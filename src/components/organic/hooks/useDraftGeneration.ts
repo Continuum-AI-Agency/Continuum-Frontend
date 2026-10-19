@@ -33,6 +33,10 @@ export function useDraftGeneration({
   );
 
   const { show: showToast } = useToast();
+  // Read when the action fires: the handler reaches every memoised cell and chip, and
+  // closing over `drafts` handed all of them a new one on each caption keystroke.
+  const draftsRef = React.useRef(drafts);
+  draftsRef.current = drafts;
 
   // Regenerate rewrites this draft's copy in place, through the ladder's Copy stage.
   // The Backend clears the text checkpoint first, so the worker genuinely regenerates
@@ -40,7 +44,7 @@ export function useDraftGeneration({
   // for ANY persisted draft, not only trend-seeded ones.
   const handleRegenerate = React.useCallback(
     async (draftId: string) => {
-      const draft = drafts.find((item) => item.id === draftId);
+      const draft = draftsRef.current.find((item) => item.id === draftId);
       if (!draft) return;
 
       if (!brandProfileId) {
@@ -77,7 +81,7 @@ export function useDraftGeneration({
         showToast({ title: 'Could not regenerate', description: message, variant: 'error' });
       }
     },
-    [brandProfileId, drafts, setGridError, showToast, updateDraftById],
+    [brandProfileId, setGridError, showToast, updateDraftById],
   );
 
   const handleClearFailure = React.useCallback(

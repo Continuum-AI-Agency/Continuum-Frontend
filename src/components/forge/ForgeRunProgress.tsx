@@ -35,13 +35,13 @@ function verdict(run: TemplateRunRow): {
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  analyze: 'Read the file',
-  derive: 'Work out the columns',
-  provision: 'Build its home',
-  seed: 'Seed row 1',
-  load: 'Load alternates',
-  build: 'Assemble the spec',
-  validate: 'Validate',
+  analyze: 'Read your file',
+  derive: 'Find the variables',
+  provision: 'Create the template',
+  seed: 'Add a sample row',
+  load: 'Load alternate options',
+  build: 'Put it together',
+  validate: 'Check everything',
 };
 
 export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
@@ -70,7 +70,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
         <div
           className="h-2 w-full overflow-hidden rounded-full bg-secondary"
           role="progressbar"
-          aria-label="Reading the project"
+          aria-label="Reading your file"
           aria-valuetext="Working out how much there is to do"
         >
           <div className="h-full w-1/3 animate-[forge-indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-primary motion-reduce:animate-none motion-reduce:w-full motion-reduce:opacity-60" />
@@ -116,14 +116,14 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
           title={run.error.code}
         >
-          {run.error.message ?? 'The run stopped on an error.'}
+          {run.error.message ?? 'Setup stopped on an error.'}
         </p>
       ) : null}
 
       {run.findings?.length ? (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">
-            {run.findings.length} thing{run.findings.length === 1 ? '' : 's'} the run could not do
+            {run.findings.length} thing{run.findings.length === 1 ? '' : 's'} setup couldn&apos;t do
           </summary>
           <ul className="mt-2 flex flex-col gap-1">
             {run.findings.map((finding) => (
@@ -138,7 +138,7 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
                   yet" are different answers and a finding list that blurs them is noise.
                 */}
                 {finding.resolver === null ? (
-                  <span className="ml-1 italic">(no fix exists yet)</span>
+                  <span className="ml-1 italic">(no automatic fix yet)</span>
                 ) : null}
               </li>
             ))}

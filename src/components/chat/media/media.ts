@@ -19,6 +19,8 @@ export type ChatMedia = {
   permalink?: string;
   /** Short corner label: "Reel", "Video", "#1"… */
   badge?: string;
+  /** The media.assets id behind `url`, when a fresh URL can be minted for it. */
+  assetId?: string;
 };
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm|m4v|avi)(\?|$)/i;
@@ -64,7 +66,7 @@ export function mediaFromAttachment(attachment: Attachment): ChatMedia | null {
   };
 }
 
-type PersistedAttachment = { url: string; name?: string; mediaType?: string };
+type PersistedAttachment = { url: string; name?: string; mediaType?: string; assetId?: string };
 
 export function mediaFromPersistedAttachments(
   messageId: string,
@@ -75,6 +77,7 @@ export function mediaFromPersistedAttachments(
     url: file.url,
     kind: resolveMediaKind({ mimeType: file.mediaType, url: file.url }),
     name: file.name,
+    ...(file.assetId ? { assetId: file.assetId } : {}),
   }));
 }
 
@@ -87,6 +90,7 @@ export function mediaFromLibraryAsset(asset: MediaAsset): ChatMedia | null {
     thumbnailUrl: asset.thumbnailUrl ?? undefined,
     kind: resolveMediaKind({ kind: asset.kind, mimeType: asset.mimeType, url }),
     name: asset.title ?? asset.fileName,
+    assetId: asset.id,
   };
 }
 

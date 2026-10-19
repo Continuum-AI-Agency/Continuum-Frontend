@@ -105,7 +105,7 @@ describe('ChatMediaThumb error fallback', () => {
     rerender(<ChatMediaThumb media={clip('https://cdn/b.mp4')} />);
     const second = container.querySelector('video');
 
-    expect(second?.getAttribute('src')).toBe('https://cdn/b.mp4#t=0.01');
+    expect(second?.getAttribute('src')).toBe('https://cdn/b.mp4');
     expect(second).not.toBe(first);
   });
 
@@ -157,23 +157,90 @@ describe('ChatMediaThumb hover-play', () => {
 
     fireEvent.pointerLeave(video);
     expect(pause).toHaveBeenCalledTimes(1);
+    // The bytes stay mounted, but the play mark comes back for the next hover.
+    expect(video.getAttribute('src')).toBe('https://cdn/clip.mp4');
+    expect(container.querySelector('span.opacity-0')).toBeNull();
   });
 
-  it('leaves existing call sites alone: no hoverPlay means the still keeps its src', () => {
+  it('asks for the bytes only once hovered: preload flips from none to auto', () => {
+    const { container } = render(<ChatMediaThumb hoverPlay media={videoMedia()} />);
+    const video = container.querySelector('video') as HTMLVideoElement;
+    video.play = mock(() => Promise.resolve()) as unknown as HTMLVideoElement['play'];
+
+    fireEvent.pointerEnter(video);
+    // A src mounting under preload="none" would sit idle and never fire loadeddata.
+    expect(video.getAttribute('preload')).toBe('auto');
+  });
+
+  it('a non-hover tile keeps its src but preloads nothing', () => {
     const { container } = render(<ChatMediaThumb media={videoMedia()} />);
     const video = container.querySelector('video') as HTMLVideoElement;
-    expect(video.getAttribute('preload')).toBe('metadata');
+    expect(video.getAttribute('preload')).toBe('none');
     expect(video.getAttribute('src')).toBe('https://cdn/clip.mp4');
   });
 
-  it('does not withhold the source when there is no poster to paint', () => {
+  it('a poster-less tile is a neutral tile: no src, no first-frame seek, a play mark', () => {
     const { container } = render(
       <ChatMediaThumb hoverPlay media={videoMedia({ thumbnailUrl: undefined })} />,
     );
     const video = container.querySelector('video') as HTMLVideoElement;
-    // Nothing else would be visible, so the first frame has to load.
-    expect(video.getAttribute('preload')).toBe('metadata');
-    expect(video.getAttribute('src')).toBe('https://cdn/clip.mp4#t=0.01');
+    // The old `#t=0.01` + preload="metadata" fetched bytes per tile just to paint a still.
+    expect(video.getAttribute('preload')).toBe('none');
+    expect(video.getAttribute('src')).toBeNull();
+    expect(video.getAttribute('poster')).toBeNull();
+    expect(container.querySelector('svg.lucide-play')).not.toBeNull();
+  });
+
+  it('never seeks for a first frame, with or without hover', () => {
+    const { container } = render(
+      <ChatMediaThumb media={videoMedia({ thumbnailUrl: undefined })} />,
+    );
+    const video = container.querySelector('video') as HTMLVideoElement;
+    expect(video.getAttribute('src')).toBe('https://cdn/clip.mp4');
+    expect(video.getAttribute('preload')).toBe('none');
+  });
+});
+
+describe('ChatMediaThumb recovery', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('asks for a fresh URL once when a video fails, and retries when one arrives', () => {
+    const onRecover = mock();
+    const clip = (url: string): ChatMedia => ({ id: 'v1', url, kind: 'video', name: 'Reel' });
+    const { container, rerender } = render(
+      <ChatMediaThumb media={clip('https://cdn/expired.mp4')} onRecover={onRecover} />,
+    );
+    fireEvent.error(container.querySelector('video') as HTMLVideoElement);
+    expect(onRecover).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('video')).toBeNull();
+
+    rerender(<ChatMediaThumb media={clip('https://cdn/fresh.mp4')} onRecover={onRecover} />);
+    // Failure is keyed to the dead URL, so the fresh one mounts a live <video> again.
+    expect(container.querySelector('video')?.getAttribute('src')).toBe('https://cdn/fresh.mp4');
+  });
+
+  it('does not re-ask for a URL it already asked about', () => {
+    const onRecover = mock();
+    const { rerender } = render(
+      <ChatMediaThumb media={imageMedia('https://cdn/a.jpg')} onRecover={onRecover} />,
+    );
+    fireEvent.error(screen.getByRole('img'));
+    rerender(<ChatMediaThumb media={imageMedia('https://cdn/b.jpg')} onRecover={onRecover} />);
+    rerender(<ChatMediaThumb media={imageMedia('https://cdn/a.jpg')} onRecover={onRecover} />);
+    expect(onRecover).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ChatMediaThumb accessible name', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('never ships an empty alt for a creative', () => {
+    render(<ChatMediaThumb media={{ id: 'x', url: 'https://cdn/x.jpg', kind: 'image' }} />);
+    expect(screen.getByRole('img').getAttribute('alt')).toBe('Image');
   });
 });
 

@@ -39,7 +39,7 @@ describe('PlacementNotificationCard', () => {
     );
 
     expect(screen.getByTestId('placement-card')).toBeTruthy();
-    expect(screen.getByText('IG')).toBeTruthy();
+    expect(screen.getByText('Instagram')).toBeTruthy();
     expect(screen.getByText('Reel')).toBeTruthy();
     expect(screen.getByText('Test Title Topic')).toBeTruthy();
   });

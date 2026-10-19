@@ -1,170 +1,82 @@
 import { describe, expect, it } from 'bun:test';
+import type { ChatMediaStripData } from '@continuum/contracts';
+import { applyOrganicFrame } from './applyOrganicFrame';
+import { parseOrganicStreamEvent } from './streamEventParser';
+import type { PanelAction } from './useOrganicAgentReducer';
 
-import { normalizePostToolResult } from './streamEventParser';
+// Post-fetching tools used to have their results hand-parsed into post lists here, one shape per
+// tool. The Backend now emits one typed `ui.media_strip` per call instead, so the parser's only
+// media job is to validate that frame.
 
-describe('normalizePostToolResult — getCompetitorInstagramTopPosts', () => {
-  const basePost = {
-    id: 'post_123',
-    captionSnippet: 'Check this out',
-    permalink: 'https://www.instagram.com/p/abc/',
-    timestamp: '2026-06-01T10:00:00Z',
-    mediaType: 'IMAGE',
-    likes: 400,
-    comments: 12,
-    engagement: 0.05,
-  };
+const strip: ChatMediaStripData = {
+  toolCallId: 'call_1',
+  toolName: 'getTopPosts',
+  items: [
+    {
+      ref: { type: 'platform', platform: 'instagram', mediaId: '17890000000000001' },
+      kind: 'video',
+      w: null,
+      h: null,
+      permalink: 'https://www.instagram.com/reel/abc/',
+      label: 'Top reel',
+    },
+    { ref: { type: 'draft', draftId: 'draft-1', slide: 2 }, kind: 'carousel', w: 1080, h: 1350 },
+  ],
+  total: 12,
+};
 
-  it('extracts mediaUrl from creative.thumbnailUrl', () => {
-    const result = {
-      found: true,
-      posts: [
-        {
-          ...basePost,
-          creative: {
-            thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
-            mediaUrl: null,
-            children: [],
-          },
-        },
-      ],
-    };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts).toHaveLength(1);
-    expect(posts[0].mediaUrl).toBe('https://cdn.example.com/thumb.jpg');
-    expect(posts[0].postId).toBe('post_123');
-    expect(posts[0].source).toBe('instagram');
-    expect(posts[0].platform).toBe('instagram');
-    expect(posts[0].caption).toBe('Check this out');
-    expect(posts[0].permalink).toBe('https://www.instagram.com/p/abc/');
-    expect(posts[0].metrics).toEqual({ likes: 400, comments: 12, engagement: 0.05 });
-  });
+const FORMER_POST_TOOLS = [
+  'listDrafts',
+  'getTopPosts',
+  'listOwnInstagramMedia',
+  'getCalendarPostedContent',
+  'getCompetitorInstagramTopPosts',
+];
 
-  it('prefers first carousel child mediaUrl over creative.thumbnailUrl', () => {
-    const result = {
-      found: true,
-      posts: [
-        {
-          ...basePost,
-          creative: {
-            thumbnailUrl: 'https://cdn.example.com/parent-thumb.jpg',
-            mediaUrl: null,
-            children: [
-              { mediaUrl: 'https://cdn.example.com/child0.jpg', thumbnailUrl: null },
-              { mediaUrl: 'https://cdn.example.com/child1.jpg', thumbnailUrl: null },
-            ],
-          },
-        },
-      ],
-    };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts[0].mediaUrl).toBe('https://cdn.example.com/child0.jpg');
-  });
-
-  it('falls back to child thumbnailUrl when child has no mediaUrl', () => {
-    const result = {
-      found: true,
-      posts: [
-        {
-          ...basePost,
-          creative: {
-            thumbnailUrl: 'https://cdn.example.com/parent-thumb.jpg',
-            mediaUrl: null,
-            children: [{ mediaUrl: null, thumbnailUrl: 'https://cdn.example.com/child-thumb.jpg' }],
-          },
-        },
-      ],
-    };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts[0].mediaUrl).toBe('https://cdn.example.com/child-thumb.jpg');
-  });
-
-  it('falls back to creative.mediaUrl when no children', () => {
-    const result = {
-      found: true,
-      posts: [
-        {
-          ...basePost,
-          creative: {
-            thumbnailUrl: null,
-            mediaUrl: 'https://cdn.example.com/media.mp4',
-            children: [],
-          },
-        },
-      ],
-    };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts[0].mediaUrl).toBe('https://cdn.example.com/media.mp4');
-  });
-
-  it('returns empty array when found=false', () => {
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', {
-      found: false,
-      posts: [],
+describe('ui.media_strip', () => {
+  it('parses into a media_strip card, refs untouched', () => {
+    expect(parseOrganicStreamEvent({ type: 'ui.media_strip', data: strip })).toEqual({
+      kind: 'uiCard',
+      card: { type: 'media_strip', data: strip },
     });
-    expect(posts).toHaveLength(0);
   });
 
-  it('skips posts without an id', () => {
-    const result = {
-      found: true,
-      posts: [{ captionSnippet: 'no id', creative: null }],
+  it('refuses an item that smuggles a URL: tiles sign on view, never from the frame', () => {
+    const [first] = strip.items;
+    const withUrl = {
+      ...strip,
+      items: [{ ...first, thumbnailUrl: 'https://cdn.example.com/expired.jpg' }],
     };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts).toHaveLength(0);
+    expect(parseOrganicStreamEvent({ type: 'ui.media_strip', data: withUrl }).kind).toBe('invalid');
   });
 
-  it('handles null creative gracefully (mediaUrl=null)', () => {
-    const result = {
-      found: true,
-      posts: [{ ...basePost, creative: null }],
-    };
-    const posts = normalizePostToolResult('getCompetitorInstagramTopPosts', result);
-    expect(posts).toHaveLength(1);
-    expect(posts[0].mediaUrl).toBeNull();
-  });
-});
-
-describe('normalizePostToolResult — getTopPosts thumbnail_url', () => {
-  it('reads thumbnail_url from row data', () => {
-    const result = {
-      ok: true,
-      platform: 'instagram',
-      rows: [
-        {
-          post_id: 'p1',
-          permalink: 'https://www.instagram.com/p/xyz/',
-          caption_snippet: 'My top post',
-          posted_at: '2026-05-01T12:00:00Z',
-          thumbnail_url: 'https://cdn.example.com/p1-thumb.jpg',
-          rank: 1,
-          metric_value: 1200,
-          metrics: { reach: 1200 },
+  it('a post tool result is a tool result only: no card is rebuilt from its shape', () => {
+    for (const toolName of FORMER_POST_TOOLS) {
+      const parsed = parseOrganicStreamEvent({
+        type: 'tool.result',
+        data: {
+          toolCallId: `call_${toolName}`,
+          toolName,
+          ok: true,
+          result: { posts: [{ mediaId: '1', thumbnail_url: 'https://cdn/x.jpg' }], rows: [] },
         },
-      ],
-    };
-    const posts = normalizePostToolResult('getTopPosts', result);
-    expect(posts).toHaveLength(1);
-    expect(posts[0].mediaUrl).toBe('https://cdn.example.com/p1-thumb.jpg');
-    expect(posts[0].postId).toBe('p1');
+      });
+      expect(parsed.kind).toBe('toolResult');
+    }
   });
 
-  it('returns null mediaUrl when thumbnail_url is absent', () => {
-    const result = {
-      ok: true,
-      platform: 'instagram',
-      rows: [
-        {
-          post_id: 'p2',
-          permalink: null,
-          caption_snippet: null,
-          posted_at: null,
-          rank: 2,
-          metric_value: 500,
-          metrics: {},
-        },
-      ],
-    };
-    const posts = normalizePostToolResult('getTopPosts', result);
-    expect(posts[0].mediaUrl).toBeNull();
+  it('live, the strip reaches the transcript and the tool result does not draw a second one', () => {
+    const actions: PanelAction[] = [];
+    const dispatch = (action: PanelAction) => actions.push(action);
+    applyOrganicFrame(
+      {
+        type: 'tool.result',
+        data: { toolCallId: 'call_1', toolName: 'getTopPosts', ok: true, result: { rows: [] } },
+      },
+      dispatch,
+      'chat',
+    );
+    applyOrganicFrame({ type: 'ui.media_strip', data: strip }, dispatch, 'chat');
+    expect(actions.map((action) => action.type)).toEqual(['STREAM_TOOL_RESULT', 'STREAM_UI_CARD']);
   });
 });

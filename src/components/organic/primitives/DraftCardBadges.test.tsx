@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
-import { StatusBadge, StatusDot } from './DraftCardBadges';
+import type { ReactNode } from 'react';
+import { publishAccountsKey } from '@/lib/organic/publishTargets';
+import { CardTargets, StatusBadge, StatusDot } from './DraftCardBadges';
 import { DRAFT_STATUS_PRESENTATION } from './draft-card-styles';
+import type { OrganicCalendarDraft } from './types';
 
 // Assertions stay on the rendered WORDS: bun's mock.module is process-wide, and sibling
 // planner specs stub `ui/badge`, so a class/attribute assertion here would only be
@@ -67,5 +71,64 @@ describe('StatusDot', () => {
     expect(
       container.querySelector(`[title="${DRAFT_STATUS_PRESENTATION.failed.hint}"]`),
     ).toBeTruthy();
+  });
+});
+
+// One reading of where a card goes, shared by the week card, the month chip and the list row.
+describe('CardTargets', () => {
+  const BRAND = 'brand-1';
+  const ACCOUNT_ID = '6f1c0b9e-0000-4000-8000-000000000001';
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  function renderTargets(
+    draft: Pick<OrganicCalendarDraft, 'platforms' | 'targetAccountId'>,
+    accounts: unknown[],
+  ) {
+    const client = new QueryClient();
+    client.setQueryData(publishAccountsKey(BRAND), { accounts });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    // The brand id comes from the override: this spec does not stub the store.
+    return render(<CardTargets draft={draft} brandId={BRAND} />, { wrapper });
+  }
+
+  const account = {
+    id: ACCOUNT_ID,
+    platform: 'instagram',
+    handle: 'acme_a',
+    displayName: 'Acme',
+    avatarUrl: null,
+    needsReauth: false,
+    isDefault: true,
+  };
+
+  it('lists the platforms in the contracts order and names the account by handle', () => {
+    const { container } = renderTargets(
+      { platforms: ['tiktok', 'instagram'], targetAccountId: ACCOUNT_ID },
+      [account],
+    );
+    expect(container.querySelector('[data-card-platforms]')?.textContent).toBe('Instagram, TikTok');
+    expect(container.querySelector('[data-card-account]')?.textContent).toBe('@acme_a');
+    expect(container.textContent).not.toContain(ACCOUNT_ID);
+  });
+
+  it('asks for an account instead of printing an id it cannot name', () => {
+    const { container } = renderTargets(
+      { platforms: ['instagram'], targetAccountId: 'acct-unknown' },
+      [account],
+    );
+    expect(container.querySelector('[data-card-account]')?.textContent).toBe('Choose account');
+  });
+
+  it('says nothing about the account while the brand has none to offer', () => {
+    const { container } = renderTargets(
+      { platforms: ['instagram'], targetAccountId: undefined },
+      [],
+    );
+    expect(container.querySelector('[data-card-account]')).toBeNull();
   });
 });

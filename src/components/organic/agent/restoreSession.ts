@@ -1,10 +1,7 @@
 import type { MediaSearchResultsFrame } from '@continuum/contracts';
 import type { OrganicSessionMessage } from '@/lib/organic/agent-sessions';
-import {
-  type ParsedPlanStatus,
-  parseOrganicStreamEvent,
-  postListCardFromToolResult,
-} from './streamEventParser';
+import type { ReadHeadlessBatchStatus } from '@/lib/organic-agent/headlessBatch';
+import { type ParsedPlanStatus, parseOrganicStreamEvent } from './streamEventParser';
 import type {
   AgentJobState,
   ConversationMessage,
@@ -12,7 +9,7 @@ import type {
   ToolCallEvent,
   UiCard,
 } from './types';
-import type { BulkRunRef } from './useOrganicAgentReducer';
+import { type BulkRunRef, upsertUiCard } from './useOrganicAgentReducer';
 
 export type RestoredSession = {
   messages: ConversationMessage[];
@@ -41,9 +38,12 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
   // Storyboard frames arrive from the (separate) blueprint job, usually after the
   // live stream closed, so on reload they're merged into the restored card by draftId.
   const blueprintsByDraftId = new Map<string, { previews: string[]; previewRevision: string }>();
+  // A batch's status frames land in several turns (its create, each status call): every card of
+  // it restores to the last one, not to whatever its own turn held.
+  const latestBatchById = new Map<string, ReadHeadlessBatchStatus>();
 
   const messages = msgs.map((m) => {
-    const uiCards: UiCard[] = [];
+    let uiCards: UiCard[] = [];
     const toolCallsById = new Map<string, ToolCallEvent>();
     const mediaSearchResults: MediaSearchResultsFrame[] = [];
 
@@ -51,7 +51,10 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
       const parsed = parseOrganicStreamEvent(frame);
       switch (parsed.kind) {
         case 'uiCard':
-          uiCards.push(parsed.card);
+          uiCards = upsertUiCard(uiCards, parsed.card);
+          if (parsed.card.type === 'headless_batch') {
+            latestBatchById.set(parsed.card.data.batchId, parsed.card.data);
+          }
           break;
         case 'pipelineCard':
           pipelineCards.push(parsed.card);
@@ -94,8 +97,6 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
               reason: parsed.reason,
             });
           }
-          const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
-          if (postCard) uiCards.push(postCard);
           break;
         }
         case 'mediaSearchResults':
@@ -150,6 +151,23 @@ export function restoreSessionFromMessages(msgs: OrganicSessionMessage[]): Resto
         previewRevision: blueprint.previewRevision,
         ...(settled ? {} : { mediaStatus: 'pending', awaitingMediaChoice: true }),
       };
+    }
+  }
+
+  // Every URL replayed from history was a 1h signature when it was written. Flagging it
+  // lets the card rank the draft's re-signed media above it instead of showing it expired.
+  for (const card of pipelineCards) {
+    if (card.preview) card.previewStale = true;
+  }
+
+  if (latestBatchById.size > 0) {
+    for (const message of messages) {
+      if (!message.uiCards) continue;
+      message.uiCards = message.uiCards.map((card) =>
+        card.type === 'headless_batch'
+          ? { ...card, data: latestBatchById.get(card.data.batchId) ?? card.data }
+          : card,
+      );
     }
   }
 

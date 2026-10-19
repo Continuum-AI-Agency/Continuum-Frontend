@@ -1,35 +1,21 @@
-import { PLATFORMS, type PlatformKey } from '@/components/onboarding/platforms';
+// The organic platforms, their order and their labels are the contracts' (`PUBLISH_PLATFORM_ORDER`,
+// `PUBLISH_PLATFORM_LABELS`). This file only keeps the old names alive for the surfaces outside the
+// planner that still import them; new code imports from `@continuum/contracts` directly.
+import {
+  PUBLISH_PLATFORM_LABELS,
+  type PublishPlatform,
+  publishPlatformSchema,
+} from '@continuum/contracts';
 
-export const ORGANIC_PLATFORM_KEYS = [
-  'instagram',
-  'facebook',
-  'tiktok',
-  'linkedin',
-  'youtube',
-  'x',
-] as const;
+export const ORGANIC_PLATFORM_KEYS = publishPlatformSchema.options;
 
-export type OrganicPlatformKey = (typeof ORGANIC_PLATFORM_KEYS)[number];
-
-const LABEL_LOOKUP = PLATFORMS.reduce<Record<PlatformKey, string>>(
-  (acc, item) => {
-    acc[item.key] = item.label;
-    return acc;
-  },
-  {} as Record<PlatformKey, string>,
-);
-
-export const ORGANIC_PLATFORMS = ORGANIC_PLATFORM_KEYS.map((key) => ({
-  key: key as PlatformKey,
-  label: LABEL_LOOKUP[key as PlatformKey] ?? key,
-}));
+export type OrganicPlatformKey = PublishPlatform;
 
 export function isOrganicPlatformKey(key: string): key is OrganicPlatformKey {
   return (ORGANIC_PLATFORM_KEYS as readonly string[]).includes(key);
 }
 
-// Display name for a platform, falling back to the key so an unmapped platform
-// degrades to something readable rather than blank.
+// Falls back to the key so an unmapped platform degrades to something readable rather than blank.
 export function organicPlatformLabel(key: string): string {
-  return LABEL_LOOKUP[key as PlatformKey] ?? key;
+  return isOrganicPlatformKey(key) ? PUBLISH_PLATFORM_LABELS[key] : key;
 }

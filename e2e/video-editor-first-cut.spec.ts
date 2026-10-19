@@ -19,6 +19,14 @@ import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { firstCutSpeedNote } from './video-editor-first-cut-speed';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   type GradedStep,
@@ -50,12 +58,20 @@ import {
 // siblings), the transcripts the Brief keeps for the drops and the draft's job row. Net zero by
 // owned id with a planted control; the job row and register receipts cannot be removed with
 // the service role, so they are SKIPs that name the ids left to sweep.
+//
+// VIDEO_EDITOR_PROD (e2e/video-editor-prod/prodMode.ts) drives the deployed Frontend against
+// the production Backend instead of the local pair; brief-only has no production mode.
 // ---------------------------------------------------------------------------
 
 test.describe.configure({ timeout: 1_800_000 });
 
 const BENCH = 'videoeditor:first-cut:e2e:bench';
 const BRIEF_ONLY = process.env.VIDEO_EDITOR_BRIEF_ONLY === '1';
+const PROD = productionOrigin();
+if (PROD && BRIEF_ONLY)
+  throw new Error(
+    'f32 brief-only has no production mode: its provider-off checks need a product change',
+  );
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (BRIEF_ONLY ? '00000000-0000-4000-8000-0000000000b2' : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
@@ -120,6 +136,16 @@ function printEnvelope(): number {
     }),
   );
   return counts.fail;
+}
+
+/** Both serving revisions before the run; a refused read is graded FAIL before it stops the run. */
+async function readRevisions(origin: string): Promise<Revisions> {
+  try {
+    return await servingRevisions(origin);
+  } catch (error) {
+    check(FRONTEND_REVISION_STEP, false, error instanceof Error ? error.message : String(error));
+    throw error;
+  }
 }
 
 type Api = { base: string; token: string };
@@ -250,6 +276,7 @@ test(BENCH, async ({ browser }) => {
   const briefIds = new Set<string>();
   const draftJobs = new Set<string>();
   const drafts: Awaited<ReturnType<typeof draftToSummary>>[] = [];
+  let before: Revisions | undefined;
   let wavsBefore = Number.NaN;
   let previousActiveBrand: string | null = null;
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
@@ -259,14 +286,28 @@ test(BENCH, async ({ browser }) => {
     await (async () => {
       wavsBefore = await transientWavCount();
       // ── servers + identity ────────────────────────────────────────────────────────────
-      const fePort = await freePort();
-      const backend = await bootBackend(`http://localhost:${fePort}`);
-      servers.push(backend);
-      const frontend = await bootFrontend(fePort, backend.url, '.next/video-first-cut-e2e');
-      servers.push(frontend);
-      note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
+      let frontendUrl: string;
+      let backendUrl: string;
+      if (PROD) {
+        before = await readRevisions(PROD);
+        frontendUrl = PROD;
+        backendUrl = PRODUCTION_BACKEND;
+        process.env.PLAYWRIGHT_BASE_URL = PROD;
+        note(
+          `production Frontend ${PROD} (revision ${before.frontend}); Backend ${PRODUCTION_BACKEND} (revision ${before.backend})`,
+        );
+      } else {
+        const fePort = await freePort();
+        const backend = await bootBackend(`http://localhost:${fePort}`);
+        servers.push(backend);
+        const frontend = await bootFrontend(fePort, backend.url, '.next/video-first-cut-e2e');
+        servers.push(frontend);
+        note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
+        frontendUrl = frontend.url;
+        backendUrl = backend.url;
+      }
       session = await mintSessionBundleForEmail(OWNER_EMAIL);
-      const api: Api = { base: backend.url, token: session.accessToken };
+      const api: Api = { base: backendUrl, token: session.accessToken };
 
       const { data: preference } = await admin
         .schema('brand_profiles')
@@ -332,7 +373,7 @@ test(BENCH, async ({ browser }) => {
           })
           .catch(() => undefined);
       });
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectA = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
       createdProjects.add(projectA);
@@ -568,7 +609,7 @@ test(BENCH, async ({ browser }) => {
         switched &&
           (await selectedB.count()) === 1 &&
           shownRevision.includes(`Revision ${beforeB?.revision}`),
-        `${page.url().replace(frontend.url, '')} · ${shownRevision}`,
+        `${page.url().replace(frontendUrl, '')} · ${shownRevision}`,
       );
       if (!variantB || !beforeB) return;
 
@@ -752,6 +793,7 @@ test(BENCH, async ({ browser }) => {
     for (const server of servers.reverse()) server.stop();
   }
   note(firstCutSpeedNote(drafts));
+  if (PROD && before) await verifyServingRevisions({ check, note }, PROD, before);
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
 });

@@ -19,12 +19,12 @@ import {
   collapseDraftGroups,
   mapPersistedRowToCalendarEntry,
   mergeUnsavedLocalDrafts,
-  newRowCopyPatch,
   type PersistedOrganicDraftRow,
   resolvePersistedRowDayId,
 } from '@/lib/organic/calendar-draft-persistence';
 import { getVisibleMonthRange } from '@/lib/organic/calendar-posts';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { newDraftFieldPatch } from '@/lib/organic/publishPlan';
 import { useCalendarStore } from '@/lib/organic/store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useDraftFieldPersistence } from './useDraftFieldEditor';
@@ -43,6 +43,8 @@ type UseCalendarDraftPersistenceOptions = {
     updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
   ) => void;
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>;
+  /** The brand's zone: a chip's time of day names a moment there, as the field route reads it. */
+  timeZone?: string;
 };
 
 function parseUpdatedAt(value: string | null | undefined): number {
@@ -84,6 +86,13 @@ function selectPersistableEntries(calendarDays: OrganicCalendarDay[]): CalendarE
         day.slots
           .filter((draft) => draft.status !== 'streaming')
           .filter((draft) => draft.origin === 'manual')
+          // ...and only until it has a row. A row that exists is written only through the
+          // backend: the field route for content, platform and time, the status routes for
+          // approve and unschedule. This effect used to UPDATE it from the browser after
+          // every edit, half a second behind the field route, with the time composed in the
+          // browser's zone and a client-clock updated_at that failed the next field save's
+          // concurrency check.
+          .filter((draft) => !draft.backendDraftId)
           .map((draft) => ({ dayId: day.id, draft })),
       )
       .filter((entry) => {
@@ -133,6 +142,7 @@ export function useCalendarDraftPersistence({
   setCalendarDays,
   updateDraftById,
   platformAccountIds = {},
+  timeZone,
 }: UseCalendarDraftPersistenceOptions) {
   const hydratedKeyRef = React.useRef<string | null>(null);
   // Re-render-visible mirror of hydratedKeyRef so consumers (e.g. the AI Studio
@@ -148,9 +158,14 @@ export function useCalendarDraftPersistence({
   // (manual constructions not yet autosaved) instead of clobbering them.
   const calendarDaysRef = React.useRef(calendarDays);
   calendarDaysRef.current = calendarDays;
+  // Only the latest refetch may write the grid. An older answer landing after a newer one
+  // would put back a group as it was before a platform was ticked, and the next tick, built
+  // from that stale card, would delete the new member row on the server.
+  const refetchSeqRef = React.useRef(0);
 
   const refetch = React.useCallback(async () => {
     if (!brandProfileId) return;
+    const seq = ++refetchSeqRef.current;
 
     // Fetch ALL of the brand's drafts (no date window). The calendar is no longer
     // week-scoped: every draft is loaded once, and each view filters/derives its
@@ -159,6 +174,7 @@ export function useCalendarDraftPersistence({
     const { drafts } = await request<{ drafts: PersistedOrganicDraftRow[] }>({
       path: `/api/organic/calendar/drafts?${params}`,
     });
+    if (seq !== refetchSeqRef.current) return;
 
     // Scaffold must contain a home day for every loaded draft (or the mapper drops
     // it), so pre-scan day ids before mapping. The visible month around today seeds
@@ -282,69 +298,52 @@ export function useCalendarDraftPersistence({
               dayId: entry.dayId,
               draft: entry.draft,
               platformAccountIds,
+              timeZone,
             });
 
-            if (!entry.draft.backendDraftId) {
-              // UPSERT on the canonical (brand_id, client_key): if a refetch already
-              // echoed this logical draft (or a write-back was missed), this updates
-              // the existing row instead of minting a duplicate.
-              const { data: created, error } = await organicSchema
-                .from('organic_calendar_drafts')
-                .upsert(
-                  {
-                    brand_id: payload.brand_id,
-                    client_key: payload.client_key,
-                    platform: payload.platform,
-                    platform_account_id: payload.platform_account_id,
-                    status: payload.status,
-                    scheduled_date: payload.scheduled_date,
-                    slot_data: payload.slot_data,
-                    user_id: user.id,
-                  },
-                  { onConflict: 'brand_id,client_key' },
-                )
-                .select('id')
-                .single();
-              if (error) continue;
-              if (!created.id) continue;
-
-              knownBackendIdsRef.current.add(created.id);
-              updateDraftById(entry.draft.id, (draft) => ({
-                ...draft,
-                backendDraftId: created.id,
-              }));
-              // Read the live grid, not `entry`: a keystroke that landed while the insert
-              // was in flight is only there, and its own PATCH was skipped for want of a row.
-              const latest =
-                calendarDaysRef.current
-                  .flatMap((day) => day.slots)
-                  .find((draft) => draft.id === entry.draft.id) ?? entry.draft;
-              const copyPatch = newRowCopyPatch(latest);
-              if (copyPatch) {
-                await persistDraftFields(
-                  { id: latest.id, backendDraftId: created.id, updatedAt: null },
-                  copyPatch,
-                );
-              }
-              continue;
-            }
-
-            const { error } = await organicSchema
+            // UPSERT on the canonical (brand_id, client_key): if a refetch already
+            // echoed this logical draft (or a write-back was missed), this updates
+            // the existing row instead of minting a duplicate.
+            const { data: created, error } = await organicSchema
               .from('organic_calendar_drafts')
-              .update({
-                brand_id: payload.brand_id,
-                client_key: payload.client_key,
-                platform: payload.platform,
-                platform_account_id: payload.platform_account_id,
-                status: payload.status,
-                scheduled_date: payload.scheduled_date,
-                slot_data: payload.slot_data,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', entry.draft.backendDraftId)
-              .eq('user_id', user.id);
-            if (!error) {
-              knownBackendIdsRef.current.add(entry.draft.backendDraftId);
+              .upsert(
+                {
+                  brand_id: payload.brand_id,
+                  client_key: payload.client_key,
+                  platform: payload.platform,
+                  platform_account_id: payload.platform_account_id,
+                  status: payload.status,
+                  scheduled_date: payload.scheduled_date,
+                  slot_data: payload.slot_data,
+                  user_id: user.id,
+                },
+                { onConflict: 'brand_id,client_key' },
+              )
+              .select('id, updated_at')
+              .single();
+            if (error) continue;
+            if (!created.id) continue;
+
+            knownBackendIdsRef.current.add(created.id);
+            updateDraftById(entry.draft.id, (draft) => ({
+              ...draft,
+              backendDraftId: created.id,
+              updatedAt: created.updated_at ?? draft.updatedAt,
+            }));
+            // The insert carries the post's content only inside the snapshot, which the
+            // publisher never reads. The field route puts it in content_json, where the preview
+            // already showed it; typed since the tick began is included.
+            const latest =
+              calendarDaysRef.current
+                .flatMap((day) => day.slots)
+                .find((draft) => draft.id === entry.draft.id) ?? entry.draft;
+            const saved = await persistDraftFields(
+              { id: latest.id, backendDraftId: created.id, updatedAt: created.updated_at ?? null },
+              newDraftFieldPatch(latest),
+            );
+            if (saved.ok && saved.updatedAt) {
+              const updatedAt = saved.updatedAt;
+              updateDraftById(entry.draft.id, (draft) => ({ ...draft, updatedAt }));
             }
           }
 
@@ -366,6 +365,7 @@ export function useCalendarDraftPersistence({
     platformAccountIds,
     refetch,
     supabase,
+    timeZone,
     updateDraftById,
   ]);
 

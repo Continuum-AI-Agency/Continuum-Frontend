@@ -222,6 +222,45 @@ test('Performance+ → Conversions sends to Meta from all three sources', async 
     expect(body.eventsReceived).toBe(1);
   });
 
+  await recorder.step(
+    'a HubSpot payload is mapped from what the URL received → Meta received 1',
+    async () => {
+      const hookUrl = `${BACKEND}${CAPI_ROUTES.hooks}/${publicId}?test=1`;
+      const hubspot = JSON.stringify({
+        vid: 7001,
+        properties: {
+          email: { value: 'hubspot-lead@example.com' },
+          lifecyclestage: { value: 'lead' },
+        },
+      });
+      const post = () =>
+        fetch(hookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: hubspot,
+        });
+      expect((await post()).status).toBe(422);
+
+      const row = page.locator('div.rounded-md').filter({ hasText: sourceName }).first();
+      await row.getByRole('button', { name: 'Map fields' }).click();
+      await row.getByRole('button', { name: 'Load last received payload' }).click();
+      const sample = row.getByLabel('Sample payload (JSON)');
+      await expect(sample).toHaveValue(/"value": "<string>"/, { timeout: 30_000 });
+      expect(await sample.inputValue()).not.toContain('hubspot-lead@example.com');
+      await row.getByRole('combobox', { name: 'email path' }).click();
+      await page.getByRole('option', { name: 'properties.email.value' }).click();
+      await expect(row.getByText(/"email": "<string>"/)).toBeVisible();
+      await shot('05-mapped-from-sample');
+      await row.getByRole('button', { name: 'Save mapping' }).click();
+      await expect(row.getByText('1 mapped fields')).toBeVisible({ timeout: 30_000 });
+
+      const sent = await post();
+      const body = (await sent.json()) as { eventsReceived?: number };
+      expect(sent.status).toBe(200);
+      expect(body.eventsReceived).toBe(1);
+    },
+  );
+
   await recorder.step('Recent deliveries shows all three sources, received', async () => {
     await page.reload(NAV);
     const table = page.getByRole('table');
@@ -229,6 +268,6 @@ test('Performance+ → Conversions sends to Meta from all three sources', async 
     for (const source of ['manual', 'csv', sourceName]) {
       await expect(table.getByRole('row').filter({ hasText: source }).first()).toBeVisible();
     }
-    await shot('05-deliveries');
+    await shot('06-deliveries');
   });
 });

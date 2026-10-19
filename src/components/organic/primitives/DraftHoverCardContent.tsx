@@ -1,5 +1,6 @@
 'use client';
 
+import { postPlatformLabel } from '@/lib/organic/postPlatforms';
 import { DraftCardMedia, resolveDraftMedia } from './DraftCardMedia';
 import { draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
@@ -20,8 +21,8 @@ export function DraftHoverCardContent({ draft }: { draft: OrganicCalendarDraft }
     >
       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-2xs font-medium">
         <span className="text-foreground">{draftStatusPresentation(draft.status).label}</span>
-        <span className="truncate capitalize text-muted-foreground">
-          {draft.platforms.join(', ') || 'Unassigned'}
+        <span className="truncate text-muted-foreground">
+          {draft.platforms.map(postPlatformLabel).join(', ') || 'Unassigned'}
         </span>
       </div>
       {hasMedia && (

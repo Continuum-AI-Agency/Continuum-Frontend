@@ -47,7 +47,7 @@ import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview'
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
@@ -152,7 +152,7 @@ function ladderFor(state: string | undefined): Array<{
           action: 'smoke',
           label: 'Test render',
           Icon: TestTube2,
-          hint: 'Renders one watermarked frame to prove the wiring binds.',
+          hint: 'Renders one watermarked frame to check each variable lands in the right place.',
         },
       ];
     case 'review_ready':
@@ -161,7 +161,7 @@ function ladderFor(state: string | undefined): Array<{
           action: 'promote',
           label: 'Publish',
           Icon: Rocket,
-          hint: 'Publishes the template and grants this brand permission to render it.',
+          hint: 'Makes this template available for your brand to render.',
         },
       ];
     // The stop every from-scratch build reaches: the table and the graph are built and the media
@@ -170,9 +170,9 @@ function ladderFor(state: string | undefined): Array<{
       return [
         {
           action: 'resume',
-          label: 'Build again',
+          label: 'Set up again',
           Icon: RefreshCw,
-          hint: 'Re-runs the checks with what the variables say now.',
+          hint: 'Runs setup again with your latest variable settings.',
         },
       ];
     case 'failed':
@@ -181,7 +181,7 @@ function ladderFor(state: string | undefined): Array<{
           action: 'resume',
           label: 'Retry',
           Icon: RefreshCw,
-          hint: 'Re-enters the run at the last state it can safely resume from.',
+          hint: 'Picks up from the last step that finished.',
         },
       ];
     default:
@@ -434,7 +434,7 @@ export function TemplateDetail({
         expectedVersionId: source.versionId,
       });
       if (inspected.requiresReview || inspected.slots.some((slot) => slot.status === 'missing')) {
-        throw new Error('The new AEP needs a source revision review before it can be used.');
+        throw new Error('Review the new file version before it can be used.');
       }
       await confirmTemplateRebind({
         brandId,
@@ -450,12 +450,12 @@ export function TemplateDetail({
       setSavedTextRepair(null);
       await onChanged();
       toast.success(
-        'Text layout saved to a new AEP version. Build and test render it before publishing.',
+        'Text changes saved as a new version of your file. Set it up and test render it before publishing.',
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not save text layout';
       if (applied) {
-        toast.error(`Text repair is applied, but the view did not refresh: ${message}`);
+        toast.error(`Text changes are applied, but this view didn't refresh: ${message}`);
       } else if (uploaded) {
         setSavedTextRepair({ versionId: savedVersionId, error: message });
         setEditingText(false);
@@ -639,7 +639,7 @@ export function TemplateDetail({
             slots: edits.map((edit) => templateSourceSlotEditSchema.parse(edit)),
           },
         });
-        await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+        await invalidateForgeBrand(queryClient, brandId);
         await onChanged();
         await onOpenVariant?.(saved.sourceAssetId, 'variables');
         toast.success('Saved template revision');
@@ -680,9 +680,9 @@ export function TemplateDetail({
       // naming a template.
       await sendTemplateToForge(brandId, assetId, templateName.trim());
       await Promise.all([onChanged(), refreshRun(), refreshBundle()]);
-      toast.success('Sent to the forge');
+      toast.success('Started');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not start the run');
+      toast.error(error instanceof Error ? error.message : "Couldn't start setup");
     } finally {
       setBusy(null);
     }
@@ -833,7 +833,7 @@ export function TemplateDetail({
         className="gap-1"
         title={
           action === 'promote' && mappingBlocked
-            ? 'Review unmatched After Effects layers before publishing.'
+            ? 'Review the unconnected layers before publishing.'
             : step.hint
         }
         disabled={busy !== null || (action === 'promote' && mappingBlocked)}
@@ -970,12 +970,12 @@ export function TemplateDetail({
                   variant={font.held ? 'success' : 'warning'}
                   title={
                     font.via === 'substitute'
-                      ? `Nobody holds ${font.family}. It will render with ${font.substitutedBy?.family ?? 'a face you accepted'}.`
+                      ? `We don't have ${font.family}. It will render with ${font.substitutedBy?.family ?? 'the font you chose'}.`
                       : font.held
                         ? font.scope === 'house'
-                          ? 'From the shared font repository'
+                          ? 'From Continuum\u2019s shared font library'
                           : "In this brand's fonts"
-                        : "Not in the package, this brand's fonts, the shared repository or Google Fonts"
+                        : 'Not in your upload, your brand fonts, our shared library or Google Fonts'
                   }
                 >
                   {/* A substitution never reads as a plain "uploaded". A green tick over a
@@ -984,17 +984,17 @@ export function TemplateDetail({
                   {font.via === 'substitute'
                     ? `${font.substitutedBy?.family ?? 'substituted'} (substituted)`
                     : font.held
-                      ? 'uploaded'
-                      : 'not uploaded'}
+                      ? 'found'
+                      : 'missing'}
                 </Pill>
               </li>
             ))}
           </ul>
         ) : null}
         <p className="text-muted-foreground">
-          Missing faces are looked for in the uploaded package, then on Google Fonts. Add the file
-          for any still missing, or substitute one you already hold. Installed means Forge linked it
-          to this promoted template after confirmation.
+          We look for missing fonts in your upload first, then on Google Fonts. For any still
+          missing, add the font file or swap in one you already have. Installed means it&apos;s linked
+          to this template after you confirm.
         </p>
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
@@ -1064,7 +1064,7 @@ export function TemplateDetail({
             <Input
               value={templateName}
               onChange={(event) => setTemplateName(event.target.value)}
-              placeholder="Name this build"
+              placeholder="Name this template"
               aria-label="Template name"
               aria-invalid={nameProblem !== null && templateName.length > 0}
               inputSize="sm"
@@ -1088,7 +1088,7 @@ export function TemplateDetail({
               ) : (
                 <Send className="size-3.5" aria-hidden />
               )}
-              Build the template
+              Set up template
             </Button>
           </div>
           <p
@@ -1098,7 +1098,7 @@ export function TemplateDetail({
           >
             {templateName.length > 0 && nameProblem
               ? nameProblem
-              : 'The build name is fixed once built. The name everyone sees can be changed anytime.'}
+              : 'This name is permanent once set up. You can change the display name anytime.'}
           </p>
         </div>
       ) : null}
@@ -1139,7 +1139,7 @@ export function TemplateDetail({
                   disabled={bundleBusy !== null}
                   onClick={() => void onBundleAdvance('resume', { runId: child.runId })}
                 >
-                  Retry build
+                  Retry setup
                 </Button>
               ) : null}
             </div>
@@ -1201,7 +1201,7 @@ export function TemplateDetail({
           {/*
             An `asset` need is where EVERY from-scratch build lands — the table is built, the
             graph is built, and nobody has chosen the pictures yet. It is answered in the
-            Variables tab, then Build again.
+            Variables tab, then Set up again.
           */}
           <ul className="flex flex-col gap-0.5 text-muted-foreground">
             {otherNeeds.map((need) => (
@@ -1236,7 +1236,7 @@ export function TemplateDetail({
             ))}
           </ul>
         ) : (
-          <p>Worker graph and displayed contract agree.</p>
+          <p>Everything matches what you see here.</p>
         )}
         {publishVerification.media.length ? (
           <ul className="flex flex-col gap-1" aria-label="Media placement measurements">
@@ -1244,9 +1244,9 @@ export function TemplateDetail({
               <li key={slot.key}>
                 {slot.label}:{' '}
                 {slot.box && slot.source
-                  ? `${slot.source[0]} × ${slot.source[1]} px source → ${Math.round(slot.box[2] - slot.box[0])} × ${Math.round(slot.box[3] - slot.box[1])} px box in ${slot.comp}`
-                  : 'placement or source size unmeasured'}
-                {slot.rigged ? ' · render-time rig' : ''}
+                  ? `${slot.source[0]} × ${slot.source[1]} px image → ${Math.round(slot.box[2] - slot.box[0])} × ${Math.round(slot.box[3] - slot.box[1])} px space in ${slot.comp}`
+                  : 'size not measured yet'}
+                {slot.rigged ? ' · placed at render time' : ''}
               </li>
             ))}
           </ul>
@@ -1283,7 +1283,7 @@ export function TemplateDetail({
     action:
       check.id === 'mapping' && mappingReview?.state === 'needs_review' ? (
         <Button type="button" size="xs" variant="outline" onClick={() => setTab('mapping')}>
-          Review mapping
+          Review layers
         </Button>
       ) : (
         ladderButton(check.action)
@@ -1299,7 +1299,7 @@ export function TemplateDetail({
       size="xs"
       variant="outline"
       className="gap-1"
-      title="Retries reading the file, finds missing fonts and packaged footage, and re-plans the build."
+      title="Opens your file again, looks for missing fonts and media, and re-plans setup."
       disabled={fixing || busy !== null}
       onClick={() => void onFix()}
     >
@@ -1345,9 +1345,9 @@ export function TemplateDetail({
             {templateKey
               ? publishVerification?.state === 'pass'
                 ? 'Ready to render'
-                : 'Published · check layout'
-              : 'Not renderable yet'}
-            {run && !run.done && !pushed ? ' · live updates unavailable' : null}
+                : 'Published · review the layout'
+              : 'Not ready to render yet'}
+            {run && !run.done && !pushed ? ' · not updating live' : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1620,7 +1620,7 @@ export function TemplateDetail({
                       frame.boxes.some((box) => box.kind === 'text' && box.instance),
                     )
                   }
-                  title="Move and resize measured text layers in the uploaded AEP"
+                  title="Move and resize text in your After Effects file"
                   onClick={() => setEditingText(true)}
                 >
                   Repair text
@@ -1710,8 +1710,8 @@ export function TemplateDetail({
               role="alert"
               className="rounded border border-warning/40 bg-warning/10 p-3 text-xs"
             >
-              <strong>Text repair saved, not applied yet.</strong> The active template still uses
-              the previous AEP.
+              <strong>Your text changes are saved but not live yet.</strong> The template still uses
+              the previous file.
               <p className="mt-1">{savedTextRepair.error}</p>
               <Button
                 type="button"
@@ -1726,8 +1726,8 @@ export function TemplateDetail({
           ) : null}
           {!rendered && source.parse && drawnRatios.size > 0 ? (
             <p className="text-xs text-muted-foreground">
-              Quick layout check is ready from the uploaded template. The full test render verifies
-              motion and effects before publishing.
+              This preview is a quick layout check. Run a test render to see motion and effects
+              before publishing.
             </p>
           ) : null}
         </div>
@@ -1747,7 +1747,7 @@ export function TemplateDetail({
               Variables
             </TabsTrigger>
             <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
-              Mapping
+              Connected layers
             </TabsTrigger>
             {templateKey ? (
               <TabsTrigger value="output" className="flex-none px-0 text-xs">
@@ -1755,7 +1755,7 @@ export function TemplateDetail({
               </TabsTrigger>
             ) : null}
             <TabsTrigger value="source" className="flex-none px-0 text-xs">
-              Source file
+              Replace file
             </TabsTrigger>
             <TabsTrigger value="details" className="flex-none px-0 text-xs">
               Details
@@ -1845,7 +1845,7 @@ export function TemplateDetail({
               name={source.displayName ?? source.parse?.filename ?? 'Template'}
               parse={source.parse}
               onSaved={async () => {
-                await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+                await invalidateForgeBrand(queryClient, brandId);
                 await Promise.all([onChanged(), loadVariables()]);
               }}
               onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
@@ -1946,15 +1946,15 @@ export function TemplateDetail({
           </TabsContent>
           <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
-              <dt className="text-muted-foreground">Template key</dt>
+              <dt className="text-muted-foreground">Template ID</dt>
               <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
               {/* Where the build actually RAN, read off the run. Not a choice and not a control:
                 the Details tab is operator plumbing, and a build has exactly one home. */}
               <dt className="text-muted-foreground">Rendered in</dt>
               <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
-              <dt className="text-muted-foreground">Root table</dt>
+              <dt className="text-muted-foreground">Data table</dt>
               <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
-              <dt className="text-muted-foreground">Asset id</dt>
+              <dt className="text-muted-foreground">File ID</dt>
               <dd className="break-all font-mono">{assetId}</dd>
               <dt className="text-muted-foreground">Original file</dt>
               <dd>
@@ -1983,7 +1983,7 @@ export function TemplateDetail({
               </dd>
               <dt className="text-muted-foreground">Uploaded</dt>
               <dd>{new Date(source.createdAt).toLocaleString()}</dd>
-              <dt className="text-muted-foreground">Source revision</dt>
+              <dt className="text-muted-foreground">File version</dt>
               <dd className="break-all font-mono">{source.versionId}</dd>
               <dt className="text-muted-foreground">Source file</dt>
               <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
@@ -2003,8 +2003,8 @@ export function TemplateDetail({
           <AlertDialogHeader>
             <AlertDialogTitle>Install fonts on this template?</AlertDialogTitle>
             <AlertDialogDescription>
-              Forge will privately upload, inspect, and link these files to the promoted template.
-              This changes the typefaces used by future renders.
+              We&apos;ll upload these files privately, check them, and link them to this template.
+              Future renders will use these fonts.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="flex flex-col gap-1 text-xs">

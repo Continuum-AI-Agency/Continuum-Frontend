@@ -2,10 +2,14 @@
 
 import {
   Check,
+  CircleDashed,
   CircleQuestionMark,
+  Clapperboard,
   Copy,
   GalleryHorizontalEnd,
   Image as ImageIcon,
+  ImageOff,
+  type LucideIcon,
   Pencil,
   Trash2,
   X,
@@ -14,7 +18,12 @@ import {
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import * as React from 'react';
+import { Pill } from '@/components/kibo-ui/pill';
 import { useApproveScheduleDraft } from '@/components/organic/hooks/useApproveScheduleDraft';
+import {
+  scheduleFieldPatch,
+  useDraftFieldEditor,
+} from '@/components/organic/hooks/useDraftFieldEditor';
 import { useProgressAnimation } from '@/components/organic/hooks/useProgressAnimation';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
 import { useUnscheduleDraft } from '@/components/organic/hooks/useUnscheduleDraft';
@@ -27,7 +36,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Pill } from '@/components/kibo-ui/pill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -35,24 +43,26 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
-import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import {
-  isPostPlatform,
-  ORGANIC_POST_PLATFORM_KEYS,
-  POST_PLATFORMS,
-} from '@/lib/organic/postPlatforms';
-import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
+  groupPublishBlocker,
+  inferPublishPlatform,
+  publishPlatformLabel,
+  unpublishedMembers,
+} from '@/lib/organic/publish-utils';
 import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { useOpenDraftInAiStudio } from './AiStudioHandoffContext';
-import { PlatformBadge, StatusBadge } from './DraftCardBadges';
+import { UNSCHEDULED_DAY_ID } from './calendar-utils';
+import { CardTargets, StatusBadge, useCardCaption } from './DraftCardBadges';
 import { useDraftDeletionConfirmation } from './DraftDeletionConfirmation';
 import { DraftHoverCardContent } from './DraftHoverCardContent';
 import { isReelMissingVideo, MediaStagePill, resolveDraftMediaStage } from './DraftLifecycle';
 import { DuplicateDayPicker } from './DuplicateDayPicker';
 import { cardVariants, draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
+import type { DraftDragActivatorAttributes, DraftDragHandle } from './useDraftDragHandle';
 
 const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
 
@@ -63,6 +73,14 @@ const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
 
 function resolvePlatformAccentColor(platform: string): string {
   return isPostPlatform(platform) ? POST_PLATFORMS[platform].color : '#5A48F9';
+}
+
+function formatGlyph(format: string | undefined): LucideIcon {
+  const normalized = (format ?? '').toLowerCase();
+  if (normalized === 'reel' || normalized === 'video') return Clapperboard;
+  if (normalized === 'carousel') return GalleryHorizontalEnd;
+  if (normalized === 'story') return CircleDashed;
+  return ImageIcon;
 }
 
 function hasTextValue(value: unknown): value is string {
@@ -110,6 +128,8 @@ export function CalendarDraftCard({
   onRealize,
   onStitch,
   isDragging = false,
+  dragActivatorRef,
+  dragActivatorAttributes,
   onMouseEnter,
   onMouseLeave,
 }: {
@@ -129,6 +149,9 @@ export function CalendarDraftCard({
   onStitch?: (draftId: string) => void;
   /** From `useDraftDragHandle`. A pointer-up that ended a drag is not a selection click. */
   isDragging?: boolean;
+  /** From `useDraftDragHandle`: the card's button is the drag activator and its one tab stop. */
+  dragActivatorRef?: DraftDragHandle['setActivatorNodeRef'];
+  dragActivatorAttributes?: DraftDragActivatorAttributes;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
@@ -165,14 +188,25 @@ export function CalendarDraftCard({
     publishPlatform !== null && draft.status !== 'published' && draft.status !== 'streaming';
   // usePublishDraft enforces this; naming it here turns a click that silently refuses into
   // a disabled item that says why.
-  const publishBlockedReason = evaluateDraftReadiness(draft).reason;
+  const publishBlockedReason = React.useMemo(() => groupPublishBlocker(draft), [draft]);
+  const publishMemberCount = unpublishedMembers(draft).length;
+  const publishDestination =
+    publishMemberCount > 1
+      ? `${publishMemberCount} platforms`
+      : publishPlatformLabel(publishPlatform);
+  const caption = useCardCaption(draft);
 
   const accentColor = resolvePlatformAccentColor(platform);
+  const FormatGlyph = formatGlyph(draft.format);
   const statusPresentation = draftStatusPresentation(draft.status);
   // A week is only scannable if a card can show its whole idea. Cards stay clamped at
   // rest — the grid keeps its rhythm — and reveal the full title/copy on hover, or
   // whenever the card is the selected one being edited.
-  const revealTitleClass = isSelected ? '' : 'line-clamp-2 group-hover:line-clamp-none';
+  // Compact cards (a narrow week column) stay at two title lines even on hover: a card that
+  // grows under the pointer reflows the whole row.
+  const revealTitleClass = isSelected
+    ? '@min-[14rem]/draft-card:line-clamp-none'
+    : '@min-[14rem]/draft-card:group-hover:line-clamp-none';
   const revealCaptionClass = isSelected ? 'line-clamp-6' : 'line-clamp-2 group-hover:line-clamp-6';
   // Enrichment state is the authoritative backend media_stage (with a derived
   // fallback for ephemeral stream drafts) — the single source the card and the
@@ -203,6 +237,11 @@ export function CalendarDraftCard({
     draft.status !== 'streaming' &&
     draft.status !== 'placeholder' &&
     draft.status !== 'published';
+  // The compact card drops the media line, so it keeps a marker for the same drafts the
+  // attention dock files under "Needs media".
+  const needsMedia =
+    (draft.status === 'draft' || draft.status === 'placeholder') &&
+    (mediaStage === 'text_only' || mediaStage === 'storyboard_ready');
   const showHoverPreview = draft.status !== 'streaming' && draft.status !== 'placeholder';
 
   // Drag start has to close an already-open preview, not merely refuse to open a new one.
@@ -227,6 +266,29 @@ export function CalendarDraftCard({
     [draft.id, focusEditor, updateDraft],
   );
 
+  // The menu's time picks are saved where publish reads them, through the field route the
+  // panel uses. They used to change the store only: a manual draft reached its row
+  // through the browser autosave, and an agent draft not at all.
+  const fieldEditor = useDraftFieldEditor(draft);
+
+  const changeTime = React.useCallback(
+    (timeLabel: string) => {
+      const day = useCalendarStore
+        .getState()
+        .days.find((item) => item.slots.some((slot) => slot.id === draft.id));
+      // The unscheduled shelf has no date to compose the time against; the label stays local.
+      const patch =
+        day && day.id !== UNSCHEDULED_DAY_ID ? scheduleFieldPatch(day.id, timeLabel) : null;
+      if (!patch) {
+        applyQuickEdit((currentDraft) => ({ ...currentDraft, timeLabel }));
+        return;
+      }
+      void fieldEditor.editField(patch, ['schedule'], { timeLabel });
+      focusEditor(draft.id);
+    },
+    [applyQuickEdit, draft.id, fieldEditor, focusEditor],
+  );
+
   const clearFailure = React.useCallback(() => {
     if (onClearFailure) {
       onClearFailure(draft.id);
@@ -246,12 +308,9 @@ export function CalendarDraftCard({
       return;
     }
     setTimeError(null);
-    applyQuickEdit((currentDraft) => ({
-      ...currentDraft,
-      timeLabel: normalized,
-    }));
+    changeTime(normalized);
     setTimePickerOpen(false);
-  }, [applyQuickEdit, pendingTime]);
+  }, [changeTime, pendingTime]);
 
   const triggerButton = (
     <Popover open={timePickerOpen} onOpenChange={setTimePickerOpen}>
@@ -262,6 +321,8 @@ export function CalendarDraftCard({
               render={
                 <button
                   type="button"
+                  ref={dragActivatorRef}
+                  {...dragActivatorAttributes}
                   onClick={(e) => {
                     // Selecting a card must not also focus its day — the enclosing cell
                     // treats a click as "focus this day" for context-free create actions.
@@ -280,9 +341,16 @@ export function CalendarDraftCard({
                   onDragStart={(event) => onDragStart?.(event, draft.id)}
                   onMouseEnter={() => onMouseEnter?.()}
                   onMouseLeave={() => onMouseLeave?.()}
+                  data-draft-id={draft.id}
+                  data-draft-card=""
+                  data-group-id={draft.groupId ?? undefined}
+                  data-backend-draft-id={draft.backendDraftId}
                   aria-pressed={isSelected || isMultiSelected}
                   className={cn(
-                    'group',
+                    // The card is its own size container: below 14rem (a week column beside
+                    // the preview, or any laptop week) it drops to time, status, format and a
+                    // two-line title, ~56px tall. The rest lives in the hover card and preview.
+                    'group @container/draft-card',
                     cardVariants({
                       selected: isSelected,
                       multiSelected: isMultiSelected,
@@ -292,24 +360,27 @@ export function CalendarDraftCard({
                     }),
                     draft.status === 'placeholder' &&
                       'border-dashed border-muted-foreground/30 bg-muted/20',
+                    'p-0',
+                    // An outline: the failed/streaming rings won the ring merge and hid the
+                    // selection. `!` beats globals.css's unlayered button `outline: none`, and
+                    // `primary` because `brand-primary` is not a Tailwind theme colour.
+                    isSelected && 'outline-2! outline-offset-1 outline-primary!',
                   )}
                 >
-                  {/* Top-edge status strip — same hue as the status pill (one source of truth). */}
-                  {(isStreaming ||
-                    isFailed ||
-                    draft.status === 'scheduled' ||
-                    draft.status === 'published') && (
-                    <div
-                      className={cn(
-                        'absolute top-0 left-0 right-0 h-0.5',
-                        isStreaming
-                          ? 'bg-gradient-to-r from-transparent via-warning to-transparent animate-shimmer'
-                          : statusPresentation.strip,
-                      )}
-                      style={isStreaming ? { backgroundSize: '200% 100%' } : undefined}
-                      aria-hidden
-                    />
-                  )}
+                  {/* Top-edge status strip — same hue as the status pill (one source of truth).
+                      The compact card hides the pill, so there every status keeps its strip. */}
+                  <div
+                    className={cn(
+                      'absolute top-0 left-0 right-0 h-0.5',
+                      isStreaming
+                        ? 'bg-gradient-to-r from-transparent via-warning to-transparent animate-shimmer'
+                        : statusPresentation.strip,
+                      (draft.status === 'draft' || draft.status === 'placeholder') &&
+                        'hidden @max-[14rem]/draft-card:block',
+                    )}
+                    style={isStreaming ? { backgroundSize: '200% 100%' } : undefined}
+                    aria-hidden
+                  />
 
                   {/* Streaming shimmer */}
                   {isStreaming && !reduceMotion && (
@@ -329,13 +400,40 @@ export function CalendarDraftCard({
                     aria-hidden
                   />
 
-                  <div className="relative z-10 pl-1">
+                  <div className="relative z-10 py-3 pr-3 pl-4 @max-[14rem]/draft-card:py-1.5 @max-[14rem]/draft-card:pr-1.5 @max-[14rem]/draft-card:pl-2.5">
                     {/* Header row: time | multi-select | regen | status pill. The row wraps so the
                         readable pill survives the narrowest planner column instead of being clipped. */}
-                    <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-y-1">
+                    <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-y-1 @max-[14rem]/draft-card:mb-0.5 @max-[14rem]/draft-card:flex-nowrap">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span className="truncate text-2xs uppercase tracking-wider text-muted-foreground/70 font-bold">
+                        {/* The time is the one fact a week column must never clip: the
+                            compact glyphs give way first (format, then the status dot). */}
+                        <span
+                          data-card-time=""
+                          className="shrink-0 whitespace-nowrap text-2xs font-bold uppercase tabular-nums tracking-wider text-muted-foreground/70 @max-[14rem]/draft-card:tracking-normal"
+                        >
                           {draft.timeLabel}
+                        </span>
+                        <span className="hidden min-w-0 items-center gap-1 text-muted-foreground/70 @max-[14rem]/draft-card:inline-flex">
+                          <span
+                            aria-hidden
+                            title={statusPresentation.hint}
+                            className={cn(
+                              'size-1.5 shrink-0 rounded-full @max-[5.5rem]/draft-card:hidden',
+                              statusPresentation.strip,
+                            )}
+                          />
+                          <span className="sr-only">{statusPresentation.label}</span>
+                          <FormatGlyph
+                            aria-hidden
+                            className="size-2.5 shrink-0 @max-[7rem]/draft-card:hidden"
+                          />
+                          <span className="sr-only">{draft.format}</span>
+                          {needsMedia ? (
+                            <span className="inline-flex shrink-0 text-warning" title="Needs media">
+                              <ImageOff aria-hidden className="size-2.5" />
+                              <span className="sr-only">Needs media</span>
+                            </span>
+                          ) : null}
                         </span>
                         {draft.titleTopic && (
                           <TooltipProvider delay={0}>
@@ -345,7 +443,7 @@ export function CalendarDraftCard({
                                   // biome-ignore lint/a11y/noStaticElementInteractions: tooltip target (help affordance), not a control
                                   // biome-ignore lint/a11y/useKeyWithClickEvents: onClick only stops the card button from activating; the tooltip opens on hover/focus
                                   <div
-                                    className="p-0.5 -m-0.5 cursor-help"
+                                    className="p-0.5 -m-0.5 cursor-help @max-[14rem]/draft-card:hidden"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <CircleQuestionMark className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
@@ -373,9 +471,11 @@ export function CalendarDraftCard({
                           // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
                           <span
                             role="button"
-                            tabIndex={0}
+                            // A pointer shortcut only: invisible until hover, it was a tab stop
+                            // nobody could see. The keyboard regenerates from the context menu.
+                            tabIndex={-1}
                             aria-label={isFailed ? 'Retry failed draft' : 'Regenerate draft'}
-                            className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
+                            className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer @max-[14rem]/draft-card:hidden"
                             onClick={(e) => {
                               e.stopPropagation();
                               onRegenerate(draft.id);
@@ -394,7 +494,7 @@ export function CalendarDraftCard({
                           status={draft.status}
                           format={draft.format}
                           className={cn(
-                            'px-1.5 py-0 text-3xs font-bold uppercase tracking-wider',
+                            'px-1.5 py-0 text-3xs font-bold uppercase tracking-wider @max-[14rem]/draft-card:hidden',
                             isStreaming && 'animate-pulse',
                           )}
                         />
@@ -413,7 +513,7 @@ export function CalendarDraftCard({
                     {/* Title — clamped at rest, revealed in full on hover (see revealTitleClass). */}
                     <p
                       className={cn(
-                        'text-sm font-semibold leading-tight tracking-tight text-foreground',
+                        'line-clamp-2 text-sm font-semibold leading-tight tracking-tight text-foreground @max-[14rem]/draft-card:text-xs',
                         revealTitleClass,
                         isStreaming && 'animate-pulse opacity-70',
                       )}
@@ -421,222 +521,238 @@ export function CalendarDraftCard({
                       {draft.creativeIdea || draft.title}
                     </p>
 
-                    {/* Inline streaming status */}
-                    {isStreaming && (
-                      <p className="mt-0.5 text-2xs text-brand-primary/80 font-medium">
-                        {draft.generationStage
-                          ? `Generating · ${draft.generationStage}`
-                          : 'Generating...'}
-                      </p>
-                    )}
+                    {/* Where it goes, at every width: a group filed under one row of the week
+                        must still say it also posts elsewhere, and to which account. */}
+                    <CardTargets
+                      draft={draft}
+                      className="mt-1 text-2xs text-muted-foreground @max-[14rem]/draft-card:mt-0.5"
+                    />
 
-                    {/* Caption */}
-                    <p
-                      className={cn(
-                        'mt-1 text-xs font-medium leading-snug text-muted-foreground',
-                        revealCaptionClass,
-                      )}
-                    >
-                      {draft.captionPreview}
-                    </p>
-
-                    {draft.status === 'placeholder' && (
-                      <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
-                        Awaiting generation
-                      </p>
-                    )}
-
-                    {/* Generation progress */}
-                    {typeof displayProgress === 'number' ? (
-                      <div className="mt-3 space-y-1.5">
-                        <div className="flex items-center justify-between text-2xs font-bold uppercase tracking-tighter text-muted-foreground">
-                          <span className="text-primary animate-pulse">GENERATING</span>
-                          <span>{displayProgress}%</span>
-                        </div>
-                        <Progress value={displayProgress} className="h-1" />
-                      </div>
+                    {/* The compact card hides the error panel, but not the one action a failed
+                        card exists to offer. A refused publish has none: regenerating cannot fix it. */}
+                    {isFailed && onRegenerate && (draft.generationError || !draft.publishError) ? (
+                      <span className="mt-1 hidden @max-[14rem]/draft-card:flex">
+                        <CardStageAction label="Retry" onActivate={() => onRegenerate(draft.id)} />
+                      </span>
                     ) : null}
 
-                    {/* Error state. Generation wins: a cleared publish failure leaves its reason in content_json. */}
-                    {isFailed && (draft.generationError || draft.publishError) ? (
-                      <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
-                        <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
-                          {draft.generationError ? 'Generation failed' : 'Publish failed'}
+                    {/* Everything below the title is detail the compact card leaves to the hover
+                        card and the preview. */}
+                    <div className="@max-[14rem]/draft-card:hidden">
+                      {/* Inline streaming status */}
+                      {isStreaming && (
+                        <p className="mt-0.5 text-2xs text-brand-primary/80 font-medium">
+                          {draft.generationStage
+                            ? `Generating · ${draft.generationStage}`
+                            : 'Generating...'}
                         </p>
-                        <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
-                          {draft.generationError ?? draft.publishError}
+                      )}
+
+                      {/* Caption */}
+                      <p
+                        className={cn(
+                          'mt-1 text-xs font-medium leading-snug text-muted-foreground',
+                          revealCaptionClass,
+                        )}
+                      >
+                        {caption}
+                      </p>
+
+                      {draft.status === 'placeholder' && (
+                        <p className="mt-1.5 text-2xs italic text-muted-foreground/60">
+                          Awaiting generation
                         </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          {/* Retry regenerates the media, which cannot fix a refused publish. */}
-                          {onRegenerate && draft.generationError ? (
-                            // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
+                      )}
+
+                      {/* Generation progress */}
+                      {typeof displayProgress === 'number' ? (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex items-center justify-between text-2xs font-bold uppercase tracking-tighter text-muted-foreground">
+                            <span className="text-primary animate-pulse">GENERATING</span>
+                            <span>{displayProgress}%</span>
+                          </div>
+                          <Progress value={displayProgress} className="h-1" />
+                        </div>
+                      ) : null}
+
+                      {/* Error state. Generation wins: a cleared publish failure leaves its reason in content_json. */}
+                      {isFailed && (draft.generationError || draft.publishError) ? (
+                        <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
+                          <p className="text-2xs font-semibold uppercase tracking-wide text-destructive">
+                            {draft.generationError ? 'Generation failed' : 'Publish failed'}
+                          </p>
+                          <p className="mt-0.5 line-clamp-2 text-2xs text-destructive/90">
+                            {draft.generationError ?? draft.publishError}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            {/* Retry regenerates the media, which cannot fix a refused publish. */}
+                            {onRegenerate && draft.generationError ? (
+                              // biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-2xs text-destructive hover:bg-destructive/20"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onRegenerate(draft.id);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    onRegenerate(draft.id);
+                                  }
+                                }}
+                              >
+                                <Zap className="h-3 w-3" />
+                                Retry
+                              </span>
+                            ) : null}
+                            {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
                             <span
                               role="button"
                               tabIndex={0}
                               className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-2xs text-destructive hover:bg-destructive/20"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                onRegenerate(draft.id);
+                                clearFailure();
                               }}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                   event.preventDefault();
                                   event.stopPropagation();
-                                  onRegenerate(draft.id);
+                                  clearFailure();
                                 }
                               }}
                             >
-                              <Zap className="h-3 w-3" />
-                              Retry
+                              <X className="h-3 w-3" />
+                              Clear
                             </span>
-                          ) : null}
-                          {/* biome-ignore lint/a11y/useSemanticElements: nested inside the card's own <button>; a real <button> here is invalid HTML nesting */}
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-2xs text-destructive hover:bg-destructive/20"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              clearFailure();
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                clearFailure();
-                              }
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                            Clear
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
+                      ) : null}
 
-                    {/* Media state — honest about text-only / blueprint drafts.
+                      {/* Media state — honest about text-only / blueprint drafts.
                         Only realized media earns the image chip; a pending draft
                         shows its storyboard (when ready) or an explicit text-only
                         state, never a fake "has media" affordance. */}
-                    {isMediaGenerating ? (
-                      <p className="mt-1.5 flex items-center gap-1 text-2xs font-medium text-primary/80">
-                        <span
-                          className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
-                          aria-hidden
-                        />
-                        {draft.generationStage ?? 'Generating media…'}
-                      </p>
-                    ) : isStoryboardReady ? (
-                      <div className="mt-2 space-y-1">
-                        {ugc ? (
-                          <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-primary">
-                            UGC · {characterReferenceCount} character
-                            {characterReferenceCount === 1 ? '' : 's'} locked
-                            {productReferenceCount > 0
-                              ? ` · ${productReferenceCount} product${productReferenceCount === 1 ? '' : 's'}`
-                              : ''}
-                          </span>
-                        ) : null}
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          <MediaStagePill
-                            mediaStage="storyboard_ready"
-                            missingReelVideo={isReelMissingVideo(draft)}
-                          />
-                          {draft.mediaSuggestion?.reel?.composition &&
-                          onStitch &&
-                          draft.backendDraftId &&
-                          !isStreaming ? (
-                            <CardStageAction
-                              label="Ready to render"
-                              onActivate={() => onStitch(draft.id)}
-                            />
-                          ) : null}
-                          {onRealize &&
-                          openInStudio &&
-                          draft.backendDraftId &&
-                          !isStreaming &&
-                          (!draft.mediaSuggestion?.reel?.composition ||
-                            !aiStudioHandoffIssue(draft)) ? (
-                            <CardStageAction
-                              label={
-                                draft.mediaSuggestion?.reel?.composition
-                                  ? 'Edit in AI Studio'
-                                  : 'Generate final media'
-                              }
-                              onActivate={() => onRealize(draft.id)}
-                            />
-                          ) : null}
-                        </span>
-                        {storyboardFrames.length > 0 && (
-                          <div className="flex items-center gap-1">
-                            {storyboardFrames.slice(0, 3).map((frame, index) => (
-                              <div
-                                key={`${frame.storagePath ?? frame.storageUrl}-${index}`}
-                                className="relative h-9 w-9 overflow-hidden rounded border border-border/60 bg-muted/40"
-                              >
-                                <Image
-                                  src={frame.storageUrl as string}
-                                  alt={`Storyboard frame ${index + 1}`}
-                                  fill
-                                  unoptimized
-                                  sizes="36px"
-                                  className="object-cover"
-                                />
-                              </div>
-                            ))}
-                            {storyboardFrames.length > 3 && (
-                              <span className="text-2xs font-medium text-muted-foreground/60">
-                                +{storyboardFrames.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : mediaStage === 'failed' ? (
-                      <p className="mt-1.5">
-                        <MediaStagePill mediaStage="failed" />
-                      </p>
-                    ) : isTextOnlyDraft ? (
-                      // The row wraps and the sentence truncates so the action keeps its full
-                      // width at the narrowest planner column — it used to render as "En…".
-                      <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60">
-                          Text only — no media yet
-                        </span>
-                        {onEnrich && draft.backendDraftId ? (
-                          <CardStageAction label="Enrich" onActivate={() => onEnrich(draft.id)} />
-                        ) : null}
-                      </p>
-                    ) : null}
-
-                    {/* Footer: platforms | media chip | format */}
-                    <div className="mt-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        {draft.platforms.map((p) => (
-                          <PlatformBadge key={p} platform={p} />
-                        ))}
-                        {isCarousel ? (
+                      {isMediaGenerating ? (
+                        <p className="mt-1.5 flex items-center gap-1 text-2xs font-medium text-primary/80">
                           <span
-                            className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/70 ml-0.5"
-                            title={
-                              carouselSlideCount > 1
-                                ? `Carousel · ${carouselSlideCount} slides`
-                                : 'Carousel'
-                            }
-                          >
-                            <GalleryHorizontalEnd className="h-2.5 w-2.5" />
-                            {carouselSlideCount > 1 ? carouselSlideCount : null}
+                            className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary"
+                            aria-hidden
+                          />
+                          {draft.generationStage ?? 'Generating media…'}
+                        </p>
+                      ) : isStoryboardReady ? (
+                        <div className="mt-2 space-y-1">
+                          {ugc ? (
+                            <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/5 px-2 py-0.5 text-2xs font-medium text-primary">
+                              UGC · {characterReferenceCount} character
+                              {characterReferenceCount === 1 ? '' : 's'} locked
+                              {productReferenceCount > 0
+                                ? ` · ${productReferenceCount} product${productReferenceCount === 1 ? '' : 's'}`
+                                : ''}
+                            </span>
+                          ) : null}
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <MediaStagePill
+                              mediaStage="storyboard_ready"
+                              missingReelVideo={isReelMissingVideo(draft)}
+                            />
+                            {draft.mediaSuggestion?.reel?.composition &&
+                            onStitch &&
+                            draft.backendDraftId &&
+                            !isStreaming ? (
+                              <CardStageAction
+                                label="Ready to render"
+                                onActivate={() => onStitch(draft.id)}
+                              />
+                            ) : null}
+                            {onRealize &&
+                            openInStudio &&
+                            draft.backendDraftId &&
+                            !isStreaming &&
+                            (!draft.mediaSuggestion?.reel?.composition ||
+                              !aiStudioHandoffIssue(draft)) ? (
+                              <CardStageAction
+                                label={
+                                  draft.mediaSuggestion?.reel?.composition
+                                    ? 'Edit in AI Studio'
+                                    : 'Generate final media'
+                                }
+                                onActivate={() => onRealize(draft.id)}
+                              />
+                            ) : null}
                           </span>
-                        ) : hasRealizedMedia ? (
-                          <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/60 ml-0.5">
-                            <ImageIcon className="h-2.5 w-2.5" />
-                            {realizedMediaCount > 1 ? realizedMediaCount : null}
+                          {storyboardFrames.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              {storyboardFrames.slice(0, 3).map((frame, index) => (
+                                <div
+                                  key={`${frame.storagePath ?? frame.storageUrl}-${index}`}
+                                  className="relative h-9 w-9 overflow-hidden rounded border border-border/60 bg-muted/40"
+                                >
+                                  <Image
+                                    src={frame.storageUrl as string}
+                                    alt={`Storyboard frame ${index + 1}`}
+                                    fill
+                                    unoptimized
+                                    sizes="36px"
+                                    className="object-cover"
+                                  />
+                                </div>
+                              ))}
+                              {storyboardFrames.length > 3 && (
+                                <span className="text-2xs font-medium text-muted-foreground/60">
+                                  +{storyboardFrames.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : mediaStage === 'failed' ? (
+                        <p className="mt-1.5">
+                          <MediaStagePill mediaStage="failed" />
+                        </p>
+                      ) : isTextOnlyDraft ? (
+                        // The row wraps and the sentence truncates so the action keeps its full
+                        // width at the narrowest planner column — it used to render as "En…".
+                        <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="min-w-0 truncate text-2xs italic text-muted-foreground/60">
+                            Text only — no media yet
                           </span>
-                        ) : null}
+                          {onEnrich && draft.backendDraftId ? (
+                            <CardStageAction label="Enrich" onActivate={() => onEnrich(draft.id)} />
+                          ) : null}
+                        </p>
+                      ) : null}
+
+                      {/* Footer: media chip | format */}
+                      <div className="mt-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {isCarousel ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/70 ml-0.5"
+                              title={
+                                carouselSlideCount > 1
+                                  ? `Carousel · ${carouselSlideCount} slides`
+                                  : 'Carousel'
+                              }
+                            >
+                              <GalleryHorizontalEnd className="h-2.5 w-2.5" />
+                              {carouselSlideCount > 1 ? carouselSlideCount : null}
+                            </span>
+                          ) : hasRealizedMedia ? (
+                            <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground/60 ml-0.5">
+                              <ImageIcon className="h-2.5 w-2.5" />
+                              {realizedMediaCount > 1 ? realizedMediaCount : null}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="text-2xs text-muted-foreground/70 font-bold uppercase tracking-widest">
+                          {draft.format}
+                        </span>
                       </div>
-                      <span className="text-2xs text-muted-foreground/70 font-bold uppercase tracking-widest">
-                        {draft.format}
-                      </span>
                     </div>
                   </div>
                 </button>
@@ -659,35 +775,11 @@ export function CalendarDraftCard({
             </ContextMenuItem>
           ) : null}
           <ContextMenuSeparator />
-          {ORGANIC_POST_PLATFORM_KEYS.map((option) => (
-            <ContextMenuItem
-              key={option}
-              onSelect={() =>
-                applyQuickEdit((currentDraft) =>
-                  currentDraft.platforms[0] === option
-                    ? currentDraft
-                    : {
-                        ...currentDraft,
-                        platforms: [option],
-                        // An account belongs to one platform; persistence re-picks this one's default.
-                        targetAccountId: undefined,
-                      },
-                )
-              }
-            >
-              Platform: {POST_PLATFORMS[option].label}
-            </ContextMenuItem>
-          ))}
+          {/* Platforms change in ONE place, the review panel's selector, which writes the
+              group's member rows. A second list here changed only the browser's copy. */}
+          <ContextMenuItem onSelect={() => onSelect(draft.id)}>Change platforms…</ContextMenuItem>
           {QUICK_TIME_OPTIONS.map((time) => (
-            <ContextMenuItem
-              key={time}
-              onSelect={() =>
-                applyQuickEdit((currentDraft) => ({
-                  ...currentDraft,
-                  timeLabel: time,
-                }))
-              }
-            >
+            <ContextMenuItem key={time} onSelect={() => changeTime(time)}>
               Time: {time}
             </ContextMenuItem>
           ))}
@@ -748,8 +840,8 @@ export function CalendarDraftCard({
               {isPublishing
                 ? 'Publishing…'
                 : publishBlockedReason
-                  ? `Publish to ${publishPlatformLabel(publishPlatform)} — needs setup`
-                  : `Publish to ${publishPlatformLabel(publishPlatform)}`}
+                  ? `Publish to ${publishDestination} — needs setup`
+                  : `Publish to ${publishDestination}`}
             </ContextMenuItem>
           ) : null}
           {openInStudio && !aiStudioHandoffIssue(draft) ? (

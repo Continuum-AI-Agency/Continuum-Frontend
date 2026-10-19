@@ -1,10 +1,13 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ParsedRunEvent, useRunEventStream } from '@/hooks/useRunEventStream';
 import { useGenerationSummaries } from '@/lib/organic/generationSummaries';
 import { useCalendarStore } from '@/lib/organic/store';
+import { fetchBulkPlanBatch } from '@/lib/organic-agent/headlessBatch';
 import { cn } from '@/lib/utils';
+import { HeadlessBatchCard } from './HeadlessBatchCard';
 import type { BulkRunState, BulkRunStatus } from './types';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -36,7 +39,11 @@ function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
     case 'slot_failed':
       return { ...prev, failed: prev.failed + 1 };
     case 'run_completed':
-      return { ...prev, status: 'completed' as BulkRunStatus };
+      return {
+        ...prev,
+        status: 'completed' as BulkRunStatus,
+        completedAt: event.ts || prev.completedAt,
+      };
     case 'run_failed':
       return { ...prev, status: 'failed' as BulkRunStatus };
     default:
@@ -81,20 +88,49 @@ function CountRow({ label, counts }: { label: string; counts: Record<string, num
   );
 }
 
+/**
+ * The plan's headless batch, looked up once its run has ended (fetchBulkPlanBatch says why). The
+ * Backend makes it a moment after the run_completed event, so a lookup that comes too early is
+ * retried for about half a minute. A plan whose batch was refused shows no card.
+ */
+function useBulkPlanBatch(
+  brandId: string | null | undefined,
+  run: BulkRunState,
+  expectsBatch: boolean,
+) {
+  return useQuery({
+    queryKey: ['organic', 'bulk-plan-batch', brandId ?? 'none', run.runId],
+    queryFn: ({ signal }) =>
+      fetchBulkPlanBatch({ brandId: brandId ?? '', planId: run.planId, signal }),
+    enabled: Boolean(brandId && expectsBatch && run.completedAt),
+    // Found once; from then on the card polls the batch itself.
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    retry: 6,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
+  }).data;
+}
+
 export function BulkRunPanel({
   runId,
   total,
   brandId,
+  expectsBatch = false,
+  onOpenDraft,
 }: {
   runId: string;
   total: number;
   brandId?: string | null;
+  /** The plan gave the director pieces (BulkPlacementSpec.headless), so a batch will be made. */
+  expectsBatch?: boolean;
+  onOpenDraft?: (draftId: string) => void;
 }) {
   // The run-event stream still drives the by-platform / by-format breakdowns (the
   // summaries carry platform but not format), but the completion TALLY is derived
   // from the real post_generation_jobs rows for this plan.
   const run = useBulkRunProgress(runId, total);
   const { summaries } = useGenerationSummaries(brandId);
+  const batch = useBulkPlanBatch(brandId, run, expectsBatch);
 
   const planId = run.planId;
   const planSummaries = useMemo(
@@ -133,42 +169,47 @@ export function BulkRunPanel({
   }, [status, requestCalendarRefetch]);
 
   return (
-    <div
-      className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3"
-      data-testid="bulk-run-panel"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Bulk Generation Run
-        </p>
-        <span
-          className={cn(
-            'shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide',
-            status === 'completed'
-              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-              : status === 'failed'
-                ? 'bg-red-500/15 text-red-500'
-                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-          )}
-        >
-          {status}
-        </span>
-      </div>
-
-      <div className="mb-2 flex items-center gap-2">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/40">
-          <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+    <>
+      <div
+        className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3"
+        data-testid="bulk-run-panel"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Bulk Generation Run
+          </p>
+          <span
+            className={cn(
+              'shrink-0 rounded px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide',
+              status === 'completed'
+                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                : status === 'failed'
+                  ? 'bg-red-500/15 text-red-500'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+            )}
+          >
+            {status}
+          </span>
         </div>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {done}/{displayTotal}
-          {failed > 0 ? ` · ${failed} failed` : ''}
-        </span>
-      </div>
 
-      <div className="space-y-1.5">
-        <CountRow label="By platform" counts={run.byPlatform} />
-        <CountRow label="By format" counts={run.byFormat} />
+        <div className="mb-2 flex items-center gap-2">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/40">
+            <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {done}/{displayTotal}
+            {failed > 0 ? ` · ${failed} failed` : ''}
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          <CountRow label="By platform" counts={run.byPlatform} />
+          <CountRow label="By format" counts={run.byFormat} />
+        </div>
       </div>
-    </div>
+      {batch && onOpenDraft ? (
+        <HeadlessBatchCard brandId={brandId} status={batch} live onOpenDraft={onOpenDraft} />
+      ) : null}
+    </>
   );
 }

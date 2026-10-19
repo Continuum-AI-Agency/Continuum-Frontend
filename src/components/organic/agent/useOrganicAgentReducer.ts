@@ -77,7 +77,8 @@ export type PanelAction =
       messageId: string;
       metadata?: AgentMentionMetadata;
     }
-  | { type: 'BEGIN_STREAMING' }
+  | { type: 'BEGIN_STREAMING'; messageId: string }
+  | { type: 'DISCARD_MESSAGE'; messageId: string }
   | { type: 'STREAM_DELTA'; delta: string }
   | { type: 'STREAM_TOOL_CALL'; event: ToolCallEvent }
   | {
@@ -117,6 +118,24 @@ export type PanelAction =
 
 const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
 
+// A media strip is one per tool call, a headless batch card one per batch: a frame replayed by
+// the run store (or persisted twice, or a later status of the same batch) replaces its card where
+// it stands rather than stacking a second copy under the same turn.
+function sameUiCard(a: UiCard, b: UiCard): boolean {
+  if (a.type === 'media_strip' && b.type === 'media_strip') {
+    return a.data.toolCallId === b.data.toolCallId;
+  }
+  if (a.type === 'headless_batch' && b.type === 'headless_batch') {
+    return a.data.batchId === b.data.batchId;
+  }
+  return false;
+}
+
+export function upsertUiCard(cards: readonly UiCard[], card: UiCard): UiCard[] {
+  const at = cards.findIndex((c) => sameUiCard(c, card));
+  return at === -1 ? [...cards, card] : cards.map((c, i) => (i === at ? card : c));
+}
+
 // Unique per assistant turn. A random suffix avoids same-millisecond collisions
 // (two turns opened in the same tick would otherwise share an id and a React key).
 function newAssistantMessageId(): string {
@@ -155,6 +174,7 @@ function applyPipelineStage(
     pct: ev.pct ?? prev?.pct,
     status: terminal && prev ? prev.status : 'running',
     preview: prev?.preview,
+    previewStale: prev?.previewStale,
     quality: prev?.quality,
     draftId: prev?.draftId,
     toolCallId: prev?.toolCallId,
@@ -190,6 +210,8 @@ function applyPipelineCard(
     pct: card.status === 'completed' ? 100 : (card.pct ?? base.pct),
     quality: card.quality ?? base.quality,
     preview: card.preview ?? base.preview,
+    // A preview arriving on a live frame is fresh; only restoreSession marks one stale.
+    previewStale: card.preview ? card.previewStale === true : base.previewStale,
     // Merge checkpoint fields so a later card update that omits checkpoint
     // doesn't wipe out textReady/blueprintReady received on an earlier frame.
     checkpoint: card.checkpoint ? { ...base.checkpoint, ...card.checkpoint } : base.checkpoint,
@@ -497,17 +519,26 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     case 'CLEAR_MEDIA_RESOLUTION':
       return { ...state, mediaResolution: null };
 
-    case 'BEGIN_STREAMING': {
-      const streamingId = newAssistantMessageId();
+    // A turn with no user message of its own (the agent's reply to an approval) still
+    // needs a row to stream into; the caller names it so it can discard it if the turn
+    // never started. It is never auto-retried: a retry re-sends the nearest preceding
+    // user message, which belongs to the turn before, so a transient error paints the
+    // error row instead.
+    case 'BEGIN_STREAMING':
       return {
         ...state,
-        messages: [...state.messages, { id: streamingId, role: 'assistant' as const, content: '' }],
-        streamingMessageId: streamingId,
+        messages: [
+          ...state.messages,
+          { id: action.messageId, role: 'assistant' as const, content: '', approvalReply: true },
+        ],
+        streamingMessageId: action.messageId,
         pendingAutoRetry: null,
-        autoRetryConsumed: false,
+        autoRetryConsumed: true,
         streamRetrying: null,
       };
-    }
+
+    case 'DISCARD_MESSAGE':
+      return { ...state, messages: state.messages.filter((m) => m.id !== action.messageId) };
 
     case 'STREAM_DELTA':
       if (!state.streamingMessageId) return state;
@@ -557,7 +588,10 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ...state,
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
-            ? { ...m, uiCards: [...(m.uiCards ?? []), action.card] }
+            ? {
+                ...m,
+                uiCards: upsertUiCard(m.uiCards ?? [], action.card),
+              }
             : m,
         ),
       };
@@ -845,6 +879,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                     images: previews,
                     format: card.preview?.format ?? null,
                   },
+                  previewStale: false,
                 }
               : {}),
             checkpoint: {

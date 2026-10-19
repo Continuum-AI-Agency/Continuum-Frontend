@@ -3,6 +3,8 @@
 import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
   type OneShotPostResponse,
+  PUBLISH_PLATFORM_LABELS,
+  PUBLISH_PLATFORM_ORDER,
   type PublishPlatform,
   plannerDayIdInZone,
   resolvePlannerTimeZone,
@@ -22,35 +24,43 @@ import {
   ResizablePanelCollapseButton,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/ToastProvider';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { pluralize } from '@/lib/format/pluralize';
-import { readSavedAccountSelection } from '@/lib/organic/account-selection';
-import {
-  aiStudioHandoffIssue,
-  brandStorageKeyAiStudioLastDraft,
-} from '@/lib/organic/ai-studio-bridge';
+import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
+import { findDraftInDays } from '@/lib/organic/groupDraft';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform } from '@/lib/organic/postPlatforms';
+import { defaultPublishAccount } from '@/lib/organic/publish-utils';
+import { usePublishAccounts } from '@/lib/organic/publishTargets';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
-import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
+import { getLocalStorageJSON, removeLocalStorage, setLocalStorageJSON } from '@/lib/storage';
+import { cn } from '@/lib/utils';
 import { buildCalendarPlanRequest } from '../calendar-plan/buildCalendarPlanRequest';
 import { CalendarPlanCard } from '../calendar-plan/CalendarPlanCard';
 import { useCalendarPlan } from '../calendar-plan/useCalendarPlan';
 import { useAiStudioHandoff } from '../hooks/useAiStudioHandoff';
 import { useApproveScheduleDraft } from '../hooks/useApproveScheduleDraft';
+import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
-import { useCalendarSelection } from '../hooks/useCalendarSelection';
+import {
+  findSelectionFocusTarget,
+  isEditableTarget,
+  isPlannerKeyEvent,
+  openerShowsTarget,
+  type SelectionFocusTarget,
+  useCalendarSelection,
+} from '../hooks/useCalendarSelection';
 import { useDraftGeneration } from '../hooks/useDraftGeneration';
 import { useRescheduleDraft } from '../hooks/useRescheduleDraft';
 import { AiPostComposer } from './AiPostComposer';
@@ -76,8 +86,7 @@ import {
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
-import { OrganicDraftPreview } from './OrganicDraftPreview';
-import { PostedContentPreview } from './PostedContentQuickLook';
+import { PlannerAttentionDock } from './PlannerAttentionDock';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
 import { usePlannerDateAnchors } from './planner-date-anchor';
@@ -87,7 +96,7 @@ import {
   type CreatePostMode,
   type PlannerPlatformKey,
 } from './planner-platforms';
-import { derivePlannerInsight } from './plannerIntelligence';
+import { derivePlannerDock } from './plannerIntelligence';
 import { TimeGridCanvas } from './TimeGridCanvas';
 import type {
   OrganicCalendarDay,
@@ -116,11 +125,23 @@ const OrganicTrendsDrawer = dynamic(
   () => import('./OrganicTrendsDrawer').then((m) => m.OrganicTrendsDrawer),
   { ssr: false },
 );
+// Gesture-gated too: a preview renders only once a post is selected. Warmed on idle below,
+// so the first click does not wait on the chunk.
+const OrganicDraftPreview = dynamic(
+  () => import('./OrganicDraftPreview').then((m) => m.OrganicDraftPreview),
+  { ssr: false },
+);
+const PostedContentPreview = dynamic(
+  () => import('./PostedContentQuickLook').then((m) => m.PostedContentPreview),
+  { ssr: false },
+);
 
-/** Warm the lazy view chunks so the SECOND view switch is instant. */
+/** Warm the lazy chunks so the SECOND view switch and the FIRST preview are instant. */
 function warmPlannerViewChunks(): void {
   void import('./OrganicMonthlyCalendar');
   void import('./OrganicListView');
+  void import('./OrganicDraftPreview');
+  void import('./PostedContentQuickLook');
 }
 
 const PREVIEW_LAYOUT_KEY = 'continuum:organic-planner:preview-percent';
@@ -141,7 +162,6 @@ type OrganicCalendarWorkspaceClientProps = {
   brandName?: string;
   brandTimeZone?: string;
   userId?: string;
-  instagramAccountId?: string;
   initialWeekStart?: string | null;
   initialSelectedDraftId?: string | null;
   initialView?: 'week' | 'month' | 'list';
@@ -153,6 +173,25 @@ type OrganicCalendarWorkspaceClientProps = {
 };
 
 const NOOP_STRING = (_id: string) => {};
+
+/**
+ * The loaded draft with this id, read when an action fires. The per-draft handlers reach every
+ * memoised cell and chip; closing over `drafts` handed each of them a new one per keystroke.
+ */
+function findLoadedDraft(draftId: string): OrganicCalendarDraft | undefined {
+  // A group member's own row (the preview's frame) is nested in its card, not a slot.
+  return findDraftInDays(useCalendarStore.getState().days, draftId);
+}
+
+/** "Wed, Oct 14 · 11:00 AM" — a published post carries its day as an id, not a label. */
+function formatPostedWhen(post: OrganicCalendarPostedContent): string {
+  const day = new Date(`${post.dayId}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  return `${day} · ${post.timeLabel}`;
+}
 
 export function OrganicCalendarWorkspaceClient(props: OrganicCalendarWorkspaceClientProps) {
   return (
@@ -177,7 +216,6 @@ function OrganicCalendarWorkspaceInner({
   brandProfileId,
   brandName,
   brandTimeZone,
-  instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
@@ -213,7 +251,6 @@ function OrganicCalendarWorkspaceInner({
     gridError,
     dateRange,
     setDateRange,
-    focusedDayId,
     setFocusedDayId,
     editingDraftId,
     beginEditingDraft,
@@ -244,31 +281,23 @@ function OrganicCalendarWorkspaceInner({
       gridError: state.gridError,
       dateRange: state.dateRange,
       setDateRange: state.setDateRange,
-      focusedDayId: state.focusedDayId,
       setFocusedDayId: state.setFocusedDayId,
       editingDraftId: state.editingDraftId,
       beginEditingDraft: state.beginEditingDraft,
     })),
   );
 
+  const publishAccounts = usePublishAccounts(brandProfileId ?? null);
   React.useEffect(() => {
-    // One account id per publishable platform — the account this workspace publishes to. It
-    // seeds from the brand's default, then from whatever the user last chose in the switcher
-    // (per brand), and both generation and publish read it. A choice that only lives in a
-    // dropdown is how posts kept landing on the brand's first-resolved account.
-    const instagram = instagramAccountId ?? platformAccountIds.instagram;
-    const defaults: Partial<Record<PublishPlatform, string>> = {
-      ...(instagram ? { instagram } : {}),
-      ...(platformAccountIds.facebook ? { facebook: platformAccountIds.facebook } : {}),
-      ...(platformAccountIds.linkedin ? { linkedin: platformAccountIds.linkedin } : {}),
-    };
-
-    const saved = readSavedAccountSelection(brandProfileId ?? null);
-    const accountIds = { ...defaults };
-    for (const [platform, accountId] of Object.entries(saved) as Array<[PublishPlatform, string]>) {
-      // Only honor a saved choice that is still one of the brand's accounts.
-      const options = platformAccountOptions[platform as OrganicPlatformKey] ?? [];
-      if (options.some((option) => option.id === accountId)) accountIds[platform] = accountId;
+    // One account id per platform — the account a new post on it goes to. It seeds from the
+    // brand's server-side default (the switcher writes it), else the only usable account, else
+    // what the page resolved. TikTok, YouTube and X used to get nothing, so their posts were
+    // created with no account and refused at publish (A8).
+    const accountIds: Partial<Record<PublishPlatform, string>> = {};
+    for (const platform of PUBLISH_PLATFORM_ORDER) {
+      const accountId =
+        defaultPublishAccount(publishAccounts, platform)?.id ?? platformAccountIds[platform];
+      if (accountId) accountIds[platform] = accountId;
     }
 
     setAccountContext({
@@ -279,9 +308,9 @@ function OrganicCalendarWorkspaceInner({
       brandId: brandProfileId ?? null,
     });
   }, [
-    instagramAccountId,
     platformAccountIds,
     platformAccountOptions,
+    publishAccounts,
     brandProfileId,
     setAccountContext,
   ]);
@@ -291,7 +320,9 @@ function OrganicCalendarWorkspaceInner({
   // the panel could not be closed by the X, the chevron, or Escape.
   const forgetDeepLinkedDraft = React.useCallback(() => {
     writePlannerUrlState({ draftId: null, edit: null });
-  }, []);
+    // The last-draft restore reads this key on reload, which reopened a dismissed preview.
+    if (brandProfileId) removeLocalStorage(brandStorageKeyAiStudioLastDraft(brandProfileId));
+  }, [brandProfileId]);
 
   const {
     selectedId,
@@ -309,17 +340,130 @@ function OrganicCalendarWorkspaceInner({
     post: OrganicCalendarPostedContent;
     metricsHref: string | null;
   } | null>(null);
+  // Dismissing the preview unmounts whatever held focus (the X, the collapse chevron, the
+  // caption), which drops focus to <body>. Hand it back to the control that opened the
+  // preview — a calendar chip, a dock row — after the commit, unless the user has already put
+  // focus somewhere else. A control that is gone by then (a dock row that left its group), or
+  // that arrow keys have since moved the selection away from, falls back to the selection's
+  // chip, re-queried.
+  const plannerRootRef = React.useRef<HTMLDivElement>(null);
+  const openerRef = React.useRef<HTMLElement | null>(null);
+  const rememberOpener = React.useCallback(() => {
+    const root = plannerRootRef.current;
+    const active = document.activeElement;
+    openerRef.current =
+      root && active instanceof HTMLElement && active !== root && root.contains(active)
+        ? active
+        : null;
+  }, []);
+  // The narrow sheet asks where focus goes only once it has closed, by which time the
+  // selection is already cleared — so the target is kept from the moment of dismissal.
+  const dismissedFocusRef = React.useRef<{
+    opener: HTMLElement | null;
+    target: SelectionFocusTarget | null;
+  }>({ opener: null, target: null });
+  const resolveDismissedFocus = React.useCallback((): HTMLElement | null => {
+    const { opener, target } = dismissedFocusRef.current;
+    if (target && opener?.isConnected && openerShowsTarget(opener, target)) return opener;
+    const root = plannerRootRef.current;
+    return root && target ? findSelectionFocusTarget(root, target) : null;
+  }, []);
+
   const handleSelectPost = React.useCallback(
     (post: OrganicCalendarPostedContent, metricsHref: string | null) => {
+      rememberOpener();
       clearAll();
       setSelectedPost({ post, metricsHref });
     },
-    [clearAll],
+    [clearAll, rememberOpener],
   );
+  // Stable, because every memoised chip and cell receives them.
+  const handleSelectDraft = React.useCallback(
+    (id: string) => {
+      rememberOpener();
+      handleSelect(id, false);
+    },
+    [handleSelect, rememberOpener],
+  );
+  const handleToggleDraftSelection = React.useCallback(
+    (id: string) => handleSelect(id, true),
+    [handleSelect],
+  );
+  // The dock's "Add media": select the draft and open its editor in one store write, the
+  // path the chips' "Open in editor" takes.
+  const handleEditDraft = React.useCallback(
+    (id: string) => {
+      rememberOpener();
+      beginEditingDraft(id);
+    },
+    [beginEditingDraft, rememberOpener],
+  );
+
+  const returnFocusToSelection = React.useCallback(() => {
+    const root = plannerRootRef.current;
+    const target: SelectionFocusTarget | null = selectedId
+      ? {
+          kind: 'draft',
+          id: selectedId,
+          dayId: calendarDays.find((day) => day.slots.some((slot) => slot.id === selectedId))?.id,
+        }
+      : selectedPost
+        ? { kind: 'post', id: selectedPost.post.id, dayId: selectedPost.post.dayId }
+        : null;
+    dismissedFocusRef.current = { opener: openerRef.current, target };
+    openerRef.current = null;
+    if (!root || !target) return;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== root && active.isConnected) return;
+      resolveDismissedFocus()?.focus();
+    });
+  }, [calendarDays, resolveDismissedFocus, selectedId, selectedPost]);
+
   const closePreview = React.useCallback(() => {
+    returnFocusToSelection();
     setSelectedPost(null);
     clearAll();
-  }, [clearAll]);
+  }, [clearAll, returnFocusToSelection]);
+  const handleCollapsePreview = React.useCallback(() => {
+    returnFocusToSelection();
+    collapsePreview();
+  }, [collapsePreview, returnFocusToSelection]);
+  const resolveSheetFinalFocus = React.useCallback(
+    () => resolveDismissedFocus() ?? true,
+    [resolveDismissedFocus],
+  );
+  const previewTitleRef = React.useRef<HTMLHeadingElement>(null);
+  const handlePlannerKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape' && isPlannerKeyEvent(event)) {
+        returnFocusToSelection();
+        setSelectedPost(null);
+      }
+      // Tab from the open draft goes into its preview. Focus stays on the draft so the arrows
+      // browse drafts, and without this the rest of the grid and the dock (75 stops in a busy
+      // week) stood between a keyboard user and the panel. Escape still returns to the draft.
+      const plainTab =
+        event.key === 'Tab' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      // The draft element itself: a control nested in it (the list row's checkbox) keeps its turn.
+      const fromDraft =
+        event.target instanceof Element ? event.target.getAttribute('data-draft-id') : null;
+      const title = previewTitleRef.current;
+      if (
+        plainTab &&
+        selectedId &&
+        fromDraft === selectedId &&
+        title &&
+        title.getClientRects().length > 0
+      ) {
+        event.preventDefault();
+        title.focus();
+        return;
+      }
+      handleKeyDown(event);
+    },
+    [handleKeyDown, returnFocusToSelection, selectedId],
+  );
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -397,6 +541,7 @@ function OrganicCalendarWorkspaceInner({
       setCalendarDays,
       updateDraftById,
       platformAccountIds: draftAccountIds,
+      timeZone: brandTimeZone,
     });
 
   // Server-authoritative freshness: subscribe to Realtime draft writes for this
@@ -613,12 +758,21 @@ function OrganicCalendarWorkspaceInner({
   // "New post"): the day the user last clicked, else today when it is on screen,
   // else the first visible day. Never `calendarDays[0]`, which is the top of the
   // loaded week regardless of what the user is looking at.
-  const defaultCreateDayId = React.useMemo(() => {
+  // Resolved when the "+" is pressed, not closed over: the create handlers reach every
+  // memoised cell as onCreatePost, so depending on the focused day re-rendered the whole
+  // grid on each day click.
+  const visibleDayIdsRef = React.useRef(visibleDayIds);
+  React.useEffect(() => {
+    visibleDayIdsRef.current = visibleDayIds;
+  }, [visibleDayIds]);
+  const resolveDefaultCreateDayId = React.useCallback(() => {
+    const focusedDayId = useCalendarStore.getState().focusedDayId;
     if (focusedDayId) return focusedDayId;
     const todayId = formatDayId(new Date());
-    if (visibleDayIds.includes(todayId)) return todayId;
-    return visibleDayIds[0] ?? todayId;
-  }, [focusedDayId, visibleDayIds]);
+    const visible = visibleDayIdsRef.current;
+    if (visible.includes(todayId)) return todayId;
+    return visible[0] ?? todayId;
+  }, []);
 
   const selectedDraft = React.useMemo(() => {
     if (!selectedId) return null;
@@ -634,11 +788,17 @@ function OrganicCalendarWorkspaceInner({
   // transient gap with the last-resolved draft so the panel never blanks and
   // re-renders with fresh content the moment the draft resolves again.
   const previewPost = selectedId ? null : selectedPost;
+  const selectedPostId = previewPost?.post.id ?? null;
   const selectedPostMetricsHref = previewPost?.metricsHref;
+  // Stable for the memoised PostedContentPreview: an inline arrow re-rendered it every commit.
+  const handleViewSelectedPostMetrics = React.useCallback(() => {
+    if (selectedPostMetricsHref) router.push(selectedPostMetricsHref);
+  }, [router, selectedPostMetricsHref]);
   const hasSelection = Boolean(selectedId || previewPost);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
   const isPreviewOpen = hasSelection && !isPreviewCollapsed;
+
   const lastResolvedDraftRef = React.useRef<OrganicCalendarDraft | null>(null);
   if (!selectedId) {
     lastResolvedDraftRef.current = null;
@@ -650,7 +810,6 @@ function OrganicCalendarWorkspaceInner({
     (selectedId && lastResolvedDraftRef.current?.id === selectedId
       ? lastResolvedDraftRef.current
       : null);
-  const studioIssue = previewDraft ? aiStudioHandoffIssue(previewDraft) : null;
 
   React.useEffect(() => {
     if (selectedId) setSelectedPost(null);
@@ -676,6 +835,15 @@ function OrganicCalendarWorkspaceInner({
       // yet. Don't prune the selection until hydration is authoritative, or the
       // back-nav transiently loses the draft being edited.
       if (!isCalendarHydrated) return;
+      // The same post under a new id: removing the card's own platform hands the card to
+      // another member row, which the refetch maps under that row's id. Follow the row.
+      const rowId = lastResolvedDraftRef.current?.backendDraftId;
+      const followed = rowId ? drafts.find((draft) => draft.backendDraftId === rowId) : undefined;
+      if (followed) {
+        if (editingDraftId === selectedId) beginEditingDraft(followed.id);
+        else setSelectedDraftId(followed.id);
+        return;
+      }
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
       if (typeof window !== 'undefined') {
@@ -711,7 +879,10 @@ function OrganicCalendarWorkspaceInner({
     }
   }, [
     allDraftIds,
+    beginEditingDraft,
     brandProfileId,
+    drafts,
+    editingDraftId,
     initialSelectedDraftId,
     isAutoSelectSuppressed,
     isCalendarHydrated,
@@ -833,9 +1004,12 @@ function OrganicCalendarWorkspaceInner({
       // only holds the loaded week scaffold plus days that already carry drafts. A
       // "+" on any other cell must still create there, so derive the day from its id
       // rather than bailing — `addDraft` materializes it in the store the same way.
-      const targetDayId = context?.dayId ?? defaultCreateDayId;
+      const targetDayId = context?.dayId ?? resolveDefaultCreateDayId();
+      // Read from the store, not closed over, for the same reason as the default day: every
+      // draft edit would otherwise hand every memoised cell a new onCreatePost.
       const targetDay =
-        calendarDays.find((day) => day.id === targetDayId) ?? makeCalendarDay(targetDayId);
+        useCalendarStore.getState().days.find((day) => day.id === targetDayId) ??
+        makeCalendarDay(targetDayId);
       const isManual = context?.mode === 'manual';
       const status = context?.status ?? 'draft';
       const trendTag = context?.trendId;
@@ -852,7 +1026,7 @@ function OrganicCalendarWorkspaceInner({
         title:
           status === 'placeholder'
             ? 'Content idea'
-            : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
+            : `New ${PUBLISH_PLATFORM_LABELS[selectedPlatform]} post`,
         summary: '',
         timeLabel: targetDay.suggestedTimes[0] ?? '9:00 AM',
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
@@ -876,7 +1050,7 @@ function OrganicCalendarWorkspaceInner({
       handleSelect(draftId, false);
       return draftId;
     },
-    [activePlatforms, addDraft, calendarDays, defaultCreateDayId, handleSelect, draftAccountIds],
+    [activePlatforms, addDraft, draftAccountIds, handleSelect, resolveDefaultCreateDayId],
   );
 
   // "Create with AI" composer (direction + tagged creatives + trends → durable job).
@@ -900,7 +1074,7 @@ function OrganicCalendarWorkspaceInner({
       // mode seeds an editable draft from scratch.
       if (mode === 'ai') {
         const platform = (isPostPlatform(context?.platform) && context?.platform) || 'instagram';
-        const dayId = (context?.dayId ?? defaultCreateDayId).slice(0, 10);
+        const dayId = (context?.dayId ?? resolveDefaultCreateDayId()).slice(0, 10);
         const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
           ? `${dayId}T12:00:00.000Z`
           : new Date().toISOString();
@@ -920,7 +1094,36 @@ function OrganicCalendarWorkspaceInner({
         format: context?.format,
       });
     },
-    [createQuickDraft, defaultCreateDayId],
+    [createQuickDraft, resolveDefaultCreateDayId],
+  );
+
+  // Month and list menus name the platform `platformKey`; the create flow calls it `platform`.
+  const handleCreatePostFromMenu = React.useCallback(
+    ({
+      dayId,
+      platformKey,
+      status,
+      mode,
+      format,
+    }: {
+      dayId?: string;
+      platformKey?: string;
+      status?: 'draft' | 'scheduled' | 'placeholder';
+      mode?: CreatePostMode;
+      format?: CreatePostFormat;
+    }) =>
+      handleGoDraft({
+        dayId,
+        platform: platformKey as PlannerPlatformKey | undefined,
+        status,
+        mode,
+        format,
+      }),
+    [handleGoDraft],
+  );
+  const handleDeleteDraftRequest = React.useCallback(
+    (id: string) => requestDraftDeletion([id], bulkDeleteDrafts),
+    [bulkDeleteDrafts, requestDraftDeletion],
   );
 
   const handleOneShotCreated = React.useCallback(
@@ -969,7 +1172,7 @@ function OrganicCalendarWorkspaceInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
+  const { handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
     weekStartId,
     selectedDraft,
@@ -978,17 +1181,13 @@ function OrganicCalendarWorkspaceInner({
     isCalendarHydrated,
   });
 
+  // The AI Studio context's value: every draft card reads it, so it must not change per edit.
   const handleOpenDraftInStudio = React.useCallback(
     (draftId: string) => {
-      let found: OrganicCalendarDraft | undefined;
-      for (const day of calendarDays) {
-        found = day.slots.find((d: OrganicCalendarDraft) => d.id === draftId);
-        if (found) break;
-      }
-      if (!found) return;
-      handleOpenDraftInAiStudio(found);
+      const found = findLoadedDraft(draftId);
+      if (found) handleOpenDraftInAiStudio(found);
     },
-    [calendarDays, handleOpenDraftInAiStudio],
+    [handleOpenDraftInAiStudio],
   );
 
   const { approveAndSchedule } = useApproveScheduleDraft();
@@ -1051,16 +1250,16 @@ function OrganicCalendarWorkspaceInner({
   // storyboard-ready card. Both need the persisted backend row.
   const handleEnrichDraft = React.useCallback(
     (draftId: string) => {
-      const draft = drafts.find((d) => d.id === draftId);
+      const draft = findLoadedDraft(draftId);
       if (!brandProfileId || !draft?.backendDraftId) return;
       void expandDrafts(brandProfileId, [{ feId: draft.id, backendDraftId: draft.backendDraftId }]);
     },
-    [brandProfileId, drafts, expandDrafts],
+    [brandProfileId, expandDrafts],
   );
 
   const handleRealizeDraft = React.useCallback(
     (draftId: string) => {
-      const draft = drafts.find((d) => d.id === draftId);
+      const draft = findLoadedDraft(draftId);
       if (draft?.mediaSuggestion?.reel?.composition) {
         handleOpenDraftInAiStudio(draft);
         return;
@@ -1076,12 +1275,12 @@ function OrganicCalendarWorkspaceInner({
         },
       ]);
     },
-    [brandProfileId, drafts, generateDraftMedia, handleOpenDraftInAiStudio],
+    [brandProfileId, generateDraftMedia, handleOpenDraftInAiStudio],
   );
 
   const handleStitchDraft = React.useCallback(
     (draftId: string) => {
-      const draft = drafts.find((candidate) => candidate.id === draftId);
+      const draft = findLoadedDraft(draftId);
       const reel = draft?.mediaSuggestion?.reel;
       if (!brandProfileId || !draft?.backendDraftId || !reel?.composition) return;
       const sceneDuration =
@@ -1098,7 +1297,7 @@ function OrganicCalendarWorkspaceInner({
             : sceneDuration,
       });
     },
-    [brandProfileId, drafts, stitchDraftReel],
+    [brandProfileId, stitchDraftReel],
   );
 
   // Selected reel drafts that carry a persisted storyboard and have not yet been
@@ -1191,28 +1390,18 @@ function OrganicCalendarWorkspaceInner({
     return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)));
   }, [drafts, selectedIds]);
 
+  const attachCreative = useAttachCreative();
+
   const handlePickerAttach = React.useCallback(
     (publishingAssets: OrganicCalendarDraft['publishingAssets']) => {
       if (!publishingAssets?.length || attachTargetDraftIds.length === 0) return;
-      // Derive a mediaSuggestion patch from the publishing assets so
-      // assertPublishable + stageMediaForPublish both see consistent data.
-      const primary = publishingAssets[0];
-      const mediaPatch: OrganicCalendarDraft['mediaSuggestion'] = {
-        mediaStatus: 'user_supplied',
-        kind: primary?.kind ?? undefined,
-        bucket: primary?.bucket ?? undefined,
-        url: primary?.storagePath ?? undefined,
-      };
-      for (const draftId of attachTargetDraftIds) {
-        updateDraftById(draftId, (draft) => ({
-          ...draft,
-          publishingAssets,
-          mediaSuggestion: { ...draft.mediaSuggestion, ...mediaPatch },
-        }));
-      }
+      attachCreative(
+        drafts.filter((draft) => attachTargetDraftIds.includes(draft.id)),
+        publishingAssets,
+      );
       setAttachPickerOpen(false);
     },
-    [attachTargetDraftIds, updateDraftById],
+    [attachCreative, attachTargetDraftIds, drafts],
   );
 
   const handleBulkAttachCreative = React.useCallback(() => {
@@ -1253,9 +1442,21 @@ function OrganicCalendarWorkspaceInner({
     isGenerating,
     hasSelection,
   });
-  const plannerInsight = React.useMemo(
-    () => derivePlannerInsight(visibleWeekDays),
-    [visibleWeekDays],
+  // The dock and the rail sentence above the grid read every loaded draft from the brand's
+  // today, whatever week is on screen: the queue of what to do next, not a second copy of
+  // the grid. One derivation feeds both, so they cannot disagree.
+  const brandTodayId =
+    plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
+  const plannerDock = React.useMemo(
+    () =>
+      derivePlannerDock({
+        todayId: brandTodayId,
+        attentionDays: gridDays,
+        allDays: calendarDays,
+        postedContent,
+        platforms: plannerPlatforms,
+      }),
+    [brandTodayId, calendarDays, gridDays, plannerPlatforms, postedContent],
   );
 
   // Hiding is reversible and the toast is where that promise is kept.
@@ -1273,26 +1474,96 @@ function OrganicCalendarWorkspaceInner({
     setLocalStorageJSON(PREVIEW_LAYOUT_KEY, percent);
   }, []);
 
-  const previewTransition = React.useMemo(
-    () => ({
-      duration: 0.24,
-      ease: [0.16, 1, 0.3, 1] as const,
-    }),
-    [],
-  );
+  const previewLabel = previewPost ? 'Published post preview' : 'Draft preview';
+  const previewWhen =
+    previewDraft?.dateLabel || (previewPost ? formatPostedWhen(previewPost.post) : '');
+  const previewContent = isPreviewOpen ? (
+    <>
+      {/* A draft names itself in its own identity row (account, format, time, ⋯, close); a
+          published post keeps this header. The wide panel's collapse chevron sits absolutely
+          over the row's left edge, so both rows keep clear of it. */}
+      {!previewDraft && (
+        <div
+          className={cn(
+            'mb-2 flex shrink-0 items-center justify-between gap-2 pb-1.5',
+            isWidePlanner && 'pl-7',
+          )}
+        >
+          <h2
+            ref={previewTitleRef}
+            tabIndex={-1}
+            className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground focus:outline-none"
+          >
+            Post Preview{previewWhen ? ` · ${previewWhen}` : ''}
+          </h2>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Close preview"
+            onClick={closePreview}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+        {previewPost ? (
+          <PostedContentPreview
+            post={previewPost.post}
+            brandName={brandName}
+            className="h-full w-full overflow-y-auto border-0"
+            onViewMetrics={selectedPostMetricsHref ? handleViewSelectedPostMetrics : undefined}
+          />
+        ) : previewDraft ? (
+          <OrganicDraftPreview
+            draft={previewDraft}
+            brandName={brandName}
+            brandProfileId={brandProfileId}
+            brandTimeZone={brandTimeZone}
+            titleRef={previewTitleRef}
+            insetStart={isWidePlanner}
+            onClose={closePreview}
+            onStitch={handleStitchDraft}
+            isStitching={stitchingDraftIds.has(previewDraft.id)}
+            onApprove={async (draftId) => {
+              const target = drafts.find((draft) => draft.id === draftId);
+              return target ? approveAndSchedule(target) : false;
+            }}
+          />
+        ) : (
+          // Selection is set but the draft has not resolved from the
+          // current calendar set yet (a refetch/reconcile is in flight).
+          // Show a neutral loading state — the panel re-renders with
+          // content the moment the draft resolves, so no reload is needed.
+          <div
+            className="flex h-full flex-col gap-3 p-3"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading post preview"
+          >
+            <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
+            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
+            <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
+          </div>
+        )}
+      </div>
+    </>
+  ) : null;
+
+  // The dock lives in the space the week grid and the list do not use. The month grid
+  // stretches to fill its region, so it has no such space.
+  const showDock = viewMode !== 'month';
 
   return (
     <AiStudioHandoffProvider onOpen={brandProfileId ? handleOpenDraftInStudio : null}>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: planner root is a keyboard-shortcut surface for the whole grid (delete/select), not a single control */}
       <div
-        className="@container/organic relative h-full min-h-0 w-full overflow-hidden focus:outline-none"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && selectedPost) {
-            closePreview();
-            return;
-          }
-          handleKeyDown(event);
-        }}
+        ref={plannerRootRef}
+        className="@container/organic relative h-full min-h-0 w-full overflow-clip focus:outline-none"
+        onKeyDown={handlePlannerKeyDown}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so grid-level key handlers fire without a child holding focus
         tabIndex={0}
       >
@@ -1321,133 +1592,16 @@ function OrganicCalendarWorkspaceInner({
             isWide={isWidePlanner}
             previewPercent={previewPercent}
             onPreviewPercentChange={handlePreviewPercentChange}
-            onCollapsePreview={collapsePreview}
-            preview={
-              isPreviewOpen ? (
-                <motion.aside
-                  role="complementary"
-                  aria-label={previewPost ? 'Published post preview' : 'Draft preview'}
-                  tabIndex={-1}
-                  initial={{ opacity: 0, x: 28, scale: 0.98 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  transition={previewTransition}
-                  className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45"
-                >
-                  <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Post Preview
-                      {previewDraft?.dateLabel
-                        ? ` · ${previewDraft.dateLabel}`
-                        : previewPost
-                          ? ` · ${previewPost.post.dayId}`
-                          : ''}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      {previewDraft?.mediaSuggestion?.reel?.composition &&
-                      previewDraft.mediaSuggestion.reel.generated !== true ? (
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="sm"
-                          disabled={stitchingDraftIds.has(previewDraft.id)}
-                          onClick={() => handleStitchDraft(previewDraft.id)}
-                        >
-                          {stitchingDraftIds.has(previewDraft.id)
-                            ? 'Stitching…'
-                            : 'Ready to render'}
-                        </Button>
-                      ) : null}
-                      {previewDraft ? <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={
-                                    !brandProfileId || !previewDraft || Boolean(studioIssue)
-                                  }
-                                  onClick={handleOpenInAiStudio}
-                                  style={
-                                    !brandProfileId || !previewDraft || studioIssue
-                                      ? { pointerEvents: 'none' }
-                                      : undefined
-                                  }
-                                >
-                                  {previewDraft?.mediaSuggestion?.reel?.composition
-                                    ? 'Edit in AI Studio'
-                                    : 'Open in AI Studio'}
-                                </Button>
-                              </span>
-                            }
-                          />
-                          {!brandProfileId || studioIssue ? (
-                            <TooltipContent>
-                              {!brandProfileId ? 'Select a brand to use AI Studio' : studioIssue}
-                            </TooltipContent>
-                          ) : null}
-                        </Tooltip>
-                      </TooltipProvider> : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Close preview"
-                        onClick={closePreview}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    {previewPost ? (
-                      <PostedContentPreview
-                        post={previewPost.post}
-                        className="h-full w-full overflow-y-auto border-0"
-                        onViewMetrics={
-                          selectedPostMetricsHref
-                            ? () => router.push(selectedPostMetricsHref)
-                            : undefined
-                        }
-                      />
-                    ) : previewDraft ? (
-                      <OrganicDraftPreview
-                        draft={previewDraft}
-                        brandName={brandName}
-                        brandProfileId={brandProfileId}
-                        onApprove={(draftId) => {
-                          const target = drafts.find((draft) => draft.id === draftId);
-                          if (target) void approveAndSchedule(target);
-                        }}
-                      />
-                    ) : (
-                      // Selection is set but the draft has not resolved from the
-                      // current calendar set yet (a refetch/reconcile is in flight).
-                      // Show a neutral loading state — the panel re-renders with
-                      // content the moment the draft resolves, so no reload is needed.
-                      <div
-                        className="flex h-full flex-col gap-3 p-3"
-                        role="status"
-                        aria-busy="true"
-                        aria-label="Loading post preview"
-                      >
-                        <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
-                        <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
-                        <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
-                        <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
-                      </div>
-                    )}
-                  </div>
-                </motion.aside>
-              ) : null
-            }
+            onCollapsePreview={handleCollapsePreview}
+            preview={previewContent}
+            previewLabel={previewLabel}
+            previewTitleRef={previewTitleRef}
+            onClosePreview={closePreview}
+            resolveSheetFinalFocus={resolveSheetFinalFocus}
             workspace={
-              <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-clip">
                 {viewMode !== 'month' && (
-                  <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                  <PlannerWorkflowRail currentStage={plannerStage} insight={plannerDock.insight} />
                 )}
                 <div>
                   <CalendarToolbar
@@ -1495,8 +1649,21 @@ function OrganicCalendarWorkspaceInner({
                 {/* One local Suspense boundary and one keyed crossfade with NO exit.
                     `AnimatePresence mode="wait"` serialised a 150ms exit BEFORE the entering
                     child mounted, delaying the lazy chunk request and keeping the heavy
-                    outgoing tree alive across the swap. */}
-                <div data-tour-id="organic-list-content" className="min-h-0 flex-1 overflow-hidden">
+                    outgoing tree alive across the swap.
+                    The region is a grid, not a flex column: the view row is
+                    minmax(0, max-content), so it takes min(its content, the space) and the
+                    dock row gets exactly what is left. A flex basis would resolve the view's
+                    h-full against the whole region. minmax(0,1fr) columns stop the week grid's
+                    min-content width from widening the region past a narrow calendar. */}
+                <div
+                  data-tour-id="organic-list-content"
+                  className={cn(
+                    'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-clip',
+                    showDock
+                      ? 'grid-rows-[minmax(0,max-content)_minmax(0,1fr)]'
+                      : 'grid-rows-[minmax(0,1fr)]',
+                  )}
+                >
                   <React.Suspense fallback={<PlannerViewSkeleton view={viewMode} />}>
                     <motion.div
                       key={`view-${viewMode}`}
@@ -1508,13 +1675,14 @@ function OrganicCalendarWorkspaceInner({
                       {viewMode === 'week' ? (
                         /* Trends live in the toolbar's drawer (OrganicTrendsDrawer), so the
                            week grid takes the full vertical space instead of a 74/26 split. */
-                        <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
+                        <div data-tour-id="organic-calendar" className="h-full overflow-clip">
                           <TimeGridCanvas
                             days={visibleWeekDays}
                             platforms={plannerPlatforms}
                             postedContent={postedContent}
                             selectedDraftId={selectedId}
                             selectedDraftIds={selectedIds}
+                            selectedPostId={selectedPostId}
                             rangeTitle={weekTitle}
                             rangeSubtitle={weekSubtitle}
                             onPreviousWeek={handlePreviousWeek}
@@ -1523,23 +1691,16 @@ function OrganicCalendarWorkspaceInner({
                             isLoadingPostedContent={isLoadingPostedContent}
                             postedContentError={postedContentError}
                             onRetryPostedContent={retryPostedContent}
-                            onCreatePost={(context) =>
-                              handleGoDraft({
-                                dayId: context?.dayId,
-                                platform: context?.platform,
-                                status: context?.status,
-                                mode: context?.mode,
-                                format: context?.format,
-                              })
-                            }
-                            onSelectDraft={(id) => handleSelect(id, false)}
-                            onToggleSelection={(id) => handleSelect(id, true)}
+                            onCreatePost={handleGoDraft}
+                            onSelectDraft={handleSelectDraft}
+                            onToggleSelection={handleToggleDraftSelection}
                             onRegenerate={handleRegenerate}
                             onClearFailure={handleClearFailure}
                             onEnrich={handleEnrichDraft}
                             onRealize={handleRealizeDraft}
                             onStitch={handleStitchDraft}
                             onNativeDrop={handleNativeDrop}
+                            onSelectPost={handleSelectPost}
                           />
                         </div>
                       ) : viewMode === 'month' ? (
@@ -1553,23 +1714,17 @@ function OrganicCalendarWorkspaceInner({
                           postedContent={postedContent}
                           selectedDraftId={selectedId}
                           selectedDraftIds={selectedIds}
-                          onSelectDraft={(id) => handleSelect(id, false)}
+                          selectedPostId={selectedPostId}
+                          onSelectDraft={handleSelectDraft}
                           onSelectPost={handleSelectPost}
-                          onToggleSelection={(id) => handleSelect(id, true)}
-                          onCreatePost={({ dayId, platformKey, status, mode, format }) =>
-                            handleGoDraft({
-                              dayId,
-                              platform: platformKey as PlannerPlatformKey | undefined,
-                              status,
-                              mode,
-                              format,
-                            })
-                          }
+                          onToggleSelection={handleToggleDraftSelection}
+                          onCreatePost={handleCreatePostFromMenu}
                           onPreviousMonth={handlePreviousMonth}
                           onNextMonth={handleNextMonth}
                           onToday={handleMonthToday}
                           onRegenerate={handleRegenerate}
-                          onDeleteDraft={(id) => requestDraftDeletion([id], bulkDeleteDrafts)}
+                          onDeleteDraft={handleDeleteDraftRequest}
+                          brandName={brandName}
                         />
                       ) : (
                         <OrganicListView
@@ -1577,17 +1732,10 @@ function OrganicCalendarWorkspaceInner({
                           platforms={plannerPlatforms}
                           selectedDraftId={selectedId}
                           selectedDraftIds={selectedIds}
-                          onSelectDraft={(id) => handleSelect(id, false)}
-                          onToggleSelection={(id) => handleSelect(id, true)}
+                          onSelectDraft={handleSelectDraft}
+                          onToggleSelection={handleToggleDraftSelection}
                           onRegenerate={handleRegenerate}
-                          onCreatePost={({ dayId, platformKey, status, mode }) =>
-                            handleGoDraft({
-                              dayId,
-                              platform: platformKey as PlannerPlatformKey | undefined,
-                              status,
-                              mode,
-                            })
-                          }
+                          onCreatePost={handleCreatePostFromMenu}
                           brandProfileId={brandProfileId}
                           backlogDrafts={backlogDrafts}
                           onAddBacklogDraft={addBacklogDraft}
@@ -1597,6 +1745,16 @@ function OrganicCalendarWorkspaceInner({
                       )}
                     </motion.div>
                   </React.Suspense>
+                  {showDock ? (
+                    <PlannerAttentionDock
+                      dock={plannerDock}
+                      showAttention={viewMode !== 'list'}
+                      platforms={plannerPlatforms}
+                      onSelectDraft={handleSelectDraft}
+                      onAddMedia={handleEditDraft}
+                      onCreatePost={handleCreatePostFromMenu}
+                    />
+                  ) : null}
                 </div>
 
                 <OrganicTrendsDrawer
@@ -1697,10 +1855,17 @@ type PlannerLayoutProps = {
   workspace: React.ReactNode;
   /** `null` when nothing is selected — the layout then gives the grid the whole surface. */
   preview: React.ReactNode | null;
+  /** The preview landmark's accessible name: "Draft preview" or "Published post preview". */
+  previewLabel: string;
+  previewTitleRef: React.RefObject<HTMLHeadingElement | null>;
   previewPercent: number;
   onPreviewPercentChange: (percent: number) => void;
   onCollapsePreview: () => void;
+  onClosePreview: () => void;
+  resolveSheetFinalFocus: () => HTMLElement | true;
 };
+
+const PREVIEW_TRANSITION = { duration: 0.24, ease: [0.16, 1, 0.3, 1] as const };
 
 /**
  * Two layouts, not one responsive one. Below `lg` there is no ResizablePanelGroup at all:
@@ -1714,6 +1879,7 @@ function PlannerLayout({ isWide, ...props }: PlannerLayoutProps) {
 function PlannerSplitLayout({
   workspace,
   preview,
+  previewLabel,
   previewPercent,
   onPreviewPercentChange,
   onCollapsePreview,
@@ -1756,7 +1922,17 @@ function PlannerSplitLayout({
             collapsedSize={0}
           >
             <div className="relative flex h-full min-h-0">
-              {preview}
+              <motion.aside
+                role="complementary"
+                aria-label={previewLabel}
+                tabIndex={-1}
+                initial={{ opacity: 0, x: 28, scale: 0.98 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={PREVIEW_TRANSITION}
+                className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45"
+              >
+                {preview}
+              </motion.aside>
               <ResizablePanelCollapseButton
                 data-testid="planner-preview-collapse"
                 label="Collapse draft preview"
@@ -1772,28 +1948,63 @@ function PlannerSplitLayout({
 }
 
 /**
- * Inline rather than a Sheet on purpose: the planner's whole value is seeing the grid while
- * editing a post, and a sheet covers the grid.
+ * Below 64rem the preview opens in a sheet over the grid instead of taking 48dvh beneath
+ * it, which left one partial row of the week visible. The sheet is fixed and portalled, so
+ * opening it cannot change the grid's in-flow geometry — the class of resize loop that once
+ * locked this layout cannot start. Escape and outside presses arrive through the sheet's own
+ * onOpenChange. The sheet's keydowns still bubble to the planner root through the React tree,
+ * but they come from a portal outside it in the DOM, so isPlannerKeyEvent's contains() guard
+ * drops them.
  */
 function PlannerStackedLayout({
   workspace,
   preview,
-  onCollapsePreview,
+  previewLabel,
+  previewTitleRef,
+  onClosePreview,
+  resolveSheetFinalFocus,
 }: Omit<PlannerLayoutProps, 'isWide' | 'previewPercent' | 'onPreviewPercentChange'>) {
+  // The selection clears the moment the sheet is dismissed, but the sheet animates out
+  // after that; it keeps the last content rather than sliding away empty, and lets go of
+  // it once the exit has finished. A ref, not state: `preview` is a new element on every
+  // workspace render, and a setState here re-rendered the layout twice per commit.
+  const lastPreviewRef = React.useRef<React.ReactNode>(null);
+  if (preview !== null) lastPreviewRef.current = preview;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div className="min-h-0 flex-1 overflow-hidden">{workspace}</div>
-      {preview ? (
-        <div className="relative mt-1 flex h-[48dvh] max-h-[48dvh] min-h-0 shrink-0 flex-col border-t border-border/50 pt-1">
-          {preview}
-          <ResizablePanelCollapseButton
-            data-testid="planner-preview-collapse"
-            label="Collapse draft preview"
-            direction="down"
-            onClick={onCollapsePreview}
-          />
-        </div>
-      ) : null}
+      <Sheet
+        open={preview !== null}
+        onOpenChange={(open, details) => {
+          if (open) return;
+          // Escape in the caption is the caption's: it leaves the field, not the sheet.
+          if (details.reason === 'escape-key' && isEditableTarget(details.event.target)) {
+            details.cancel();
+            return;
+          }
+          onClosePreview();
+        }}
+        onOpenChangeComplete={(open) => {
+          if (!open) lastPreviewRef.current = null;
+        }}
+      >
+        {/* Base UI makes the page outside a modal dialog inert but does not say so on the
+            popup; aria-modal states it for assistive tech. The scrim says it to the eye. */}
+        <SheetContent
+          side="right"
+          aria-label={previewLabel}
+          aria-modal="true"
+          showCloseButton={false}
+          showOverlay
+          overlayClassName="bg-neutral-950/20"
+          initialFocus={previewTitleRef}
+          finalFocus={resolveSheetFinalFocus}
+          className="gap-0 p-2 data-[side=right]:w-full data-[side=right]:sm:max-w-[28rem] motion-reduce:transition-none"
+        >
+          {preview ?? lastPreviewRef.current}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

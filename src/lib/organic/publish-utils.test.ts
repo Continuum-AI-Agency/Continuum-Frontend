@@ -4,107 +4,123 @@ import type {
   OrganicCalendarDraft,
   OrganicDraftGroupMember,
 } from '@/components/organic/primitives/types';
-import { inferPublishPlatform, resolveGroupPublishTargets } from './publish-utils';
+import {
+  defaultPublishAccount,
+  groupPublishBlocker,
+  inferPublishPlatform,
+  unpublishedMembers,
+} from './publish-utils';
+
+const IMAGE = [{ role: 'primary', kind: 'image', storageUrl: 'https://cdn.example/image.jpg' }];
+const VIDEO = [{ role: 'primary', kind: 'video', storageUrl: 'https://cdn.example/clip.mp4' }];
 
 function makeDraft(partial: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
     id: 'placement-1',
-    backendDraftId: 'row-1',
+    backendDraftId: 'row-instagram',
     title: 'One post, three destinations',
     summary: '',
     timeLabel: '9:00 AM',
     dateLabel: 'Mon, Jun 1',
-    status: 'scheduled',
+    status: 'draft',
     platforms: ['instagram'],
     format: 'Post',
     objective: 'engagement',
     captionPreview: 'Shared copy',
     tags: [],
     mediaCount: 1,
+    publishingAssets: IMAGE as never,
     ...partial,
   };
 }
 
+/** A member row other than the card's own: it carries its own draft. */
 function member(
   platform: OrganicDraftGroupMember['platform'],
-  partial: Partial<OrganicDraftGroupMember> = {},
+  draft: Partial<OrganicCalendarDraft> = {},
 ): OrganicDraftGroupMember {
+  const status = draft.status ?? 'draft';
   return {
     backendDraftId: `row-${platform}`,
     platform,
-    status: 'scheduled',
-    ...partial,
+    status,
+    accountId: null,
+    draft: makeDraft({
+      id: `placement-1::${platform}`,
+      backendDraftId: `row-${platform}`,
+      platforms: [platform],
+      ...draft,
+    }),
   };
 }
 
-describe('resolveGroupPublishTargets', () => {
-  it('resolves an ungrouped draft to its own single target', () => {
-    const targets = resolveGroupPublishTargets(makeDraft());
-    expect(targets).toEqual([{ draftId: 'row-1', platform: 'instagram' }]);
+const ownRow = (status: OrganicDraftGroupMember['status'] = 'draft'): OrganicDraftGroupMember => ({
+  backendDraftId: 'row-instagram',
+  platform: 'instagram',
+  status,
+  accountId: null,
+});
+
+describe('unpublishedMembers', () => {
+  it('is the card itself for a lone draft', () => {
+    const card = makeDraft();
+    expect(unpublishedMembers(card)).toEqual([card]);
   });
 
-  it('returns nothing for a draft that was never persisted', () => {
-    // There is no id for the publish route's claim to key on.
-    expect(resolveGroupPublishTargets(makeDraft({ backendDraftId: undefined }))).toEqual([]);
-  });
-
-  it('returns every group member in canonical platform order', () => {
-    const targets = resolveGroupPublishTargets(
-      makeDraft({
-        platforms: ['linkedin', 'instagram', 'facebook'],
-        groupMembers: [member('linkedin'), member('facebook'), member('instagram')],
-      }),
-    );
-
-    expect(targets).toEqual([
-      { draftId: 'row-instagram', platform: 'instagram' },
-      { draftId: 'row-facebook', platform: 'facebook' },
-      { draftId: 'row-linkedin', platform: 'linkedin' },
+  it('drops a live member so a group publish never re-posts it', () => {
+    const card = makeDraft({
+      platforms: ['instagram', 'facebook', 'linkedin'],
+      groupMembers: [ownRow(), member('facebook', { status: 'published' }), member('linkedin')],
+    });
+    expect(unpublishedMembers(card).map((draft) => draft.backendDraftId)).toEqual([
+      'row-instagram',
+      'row-linkedin',
     ]);
   });
+});
 
-  it('drops already-published members so a group publish never re-posts a live post', () => {
-    const targets = resolveGroupPublishTargets(
-      makeDraft({
-        platforms: ['instagram', 'linkedin'],
-        groupMembers: [member('instagram', { status: 'published' }), member('linkedin')],
-      }),
-    );
-
-    expect(targets).toEqual([{ draftId: 'row-linkedin', platform: 'linkedin' }]);
+describe('groupPublishBlocker', () => {
+  it('passes a ready lone draft', () => {
+    expect(groupPublishBlocker(makeDraft())).toBeNull();
   });
 
-  it('drops members with no persisted row while retaining publishable platforms', () => {
-    const targets = resolveGroupPublishTargets(
-      makeDraft({
-        platforms: ['instagram', 'facebook', 'tiktok'],
-        groupMembers: [
-          member('instagram', { backendDraftId: '' }),
-          member('facebook'),
-          member('tiktok'),
-        ],
-      }),
-    );
-
-    expect(targets).toEqual([
-      { draftId: 'row-facebook', platform: 'facebook' },
-      { draftId: 'row-tiktok', platform: 'tiktok' },
-    ]);
+  it('names the reason for a lone draft without a platform prefix', () => {
+    expect(groupPublishBlocker(makeDraft({ captionPreview: '' }))).toContain('caption');
   });
 
-  it('collapses a duplicated platform onto its first member so a group cannot double-post', () => {
-    const targets = resolveGroupPublishTargets(
-      makeDraft({
-        groupMembers: [
-          member('instagram', { backendDraftId: 'row-first' }),
-          member('instagram', { backendDraftId: 'row-second' }),
-        ],
-      }),
-    );
-
-    expect(targets).toEqual([{ draftId: 'row-first', platform: 'instagram' }]);
+  // The card's row carries the group's platform union. Judged with the card's image, the
+  // YouTube member (a reel with its own video) was refused.
+  it('judges every member on its own platform with its own content', () => {
+    const card = makeDraft({
+      platforms: ['instagram', 'youtube'],
+      groupMembers: [
+        ownRow(),
+        member('youtube', { format: 'Reel', publishingAssets: VIDEO as never }),
+      ],
+    });
+    expect(groupPublishBlocker(card)).toBeNull();
   });
 
+  it('names the member that is not ready', () => {
+    const card = makeDraft({
+      platforms: ['instagram', 'linkedin'],
+      groupMembers: [ownRow(), member('linkedin', { captionPreview: '' })],
+    });
+    expect(groupPublishBlocker(card)).toStartWith('LinkedIn: ');
+  });
+
+  it('says so when every member is already live', () => {
+    const card = makeDraft({
+      platforms: ['instagram', 'linkedin'],
+      groupMembers: [ownRow('published'), member('linkedin', { status: 'published' })],
+    });
+    expect(groupPublishBlocker(makeDraft({ ...card, status: 'published' }))).toBe(
+      'Every platform of this post is already live.',
+    );
+  });
+});
+
+describe('inferPublishPlatform', () => {
   it('infers the publish platform for single-draft publishing', () => {
     expect(inferPublishPlatform(makeDraft({ platforms: ['linkedin'] }))).toBe('linkedin');
     expect(inferPublishPlatform(makeDraft({ platforms: ['tiktok'] }))).toBe('tiktok');
@@ -120,5 +136,37 @@ describe('resolveGroupPublishTargets', () => {
         }),
       ),
     ).toBe('linkedin');
+  });
+});
+
+describe('defaultPublishAccount', () => {
+  const candidate = (id: string, extra: { isDefault?: boolean; needsReauth?: boolean } = {}) => ({
+    id,
+    platform: 'tiktok' as const,
+    handle: id,
+    displayName: null,
+    avatarUrl: null,
+    needsReauth: extra.needsReauth ?? false,
+    isDefault: extra.isDefault ?? false,
+  });
+
+  it("takes the brand's default, else the only usable account", () => {
+    expect(
+      defaultPublishAccount([candidate('a'), candidate('b', { isDefault: true })], 'tiktok')?.id,
+    ).toBe('b');
+    expect(
+      defaultPublishAccount([candidate('a'), candidate('b', { needsReauth: true })], 'tiktok')?.id,
+    ).toBe('a');
+  });
+
+  it('leaves a real choice, a lapsed default and another platform unanswered', () => {
+    expect(defaultPublishAccount([candidate('a'), candidate('b')], 'tiktok')).toBeNull();
+    expect(
+      defaultPublishAccount(
+        [candidate('a', { isDefault: true, needsReauth: true }), candidate('b'), candidate('c')],
+        'tiktok',
+      ),
+    ).toBeNull();
+    expect(defaultPublishAccount([candidate('a')], 'instagram')).toBeNull();
   });
 });

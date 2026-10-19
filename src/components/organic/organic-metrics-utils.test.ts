@@ -19,6 +19,7 @@ import {
   postWindowDays,
   postWindowRange,
   resolveReportViewState,
+  splitTrialPosts,
   summarizeYoutubeTypeMetrics,
   trendLineShape,
   windowEndingOn,
@@ -106,6 +107,41 @@ describe('isYouTubeShort', () => {
     expect(isYouTubeShort(yt('b', 'shorts'))).toBe(true);
     expect(isYouTubeShort(yt('c', 'VIDEO'))).toBe(false);
     expect(isYouTubeShort({ id: 'd', metrics: {} } as OrganicPost)).toBe(false);
+  });
+});
+
+describe('splitTrialPosts', () => {
+  const verdict = (kind: 'winner' | 'loser', hookRate: number) => ({
+    verdict: kind,
+    reason: 'Hook rate vs the account median.',
+    hookRate,
+    medianHookRate: 31,
+    engagementRate: null,
+    medianEngagementRate: null,
+    reach: 900,
+    baselineReels: 12,
+    measuredAt: '2026-10-16T11:00:00.000Z',
+  });
+  const post = (id: string, trial?: OrganicPost['trial']): OrganicPost =>
+    ({ id, mediaProductType: 'REELS', ...(trial ? { trial } : {}) }) as OrganicPost;
+
+  it('keeps trials out of the ordinary list, in its original order', () => {
+    const { ordinary } = splitTrialPosts([
+      post('a'),
+      post('t1', { graduationStrategy: 'MANUAL', verdict: null }),
+      post('b'),
+    ]);
+    expect(ordinary.map((p) => p.id)).toEqual(['a', 'b']);
+  });
+
+  it('orders the trials lane by verdict: winners first, then measuring, then losers', () => {
+    const { trials } = splitTrialPosts([
+      post('loser', { graduationStrategy: 'MANUAL', verdict: verdict('loser', 25) }),
+      post('measuring', { graduationStrategy: 'MANUAL', verdict: null }),
+      post('winner-low', { graduationStrategy: 'MANUAL', verdict: verdict('winner', 35) }),
+      post('winner-high', { graduationStrategy: 'SS_PERFORMANCE', verdict: verdict('winner', 44) }),
+    ]);
+    expect(trials.map((p) => p.id)).toEqual(['winner-high', 'winner-low', 'measuring', 'loser']);
   });
 });
 

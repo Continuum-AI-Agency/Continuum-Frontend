@@ -41,6 +41,7 @@ function SheetContent({
   side = 'right',
   showCloseButton = true,
   showOverlay = false,
+  overlayClassName,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: 'top' | 'right' | 'bottom' | 'left';
@@ -48,10 +49,11 @@ function SheetContent({
   // Sheets here sit BESIDE the app rather than over it, so the scrim is off by default —
   // base-nova renders one unconditionally. tests/ui/sheet.test.tsx guards this.
   showOverlay?: boolean;
+  overlayClassName?: string;
 }) {
   return (
     <SheetPortal>
-      {showOverlay && <SheetOverlay />}
+      {showOverlay && <SheetOverlay className={overlayClassName} />}
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}

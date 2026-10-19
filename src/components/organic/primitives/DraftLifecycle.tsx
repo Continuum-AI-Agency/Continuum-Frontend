@@ -23,7 +23,6 @@ import type {
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { type ReusableMediaItem, summarizeDraftMedia } from '@/lib/organic/draftMediaSummary';
-import type { ReadinessCheck } from '@/lib/organic/draftReadiness';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -315,48 +314,5 @@ export function MediaEnrichmentSummary({
         </HoverCardContent>
       </HoverCard>
     </div>
-  );
-}
-
-// Replaces the always-on footer checklist: a compact amber alert chip whose hover
-// popover lists the bare-minimum schedule requirements (caption + media). Shown
-// only while a draft is not yet ready, so the panel footer stays uncluttered.
-export function SchedulingRequirementsHint({ checks }: { checks: ReadinessCheck[] }) {
-  return (
-    <HoverCard openDelay={120} closeDelay={120}>
-      <HoverCardTrigger
-        render={
-          <button
-            type="button"
-            aria-label="Why this draft can't be scheduled yet"
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider text-amber-700 transition-colors hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-amber-300"
-          >
-            <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />
-            Needs setup
-          </button>
-        }
-      />
-      <HoverCardContent align="end" className="w-60 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Needed to schedule
-        </p>
-        <ul className="flex flex-col gap-1">
-          {checks.map((check) => (
-            <li key={check.id} className="flex items-center gap-2 text-sm">
-              {check.met ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-              )}
-              <span
-                className={check.met ? 'text-muted-foreground line-through' : 'text-foreground'}
-              >
-                {check.label}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </HoverCardContent>
-    </HoverCard>
   );
 }

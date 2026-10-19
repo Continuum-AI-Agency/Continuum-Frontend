@@ -280,12 +280,21 @@ test.describe('planner publish account is explicit', () => {
       return persisted;
     });
 
-    await recorder.step('no Facebook account switcher: the Page is the only target', async () => {
-      // Checked only now: the row above exists, so the planner has hydrated and seeded its
-      // accounts. Before that the switcher is absent on any code and the check proves nothing.
-      // It renders only for a platform with a choice; offering the ad account made one.
-      await expect(page.getByRole('button', { name: 'Facebook account' })).toHaveCount(0);
-    });
+    await recorder.step(
+      'the Facebook default offers the Page only, never the ad account',
+      async () => {
+        // Checked only now: the row above exists, so the planner has hydrated and seeded its
+        // accounts. Since A7 the toolbar shows one "Default <Platform> account" control per
+        // platform even with a single account, so the proof is its choices: exactly one (the Page).
+        // Offering the ad account would make two.
+        const trigger = page.getByRole('button', { name: /^Default Facebook account:/ });
+        await expect(trigger).toHaveCount(1);
+        await trigger.click();
+        const choices = page.getByRole('radiogroup', { name: 'New Facebook posts go to' });
+        await expect(choices.getByRole('radio')).toHaveCount(1);
+        await page.keyboard.press('Escape');
+      },
+    );
 
     await recorder.step('the Backend gate reads the Page from the row', async () => {
       // publish-intent evaluates the row as stored (no single-account swap), so this is the

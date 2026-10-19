@@ -15,8 +15,10 @@ import {
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
+  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
+  readinessFindings,
   type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
@@ -75,6 +77,7 @@ import { NameDialog } from '@/components/forge/RenderSetMenu';
 import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import { checkpointGraph } from '@/components/forge/templateCheckpoints';
+import { explainFinding } from '@/components/forge/readinessCopy';
 import {
   addSibling,
   applyAssistOps,
@@ -1082,16 +1085,22 @@ export function RenderRequestsGrid({
     let review = 0;
     let checking = 0;
     let ready = 0;
+    const labelOf = (key: string | undefined) => {
+      const label = variables?.find((variable) => variable.key === key)?.label;
+      return label ? readableLayerName(label) : undefined;
+    };
     for (const row of rows) {
       const errors = clientErrors.get(row.id) ?? {};
+      // The same findings, and the same words, as the row's "Needs review" badge and the tray.
       const unknown =
         row.check.state === 'ready'
-          ? (row.check.guardrails ?? []).filter((finding) => finding.severity === 'unknown')
+          ? readinessFindings(row.check).filter(leavesCheckIncomplete)
           : [];
       for (const item of unknown) {
-        const finding = findings.get(item.code) ?? { message: item.message, rows: [] };
+        const key = `${item.code}:${item.variableKey ?? ''}`;
+        const finding = findings.get(key) ?? { message: explainFinding(item, labelOf), rows: [] };
         finding.rows.push(row.label || 'Untitled');
-        findings.set(item.code, finding);
+        findings.set(key, finding);
       }
       if (Object.keys(errors).length > 0 || row.check.state === 'error') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
@@ -1109,12 +1118,7 @@ export function RenderRequestsGrid({
           finding.rows.push(row.label || 'Untitled');
           findings.set('server', finding);
         }
-      } else if (
-        unknown.length ||
-        (row.check.state === 'ready' &&
-          row.check.fit?.slots.some((slot) => slot.state === 'unknown'))
-      )
-        review += 1;
+      } else if (unknown.length) review += 1;
       else if (row.check.state === 'ready') ready += 1;
       else checking += 1;
     }
@@ -3192,6 +3196,7 @@ export function RenderRequestsGrid({
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
                   templateRef={templateRef}
+                  templateRevisionId={activeSet?.templateRevision?.revisionId ?? null}
                   contract={contract}
                   rows={batch.rows}
                   records={batch.records}

@@ -1,5 +1,6 @@
 'use client';
 
+import { type ChatMediaRef, chatMediaRefKey, chatMediaRefSchema } from '@continuum/contracts';
 import {
   BookOpen,
   FileText,
@@ -15,6 +16,11 @@ import {
 import React from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { AgentMentionReference } from '@/lib/agent-references';
+import {
+  type SignedChatMediaTile,
+  useChatMediaTiles,
+  useNearViewport,
+} from '@/lib/media/chatMediaRefs';
 import { cn } from '@/lib/utils';
 
 const URL_SPLIT_RE = /(https?:\/\/[^\s<>"]+)/;
@@ -24,6 +30,8 @@ type MentionifiedTextProps = {
   references?: AgentMentionReference[];
   className?: string;
   linkClassName?: string;
+  /** With a brand, Library chips show a signed ≤480 px still instead of the URL they were saved with. */
+  brandId?: string | null;
 };
 
 function buildMentionSplitRe(references: AgentMentionReference[]): RegExp | null {
@@ -137,13 +145,60 @@ function previewFromReference(ref: AgentMentionReference): {
   return { url, kind };
 }
 
+const VIDEO_FILE = /\.(mp4|mov|m4v|webm)(\?|#|$)/i;
+
+/** A still for a video mention, so a chip in history never fetches the video to paint itself. */
+function posterFromReference(ref: AgentMentionReference): string | null {
+  const meta = ref.metadata as Record<string, unknown> | undefined;
+  const poster = readMetaString(meta, 'posterUrl') ?? readMetaString(meta, 'thumbnailUrl');
+  return poster && !VIDEO_FILE.test(poster) ? poster : null;
+}
+
+/**
+ * The still a chip may show without a signed one: a thumbnail, never a video file and never the
+ * preview, which can be the original.
+ */
+function stillFromReference(ref: AgentMentionReference): string | null {
+  const meta = ref.metadata as Record<string, unknown> | undefined;
+  const still = readMetaString(meta, 'thumbnailUrl');
+  return still && !VIDEO_FILE.test(still) ? still : null;
+}
+
+/** A Library chip's ref, when it names a real asset: signed like a strip tile. */
+function libraryRefOf(ref: AgentMentionReference): ChatMediaRef | null {
+  if (ref.type !== 'media_asset') return null;
+  const assetId = readMetaString(ref.metadata as Record<string, unknown>, 'assetId') ?? ref.id;
+  const parsed = chatMediaRefSchema.safeParse({ type: 'library', assetId });
+  return parsed.success ? parsed.data : null;
+}
+
+type ChipStills = {
+  tiles: ReadonlyMap<string, SignedChatMediaTile>;
+  recover: (key: string) => void;
+} | null;
+
 function isVisualReference(ref: AgentMentionReference): boolean {
   return ref.type === 'media_asset' || ref.type === 'canvas_node';
 }
 
-function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
+function MentionHoverBody({
+  reference,
+  still,
+  onStillError,
+}: {
+  reference: AgentMentionReference;
+  /** A Library chip's signed still (null: none yet); undefined for any other chip. */
+  still?: string | null;
+  onStillError?: () => void;
+}) {
   const meta = (reference.metadata ?? {}) as Record<string, unknown>;
   const preview = previewFromReference(reference);
+  const poster = preview.kind === 'video' ? (still ?? posterFromReference(reference)) : null;
+  // A Library chip's saved URL lapses within the hour: its card shows the signed still or nothing.
+  const imageUrl = preview.kind === 'video' ? null : still === undefined ? preview.url : still;
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  const showMedia =
+    preview.kind === 'video' ? Boolean(preview.url) : Boolean(imageUrl && imageUrl !== failedUrl);
   const description =
     readMetaString(meta, 'description') ??
     readMetaString(meta, 'text') ??
@@ -184,19 +239,30 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
 
   return (
     <div className="flex flex-col gap-2.5">
-      {preview.url ? (
+      {showMedia ? (
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {preview.kind === 'video' ? (
+            // This body mounts only once the card opens on hover, so these bytes follow a hover.
+            // With a poster it fetches none even then.
             <video
-              src={preview.url}
+              src={preview.url ?? undefined}
+              poster={poster ?? undefined}
               muted
               playsInline
-              preload="metadata"
+              preload={poster ? 'none' : 'metadata'}
               className="h-full w-full object-cover"
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- arbitrary signed/CDN URLs
-            <img src={preview.url} alt="" className="h-full w-full object-cover" />
+            <img
+              src={imageUrl ?? undefined}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => {
+                setFailedUrl(imageUrl);
+                onStillError?.();
+              }}
+            />
           )}
         </div>
       ) : null}
@@ -327,31 +393,46 @@ function MentionHoverBody({ reference }: { reference: AgentMentionReference }) {
 function InlineMention({
   reference,
   fallbackLabel,
+  stills,
 }: {
   reference?: AgentMentionReference;
   fallbackLabel: string;
+  stills: ChipStills;
 }) {
   const label = reference?.label ?? fallbackLabel.replace(/^@/, '');
   const preview = reference ? previewFromReference(reference) : { url: null, kind: null };
   const visual = reference ? isVisualReference(reference) : false;
-  const showInlineThumb = Boolean(visual && preview.url);
+  const libraryRef = reference ? libraryRefOf(reference) : null;
+  const libraryKey = libraryRef ? chatMediaRefKey(libraryRef) : null;
+  // A chip lives in history. A Library chip shows its signed still (fresh, ≤480 px, a video's
+  // poster); any other chip shows a thumbnail or its glyph, never a video file and never the
+  // original: a <video> here fetched every video ever mentioned in the thread before anyone
+  // hovered.
+  const thumbUrl =
+    stills && libraryKey
+      ? (stills.tiles.get(libraryKey)?.thumbUrl ?? null)
+      : !reference
+        ? null
+        : preview.kind === 'video'
+          ? posterFromReference(reference)
+          : stillFromReference(reference);
+  // A lapsed URL is the glyph, not a broken image; a signed one is re-signed once first.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  const showInlineThumb = Boolean(visual && thumbUrl && thumbUrl !== failedUrl);
 
   const trigger = (
     <span className={cn('mention-inline', showInlineThumb && 'mention-inline--media')}>
-      {showInlineThumb && preview.url ? (
-        preview.kind === 'video' ? (
-          <video
-            src={preview.url}
-            muted
-            playsInline
-            preload="metadata"
-            className="mention-inline__thumb"
-            aria-hidden
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- signed/CDN URLs
-          <img src={preview.url} alt="" className="mention-inline__thumb" />
-        )
+      {showInlineThumb && thumbUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed/CDN URLs
+        <img
+          src={thumbUrl}
+          alt=""
+          className="mention-inline__thumb"
+          onError={() => {
+            setFailedUrl(thumbUrl);
+            if (stills && libraryKey) stills.recover(libraryKey);
+          }}
+        />
       ) : reference ? (
         <span className="mention-inline__icon" aria-hidden>
           {preview.kind === 'video' ? (
@@ -388,7 +469,11 @@ function InlineMention({
           (reference.type === 'media_asset' || reference.type === 'canvas_node') && 'p-3',
         )}
       >
-        <MentionHoverBody reference={reference} />
+        <MentionHoverBody
+          reference={reference}
+          still={stills && libraryKey ? thumbUrl : undefined}
+          onStillError={stills && libraryKey ? () => stills.recover(libraryKey) : undefined}
+        />
       </HoverCardContent>
     </HoverCard>
   );
@@ -399,7 +484,23 @@ export function MentionifiedText({
   references,
   className,
   linkClassName,
+  brandId,
 }: MentionifiedTextProps) {
+  const libraryRefs = React.useMemo(
+    () =>
+      (references ?? []).flatMap((ref) => {
+        const library = libraryRefOf(ref);
+        return library ? [library] : [];
+      }),
+    [references],
+  );
+  // Every chip of the message in one sign, once it nears the viewport, together with every
+  // message that comes into view with it.
+  const signs = Boolean(brandId && libraryRefs.length > 0);
+  const [observe, near] = useNearViewport();
+  const { tiles, recover } = useChatMediaTiles(brandId, libraryRefs, { enabled: near });
+  const stills: ChipStills = brandId ? { tiles, recover } : null;
+
   const byToken = React.useMemo(() => {
     const map = new Map<string, AgentMentionReference>();
     for (const ref of references ?? []) {
@@ -416,7 +517,7 @@ export function MentionifiedText({
   const urlParts = React.useMemo(() => text.split(URL_SPLIT_RE), [text]);
 
   return (
-    <span className={className}>
+    <span ref={signs ? observe : undefined} className={className}>
       {urlParts.flatMap((part, urlIdx) => {
         if (urlIdx % 2 === 1) {
           return (
@@ -441,7 +542,14 @@ export function MentionifiedText({
         return part.split(mentionSplitRe).map((seg, mIdx) => {
           if (mIdx % 2 !== 1) return seg;
           const ref = byToken.get(seg);
-          return <InlineMention key={`u${urlIdx}m${mIdx}`} reference={ref} fallbackLabel={seg} />;
+          return (
+            <InlineMention
+              key={`u${urlIdx}m${mIdx}`}
+              reference={ref}
+              fallbackLabel={seg}
+              stills={stills}
+            />
+          );
         });
       })}
     </span>

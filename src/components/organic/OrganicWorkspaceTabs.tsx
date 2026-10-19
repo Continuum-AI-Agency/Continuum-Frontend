@@ -164,13 +164,15 @@ export function OrganicWorkspaceTabs({
 
   return (
     <OpenPlannerDraftProvider value={openPlannerDraft}>
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
         <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
           <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* At phone width the tabs scroll inside their own strip: overflowing the header
+            lets a focus or click scroll the whole workspace sideways under the planner. */}
+          <div className="flex min-w-0 items-center gap-2">
             <nav
-              className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5"
+              className="inline-flex min-w-0 overflow-x-auto rounded-lg border bg-muted/40 p-0.5"
               aria-label="Organic workspace"
             >
               {(
@@ -199,7 +201,7 @@ export function OrganicWorkspaceTabs({
                     }
                     onClick={() => handleValueChange(view)}
                     className={cn(
-                      'h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm',
+                      'h-7 shrink-0 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm',
                       isActive
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',

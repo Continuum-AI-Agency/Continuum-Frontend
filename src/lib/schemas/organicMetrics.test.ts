@@ -5,6 +5,7 @@ import {
   instagramOrganicMetricsResponseSchema,
   linkedInOrganicMetricsResponseSchema,
   organicMetricsResponseSchema,
+  organicPostSchema,
 } from './organicMetrics';
 
 function basePayload() {
@@ -111,5 +112,20 @@ describe('organic metrics platform schemas', () => {
     assert.equal(parsed.success, true, parsed.success ? '' : parsed.error.message);
     if (!parsed.success) return;
     assert.equal(parsed.data.range.preset, 'last_30d');
+  });
+});
+
+describe('organicPostSchema trial', () => {
+  test('carries a trial reel verdict through', () => {
+    const parsed = organicPostSchema.parse({
+      id: 'm1',
+      trial: { graduationStrategy: 'MANUAL', verdict: null },
+    });
+    assert.deepEqual(parsed.trial, { graduationStrategy: 'MANUAL', verdict: null });
+  });
+
+  test('lists a post with a malformed trial as an ordinary post instead of failing the gallery', () => {
+    const parsed = organicPostSchema.parse({ id: 'm1', trial: { graduationStrategy: 'LATER' } });
+    assert.equal(parsed.trial, undefined);
   });
 });

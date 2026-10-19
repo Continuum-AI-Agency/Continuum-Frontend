@@ -153,7 +153,42 @@ describe('restoreSessionFromMessages', () => {
     });
   });
 
-  it('synthesizes a post_list card from a post-fetching tool result', () => {
+  it('replays a persisted media strip onto its turn, refs only', () => {
+    const strip = {
+      toolCallId: 'tc3',
+      toolName: 'listOwnInstagramMedia',
+      items: [
+        {
+          ref: { type: 'platform', platform: 'instagram', mediaId: '1789' },
+          kind: 'video',
+          w: null,
+          h: null,
+          permalink: 'https://www.instagram.com/reel/abc/',
+          label: 'Launch reel',
+        },
+      ],
+      total: 31,
+    };
+    const { messages } = restoreSessionFromMessages([
+      message({
+        uiCardFrames: [
+          {
+            type: 'tool.result',
+            data: { toolCallId: 'tc3', toolName: 'listOwnInstagramMedia', ok: true },
+          },
+          { type: 'ui.media_strip', data: strip },
+          // The same strip persisted twice is still one strip (one React key per tool call).
+          { type: 'ui.media_strip', data: strip },
+        ],
+      }),
+    ]);
+
+    expect(messages[0]!.uiCards).toEqual([{ type: 'media_strip', data: strip }]);
+  });
+
+  // Sessions persisted before the strip carry only the tool result. They reload with no strip
+  // (the FE no longer rebuilds one from each tool's result shape) and must not throw.
+  it('an old post-tool result with no strip reloads with no card and no crash', () => {
     const { messages } = restoreSessionFromMessages([
       message({
         uiCardFrames: [
@@ -171,8 +206,8 @@ describe('restoreSessionFromMessages', () => {
       }),
     ]);
 
-    const cards = messages[0]!.uiCards ?? [];
-    expect(cards.some((c) => c.type === 'post_list')).toBe(true);
+    expect(messages[0]!.uiCards).toBeUndefined();
+    expect(messages[0]!.toolCalls?.[0]?.toolName).toBe('listDrafts');
   });
 
   it('rehydrates media search results onto the message', () => {
@@ -248,6 +283,8 @@ describe('restoreSessionFromMessages', () => {
     expect(pipelineCards[0]!.preview?.images).toEqual(['https://cdn/scene_1.png']);
     expect(pipelineCards[0]!.checkpoint?.blueprintReady).toBe(true);
     expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-1');
+    // Replayed signatures are stale on arrival: the card must rank re-signed media above them.
+    expect(pipelineCards[0]!.previewStale).toBe(true);
   });
 
   // Bug #220 on the reload path. previews and previewRevision fail independently:
@@ -281,6 +318,7 @@ describe('restoreSessionFromMessages', () => {
     expect(pipelineCards[0]!.checkpoint?.previewRevision).toBe('revision-2');
     // No previews means no preview block — not an empty one that would blank the card.
     expect(pipelineCards[0]!.preview).toBeUndefined();
+    expect(pipelineCards[0]!.previewStale).toBeUndefined();
   });
 
   // The blueprint frame is older than a realize that followed it, so replaying it must

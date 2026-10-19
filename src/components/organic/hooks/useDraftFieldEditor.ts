@@ -12,6 +12,7 @@ import type { OrganicCalendarDraft } from '@/components/organic/primitives/types
 import { useToast } from '@/components/ui/ToastProvider';
 import { ApiError } from '@/lib/api/errors';
 import { request } from '@/lib/api/http';
+import { groupMemberDrafts, isGroup } from '@/lib/organic/groupDraft';
 import { type DraftEditField, useCalendarStore } from '@/lib/organic/store';
 
 /**
@@ -45,11 +46,41 @@ type PersistTarget = Pick<OrganicCalendarDraft, 'id' | 'backendDraftId' | 'updat
 
 function messageForError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 422) return 'This post can no longer be edited.';
+    // `caption_too_long` and `account_not_candidate` name the limit or the accounts: say it.
+    if (error.status === 422) return error.payload?.message ?? 'This post can no longer be edited.';
     if (error.status === 403) return 'You do not have access to this post.';
     if (error.status === 404) return 'This post no longer exists.';
   }
   return 'Your change could not be saved.';
+}
+
+// One save at a time per row. The route's concurrency token is the row's updated_at, so two
+// saves sent together carry the same token and the second is refused as stale: the user's own
+// edit, reported as "changed elsewhere". Each save waits for the one before it on the same row
+// (the panel's fields, its media, a move) and sends the token that save came back with.
+type RowSaves = { tail: Promise<void>; token: string | null; pending: number };
+const savesByRow = new Map<string, RowSaves>();
+
+async function saveInTurn(
+  rowId: string,
+  save: (token: string | null) => Promise<DraftFieldPersistResult>,
+  token: string | null,
+): Promise<DraftFieldPersistResult> {
+  const busy = savesByRow.get(rowId);
+  const saves = busy ?? { tail: Promise.resolve(), token, pending: 0 };
+  savesByRow.set(rowId, saves);
+  saves.pending += 1;
+  // An idle row saves at once, so the request is on the wire when the caller returns.
+  const result = busy ? saves.tail.then(() => save(saves.token)) : save(token);
+  saves.tail = result.then((settled) => {
+    if (settled.ok && settled.updatedAt) saves.token = settled.updatedAt;
+  });
+  try {
+    return await result;
+  } finally {
+    saves.pending -= 1;
+    if (saves.pending === 0) savesByRow.delete(rowId);
+  }
 }
 
 export function useDraftFieldPersistence() {
@@ -59,29 +90,35 @@ export function useDraftFieldPersistence() {
       patch: PlannerDraftFieldPatch,
     ): Promise<DraftFieldPersistResult> => {
       // A draft with no server row yet is inserted by the autosave, which replays its
-      // copy through this route once the row exists (`newRowCopyPatch`) — there is
+      // content through this route once the row exists (`newDraftFieldPatch`) — there is
       // nothing to PATCH yet, and reporting a failure here would be a lie.
-      if (!target.backendDraftId) return { ok: true, updatedAt: null };
+      const rowId = target.backendDraftId;
+      if (!rowId) return { ok: true, updatedAt: null };
 
-      const parsed = plannerDraftFieldPatchSchema.safeParse({
-        ...patch,
-        expected_updated_at: patch.expected_updated_at ?? target.updatedAt ?? null,
-      });
-      if (!parsed.success) {
-        return { ok: false, stale: false, message: 'That value is not valid.' };
-      }
-
-      try {
-        const response = await request<{ updated_at?: string | null }>({
-          path: `/api/organic/calendar/drafts/${target.backendDraftId}/fields`,
-          method: 'PATCH',
-          body: parsed.data,
-        });
-        return { ok: true, updatedAt: response?.updated_at ?? null };
-      } catch (error) {
-        const stale = error instanceof ApiError && error.status === 409;
-        return { ok: false, stale, message: messageForError(error) };
-      }
+      return saveInTurn(
+        rowId,
+        async (token) => {
+          const parsed = plannerDraftFieldPatchSchema.safeParse({
+            ...patch,
+            expected_updated_at: token,
+          });
+          if (!parsed.success) {
+            return { ok: false, stale: false, message: 'That value is not valid.' };
+          }
+          try {
+            const response = await request<{ updated_at?: string | null }>({
+              path: `/api/organic/calendar/drafts/${rowId}/fields`,
+              method: 'PATCH',
+              body: parsed.data,
+            });
+            return { ok: true, updatedAt: response?.updated_at ?? null };
+          } catch (error) {
+            const stale = error instanceof ApiError && error.status === 409;
+            return { ok: false, stale, message: messageForError(error) };
+          }
+        },
+        patch.expected_updated_at ?? target.updatedAt ?? null,
+      );
     },
     [],
   );
@@ -100,14 +137,23 @@ export type UseDraftFieldEditorResult = {
     fields: readonly DraftEditField[],
     localPatch?: Partial<OrganicCalendarDraft>,
   ) => Promise<boolean>;
-  /** A text edit (caption, creative direction): store now, PATCH coalesced. */
+  /**
+   * A text edit (caption, creative direction): shown at once through `draft`, written to the
+   * store and PATCHed once per coalesced burst.
+   */
   queueFieldEdit: (
     patch: PlannerDraftFieldPatch,
     fields: readonly DraftEditField[],
     localPatch?: Partial<OrganicCalendarDraft>,
   ) => void;
-  /** Send any coalesced edit immediately. Call on blur and before navigating away. */
-  flush: () => Promise<void>;
+  /**
+   * Send any coalesced edit immediately and wait for every save already on the wire. Call on
+   * blur and before navigating away. False when one of them failed to save, so approve and
+   * publish can stop instead of sending the old copy.
+   */
+  flush: () => Promise<boolean>;
+  /** The draft with any typing that has not reached the store yet. Render THIS one. */
+  draft: OrganicCalendarDraft;
   isSaving: boolean;
   savingFields: ReadonlySet<DraftEditField>;
   saveError: string | null;
@@ -115,9 +161,15 @@ export type UseDraftFieldEditorResult = {
 };
 
 type QueuedEdit = {
+  /** The draft typed into, so a burst still lands on it if the panel moves to another. */
+  target: PersistTarget;
   patch: PlannerDraftFieldPatch;
   fields: DraftEditField[];
+  /** What the burst changes locally; it reaches the store once, with the PATCH result. */
+  localPatch?: Partial<OrganicCalendarDraft>;
 };
+
+type Typed = { draftId: string; patch: Partial<OrganicCalendarDraft> };
 
 /**
  * `localPatch` exists because the store's draft shape is not the wire patch: a
@@ -141,6 +193,10 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     () => new Set(),
   );
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  // Typing lives here until its burst is sent. Written to the store per keystroke, every
+  // memoised calendar cell holding the draft re-rendered on each one, then again for the
+  // PATCH's updated_at.
+  const [typed, setTyped] = React.useState<Typed | null>(null);
 
   // The draft as it is RIGHT NOW, read at send time rather than captured at call
   // time: a coalesced caption edit must send the latest keystroke, not the first.
@@ -149,18 +205,36 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
 
   const queuedRef = React.useRef<QueuedEdit | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = React.useRef(new Set<Promise<boolean>>());
 
   const send = React.useCallback(
     async (
+      target: PersistTarget,
       patch: PlannerDraftFieldPatch,
       fields: readonly DraftEditField[],
       snapshot: Partial<OrganicCalendarDraft> | null,
+      localPatch?: Partial<OrganicCalendarDraft>,
     ): Promise<boolean> => {
-      const draftId = draftRef.current.id;
+      const draftId = target.id;
       markDraftEditPending(draftId, fields);
+      // Lets flush() wait for this save. Never rejects: persistDraftFields catches.
+      let settle: (saved: boolean) => void = () => {};
+      const tracked = new Promise<boolean>((resolve) => {
+        settle = resolve;
+      });
+      inFlightRef.current.add(tracked);
+      const finish = (saved: boolean) => {
+        inFlightRef.current.delete(tracked);
+        settle(saved);
+        return saved;
+      };
       setSavingFields((current) => new Set([...current, ...fields]));
 
-      const result = await persistDraftFields(draftRef.current, patch);
+      // The freshest CAS token: an edit that settled while this one waited moved it on.
+      const result = await persistDraftFields(
+        draftRef.current.id === draftId ? draftRef.current : target,
+        patch,
+      );
 
       clearDraftEditPending(draftId, fields);
       setSavingFields((current) => {
@@ -169,12 +243,27 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
         return next;
       });
 
+      // Typing still queued behind this send stays on screen; the rest is in the store now.
+      const settleTyped = () =>
+        setTyped(() => {
+          const queued = queuedRef.current;
+          return queued?.localPatch
+            ? { draftId: queued.target.id, patch: queued.localPatch }
+            : null;
+        });
+
       if (result.ok) {
-        if (result.updatedAt) {
-          updateDraft(draftId, (current) => ({ ...current, updatedAt: result.updatedAt }));
+        // ONE store write per burst: its text and the server's updated_at together.
+        if (localPatch || result.updatedAt) {
+          updateDraft(draftId, (current) => ({
+            ...current,
+            ...localPatch,
+            ...(result.updatedAt ? { updatedAt: result.updatedAt } : {}),
+          }));
         }
+        settleTyped();
         setSaveError(null);
-        return true;
+        return finish(true);
       }
 
       if (result.stale) {
@@ -186,13 +275,17 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
           variant: 'error',
         });
         requestCalendarRefetch();
-        return false;
+        settleTyped();
+        return finish(false);
       }
 
       if (snapshot) updateDraft(draftId, (current) => ({ ...current, ...snapshot }));
+      // Unsaved typing stays on screen, as the toast's "not saved" refers to it.
+      if (localPatch) updateDraft(draftId, (current) => ({ ...current, ...localPatch }));
+      settleTyped();
       setSaveError(result.message);
       show({ title: 'Change not saved', description: result.message, variant: 'error' });
-      return false;
+      return finish(false);
     },
     [
       persistDraftFields,
@@ -223,24 +316,74 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       fields: readonly DraftEditField[],
       localPatch?: Partial<OrganicCalendarDraft>,
     ): Promise<boolean> => {
+      const card = draftRef.current;
       const snapshot = snapshotFor(localPatch);
       if (localPatch) {
-        updateDraft(draftRef.current.id, (current) => ({ ...current, ...localPatch }));
+        updateDraft(card.id, (current) => ({ ...current, ...localPatch }));
       }
-      return send(patch, fields, snapshot);
+      // A group is one post: its time moves every member row, each against its own token.
+      const others =
+        fields.includes('schedule') && isGroup(card)
+          ? groupMemberDrafts(card).filter((member) => member.id !== card.id)
+          : [];
+      if (others.length === 0) return send(card, patch, fields, snapshot);
+
+      const [cardSaved, ...results] = await Promise.all([
+        send(card, patch, fields, snapshot),
+        ...others.map((member) => persistDraftFields(member, patch)),
+      ]);
+      results.forEach((result, index) => {
+        const member = others[index];
+        if (!result.ok || !member) return;
+        updateDraft(member.id, (current) => ({
+          ...current,
+          ...localPatch,
+          ...(result.updatedAt ? { updatedAt: result.updatedAt } : {}),
+        }));
+      });
+      const movedMembers = others.filter((_, index) => results[index]?.ok);
+      if (cardSaved && movedMembers.length === others.length) return true;
+      // Some rows moved and some did not. Put the moved ones back, or the post's platforms go
+      // out at different times; our own write is the only one on them, so no token is needed.
+      const previous =
+        patch.dayId && snapshot?.timeLabel
+          ? scheduleFieldPatch(patch.dayId, snapshot.timeLabel)
+          : null;
+      const moved = [...(cardSaved ? [card] : []), ...movedMembers];
+      if (previous) {
+        await Promise.all(
+          moved.map(async (row) => {
+            await persistDraftFields({ ...row, updatedAt: null }, previous);
+            updateDraft(row.id, (current) => ({ ...current, ...snapshot }));
+          }),
+        );
+      }
+      const total = others.length + 1;
+      show({
+        title: 'Time not changed',
+        description: previous
+          ? `${total - moved.length} of ${total} platforms could not move, so none did.`
+          : 'Reloading the post as it is saved.',
+        variant: 'error',
+      });
+      requestCalendarRefetch();
+      return false;
     },
-    [send, snapshotFor, updateDraft],
+    [persistDraftFields, requestCalendarRefetch, send, show, snapshotFor, updateDraft],
   );
 
-  const flush = React.useCallback(async (): Promise<void> => {
+  const flush = React.useCallback(async (): Promise<boolean> => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     const queued = queuedRef.current;
-    if (!queued) return;
     queuedRef.current = null;
-    await send(queued.patch, queued.fields, null);
+    if (queued) void send(queued.target, queued.patch, queued.fields, null, queued.localPatch);
+    // A burst whose timer already fired, and a format or time picked a moment ago, are on the
+    // wire, not queued: approving without them sends what the row held before.
+    const saved = await Promise.all(inFlightRef.current);
+    return saved.every(Boolean);
   }, [send]);
 
   const queueFieldEdit = React.useCallback(
@@ -249,21 +392,32 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       fields: readonly DraftEditField[],
       localPatch?: Partial<OrganicCalendarDraft>,
     ): void => {
-      if (localPatch) {
-        updateDraft(draftRef.current.id, (current) => ({ ...current, ...localPatch }));
-      }
+      const target = draftRef.current;
       const previous = queuedRef.current;
+      // A burst belongs to one draft: typing into another one sends the first burst now.
+      if (previous && previous.target.id !== target.id) void flush();
+      const carried = queuedRef.current;
+      const queuedLocal =
+        localPatch || carried?.localPatch ? { ...carried?.localPatch, ...localPatch } : undefined;
       queuedRef.current = {
-        patch: { ...previous?.patch, ...patch },
-        fields: [...new Set([...(previous?.fields ?? []), ...fields])],
+        target,
+        patch: { ...carried?.patch, ...patch },
+        fields: [...new Set([...(carried?.fields ?? []), ...fields])],
+        localPatch: queuedLocal,
       };
+      if (queuedLocal) setTyped({ draftId: target.id, patch: queuedLocal });
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         void flush();
       }, TEXT_EDIT_COALESCE_MS);
     },
-    [flush, updateDraft],
+    [flush],
+  );
+
+  const shownDraft = React.useMemo(
+    () => (typed?.draftId === draft.id ? { ...draft, ...typed.patch } : draft),
+    [draft, typed],
   );
 
   // An unmount mid-burst must not drop the pending keystrokes. The timer is cleared
@@ -279,6 +433,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
     editField,
     queueFieldEdit,
     flush,
+    draft: shownDraft,
     isSaving: savingFields.size > 0,
     savingFields,
     saveError,

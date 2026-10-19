@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
+// The cards name their posting account through React Query; no brand is set, so it stays idle.
+const queryClient = new QueryClient();
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
 // @testing-library/dom's querySelectorAll internals.
@@ -34,6 +42,11 @@ const requestMock = mock((_args: { path: string; method?: string; body?: unknown
 mock.module('@/lib/api/http', () => ({
   request: requestMock,
   http: { request: requestMock },
+}));
+
+const unschedule = mock(async (_draft: OrganicCalendarDraft) => true);
+mock.module('@/components/organic/hooks/useUnscheduleDraft', () => ({
+  useUnscheduleDraft: () => ({ unschedule, isUnscheduling: false }),
 }));
 
 mock.module('./DraftDeletionConfirmation', () => ({
@@ -140,16 +153,19 @@ const NOOP = () => undefined;
 function renderList(options: {
   days?: OrganicCalendarDay[];
   backlogDrafts?: OrganicCalendarDraft[];
+  selectedDraftId?: string | null;
   selectedDraftIds?: string[];
+  onSelectDraft?: (id: string) => void;
+  onToggleSelection?: (id: string) => void;
 }) {
   return render(
     <OrganicListView
       days={options.days ?? []}
       platforms={[]}
-      selectedDraftId={null}
+      selectedDraftId={options.selectedDraftId ?? null}
       selectedDraftIds={options.selectedDraftIds ?? []}
-      onSelectDraft={NOOP}
-      onToggleSelection={NOOP}
+      onSelectDraft={options.onSelectDraft ?? NOOP}
+      onToggleSelection={options.onToggleSelection ?? NOOP}
       onRegenerate={NOOP}
       onCreatePost={NOOP}
       backlogDrafts={options.backlogDrafts ?? []}
@@ -317,6 +333,30 @@ describe('OrganicListView', () => {
     });
   });
 
+  // Base UI emits `data-checked`; the old `data-[state=checked]` (Radix) never matched, so a
+  // selected row's tick vanished until hover. Hidden controls must also show on focus.
+  it('shows a ticked box at rest, and every hover-only control on focus', () => {
+    renderList({ days: [makeDay([makeDraft()])], selectedDraftIds: ['draft-1'] });
+
+    const box = screen.getByRole('checkbox', { name: /Select/ });
+    expect(box.hasAttribute('data-checked')).toBe(true);
+    expect(box.className).toContain('data-checked:opacity-100');
+    for (const control of [box, ...screen.getAllByRole('button', { name: 'Remove' })]) {
+      expect(control.className).toContain('focus-visible:opacity-100');
+    }
+  });
+
+  it('sends a scheduled row back to draft through the server, which cancels its publish', () => {
+    unschedule.mockClear();
+    const scheduled = makeDraft({ status: 'scheduled', backendDraftId: 'srv-1' });
+    renderList({ days: [makeDay([scheduled])] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    expect(unschedule).toHaveBeenCalledTimes(1);
+    expect(unschedule.mock.calls[0]?.[0]).toMatchObject({ id: 'draft-1', backendDraftId: 'srv-1' });
+  });
+
   it('keeps every clickable row reachable from the keyboard', () => {
     renderList({ days: [makeDay([makeDraft()])], backlogDrafts: [makeDraft({ id: 'backlog-1' })] });
 
@@ -325,6 +365,72 @@ describe('OrganicListView', () => {
     for (const row of rows) {
       expect(row.getAttribute('tabindex')).toBe('0');
     }
+  });
+
+  // Rows take the list's shared id-based handlers (so the memo holds across a selection)
+  // and carry the attributes focus return re-queries.
+  describe('selection', () => {
+    const rowOf = (title: string) => {
+      const row = screen.getByText(title).closest('[data-draft-id]');
+      if (!row) throw new Error(`no row carries a draft id for ${title}`);
+      return row as HTMLElement;
+    };
+
+    it('marks each row with its draft id and pressed state', () => {
+      renderList({
+        days: [makeDay([makeDraft(), makeDraft({ id: 'draft-2', title: 'Other draft' })])],
+        backlogDrafts: [makeDraft({ id: 'backlog-1', title: 'Backlog idea' })],
+        selectedDraftId: 'draft-2',
+      });
+
+      expect(rowOf('Draft title').getAttribute('data-draft-id')).toBe('draft-1');
+      expect(rowOf('Draft title').getAttribute('aria-pressed')).toBe('false');
+      expect(rowOf('Other draft').getAttribute('aria-pressed')).toBe('true');
+      expect(rowOf('Backlog idea').getAttribute('data-draft-id')).toBe('backlog-1');
+    });
+
+    // C7: one row per post, naming every platform it goes to.
+    it('carries the card contract on a grouped row, with every platform it goes to', () => {
+      renderList({
+        days: [
+          makeDay([
+            makeDraft({
+              backendDraftId: 'srv-1',
+              groupId: 'group-1',
+              platforms: ['linkedin', 'instagram'],
+            }),
+          ]),
+        ],
+      });
+
+      const row = rowOf('Draft title');
+      expect(row.getAttribute('data-draft-card')).toBe('');
+      expect(row.getAttribute('data-group-id')).toBe('group-1');
+      expect(row.getAttribute('data-backend-draft-id')).toBe('srv-1');
+      expect(row.querySelector('[data-card-platforms]')?.textContent).toBe('Instagram, LinkedIn');
+    });
+
+    it('selects the row by id from a click and from Enter', () => {
+      const onSelectDraft = mock((_id: string) => undefined);
+      renderList({
+        days: [makeDay([makeDraft(), makeDraft({ id: 'draft-2', title: 'Other draft' })])],
+        onSelectDraft,
+      });
+
+      fireEvent.click(rowOf('Other draft'));
+      fireEvent.keyDown(rowOf('Draft title'), { key: 'Enter' });
+
+      expect(onSelectDraft.mock.calls).toEqual([['draft-2'], ['draft-1']]);
+    });
+
+    it('toggles the multi-selection by id from the row checkbox', () => {
+      const onToggleSelection = mock((_id: string) => undefined);
+      renderList({ days: [makeDay([makeDraft({ id: 'draft-9' })])], onToggleSelection });
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select Draft title' }));
+
+      expect(onToggleSelection).toHaveBeenCalledWith('draft-9');
+    });
   });
 
   // The list row used to carry its OWN status table — a third, contradicting copy: it

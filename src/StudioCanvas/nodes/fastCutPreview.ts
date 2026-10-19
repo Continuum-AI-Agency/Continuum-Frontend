@@ -4,10 +4,11 @@
 
 import {
   CUT_RUNGS_SEC,
+  type CutLayout,
   type CutPlanInput,
   type CutRungSec,
   fastCutNodeDataSchema,
-  planCuts,
+  planLayoutCuts,
 } from '@continuum/contracts';
 
 export const FAST_CUT_PREVIEW_BPM = 150;
@@ -18,7 +19,9 @@ const PREVIEW_SOURCES: CutPlanInput['sources'] = [
   { id: 'preview-b', durationSec: 600, still: false, speech: [] },
 ];
 
-export type FastCutSettings = Pick<CutPlanInput, 'pacing' | 'rung' | 'bars' | 'transients'>;
+export type FastCutSettings = Pick<CutPlanInput, 'pacing' | 'rung' | 'bars' | 'transients'> & {
+  layout: CutLayout;
+};
 
 export type FastCutPreview =
   | {
@@ -33,15 +36,16 @@ export type FastCutPreview =
 /** A node's settings with the schema's defaults filled in; unreadable data reads as the defaults. */
 export function fastCutSettings(data: Record<string, unknown>): FastCutSettings {
   const parsed = fastCutNodeDataSchema.safeParse(data);
-  const { pacing, rung, bars, transients } = parsed.success
+  const { pacing, rung, bars, transients, layout } = parsed.success
     ? parsed.data
     : fastCutNodeDataSchema.parse({});
-  return { pacing, rung, bars, transients };
+  return { pacing, rung, bars, transients, layout };
 }
 
 export function fastCutPreview(settings: FastCutSettings): FastCutPreview {
   try {
-    const plan = planCuts({ beat: PREVIEW_BEAT, sources: PREVIEW_SOURCES, ...settings });
+    const { layout, ...input } = settings;
+    const plan = planLayoutCuts({ beat: PREVIEW_BEAT, sources: PREVIEW_SOURCES, ...input }, layout);
     return {
       ok: true,
       fps: plan.fps,

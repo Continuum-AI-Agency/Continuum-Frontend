@@ -134,7 +134,7 @@ function SortableThumb({
             className="object-cover"
           />
         )}
-        <div className="absolute bottom-0.5 right-0.5 rounded-full bg-black/60 px-1 py-px text-3xs font-semibold text-white tabular-nums">
+        <div className="absolute bottom-0.5 right-0.5 rounded-full bg-neutral-950/60 px-1 py-px text-3xs font-semibold text-neutral-50 tabular-nums">
           {label}
         </div>
       </button>

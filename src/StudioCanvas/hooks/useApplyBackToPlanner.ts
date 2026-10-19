@@ -315,9 +315,11 @@ export function useApplyBackToPlanner({
         }),
       );
 
+      // The route writes the ROW the handoff was opened from. On a group that is the frame's
+      // member row, whose planner id (`<card>::<platform>`) is not a row id.
       const requestPayload: PlannerAiStudioApplyRequest = {
         schemaVersion: 'planner_ai_apply_v1',
-        draftId: organicPlannerSeed.draftId,
+        draftId: organicPlannerSeed.backendDraftId ?? organicPlannerSeed.draftId,
         brandProfileId,
         postType: organicPlannerSeed.postType,
         platform: organicPlannerSeed.platform,
@@ -356,9 +358,10 @@ export function useApplyBackToPlanner({
         throw new Error('Apply response payload is invalid.');
       }
 
+      // The planner mirrors it by its own id, the one the return link carries.
       window.localStorage.setItem(
         buildPendingApplyStorageKey(organicPlannerSeed.draftId),
-        JSON.stringify(parsed.data),
+        JSON.stringify({ ...parsed.data, draftId: organicPlannerSeed.draftId }),
       );
 
       show({

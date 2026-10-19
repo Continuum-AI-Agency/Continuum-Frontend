@@ -134,7 +134,10 @@ export interface PublishOptionCapability {
 
 export interface PlatformCapability {
   readonly formats: Readonly<Record<PublishFormat, boolean>>;
-  readonly carousel: { readonly min: number; readonly max: number };
+  /** `videoSlides`: a carousel slide may be a video. Only Instagram mixes the two. */
+  readonly carousel: { readonly min: number; readonly max: number; readonly videoSlides: boolean };
+  /** A POST with no media publishes as a text-only post (Facebook feed, LinkedIn commentary). */
+  readonly textPost: boolean;
   readonly mediaTransport: PublishMediaTransport;
   readonly caption: CaptionCapability;
   readonly publishOptions: PublishOptionCapability;
@@ -143,7 +146,8 @@ export interface PlatformCapability {
 export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCapability>> = {
   instagram: {
     formats: { POST: true, REEL: true, CAROUSEL: true, STORY: true },
-    carousel: { min: 2, max: 10 },
+    carousel: { min: 2, max: 10, videoSlides: true },
+    textPost: false,
     mediaTransport: 'url',
     // Instagram Content Publishing API.
     caption: { maxLength: 2200, maxHashtags: 30 },
@@ -159,7 +163,9 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
   },
   facebook: {
     formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
-    carousel: { min: 2, max: 10 },
+    carousel: { min: 2, max: 10, videoSlides: false },
+    // POST /{page-id}/feed with a message and no attached media.
+    textPost: true,
     mediaTransport: 'url',
     // Facebook's message field is effectively unbounded at the post level (63,206).
     caption: { maxLength: 63206, maxHashtags: 30 },
@@ -176,7 +182,9 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
   linkedin: {
     // REEL maps to a native video post; CAROUSEL maps to a native multiImage post.
     formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
-    carousel: { min: 2, max: 20 },
+    carousel: { min: 2, max: 20, videoSlides: false },
+    // POST /rest/posts with commentary and no content.
+    textPost: true,
     mediaTransport: 'bytes',
     // LinkedIn ugcPost commentary.
     caption: { maxLength: 3000, maxHashtags: 30 },
@@ -194,7 +202,8 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // that would upload a still image as a one-frame video.
     formats: { POST: false, REEL: true, CAROUSEL: false, STORY: false },
     // Unreachable while CAROUSEL is false; kept so the shape stays total over PublishFormat.
-    carousel: { min: 0, max: 0 },
+    carousel: { min: 0, max: 0, videoSlides: false },
+    textPost: false,
     // YouTube will not fetch a URL — `videos.insert` is a resumable upload of the bytes,
     // the same posture as LinkedIn and unlike every URL-pull platform here.
     mediaTransport: 'bytes',
@@ -214,7 +223,8 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // multi-image photo post, both via /post/publish/content/init with media_type=PHOTO.
     formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
     // TikTok photo posts accept up to 35 images.
-    carousel: { min: 2, max: 35 },
+    carousel: { min: 2, max: 35, videoSlides: false },
+    textPost: false,
     // URL-pull for EVERY format. The Business Organic API (business-api.tiktok.com/open_api/v1.3,
     // the client we actually ship) has no FILE_UPLOAD route and no chunking on either endpoint —
     // `video_url` and `photo_images` are both fetched by TikTok. See the header of
@@ -239,7 +249,9 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // Every X call is metered against the brand's prepaid X wallet (`x:post_create`, or
     // `x:post_create_url` at $0.20 when the text carries a link) — see `xPublisher.ts`.
     formats: { POST: true, REEL: true, CAROUSEL: true, STORY: false },
-    carousel: { min: 2, max: 4 },
+    carousel: { min: 2, max: 4, videoSlides: false },
+    // A POST with no staged image is a text-only post (`xPublisher.ts`).
+    textPost: true,
     // POST /2/media/upload (initialize / append / finalize): X never fetches a URL.
     mediaTransport: 'bytes',
     // ponytail: plain-length check; X counts a link as 23 and CJK/emoji as 2, so weight it
@@ -272,7 +284,11 @@ export function supportsFormat(platform: PublishPlatform, format: PublishFormat)
   return PLATFORM_CAPABILITIES[platform].formats[format];
 }
 
-export function carouselLimits(platform: PublishPlatform): { min: number; max: number } {
+export function carouselLimits(platform: PublishPlatform): {
+  min: number;
+  max: number;
+  videoSlides: boolean;
+} {
   return PLATFORM_CAPABILITIES[platform].carousel;
 }
 
@@ -285,8 +301,8 @@ export function captionLimits(platform: PublishPlatform): {
 
 /**
  * The widest caption any supported platform accepts. Wire schemas parse before the
- * platform is resolved, so they bound on this and leave exact per-platform truncation
- * to the publisher, which knows the destination.
+ * platform is resolved, so they bound on this and leave the exact per-platform limit to
+ * the write paths and the publish gate, which know the destination and refuse.
  */
 export const CAPTION_MAX_ANY_PLATFORM: number = Math.max(
   ...Object.values(PLATFORM_CAPABILITIES).map((capability) => capability.caption.maxLength),
@@ -338,10 +354,15 @@ export const publishErrorCodeSchema = z.enum([
   // written before an account is chosen, so this is the ordinary "nothing connected yet" state
   // — the publish is the stage that needs one.
   'account_missing',
+  // The caller expected another account than the draft's stamp: what the UI showed is stale.
+  'account_mismatch',
   'media_missing',
   // The draft resolved to no caption at all. A platform accepts a container with no caption
   // param and posts it blank, so this fails closed rather than publishing an empty post.
   'caption_missing',
+  // The caption the plan would send is shorter than the one it was built from (body + hashtags
+  // over the platform's limit). Refused, never cut.
+  'caption_too_long',
   'hyperframe_mp4_not_ready',
   // The draft's format is not offered by its platform.
   'unsupported_format',

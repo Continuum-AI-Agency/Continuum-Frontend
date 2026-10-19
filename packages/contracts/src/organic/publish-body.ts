@@ -3,7 +3,7 @@
  * and the format→postType mapping behind it.
  *
  * This is an FE→BE HTTP envelope, so it lives here and both sides import it: the planner
- * builds the body, the Backend's `PublishDraftBodySchema` parses it, and the publish bench
+ * builds the body, the Backend parses it with `publishDraftBodySchema`, and the publish bench
  * drives this exact builder instead of a hand-shaped stand-in that can't drift with it.
  *
  * `resolvePublishFormat` exists because the mapping used to be written twice — case-
@@ -15,7 +15,9 @@
 import { z } from 'zod';
 import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
 import { trialGraduationStrategySchema } from '../trial-reels/index';
+import { type PublishPlanDraft, type PublishPlanMedia, resolvePublishPlan } from './publish-plan';
 import {
+  CAPTION_MAX_ANY_PLATFORM,
   PLATFORM_CAPABILITIES,
   type PublishFormat,
   type PublishPlatform,
@@ -100,6 +102,102 @@ export function unsupportedPublishOptions(
   }
   return unsupported;
 }
+
+const carouselItemSchema = z
+  .object({
+    // https:// URLs and data: URIs (base64 images from the planner). A data: URI is uploaded
+    // to the staging bucket before the platform call.
+    imageUrl: z.string().min(1).optional(),
+    videoUrl: z.string().url().optional(),
+  })
+  .refine((item) => item.imageUrl || item.videoUrl, {
+    message: 'Each carousel item must have imageUrl or videoUrl',
+  });
+
+// The target fields shared by every publish body.
+//
+// The account is NOT a choice here: a persisted draft publishes to its own
+// `platform_account_id`. `accountId` (and the legacy Instagram alias `igAccountId`) is the
+// account the UI showed; the Backend refuses the publish (`account_mismatch`) when it differs
+// from the stamp. They matter on their own only for an inline draft with no row.
+const targetFields = {
+  platform: publishPlatformSchema.optional(),
+  accountId: z.string().min(1).optional(),
+  igAccountId: z.string().min(1).optional(),
+  brandId: z.string().uuid().optional(),
+  /**
+   * The `intent_hash` the caller was shown by `/publish-intent` and confirmed. It is bound to
+   * the caption, account, platform and format the human reviewed, so a confirmation cannot be
+   * redeemed for content the draft has since changed to. Required by the interactive publish
+   * routes; absent on the cron and automations paths, whose approval was scheduling.
+   */
+  confirmationHash: z.string().min(1).optional(),
+  /** First comment, chosen cover and AI label, gated per platform by the publisher. */
+  publishOptions: publishOptionsSchema.optional(),
+};
+
+// `caption` is bounded by the WIDEST caption any platform accepts: the destination platform
+// is not resolved until after this parses. The plan's `caption.text` is the wire string.
+// Media is optional: a persisted draft publishes its own row's media, and missing media is
+// refused by `checkPublishability`, not here.
+const caption = z.string().max(CAPTION_MAX_ANY_PLATFORM).optional();
+
+const postBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('POST'),
+  imageUrl: z.string().url().optional(),
+  caption,
+});
+const reelBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('REEL'),
+  videoUrl: z.string().url().optional(),
+  caption,
+  shareToFeed: z.boolean().optional(),
+  coverUrl: z.string().url().optional(),
+});
+// The per-platform maximum is enforced by the publisher against PLATFORM_CAPABILITIES
+// (Instagram and Facebook cap at 10, LinkedIn at 20).
+const carouselBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('CAROUSEL'),
+  items: z.array(carouselItemSchema).min(2).max(20).optional(),
+  caption,
+});
+// A story sends one image or video and no caption; the publisher drops a merged caption.
+const storyBodySchema = z.object({
+  ...targetFields,
+  postType: z.literal('STORY'),
+  imageUrl: z.string().url().optional(),
+  videoUrl: z.string().url().optional(),
+  caption,
+});
+
+/** `POST /api/organic/calendar/drafts/:id/publish`. */
+export const publishDraftBodySchema = z.discriminatedUnion('postType', [
+  postBodySchema,
+  reelBodySchema,
+  carouselBodySchema,
+  storyBodySchema,
+]);
+export type PublishDraftBody = z.infer<typeof publishDraftBodySchema>;
+
+const memberId = { id: z.string() };
+
+/** One member of `POST /api/organic/calendar/drafts/bulk-publish`: a publish body plus its row id. */
+export const bulkPublishItemSchema = z.discriminatedUnion('postType', [
+  postBodySchema.extend(memberId),
+  reelBodySchema.extend(memberId),
+  carouselBodySchema.extend(memberId),
+  storyBodySchema.extend(memberId),
+]);
+export type BulkPublishItem = z.infer<typeof bulkPublishItemSchema>;
+
+/** The group publish: one item per member, each with its own `/publish-intent` hash. */
+export const bulkPublishBodySchema = z.object({
+  items: z.array(bulkPublishItemSchema).min(1).max(20),
+});
+export type BulkPublishBody = z.infer<typeof bulkPublishBodySchema>;
 
 /** The draft fields the publish body is built from. The planner's richer draft satisfies it. */
 export interface PublishableDraft {
@@ -238,36 +336,59 @@ export function buildFullCaption(
   return buildPlatformCaption(platform, draft.captionPreview, draft.hashtags);
 }
 
-/**
- * Carousel slides, in order. Realized `publishingAssets` win — they are what the planner
- * writes when a user assigns or replaces a creative. Generated `mediaSuggestion.assets` are
- * the headless fallback, and only reachable when nothing has been assigned.
- */
-function carouselItems(draft: PublishableDraft): CarouselPublishItem[] {
-  const assigned = (draft.publishingAssets ?? [])
-    .filter((asset) => !!asset.storageUrl)
-    .slice()
-    .sort((a, b) => (a.slideIndex ?? 0) - (b.slideIndex ?? 0))
-    .map(
-      (asset): CarouselPublishItem =>
-        asset.kind === 'video' ? { videoUrl: asset.storageUrl } : { imageUrl: asset.storageUrl },
-    );
-
-  if (draft.publishingAssets?.length) return assigned;
-
-  return (draft.mediaSuggestion?.assets ?? [])
-    .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .flatMap((asset): CarouselPublishItem[] => {
-      const url =
-        asset.assetUrl ||
-        (asset.assetBase64
-          ? `data:${asset.mimeType ?? 'image/png'};base64,${asset.assetBase64}`
-          : '');
-      if (!url) return [];
-      return [asset.mimeType?.startsWith('video/') ? { videoUrl: url } : { imageUrl: url }];
-    });
+/** The planner's draft as publish-plan input. Fields it does not carry read as absent. */
+function planDraftOf(draft: PublishableDraft): PublishPlanDraft {
+  const generated = draft.mediaSuggestion?.assets ?? [];
+  return {
+    id: draft.id,
+    formats: [draft.format],
+    caption: draft.captionPreview ?? null,
+    hashtags: draft.hashtags ?? null,
+    publishingAssets: (draft.publishingAssets ?? []).map((asset) => ({
+      role: asset.role,
+      kind: asset.kind,
+      slideIndex: asset.slideIndex ?? null,
+      assetId: null,
+      bucket: null,
+      storagePath: null,
+      storageUrl: asset.storageUrl || null,
+      mimeType: null,
+      width: null,
+      height: null,
+    })),
+    mediaSuggestion: generated.length
+      ? {
+          mediaStatus: null,
+          url: null,
+          assetUrl: null,
+          signedUrl: null,
+          assetBase64: null,
+          bucket: null,
+          mimeType: null,
+          width: null,
+          height: null,
+          alt: null,
+          assets: generated.map((asset) => ({
+            order: asset.order ?? null,
+            url: null,
+            assetUrl: asset.assetUrl ?? null,
+            signedUrl: null,
+            assetBase64: asset.assetBase64 ?? null,
+            bucket: null,
+            mimeType: asset.mimeType ?? null,
+            width: null,
+            height: null,
+          })),
+          reel: null,
+          hyperframe: null,
+        }
+      : null,
+    savedPublishOptions: null,
+  };
 }
+
+const mediaUrl = (media: PublishPlanMedia | undefined): string | undefined =>
+  media?.url ?? undefined;
 
 export function buildPublishBody(
   draft: PublishableDraft,
@@ -276,13 +397,16 @@ export function buildPublishBody(
   brandId: string | null,
   publishOptions?: PublishOptions | null,
 ): PublishRequestBody {
-  const postType = inferPostType(draft);
-  const caption = buildFullCaption(draft, platform ?? undefined) || undefined;
-  const assets = draft.publishingAssets ?? [];
-  const video = assets.find((asset) => asset.kind === 'video');
-  const image =
-    assets.find((asset) => asset.kind === 'image' && asset.role === 'primary') ??
-    assets.find((asset) => asset.kind === 'image');
+  // Instagram's limits when the destination is unknown: the tightest, so nothing over-reports.
+  const plan = resolvePublishPlan({
+    draft: planDraftOf(draft),
+    platform: platform ?? 'instagram',
+    account: { boundAccountId: accountId, accounts: null },
+    publishOptions: publishOptions ?? null,
+    mediaGenerated: null,
+  });
+  const caption = plan.caption.text ?? undefined;
+  const [first] = plan.media;
 
   const target: PublishTarget = {
     ...(platform ? { platform } : {}),
@@ -291,30 +415,32 @@ export function buildPublishBody(
     ...(publishOptions ? { publishOptions } : {}),
   };
 
-  if (postType === 'REEL') {
-    const cover = assets.find((asset) => asset.role === 'cover' && asset.kind === 'image');
+  if (plan.format === 'REEL') {
+    const coverUrl = plan.cover?.source === 'publishing_asset' ? plan.cover.url : null;
     return {
       postType: 'REEL',
       placementId: draft.id,
-      ...(video ? { videoUrl: video.storageUrl } : {}),
-      ...(cover ? { coverUrl: cover.storageUrl } : {}),
+      ...(first ? { videoUrl: mediaUrl(first) } : {}),
+      ...(coverUrl ? { coverUrl } : {}),
       caption,
       shareToFeed: true,
       ...target,
     };
   }
 
-  if (postType === 'STORY') {
-    return {
-      postType: 'STORY',
-      placementId: draft.id,
-      ...(video ? { videoUrl: video.storageUrl } : image ? { imageUrl: image.storageUrl } : {}),
-      ...target,
-    };
+  if (plan.format === 'STORY') {
+    const media = first
+      ? first.kind === 'video'
+        ? { videoUrl: mediaUrl(first) }
+        : { imageUrl: mediaUrl(first) }
+      : {};
+    return { postType: 'STORY', placementId: draft.id, ...media, ...target };
   }
 
-  if (postType === 'CAROUSEL') {
-    const items = carouselItems(draft);
+  if (plan.format === 'CAROUSEL') {
+    const items = plan.media.flatMap((item) =>
+      item.url ? [item.kind === 'video' ? { videoUrl: item.url } : { imageUrl: item.url }] : [],
+    );
     return {
       postType: 'CAROUSEL',
       placementId: draft.id,
@@ -328,7 +454,7 @@ export function buildPublishBody(
   return {
     postType: 'POST',
     placementId: draft.id,
-    ...(image ? { imageUrl: image.storageUrl } : {}),
+    ...(first ? { imageUrl: mediaUrl(first) } : {}),
     caption,
     ...target,
   };

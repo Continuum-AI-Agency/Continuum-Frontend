@@ -57,7 +57,7 @@ const TEMPLATE_REVISION_MESSAGES: Record<TemplateRevisionErrorCode, string> = {
   template_variant_archived:
     'That variant was archived. Choose another revision for this set, or restore the variant.',
   template_variant_unpublished:
-    'Publish this variant before making it the default. Open it from the Variants tab to publish.',
+    'Publish this variant revision before making it the default. Open it from the Variants tab to publish.',
   template_revision_head_conflict:
     'Someone else saved this template at the same time. Reload it and save again.',
   template_revision_multi_source_edit_unsupported:

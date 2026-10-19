@@ -1,6 +1,11 @@
 'use client';
 
-import { captionLimits, toPublishPlatform } from '@continuum/contracts';
+import {
+  captionLimits,
+  type HashtagTiers,
+  platformCaptionLength,
+  toPublishPlatform,
+} from '@continuum/contracts';
 import * as React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -62,9 +67,20 @@ export function InlinePreviewTextarea({
 // The counter reads the SAME capability block the publisher clamps against, so a caption
 // the counter shows as in-bounds is one that publishes whole. They used to be two maps and
 // a LinkedIn draft at 2,600 chars counted green while publishing truncated at 2200.
-export function CaptionCharCount({ caption, platform }: { caption: string; platform: string }) {
-  const limit = captionLimits(toPublishPlatform(platform) ?? 'instagram').maxLength;
-  const len = caption.length;
+// It counts the caption AS SENT — body plus the hashtags the platform takes — because that is
+// what the limit (and the publish gate) is measured against.
+export function CaptionCharCount({
+  caption,
+  platform,
+  hashtags,
+}: {
+  caption: string;
+  platform: string;
+  hashtags?: HashtagTiers | string[] | null;
+}) {
+  const publishPlatform = toPublishPlatform(platform) ?? 'instagram';
+  const limit = captionLimits(publishPlatform).maxLength;
+  const len = platformCaptionLength(publishPlatform, caption, hashtags);
   return (
     <div className="mt-1 flex justify-end">
       <span
@@ -109,7 +125,15 @@ export function EditableCaption({
   editClassName,
   ariaLabel = 'Caption',
   editable = true,
+  editing: controlledEditing,
+  onEditingChange,
+  displayValue,
+  lead,
+  readoutClassName,
+  hashtags,
 }: {
+  /** Counted with the caption: the limit is the caption as sent. */
+  hashtags?: HashtagTiers | string[] | null;
   value: string;
   onChange: (next: string) => void;
   platform: string;
@@ -120,16 +144,44 @@ export function EditableCaption({
   // When false the caption is a locked, read-only readout with no edit affordance
   // (the preview's "final look" view mode). Editing is gated behind the pencil.
   editable?: boolean;
+  // Controlled open state, for a caller that opens the field from elsewhere (a readiness
+  // "Add a caption" jump). Uncontrolled when omitted.
+  editing?: boolean;
+  onEditingChange?: (next: boolean) => void;
+  // What the readout shows when it differs from the editable text: the caption exactly as
+  // it will be sent (hashtags appended, cut at the platform limit).
+  displayValue?: string;
+  /** Text that leads the readout on its first line (a feed caption's account name). */
+  lead?: React.ReactNode;
+  // Classes for the readout's text box. A line clamp goes HERE: a <button> is never a true
+  // inline box, so a clamp on its parent cannot reach the text inside it.
+  readoutClassName?: string;
 }) {
-  const [editing, setEditing] = React.useState(false);
+  const [uncontrolledEditing, setUncontrolledEditing] = React.useState(false);
+  const editing = controlledEditing ?? uncontrolledEditing;
+  const setEditing = (next: boolean) => {
+    if (controlledEditing === undefined) setUncontrolledEditing(next);
+    onEditingChange?.(next);
+  };
+  const readoutValue = displayValue ?? value;
+  // Leaving the field by keyboard unmounts it, which drops focus to <body>: the next Escape
+  // then reached nothing, and Tab started over from the top of the page. Focus lands back on
+  // the readout that opened the field instead. A click away keeps focus where it went.
+  const readoutRef = React.useRef<HTMLButtonElement>(null);
+  const refocusReadoutRef = React.useRef(false);
+  React.useEffect(() => {
+    if (editing || !refocusReadoutRef.current) return;
+    refocusReadoutRef.current = false;
+    readoutRef.current?.focus();
+  }, [editing]);
 
   // Read-only view mode: faithful text, no click-to-edit button or textarea.
   if (!editable) {
-    const hasText = value.trim().length > 0;
+    const hasText = readoutValue.trim().length > 0;
     return (
       <div className={cn('block w-full px-2 py-1.5 text-left text-foreground', className)}>
         {hasText ? (
-          <CaptionReadout value={value} />
+          <CaptionReadout value={readoutValue} />
         ) : (
           <span className="text-muted-foreground/50">{placeholder}</span>
         )}
@@ -138,24 +190,31 @@ export function EditableCaption({
   }
 
   if (!editing) {
-    const hasText = value.trim().length > 0;
+    const hasText = readoutValue.trim().length > 0;
     return (
       <button
+        ref={readoutRef}
         type="button"
         onClick={() => setEditing(true)}
         aria-label={
-          hasText ? `Edit ${ariaLabel.toLowerCase()}` : `Add a ${ariaLabel.toLowerCase()}`
+          // Platform names keep their case ("Edit TikTok caption"); only the bare default lowers.
+          hasText
+            ? `Edit ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
+            : `Add a ${ariaLabel === 'Caption' ? 'caption' : ariaLabel}`
         }
         className={cn(
           'block w-full rounded-md px-2 py-1.5 text-left text-foreground transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50',
           className,
         )}
       >
-        {hasText ? (
-          <CaptionReadout value={value} />
-        ) : (
-          <span className="text-muted-foreground/50">{placeholder}</span>
-        )}
+        <span className={cn('block', readoutClassName)}>
+          {lead}
+          {hasText ? (
+            <CaptionReadout value={readoutValue} />
+          ) : (
+            <span className="text-muted-foreground/50">{placeholder}</span>
+          )}
+        </span>
       </button>
     );
   }
@@ -169,6 +228,7 @@ export function EditableCaption({
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
+            refocusReadoutRef.current = true;
             setEditing(false);
           }
         }}
@@ -180,7 +240,7 @@ export function EditableCaption({
           editClassName,
         )}
       />
-      <CaptionCharCount caption={value} platform={platform} />
+      <CaptionCharCount caption={value} platform={platform} hashtags={hashtags} />
     </div>
   );
 }

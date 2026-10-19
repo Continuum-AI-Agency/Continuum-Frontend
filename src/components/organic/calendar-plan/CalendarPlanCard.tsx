@@ -1,9 +1,14 @@
 'use client';
 
 import type { CalendarPlanDecision } from '@continuum/contracts';
+import dynamic from 'next/dynamic';
 import { BulkPlanCard } from '../agent/BulkPlanCard';
-import { BulkRunPanel } from '../agent/BulkRunPanel';
 import type { CalendarPlanState } from './useCalendarPlan';
+
+// Renders only after a plan is approved; keeps the batch cards off /organic's first load.
+const BulkRunPanel = dynamic(() => import('../agent/BulkRunPanel').then((m) => m.BulkRunPanel), {
+  ssr: false,
+});
 
 type Props = {
   state: CalendarPlanState;

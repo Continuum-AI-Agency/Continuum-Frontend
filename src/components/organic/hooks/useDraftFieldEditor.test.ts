@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { CAPTION_MAX_ANY_PLATFORM } from '@continuum/contracts';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
@@ -29,13 +30,16 @@ const storeState = {
   draft: null as OrganicCalendarDraft | null,
   pendingDraftEdits: {} as Record<string, PendingDraftEdit>,
   refetchRequests: 0,
+  writes: 0,
 };
 
 const updateDraft = (
   draftId: string,
   updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
 ): void => {
-  if (storeState.draft?.id === draftId) storeState.draft = updater(storeState.draft);
+  if (storeState.draft?.id !== draftId) return;
+  storeState.draft = updater(storeState.draft);
+  storeState.writes += 1;
 };
 
 const markDraftEditPending = (draftId: string, fields: readonly DraftEditField[]): void => {
@@ -69,7 +73,7 @@ mock.module('@/lib/organic/store', () =>
 );
 
 // Imported AFTER the module mocks so the hook binds to them.
-const { useDraftFieldEditor } = await import('./useDraftFieldEditor');
+const { useDraftFieldEditor, useDraftFieldPersistence } = await import('./useDraftFieldEditor');
 
 function draft(over: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -96,6 +100,7 @@ function seed(slot: OrganicCalendarDraft): void {
   storeState.draft = slot;
   storeState.pendingDraftEdits = {};
   storeState.refetchRequests = 0;
+  storeState.writes = 0;
 }
 
 function storedDraft(): OrganicCalendarDraft | null {
@@ -190,6 +195,121 @@ describe('editField', () => {
     expect(result.current.saveError).not.toBeNull();
   });
 
+  // C5: a group is one post, so its time moves every member row, each with its own token.
+  it('moves every member of a group when the time changes, each against its own row', async () => {
+    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const target = draft({
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: member,
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    await act(async () => {
+      await result.current.editField({ dayId: '2030-08-06', timeOfDay: '13:00' }, ['schedule'], {
+        timeLabel: '1:00 PM',
+      });
+    });
+
+    expect(requestCalls.map((call) => call.path).sort()).toEqual([
+      '/api/organic/calendar/drafts/srv-1/fields',
+      '/api/organic/calendar/drafts/srv-tt/fields',
+    ]);
+    const tt = requestCalls.find((call) => call.path.includes('srv-tt'));
+    expect(tt?.body).toMatchObject({
+      dayId: '2030-08-06',
+      timeOfDay: '13:00',
+      expected_updated_at: 'T-tt',
+    });
+  });
+
+  it('puts the moved rows back when one member cannot move, so the platforms never split', async () => {
+    requestImpl = async (call) => {
+      if (call.path.includes('srv-tt')) throw new ApiError('boom', 500);
+      return { updated_at: 'T-new' };
+    };
+    const member = draft({ id: 'local-1::tiktok', backendDraftId: 'srv-tt', updatedAt: 'T-tt' });
+    const target = draft({
+      timeLabel: '5:00 PM',
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: member,
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.editField(
+        { dayId: '2030-08-06', timeOfDay: '13:00' },
+        ['schedule'],
+        {
+          timeLabel: '1:00 PM',
+        },
+      );
+    });
+
+    expect(ok).toBe(false);
+    const cardWrites = requestCalls.filter((call) => call.path.includes('srv-1'));
+    expect(cardWrites.map((call) => call.body?.timeOfDay)).toEqual(['13:00', '17:00']);
+    expect(storedDraft()?.timeLabel).toBe('5:00 PM');
+  });
+
+  it('a caption edit on a group card stays on the card row', async () => {
+    const target = draft({
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: draft({ id: 'x', backendDraftId: 'srv-tt' }),
+        },
+      ],
+    });
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+    await act(async () => {
+      await result.current.editField({ caption: 'card only' }, ['caption']);
+    });
+    expect(requestCalls.map((call) => call.path)).toEqual([
+      '/api/organic/calendar/drafts/srv-1/fields',
+    ]);
+  });
+
+  // One caption rule: the route refuses an over-limit caption and names the limit; never truncate.
+  it("shows the route's own reason for a refused edit", async () => {
+    const message = 'LinkedIn captions are at most 3000 characters — this one is 3001';
+    requestImpl = async () => {
+      throw new ApiError(message, 422, undefined, { error: 'caption_too_long', message });
+    };
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    await act(async () => {
+      await result.current.editField({ caption: 'x'.repeat(3001) }, ['caption']);
+    });
+
+    expect(result.current.saveError).toBe(message);
+  });
+
   // A 409 means someone else's newer value is on the row. Rolling back would
   // replace their change with an even older one, so reconcile instead.
   it('does NOT roll back on a stale-draft conflict; it requests a refetch', async () => {
@@ -266,7 +386,10 @@ describe('editField', () => {
     const { result } = renderHook(() => useDraftFieldEditor(target));
 
     await act(async () => {
-      await result.current.editField({ caption: 'x'.repeat(3000) }, ['caption']);
+      // Past the widest platform's limit: the wire schema bounds on CAPTION_MAX_ANY_PLATFORM.
+      await result.current.editField({ caption: 'x'.repeat(CAPTION_MAX_ANY_PLATFORM + 1) }, [
+        'caption',
+      ]);
     });
 
     expect(requestCalls).toHaveLength(0);
@@ -286,12 +409,78 @@ describe('queueFieldEdit', () => {
       result.current.queueFieldEdit({ caption: 'abc' }, ['caption'], { captionPreview: 'abc' });
     });
 
-    // Every keystroke is visible at once; only the send is deferred.
-    expect(storedDraft()?.captionPreview).toBe('abc');
+    // Every keystroke is visible at once in the editor's draft; the store and the send wait.
+    expect(result.current.draft.captionPreview).toBe('abc');
+    expect(storedDraft()?.captionPreview).toBe('original caption');
     expect(requestCalls).toHaveLength(0);
 
     await waitFor(() => expect(requestCalls).toHaveLength(1));
     expect(requestCalls[0]?.body?.caption).toBe('abc');
+    await waitFor(() => expect(storedDraft()?.captionPreview).toBe('abc'));
+  });
+
+  // Each store write re-renders every calendar cell holding the draft: a burst is one write,
+  // carrying the typed text and the server's updated_at together.
+  it('writes a burst to the store once, with the server updated_at', async () => {
+    requestImpl = async () => ({ updated_at: '2030-08-02T10:00:00.000Z' });
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'a' }, ['caption'], { captionPreview: 'a' });
+      result.current.queueFieldEdit({ caption: 'ab' }, ['caption'], { captionPreview: 'ab' });
+    });
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(storeState.writes).toBe(1);
+    expect(storedDraft()?.captionPreview).toBe('ab');
+    expect(storedDraft()?.updatedAt).toBe('2030-08-02T10:00:00.000Z');
+  });
+
+  it('keeps unsaved typing in the store when the PATCH is rejected', async () => {
+    requestImpl = async () => {
+      throw new ApiError('boom', 500);
+    };
+    const target = draft();
+    seed(target);
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'kept' }, ['caption'], { captionPreview: 'kept' });
+    });
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(storedDraft()?.captionPreview).toBe('kept');
+    expect(show).toHaveBeenCalled();
+  });
+
+  // The panel can move to another draft mid-burst; the burst still belongs to the first one.
+  it('sends a burst to the draft it was typed into after the panel moves on', async () => {
+    const first = draft();
+    seed(first);
+    const { result, rerender } = renderHook(({ current }) => useDraftFieldEditor(current), {
+      initialProps: { current: first },
+    });
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'for one' }, ['caption'], {
+        captionPreview: 'for one',
+      });
+    });
+    rerender({ current: draft({ id: 'local-2', backendDraftId: 'srv-2' }) });
+
+    expect(result.current.draft.captionPreview).toBe('original caption');
+    await act(async () => {
+      await result.current.flush();
+    });
+
+    expect(requestCalls[0]?.path).toContain('/srv-1/');
+    expect(storedDraft()?.captionPreview).toBe('for one');
   });
 
   it('flush() sends the coalesced edit immediately', async () => {
@@ -322,6 +511,147 @@ describe('queueFieldEdit', () => {
     });
 
     expect(requestCalls).toHaveLength(0);
+  });
+
+  it('flush() waits for a discrete edit already on the wire', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(flushed).toBeNull();
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+  });
+
+  it('a burst flushed behind a save on the wire goes out after it, with the token it returned', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      requestCalls.length === 1
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve({ updated_at: 'T2' });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requestCalls).toHaveLength(1);
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+    expect(requestCalls).toHaveLength(2);
+    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('two writers on one row save in turn, each sending the token the last one returned', async () => {
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      requestCalls.length === 1
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve({ updated_at: 'T2' });
+    const media = renderHook(() => useDraftFieldPersistence()).result.current;
+    const fields = renderHook(() => useDraftFieldPersistence()).result.current;
+    const row = { id: 'local-1', backendDraftId: 'srv-1', updatedAt: 'T0' };
+
+    const first = media.persistDraftFields(row, { format: 'Carousel' });
+    const second = fields.persistDraftFields(row, { caption: 'typed' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.body).toMatchObject({ expected_updated_at: 'T0' });
+
+    release({ updated_at: 'T1' });
+    expect(await first).toEqual({ ok: true, updatedAt: 'T1' });
+    expect(await second).toEqual({ ok: true, updatedAt: 'T2' });
+    expect(requestCalls[1]?.body).toMatchObject({ caption: 'typed', expected_updated_at: 'T1' });
+  });
+
+  it('flush() waits for a burst whose coalesce timer already fired', async () => {
+    const target = draft();
+    seed(target);
+    let release: (value: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      result.current.queueFieldEdit({ caption: 'typed' }, ['caption'], { captionPreview: 'typed' });
+    });
+    await waitFor(() => expect(requestCalls).toHaveLength(1));
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(flushed).toBeNull();
+    expect(requestCalls).toHaveLength(1);
+
+    await act(async () => {
+      release({ updated_at: 'T1' });
+    });
+    await waitFor(() => expect(flushed).toBe(true));
+  });
+
+  it('flush() reports false when the edit on the wire fails', async () => {
+    const target = draft();
+    seed(target);
+    let fail: (error: unknown) => void = () => {};
+    requestImpl = () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    act(() => {
+      void result.current.editField({ format: 'Carousel' }, ['format'], { format: 'Carousel' });
+    });
+    let flushed: boolean | null = null;
+    act(() => {
+      void result.current.flush().then((saved) => {
+        flushed = saved;
+      });
+    });
+    await act(async () => {
+      fail(new ApiError('boom', 500));
+    });
+    await waitFor(() => expect(flushed).toBe(false));
   });
 
   it('merges different queued fields into one patch rather than dropping either', async () => {

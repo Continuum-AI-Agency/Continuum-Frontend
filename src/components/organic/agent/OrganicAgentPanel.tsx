@@ -1,12 +1,10 @@
 'use client';
 
 import type { Skill } from '@continuum/contracts';
-import { ArrowRight, RefreshCw } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import {
   type AgentDataScopeOption,
@@ -19,21 +17,14 @@ import {
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
 import type { Attachment } from '@/components/chat/attachments';
-import { ChatMarker } from '@/components/chat/ChatMarker';
-import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
 import { useCollapsibleConversations } from '@/components/chat/collapsibleConversations';
-import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
-import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
-import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
 import { SessionContentTray } from '@/components/chat/SessionContentTray';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
-import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useOrganicAgentStream } from '@/hooks/useOrganicAgentStream';
@@ -97,37 +88,32 @@ import type { StudioNode } from '@/StudioCanvas/types';
 import { DisabledControl } from '../DisabledControl';
 import { describeComposerBlock } from '../disabledReasons';
 import type { OrganicCalendarDraft } from '../primitives/types';
-import { ActiveStagesPanel } from './ActiveStagesPanel';
-import { AeoSnapshotCard } from './AeoSnapshotCard';
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
-import { BulkPlanCard } from './BulkPlanCard';
-import { BulkRunPanel } from './BulkRunPanel';
-import { ConceptPlan } from './ConceptPlan';
 import { buildCanvasReference, getCanvasPreview } from './canvasMentions';
 import { resolveConceptPreviewUrls } from './conceptPreview';
-import { deriveOrganicAnchors, milestonesForMessage } from './deriveOrganicAnchors';
-import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
-import { MessageActions } from './MessageActions';
+import { DraftTrayPreview } from './DraftTrayPreview';
+import { deriveOrganicAnchors } from './deriveOrganicAnchors';
+import {
+  NO_ACTIVE_STAGES,
+  OrganicMessageRow,
+  type OrganicRowRunState,
+  rowRunState,
+  useStableRowActions,
+} from './OrganicMessageRow';
 import { OrganicSessionSidebar } from './OrganicSessionSidebar';
-import { OrganicThinkingPanel } from './OrganicThinkingPanel';
-import { ToolCallPipelineCards } from './PipelinePlacementGrid';
-import { PostContentCardGrid } from './PostContentCardGrid';
 import { PromptPickerButton } from './PromptPickerButton';
-import { buildPlannerDraftDeepLink, presentAgentMessage } from './presentAgentMessage';
+import { buildPlannerDraftDeepLink } from './presentAgentMessage';
 import { type RestoredSession, restoreSessionFromMessages } from './restoreSession';
 import { SkillPickerButton } from './SkillPickerButton';
-import { SkillProposalCard } from './SkillProposalCard';
+import { organicSessionContent } from './sessionContent';
 import { ToolApprovalCard } from './ToolApprovalCard';
-import { TrendChartCard } from './TrendChartCard';
 import type {
   AgentJobState,
   ConversationMessage,
   PipelineCardState,
   PlanApprovalDecision,
   ToolApproval,
-  UiCard,
 } from './types';
-import { organicSessionContent } from './sessionContent';
 import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
 import { useOrganicSessions } from './useOrganicSessions';
 import { useProjectedRun } from './useProjectedRun';
@@ -256,12 +242,6 @@ const STARTER_PROMPTS = [
 // even when the reader only wanted to know how last week went.
 const COMPOSER_PLACEHOLDER = 'Ask about performance, or plan what comes next…';
 
-// Wide children a markdown answer can legitimately contain — a code block, a data table —
-// scroll inside their own box. Anything else and the bubble either clips the answer or the
-// answer pushes the whole transcript sideways.
-const ASSISTANT_MARKDOWN_CLASS =
-  'text-base leading-7 text-foreground text-pretty [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_a]:break-words [&_code]:break-words';
-
 function resolveTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
@@ -281,30 +261,6 @@ function currentWeekStartIso(): string {
   const monday = new Date(now);
   monday.setDate(now.getDate() - daysToMonday);
   return monday.toISOString().slice(0, 10);
-}
-
-// Stable identity per rendered card so React reconciliation and enter-animations
-// key off the card's own id instead of its array index (which shifts as cards
-// interleave during a turn).
-function cardKey(card: UiCard, index: number): string {
-  switch (card.type) {
-    case 'plan_card':
-      return `plan_card:${card.data.planId}`;
-    case 'bulk_plan_card':
-      return `bulk_plan_card:${card.data.planId}`;
-    case 'trend_chart':
-      return `trend_chart:${card.data.title || index}`;
-    case 'post_list':
-      return `post_list:${card.label ?? index}`;
-    case 'skill_proposal':
-      return `skill_proposal:${card.data.proposalId}`;
-    case 'aeo_snapshot':
-      return `aeo_snapshot:${card.data.snapshotId}`;
-    case 'agent_delegated':
-      return `agent_delegated:${card.data.callId}`;
-    default:
-      return String(index);
-  }
 }
 
 function matchesMentionQuery(query: string, values: Array<string | null | undefined>) {
@@ -991,7 +947,13 @@ export function OrganicAgentPanel({
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!currentSessionId || isStreaming) return;
 
+      const runBefore = selectRunForSession(currentSessionId)(useAgentRunStore.getState())?.run
+        .runId;
+      const replyMessageId = crypto.randomUUID();
       dispatch({ type: 'TOOL_APPROVAL_RESOLVE', approvalId: approval.approvalId });
+      // The agent's reply is a new turn. Without its own row every frame it streams is
+      // dropped, because the previous turn's STREAM_COMPLETE left no row open.
+      dispatch({ type: 'BEGIN_STREAMING', messageId: replyMessageId });
 
       start({
         brandId,
@@ -1001,20 +963,32 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds: scopedPlatformAccountIds,
-      })
-        .then(() => debouncedRefreshSessions())
-        .catch(() => {
-          // The card was removed optimistically. Swallowing this left the user believing they had
-          // approved (or denied) a publish that the agent never heard about — the worst possible
-          // silence on a gate. Put it back so the decision can actually be made.
-          dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
-          show({
-            title: approved ? 'Approval not delivered' : 'Denial not delivered',
-            description:
-              'The agent did not receive your decision. Nothing was published — please answer again.',
-            variant: 'error',
-          });
+      }).then(({ error }) => {
+        // `start` resolves with the error rather than rejecting. Every turn names a fresh
+        // run, so a failed turn that never named one never reached the agent; one that did
+        // was delivered and its own error row stands. A reader aborted because the user
+        // left the session cannot tell, so it is left alone.
+        const runStore = useAgentRunStore.getState();
+        const undelivered =
+          error !== undefined &&
+          selectRunForSession(currentSessionId)(runStore)?.run.runId === runBefore &&
+          runStore.viewingSessionId === currentSessionId;
+        if (!undelivered) {
+          debouncedRefreshSessions();
+          return;
+        }
+        // The card was removed optimistically. Swallowing this left the user believing they had
+        // approved (or denied) a publish that the agent never heard about — the worst possible
+        // silence on a gate. Put it back so the decision can actually be made.
+        dispatch({ type: 'DISCARD_MESSAGE', messageId: replyMessageId });
+        dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
+        show({
+          title: approved ? 'Approval not delivered' : 'Denial not delivered',
+          description:
+            'The agent did not receive your decision. Nothing was published — please answer again.',
+          variant: 'error',
         });
+      });
     },
     [
       state.sessionId,
@@ -1714,6 +1688,42 @@ export function OrganicAgentPanel({
     return byToolCallId;
   }, [state.pipeline]);
 
+  const runState = useMemo<OrganicRowRunState>(
+    () => ({
+      pipeline: state.pipeline,
+      pipelineCardsByToolCallId,
+      planItemStatus: state.planItemStatus,
+      bulkRuns: state.bulkRuns,
+      jobs: state.jobs,
+    }),
+    [state.pipeline, pipelineCardsByToolCallId, state.planItemStatus, state.bulkRuns, state.jobs],
+  );
+
+  // Rows get one stable actions object (see useStableRowActions).
+  const rowActions = useStableRowActions({
+    onEnrichDraft: handleEnrichDraftFromChat,
+    onGenerateMedia: handleGenerateMediaFromChat,
+    onRetryJob: handleRetryJobFromChat,
+    onPlanDecision: handlePlanDecision,
+    onStartBulkRun: (run) => dispatch({ type: 'BULK_RUN_START', run }),
+    onOpenDraftIn: (draftId, target) => {
+      setSelectedDraftId(draftId);
+      setViewMode(target === 'calendar' ? 'month' : 'list');
+    },
+    onViewDraft: handleViewDraft,
+    onUseAsset: (item) =>
+      setQueuedMentionSuggestions((current) => [
+        ...current,
+        mediaAssetToMentionSuggestion(item.asset),
+      ]),
+    onSkillSaved: () => {
+      void refreshBrandSkills();
+    },
+    onRetryTurn: (messageId) => {
+      handleRetryTurn(messageId);
+    },
+  });
+
   return (
     <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
       <OrganicSessionSidebar
@@ -1782,274 +1792,30 @@ export function OrganicAgentPanel({
             </div>
           ) : (
             <>
-              {state.messages.map((msg) => (
-                <Fragment key={msg.id}>
-                  <ChatMessage id={msg.id} role={msg.role}>
-                    <div className="space-y-2">
-                      {msg.role === 'assistant' ? (
-                        msg.content ? (
-                          <SafeMarkdown
-                            content={presentAgentMessage(msg.content)}
-                            className={ASSISTANT_MARKDOWN_CLASS}
-                            mode={msg.id === state.streamingMessageId ? 'streaming' : 'static'}
-                            isAnimating={msg.id === state.streamingMessageId}
-                          />
-                        ) : msg.id === state.streamingMessageId &&
-                          (msg.toolCalls?.length ?? 0) === 0 &&
-                          !msg.error ? (
-                          <AgentWorkingIndicator />
-                        ) : null
-                      ) : (
-                        <>
-                          <p className="group whitespace-pre-wrap text-base leading-relaxed">
-                            <MentionifiedText
-                              text={msg.content}
-                              references={msg.metadata?.references}
-                            />
-                          </p>
-                          <ChatMediaGrid
-                            items={mediaFromPersistedAttachments(msg.id, msg.metadata?.attachments)}
-                            lightboxTitle="Attachment"
-                          />
-                        </>
-                      )}
-                      <OrganicThinkingPanel
-                        toolCalls={msg.toolCalls ?? []}
-                        isStreaming={msg.id === state.streamingMessageId}
-                      />
-                      <ToolCallPipelineCards
-                        toolCalls={msg.toolCalls ?? []}
-                        cardsByToolCallId={pipelineCardsByToolCallId}
-                        onEnrichDraft={handleEnrichDraftFromChat}
-                        onGenerateMedia={handleGenerateMediaFromChat}
-                      />
-                      <ActiveStagesPanel
-                        stages={msg.id === state.streamingMessageId ? activeStages : []}
-                        isStreaming={msg.id === state.streamingMessageId}
-                      />
-                      {msg.mediaSearchResults && msg.mediaSearchResults.length > 0 && (
-                        <div className="space-y-2">
-                          {msg.mediaSearchResults.map((frame, i) => (
-                            <MediaLibrarySearchResults
-                              key={`media:${i}:${typeof frame.data?.query === 'string' ? frame.data.query : ''}`}
-                              frame={frame}
-                              disabled={inputDisabled}
-                              onUseAsset={(item) =>
-                                setQueuedMentionSuggestions((current) => [
-                                  ...current,
-                                  mediaAssetToMentionSuggestion(item.asset),
-                                ])
-                              }
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {msg.uiCards && msg.uiCards.length > 0 && (
-                        <div className="space-y-2">
-                          <AnimatePresence initial={false}>
-                            {msg.uiCards.map((card, i) => {
-                              const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
-                              if (card.type === 'trend_chart') {
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <TrendChartCard chart={card.data} />
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'plan_card') {
-                                const planId = card.data.planId;
-                                const pipelineCards = Object.values(state.pipeline).filter(
-                                  (p) => p.planId === planId,
-                                );
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <ConceptPlan
-                                      plan={card.data}
-                                      planItemStatus={state.planItemStatus}
-                                      pipeline={pipelineCards}
-                                      onGenerateItemAction={(itemId, clientKey) =>
-                                        handlePlanDecision({
-                                          decision: 'approve',
-                                          planId,
-                                          itemId,
-                                          clientKey,
-                                        })
-                                      }
-                                      onGenerateAllAction={(itemIds) =>
-                                        handlePlanDecision({ decision: 'approve', planId, itemIds })
-                                      }
-                                      onRejectAction={() =>
-                                        handlePlanDecision({ decision: 'reject', planId })
-                                      }
-                                      onViewDraftAction={(draftId, target) => {
-                                        setSelectedDraftId(draftId);
-                                        setViewMode(target === 'calendar' ? 'month' : 'list');
-                                      }}
-                                      onEnrichDraftAction={handleEnrichDraftFromChat}
-                                      onGenerateMediaAction={handleGenerateMediaFromChat}
-                                      onRetryJobAction={handleRetryJobFromChat}
-                                    />
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'bulk_plan_card') {
-                                const planId = card.data.planId;
-                                const runId = `run_${planId}`;
-                                const run = state.bulkRuns[runId];
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                    className="space-y-2"
-                                  >
-                                    <BulkPlanCard
-                                      plan={card.data}
-                                      onApproveAction={() => {
-                                        dispatch({
-                                          type: 'BULK_RUN_START',
-                                          run: {
-                                            runId,
-                                            planId,
-                                            total: card.data.placements.length,
-                                          },
-                                        });
-                                        handlePlanDecision({ decision: 'approve', planId });
-                                      }}
-                                      onRejectAction={() =>
-                                        handlePlanDecision({ decision: 'reject', planId })
-                                      }
-                                    />
-                                    {run && (
-                                      <BulkRunPanel
-                                        runId={run.runId}
-                                        total={run.total}
-                                        brandId={brandId}
-                                      />
-                                    )}
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'post_list') {
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <PostContentCardGrid posts={card.data} label={card.label} />
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'skill_proposal') {
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <SkillProposalCard
-                                      proposal={card.data}
-                                      onSavedAction={() => {
-                                        void refreshBrandSkills();
-                                      }}
-                                    />
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'agent_delegated') {
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <AgentDelegatedCard data={card.data} />
-                                  </motion.div>
-                                );
-                              }
-                              if (card.type === 'aeo_snapshot') {
-                                return (
-                                  <motion.div
-                                    key={cardKey(card, i)}
-                                    initial={{ opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.08, duration: 0.18, ease }}
-                                  >
-                                    <AeoSnapshotCard snapshot={card.data} />
-                                  </motion.div>
-                                );
-                              }
-                              return null;
-                            })}
-                          </AnimatePresence>
-                        </div>
-                      )}
-                      {msg.role === 'assistant' && !msg.error ? (
-                        <MessageDraftLinks
-                          message={msg}
-                          pipelineCardsByToolCallId={pipelineCardsByToolCallId}
-                          jobs={state.jobs}
-                          onViewDraft={handleViewDraft}
-                        />
-                      ) : null}
-                      {msg.role === 'assistant' &&
-                      msg.error &&
-                      state.pendingAutoRetry !== msg.id ? (
-                        <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                          <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
-                          <AgentButton
-                            variant="ghost"
-                            disabled={isStreaming}
-                            onClick={() => handleRetryTurn(msg.id)}
-                          >
-                            <RefreshCw className="size-3.5" />
-                            Retry
-                          </AgentButton>
-                        </div>
-                      ) : null}
-                      {msg.role === 'assistant' &&
-                      !msg.error &&
-                      msg.content &&
-                      msg.id !== state.streamingMessageId ? (
-                        <MessageActions
-                          content={msg.content}
-                          onRegenerate={() => handleRetryTurn(msg.id)}
-                          disabled={isStreaming}
-                        />
-                      ) : null}
-                    </div>
-                  </ChatMessage>
-                  {milestonesForMessage(msg, state.pipeline).map((milestone) => (
-                    <ChatMarker
-                      key={milestone.id}
-                      id={milestone.id}
-                      kind="milestone"
-                      label={milestone.label}
-                    />
-                  ))}
-                </Fragment>
-              ))}
+              {state.messages.map((msg) => {
+                const isStreamingRow = msg.id === state.streamingMessageId;
+                return (
+                  <OrganicMessageRow
+                    key={msg.id}
+                    msg={msg}
+                    brandId={brandId}
+                    isStreamingRow={isStreamingRow}
+                    activeStages={isStreamingRow ? activeStages : NO_ACTIVE_STAGES}
+                    autoRetryPending={state.pendingAutoRetry === msg.id}
+                    isStreaming={isStreaming}
+                    inputDisabled={inputDisabled}
+                    {...rowRunState(msg, runState)}
+                    actions={rowActions}
+                  />
+                );
+              })}
               {state.pendingToolApprovals.length > 0 && (
                 <div className="flex gap-3 overflow-x-auto pb-1 pl-1">
                   {state.pendingToolApprovals.map((approval) => (
                     <ToolApprovalCard
                       key={approval.approvalId}
                       approval={approval}
+                      brandId={brandId}
                       disabled={composerBusy}
                       onApproveAction={() => handleToolApproval(approval, true)}
                       onDenyAction={() => handleToolApproval(approval, false)}
@@ -2153,6 +1919,11 @@ export function OrganicAgentPanel({
                 <SessionContentTray
                   items={sessionContent}
                   onInsert={(item) => setQueuedMentionSuggestions((current) => [...current, item])}
+                  renderPreview={(item) =>
+                    item.type === 'draft' ? (
+                      <DraftTrayPreview brandId={brandId} item={item} />
+                    ) : null
+                  }
                 />
                 <SkillPickerButton
                   skills={brandSkills}
@@ -2181,68 +1952,6 @@ export function OrganicAgentPanel({
           ) : null}
         </div>
       </div>
-    </div>
-  );
-}
-
-// The planner draft(s) an assistant turn produced, resolved from the same
-// tool-call linkage the transcript already uses to render pipeline cards inline:
-// message tool call -> pipeline card / durable job -> draftId. Purely derived, so
-// it works for live turns and restored sessions alike without any new plumbing.
-function draftIdsForMessage(
-  message: ConversationMessage,
-  pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>,
-  jobs: Readonly<Record<string, AgentJobState>>,
-): string[] {
-  if (message.role !== 'assistant') return [];
-  const toolCallIds = new Set((message.toolCalls ?? []).map((call) => call.toolCallId));
-  if (toolCallIds.size === 0) return [];
-
-  const draftIds = new Set<string>();
-  for (const toolCallId of toolCallIds) {
-    for (const card of pipelineCardsByToolCallId.get(toolCallId) ?? []) {
-      if (card.draftId) draftIds.add(card.draftId);
-    }
-  }
-  for (const job of Object.values(jobs)) {
-    if (job.toolCallId && toolCallIds.has(job.toolCallId) && job.draftId) {
-      draftIds.add(job.draftId);
-    }
-  }
-  return Array.from(draftIds);
-}
-
-// Persistent "View post" CTA(s) on an assistant turn that produced a draft, so the
-// ready post is always one obvious click away from the chat — the old text-based
-// linkifier never fired because the backend does not emit a "Draft ID:" line.
-function MessageDraftLinks({
-  message,
-  pipelineCardsByToolCallId,
-  jobs,
-  onViewDraft,
-}: {
-  message: ConversationMessage;
-  pipelineCardsByToolCallId: ReadonlyMap<string, PipelineCardState[]>;
-  jobs: Readonly<Record<string, AgentJobState>>;
-  onViewDraft: (draftId: string) => void;
-}) {
-  const draftIds = draftIdsForMessage(message, pipelineCardsByToolCallId, jobs);
-  if (draftIds.length === 0) return null;
-  const multiple = draftIds.length > 1;
-
-  return (
-    <div className="flex flex-wrap gap-2 pt-0.5">
-      {draftIds.map((draftId, index) => (
-        <button
-          key={draftId}
-          type="button"
-          onClick={() => onViewDraft(draftId)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/40 bg-brand-primary/5 px-3 py-1 text-xs font-medium text-brand-primary transition-colors hover:bg-brand-primary/10"
-        >
-          {multiple ? `View post ${index + 1}` : 'View post'}
-          <ArrowRight className="size-3" />
-        </button>
-      ))}
     </div>
   );
 }

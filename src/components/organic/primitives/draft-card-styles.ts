@@ -279,40 +279,19 @@ export function statusFrameClasses(
   return palette[frame];
 }
 
-export const platformBadgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider',
-  {
-    variants: {
-      platform: {
-        instagram:
-          'border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-950 dark:text-fuchsia-100 shadow-sm shadow-fuchsia-500/10',
-        linkedin:
-          'border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-100 shadow-sm shadow-sky-500/10',
-        facebook: 'border-blue-600/40 bg-blue-600/15 text-blue-950 dark:text-blue-100',
-        tiktok: 'border-zinc-500/40 bg-zinc-500/15 text-zinc-900 dark:text-zinc-100',
-        youtube: 'border-red-500/40 bg-red-500/15 text-red-900 dark:text-red-100',
-        twitter: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
-        x: 'border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100',
-      },
-    },
-    defaultVariants: {
-      platform: 'instagram',
-    },
-  },
-);
-
 export const cardVariants = cva(
-  'group relative w-full rounded-lg border px-3 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary overflow-hidden',
+  'group relative w-full rounded-lg border px-3 py-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
   {
     variants: {
       selected: {
         // The selected card drives the preview panel, so it has to win the cell at a
-        // glance: a full brand ring (not a tinted border alone) plus a brand fill.
-        true: 'z-10 border-brand-primary bg-brand-primary/10 ring-2 ring-brand-primary ring-offset-1 ring-offset-background',
+        // glance: a brand fill here, and the outline CalendarDraftCard adds (a ring here
+        // would lose the ring merge to the failed/streaming rings).
+        true: 'z-10 border-primary bg-primary/10',
         false: 'border-subtle bg-surface/70 hover:bg-surface',
       },
       multiSelected: {
-        true: 'border-2 border-brand-primary/50 bg-brand-primary/5',
+        true: 'border-2 border-primary/50 bg-primary/5',
         false: '',
       },
       streaming: {

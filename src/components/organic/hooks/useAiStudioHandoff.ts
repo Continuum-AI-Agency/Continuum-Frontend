@@ -257,10 +257,10 @@ export function useAiStudioHandoff({
     return () => clearTimeout(timer);
   }, [buildAiStudioContext, persistAiStudioContext, selectedDraft]);
 
-  // Sync pending apply response from AI Studio on return. Gated on hydration so it
-  // runs AFTER the calendar's fetch-all populates the store — applying onto the
-  // hydrated draft (which then autosaves) instead of racing the refetch that would
-  // otherwise clobber the patch.
+  // Sync pending apply response from AI Studio on return. The apply route has already
+  // saved the creative through the backend's field funnel; this mirrors it into the store.
+  // Gated on hydration so it runs AFTER the calendar's fetch-all populates the store,
+  // instead of racing the refetch that would otherwise clobber the mirror.
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!isCalendarHydrated) return;

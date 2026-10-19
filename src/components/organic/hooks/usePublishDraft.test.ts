@@ -20,7 +20,7 @@ type ConfirmationOptions = {
   title: string;
   description: string;
   confirmLabel: string;
-  details?: unknown;
+  details?: { props: { intents: Array<{ platform: string; account: { id: string } }> } };
   confirmDisabled?: boolean;
 };
 let confirmationAnswer = true;
@@ -37,13 +37,15 @@ vi.mock('@/components/organic/primitives/DestructiveConfirmation', () => ({
 
 // mock.module/vi.mock is process-wide: the shared stub answers keys this file does not
 // name with a no-op, so sibling specs' hooks never receive `undefined` for a selector.
+// The toolbar default here deliberately differs from every draft's stamp: publish must
+// never send it (A1).
 vi.mock('@/lib/organic/store', () =>
   createCalendarStoreStub({
     updateDraft: updateDraftMock,
     accountContext: {
       accountIds: {
-        instagram: '17841400008460056',
-        linkedin: 'urn:li:organization:2414183',
+        instagram: 'toolbar-default-ig',
+        linkedin: 'toolbar-default-li',
       },
       brandId: '32841a24-9e31-480c-8a3a-7ebc3cde0569',
     },
@@ -53,6 +55,7 @@ vi.mock('@/lib/organic/store', () =>
 import { usePublishDraft } from './usePublishDraft';
 
 const API_BASE = 'https://api.trycontinuum.ai';
+const BULK_URL = `${API_BASE}/api/organic/calendar/drafts/bulk-publish`;
 
 function sseStream(frames: Array<{ event: string; data: unknown }>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -66,56 +69,151 @@ function sseStream(frames: Array<{ event: string; data: unknown }>): ReadableStr
   });
 }
 
-const INTENT_HASH = 'sha256:test-intent-hash';
+const ACCOUNTS: Record<string, { id: string; handle: string }> = {
+  instagram: { id: 'acct-ig', handle: 'acme_a' },
+  facebook: { id: 'acct-fb', handle: 'acme_fb' },
+  linkedin: { id: 'acct-li', handle: 'acme_li' },
+};
 
-/**
- * Publishing is now two requests: /publish-intent tells the user what will actually be sent and
- * returns the hash their confirmation is bound to, then /publish carries that hash. These helpers
- * serve the preflight so each test only has to describe the publish response it cares about.
- */
-function intentResponse(overrides: Record<string, unknown> = {}) {
+/** Each member row's /publish-intent: its own account, caption and hash. */
+function intentFor(rowId: string, overrides: Record<string, unknown> = {}) {
+  const platform = rowId.replace('draft-', '') as keyof typeof ACCOUNTS;
+  const account = ACCOUNTS[platform] ?? ACCOUNTS.instagram;
   return {
-    status: 200,
-    ok: true,
-    json: async () => ({
-      publishable: true,
-      blockers: [],
-      platform: 'instagram',
-      format: 'POST',
-      account: { id: 'acct-1', source: 'slot_data' },
-      caption: { present: true, length: 11, preview: 'Hello world' },
-      media: { count: 1, required: 1, source: 'publishing_assets' },
-      intent_hash: INTENT_HASH,
-      expected_updated_at: null,
-      ...overrides,
-    }),
+    publishable: true,
+    blockers: [],
+    warnings: [],
+    platform: ACCOUNTS[platform] ? platform : 'instagram',
+    format: 'POST',
+    account: { ...account, source: 'draft_column', displayName: null, avatarUrl: null },
+    caption: { present: true, length: 11, preview: 'Hello world' },
+    media: { count: 1, required: 1, source: 'publishing_assets' },
+    intent_hash: `sha256:${rowId}`,
+    ...overrides,
   };
 }
 
-function routedFetch(publishResponse: () => unknown, intent: () => unknown = intentResponse) {
-  return vi.fn((url: string) =>
-    Promise.resolve(String(url).includes('/publish-intent') ? intent() : publishResponse()),
-  );
+function routedFetch(
+  publishResponse: () => unknown,
+  intent: (rowId: string) => unknown = (rowId) => intentFor(rowId),
+) {
+  return vi.fn((url: string) => {
+    const match = /\/drafts\/([^/]+)\/publish-intent$/.exec(String(url));
+    return Promise.resolve(
+      match ? { ok: true, status: 200, json: async () => intent(match[1]) } : publishResponse(),
+    );
+  });
 }
 
-/** The publish request itself, skipping the intent preflight. */
-function publishCall(fetchMock: { mock: { calls: unknown[][] } }) {
-  return fetchMock.mock.calls.find(([url]) => String(url).endsWith('/publish')) as
-    | [string, { headers: Record<string, string>; body: string }]
-    | undefined;
+function bulkCalls(fetchMock: { mock: { calls: unknown[][] } }) {
+  return fetchMock.mock.calls.filter(([url]) => url === BULK_URL) as Array<
+    [string, { headers: Record<string, string>; body: string }]
+  >;
 }
 
-const draft = {
-  id: 'placement-1',
-  backendDraftId: 'draft-1',
-  platforms: ['instagram'],
+function bulkItems(fetchMock: { mock: { calls: unknown[][] } }) {
+  const [call] = bulkCalls(fetchMock);
+  return (JSON.parse(call?.[1].body ?? '{"items":[]}') as { items: Record<string, unknown>[] })
+    .items;
+}
+
+const published = (id: string, platform: string, postId: string) => ({
+  event: 'published',
+  data: { id, type: 'published', platform, postId, format: 'POST', accountId: 'acct' },
+});
+
+function complete(results: Array<Record<string, unknown>>) {
+  const succeeded = results.filter((result) => result.status === 'published').length;
+  return {
+    event: 'complete',
+    data: {
+      type: 'complete',
+      total: results.length,
+      succeeded,
+      failed: results.length - succeeded,
+      groupStatus:
+        succeeded === results.length ? 'published' : succeeded === 0 ? 'failed' : 'partial',
+      results,
+    },
+  };
+}
+
+const ok = (id: string, platform: string, postId: string) => ({
+  id,
+  status: 'published',
+  postId,
+  platform,
+  format: 'POST',
+  accountId: 'acct',
+});
+
+const streamOf = (frames: Array<{ event: string; data: unknown }>) => () => ({
+  status: 200,
+  ok: true,
+  body: sseStream(frames),
+});
+
+const base = {
   format: 'Post',
   captionPreview: 'Hello world',
+  status: 'draft',
   hashtags: { high: [], medium: [], low: [] },
   publishingAssets: [
     { role: 'primary', kind: 'image', storageUrl: 'https://cdn.example/image.jpg' },
   ],
+};
+
+// A lone draft is a group of one: its own row and nothing else.
+const draft = {
+  ...base,
+  id: 'placement-1',
+  backendDraftId: 'draft-instagram',
+  platforms: ['instagram'],
+  targetAccountId: 'acct-ig',
+  groupMembers: [
+    {
+      backendDraftId: 'draft-instagram',
+      platform: 'instagram',
+      status: 'draft',
+      accountId: 'acct-ig',
+    },
+  ],
 } as never;
+
+const member = (platform: string, status = 'draft') => ({
+  backendDraftId: `draft-${platform}`,
+  platform,
+  status,
+  accountId: ACCOUNTS[platform].id,
+  draft: {
+    ...base,
+    status,
+    id: `placement-1::${platform}`,
+    backendDraftId: `draft-${platform}`,
+    platforms: [platform],
+    targetAccountId: ACCOUNTS[platform].id,
+  },
+});
+
+const group = (statuses: Record<string, string> = {}) =>
+  ({
+    ...base,
+    id: 'placement-1',
+    backendDraftId: 'draft-instagram',
+    platforms: ['instagram', 'facebook', 'linkedin'],
+    targetAccountId: 'acct-ig',
+    groupId: 'group-1',
+    groupMembers: [
+      {
+        backendDraftId: 'draft-instagram',
+        platform: 'instagram',
+        status: 'draft',
+        accountId: 'acct-ig',
+      },
+      member('facebook', statuses.facebook),
+      member('linkedin', statuses.linkedin),
+    ],
+  }) as never;
 
 describe('usePublishDraft', () => {
   beforeEach(() => {
@@ -130,26 +228,14 @@ describe('usePublishDraft', () => {
   });
 
   // Regression guard: these routes exist only on the Fastify backend and next.config.ts has
-  // no rewrite for /api/organic/*. A relative fetch here 404s on Vercel, which meant the
-  // planner's Publish button never worked in production.
-  it('publishes against the absolute backend origin, not the Next.js origin', async () => {
-    const fetchMock = routedFetch(() => ({
-      status: 200,
-      ok: true,
-      body: sseStream([
-        { event: 'started', data: { type: 'started', platform: 'instagram', format: 'POST' } },
-        {
-          event: 'published',
-          data: {
-            type: 'published',
-            platform: 'instagram',
-            postId: 'post-1',
-            format: 'POST',
-            accountId: '17841400008460056',
-          },
-        },
+  // no rewrite for /api/organic/*. A relative fetch here 404s on Vercel.
+  it('publishes against the absolute backend origin with the confirmation hash', async () => {
+    const fetchMock = routedFetch(
+      streamOf([
+        published('draft-instagram', 'instagram', 'post-1'),
+        complete([ok('draft-instagram', 'instagram', 'post-1')]),
       ]),
-    }));
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => usePublishDraft());
@@ -157,130 +243,117 @@ describe('usePublishDraft', () => {
       await result.current.publish(draft);
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-
-    const call = publishCall(fetchMock);
+    const [call] = bulkCalls(fetchMock);
     expect(call).toBeDefined();
-    const calledUrl = call?.[0] as string;
-    expect(calledUrl).toBe(`${API_BASE}/api/organic/calendar/drafts/draft-1/publish`);
-    expect(calledUrl.startsWith('/api/')).toBe(false);
-    expect(call?.[1].headers.Authorization).toBe('Bearer test-token');
-    // The confirmation the user gave is carried to the publish, bound to what they were shown.
-    expect(JSON.parse(call?.[1].body ?? '{}').confirmationHash).toBe(INTENT_HASH);
+    expect(call[1].headers.Authorization).toBe('Bearer test-token');
+    expect(bulkItems(fetchMock)).toEqual([
+      expect.objectContaining({
+        id: 'draft-instagram',
+        platform: 'instagram',
+        confirmationHash: 'sha256:draft-instagram',
+      }),
+    ]);
   });
 
-  it('sends the draft platform and its matching account id', async () => {
-    const fetchMock = routedFetch(() => ({ status: 200, ok: true, body: sseStream([]) }));
+  // A1: the toolbar switcher's id used to ride on the publish body and override the draft's
+  // own stamp, while the confirm showed the stamp. The body carries no account at all.
+  it('never sends an account override, even when the toolbar default differs from the stamp', async () => {
+    const fetchMock = routedFetch(streamOf([complete([])]));
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => usePublishDraft());
     await act(async () => {
-      await result.current.publish({ ...draft, platforms: ['linkedin'] } as never);
-    });
-
-    const body = JSON.parse(publishCall(fetchMock)?.[1].body ?? '{}');
-    expect(body.platform).toBe('linkedin');
-    expect(body.accountId).toBe('urn:li:organization:2414183');
-    expect(body.igAccountId).toBeUndefined();
-  });
-
-  // platform_post_id is what the backend actually persists; instagram_post_id is the legacy
-  // mirror it dual-writes for Instagram ONLY. Stamping the mirror on every platform put a
-  // Facebook post id behind the "View on Instagram" instagram.com/p/ permalink.
-  const publishedFrames = (platform: string, postId: string) => [
-    { event: 'started', data: { type: 'started', platform, format: 'POST' } },
-    {
-      event: 'published',
-      data: { type: 'published', platform, postId, format: 'POST', accountId: 'acct-1' },
-    },
-  ];
-
-  it('mirrors the post id into instagram_post_id for an Instagram publish', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch(() => ({
-        status: 200,
-        ok: true,
-        body: sseStream(publishedFrames('instagram', 'ig-post-1')),
-      })),
-    );
-
-    const { result } = renderHook(() => usePublishDraft());
-    await act(async () => {
       await result.current.publish(draft);
     });
 
-    await waitFor(() => expect(updateDraftMock).toHaveBeenCalled());
-    const patch = updateDraftMock.mock.calls[0][1]({});
-    expect(patch.platform_post_id).toBe('ig-post-1');
-    expect(patch.instagram_post_id).toBe('ig-post-1');
+    const [item] = bulkItems(fetchMock);
+    expect(item.accountId).toBeUndefined();
+    expect(item.igAccountId).toBeUndefined();
+    expect(JSON.stringify(item)).not.toContain('toolbar-default');
   });
 
-  it('never writes instagram_post_id for a Facebook publish', async () => {
+  it('mirrors the post id into instagram_post_id for an Instagram member only', async () => {
     vi.stubGlobal(
       'fetch',
-      routedFetch(() => ({
-        status: 200,
-        ok: true,
-        body: sseStream(publishedFrames('facebook', 'fb-post-1')),
-      })),
-    );
-
-    const { result } = renderHook(() => usePublishDraft());
-    await act(async () => {
-      await result.current.publish({ ...draft, platforms: ['facebook'] } as never);
-    });
-
-    await waitFor(() => expect(updateDraftMock).toHaveBeenCalled());
-    const patch = updateDraftMock.mock.calls[0][1]({});
-    expect(patch.platform_post_id).toBe('fb-post-1');
-    expect(patch.status).toBe('published');
-    // A Facebook id here renders a dead instagram.com/p/<fb-id> link.
-    expect(patch.instagram_post_id).toBeUndefined();
-  });
-
-  it('names the publishing platform in the success toast', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch(() => ({
-        status: 200,
-        ok: true,
-        body: sseStream([
-          {
-            event: 'published',
-            data: {
-              type: 'published',
-              platform: 'linkedin',
-              postId: 'urn:li:share:7301',
-              format: 'POST',
-              accountId: 'urn:li:organization:2414183',
-            },
-          },
+      routedFetch(
+        streamOf([
+          published('draft-instagram', 'instagram', 'ig-post-1'),
+          published('draft-facebook', 'facebook', 'fb-post-1'),
+          complete([ok('draft-instagram', 'instagram', 'ig-post-1')]),
         ]),
-      })),
+      ),
     );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(group());
+    });
+
+    const patches = new Map(
+      updateDraftMock.mock.calls.map(([id, updater]) => [id, updater({})] as const),
+    );
+    expect(patches.get('placement-1')).toMatchObject({
+      status: 'published',
+      platform_post_id: 'ig-post-1',
+      instagram_post_id: 'ig-post-1',
+    });
+    // A Facebook id behind instagram_post_id renders a dead instagram.com/p/<fb-id> link.
+    expect(patches.get('placement-1::facebook')).toEqual({
+      status: 'published',
+      platform_post_id: 'fb-post-1',
+    });
+  });
+
+  it('names every platform and its account in the result toast', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(
+        streamOf([
+          complete([
+            ok('draft-instagram', 'instagram', 'p1'),
+            ok('draft-facebook', 'facebook', 'p2'),
+            {
+              id: 'draft-linkedin',
+              status: 'failed',
+              platform: 'linkedin',
+              error: 'boom',
+              code: 'rate_limited',
+            },
+          ]),
+        ]),
+      ),
+    );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(group());
+    });
+
+    const toast = showMock.mock.calls.at(-1)?.[0];
+    expect(toast.title).toBe('Partly published');
+    expect(toast.description).toBe(
+      'Published to Instagram (@acme_a), Facebook (@acme_fb); LinkedIn (@acme_li) failed: The platform is temporarily rate-limiting requests. Wait a few minutes and try again..',
+    );
+    expect(result.current.error).toContain('LinkedIn (@acme_li) failed');
+  });
+
+  // A stream that ends without its summary may have published some members. "Failed" would
+  // invite the click that posts them twice.
+  it('reports an unknown outcome when the stream ends without its summary', async () => {
+    vi.stubGlobal('fetch', routedFetch(streamOf([published('draft-instagram', 'instagram', 'p')])));
 
     const { result } = renderHook(() => usePublishDraft());
     await act(async () => {
       await result.current.publish(draft);
     });
 
-    await waitFor(() => expect(showMock).toHaveBeenCalled());
-    expect(showMock.mock.calls[0][0].description).toContain('LinkedIn');
+    expect(showMock.mock.calls.at(-1)?.[0].title).toBe('Publishing status unknown');
   });
 
   // THE regression lock. On 2026-07-14 one click on Publish put three identical posts on
-  // Instagram. The backend stripped CORS from the hijacked publish stream, so the browser
-  // rejected a response the server had already acted on; `fetch` threw "Failed to fetch";
-  // this hook classified that as retryable and replayed the POST twice on a 2s/4s backoff.
-  // Every replay published for real.
-  //
-  // A publish is not idempotent, and a network error tells us NOTHING about whether the post
-  // went out — the request may have succeeded and only the response been lost. So: never retry
-  // it automatically. Ever.
+  // Instagram: `fetch` threw "Failed to fetch" on a response the server had already acted on,
+  // and this hook replayed the POST twice on a 2s/4s backoff. Never retry automatically.
   it('does NOT retry a failed publish — a network error may mean the post already went out', async () => {
-    // The preflight succeeds and the PUBLISH is what fails: that is the shape of the real
-    // incident, where the server had already published and only the response was lost.
     const fetchMock = routedFetch(() => Promise.reject(new TypeError('Failed to fetch')));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -289,16 +362,12 @@ describe('usePublishDraft', () => {
       await result.current.publish(draft);
     });
 
-    // Wait past the old backoff schedule (2s + 4s). If a timer were still armed, the second and
-    // third publishes would land in this window — as they did on the real account.
+    // Wait past the old backoff schedule (2s + 4s).
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 7000));
     });
 
-    // Exactly one PUBLISH. The preflight is a separate, idempotent GET-shaped read.
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/publish'))).toHaveLength(
-      1,
-    );
+    expect(bulkCalls(fetchMock)).toHaveLength(1);
     expect(result.current.isPublishing).toBe(false);
     expect(result.current.error).toBeTruthy();
   }, 15000);
@@ -306,27 +375,100 @@ describe('usePublishDraft', () => {
   it('retries only when the user explicitly asks', async () => {
     const fetchMock = routedFetch(() => Promise.reject(new TypeError('Failed to fetch')));
     vi.stubGlobal('fetch', fetchMock);
-    const publishCalls = () =>
-      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/publish')).length;
 
     const { result } = renderHook(() => usePublishDraft());
     await act(async () => {
       await result.current.publish(draft);
     });
-    expect(publishCalls()).toBe(1);
+    expect(bulkCalls(fetchMock)).toHaveLength(1);
 
     await act(async () => {
       result.current.retryPublish();
     });
 
-    await waitFor(() => expect(publishCalls()).toBe(2));
+    await waitFor(() => expect(bulkCalls(fetchMock)).toHaveLength(2));
+  });
+
+  describe('group publish (C1)', () => {
+    it('publishes a group of 3 with ONE confirm and ONE bulk-publish of 3 items', async () => {
+      const fetchMock = routedFetch(streamOf([complete([])]));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { result } = renderHook(() => usePublishDraft());
+      await act(async () => {
+        await result.current.publish(group());
+      });
+
+      expect(confirmationRequests).toHaveLength(1);
+      expect(confirmationRequests[0].title).toBe('Publish to 3 platforms?');
+      expect(confirmationRequests[0].confirmLabel).toBe('Publish to 3 platforms');
+      expect(
+        confirmationRequests[0].details?.props.intents.map((intent) => [
+          intent.platform,
+          intent.account.id,
+        ]),
+      ).toEqual([
+        ['instagram', 'acct-ig'],
+        ['facebook', 'acct-fb'],
+        ['linkedin', 'acct-li'],
+      ]);
+      expect(bulkCalls(fetchMock)).toHaveLength(1);
+      expect(
+        bulkItems(fetchMock).map((item) => [item.id, item.platform, item.confirmationHash]),
+      ).toEqual([
+        ['draft-instagram', 'instagram', 'sha256:draft-instagram'],
+        ['draft-facebook', 'facebook', 'sha256:draft-facebook'],
+        ['draft-linkedin', 'linkedin', 'sha256:draft-linkedin'],
+      ]);
+    });
+
+    it('never re-posts a member that is already live', async () => {
+      const fetchMock = routedFetch(streamOf([complete([])]));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { result } = renderHook(() => usePublishDraft());
+      await act(async () => {
+        await result.current.publish(group({ facebook: 'published' }));
+      });
+
+      expect(bulkItems(fetchMock).map((item) => item.id)).toEqual([
+        'draft-instagram',
+        'draft-linkedin',
+      ]);
+      expect(confirmationRequests[0].title).toBe('Publish to 2 platforms?');
+    });
+
+    it('disables the confirm when any member is not publishable', async () => {
+      vi.stubGlobal(
+        'fetch',
+        routedFetch(streamOf([complete([])]), (rowId) =>
+          rowId === 'draft-linkedin'
+            ? intentFor(rowId, {
+                publishable: false,
+                intent_hash: null,
+                blockers: [{ reason: 'account_missing', message: 'Choose a LinkedIn account' }],
+              })
+            : intentFor(rowId),
+        ),
+      );
+
+      const { result } = renderHook(() => usePublishDraft());
+      await act(async () => {
+        await result.current.publish(group());
+      });
+
+      expect(confirmationRequests[0].confirmDisabled).toBe(true);
+    });
   });
 
   // BUG M-16: three of the four publish surfaces called this hook with no readiness check
-  // and no confirmation, so "Publish to Instagram" was live on a draft with NEEDS SETUP and
-  // no media. The invariant now lives here, ahead of every network call.
+  // and no confirmation. The invariant lives here, ahead of every network call.
   describe('publish gate', () => {
-    const notReadyDraft = { ...draft, captionPreview: '', publishingAssets: [] } as never;
+    const notReadyDraft = {
+      ...(draft as object),
+      captionPreview: '',
+      publishingAssets: [],
+    } as never;
 
     it('makes NO network call for a draft that is not ready', async () => {
       const fetchMock = vi.fn();
@@ -338,15 +480,31 @@ describe('usePublishDraft', () => {
       });
 
       expect(fetchMock).not.toHaveBeenCalled();
-      // It does not even reach the confirmation — there is nothing to confirm.
       expect(confirmationRequests).toHaveLength(0);
       expect(result.current.error).toContain('caption');
       expect(showMock.mock.calls[0][0].variant).toBe('error');
     });
 
+    it('refuses a draft the autosave has not saved yet, with no network call', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { result } = renderHook(() => usePublishDraft());
+      await act(async () => {
+        await result.current.publish({
+          ...(draft as object),
+          backendDraftId: undefined,
+          groupMembers: undefined,
+        } as never);
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(showMock.mock.calls[0][0].title).toBe('Not saved yet');
+    });
+
     it('does not publish when the confirmation is declined', async () => {
       confirmationAnswer = false;
-      const fetchMock = routedFetch(() => ({ status: 200, ok: true, body: sseStream([]) }));
+      const fetchMock = routedFetch(streamOf([complete([])]));
       vi.stubGlobal('fetch', fetchMock);
 
       const { result } = renderHook(() => usePublishDraft());
@@ -355,80 +513,20 @@ describe('usePublishDraft', () => {
       });
 
       expect(confirmationRequests).toHaveLength(1);
-      // The preflight ran (that is how the dialog got its caption), but nothing was published.
-      expect(publishCall(fetchMock)).toBeUndefined();
+      expect(bulkCalls(fetchMock)).toHaveLength(0);
       expect(result.current.isPublishing).toBe(false);
     });
 
-    it('publishes exactly once when the confirmation is accepted', async () => {
-      const fetchMock = routedFetch(() => ({ status: 200, ok: true, body: sseStream([]) }));
-      vi.stubGlobal('fetch', fetchMock);
+    it('names the one platform in the confirm of a lone draft', async () => {
+      vi.stubGlobal('fetch', routedFetch(streamOf([complete([])])));
 
       const { result } = renderHook(() => usePublishDraft());
       await act(async () => {
         await result.current.publish(draft);
       });
 
-      expect(confirmationRequests).toHaveLength(1);
-      expect(confirmationRequests[0].title).toContain('Instagram');
-      expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/publish'))).toHaveLength(
-        1,
-      );
+      expect(confirmationRequests[0].title).toBe('Publish to Instagram?');
+      expect(confirmationRequests[0].confirmLabel).toBe('Publish to Instagram');
     });
-
-    // The dialog must show the real caption and account, not a generic warning. That is the whole
-    // point of the hash: the user approves specific content, and the backend refuses anything else.
-    it('shows the resolved caption and account in the confirmation', async () => {
-      const fetchMock = routedFetch(() => ({ status: 200, ok: true, body: sseStream([]) }));
-      vi.stubGlobal('fetch', fetchMock);
-
-      const { result } = renderHook(() => usePublishDraft());
-      await act(async () => {
-        await result.current.publish(draft);
-      });
-
-      expect(confirmationRequests[0].details).toBeDefined();
-    });
-
-    // An unpublishable draft must not offer a usable confirm button, even if the client-side
-    // readiness check passed — the server is the authority on publishability.
-    it('disables the confirm button when the server reports the post is not publishable', async () => {
-      const fetchMock = routedFetch(
-        () => ({ status: 200, ok: true, body: sseStream([]) }),
-        () =>
-          intentResponse({
-            publishable: false,
-            intent_hash: null,
-            blockers: [{ reason: 'media_missing', message: 'No postable media artifact' }],
-          }),
-      );
-      vi.stubGlobal('fetch', fetchMock);
-
-      const { result } = renderHook(() => usePublishDraft());
-      await act(async () => {
-        await result.current.publish(draft);
-      });
-
-      expect(confirmationRequests[0].confirmDisabled).toBe(true);
-    });
-  });
-
-  it('registers an unpersisted draft against the backend origin first', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'new-draft' }) })
-      .mockResolvedValueOnce({ status: 200, ok: true, body: sseStream([]) });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const { result } = renderHook(() => usePublishDraft());
-    await act(async () => {
-      await result.current.publish({ ...draft, backendDraftId: undefined } as never);
-    });
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE}/api/organic/calendar/drafts`);
-    expect(fetchMock.mock.calls[1][0]).toBe(
-      `${API_BASE}/api/organic/calendar/drafts/new-draft/publish`,
-    );
   });
 });

@@ -1,5 +1,13 @@
-import { PLATFORM_CAPABILITIES, type PublishPlatform } from '@continuum/contracts';
+import {
+  PLATFORM_CAPABILITIES,
+  PUBLISH_PLATFORM_LABELS,
+  type PublishAccountCandidate,
+  type PublishPlatform,
+} from '@continuum/contracts';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+// draftReadiness reads inferPublishPlatform from here: a cycle that only resolves at call time.
+import { evaluateDraftReadiness } from './draftReadiness';
+import { groupMemberDrafts } from './groupDraft';
 import { POST_PLATFORMS } from './postPlatforms';
 
 // The body builder and the format→postType mapping live in @continuum/contracts: the
@@ -24,55 +32,43 @@ export function inferPublishPlatform(draft: OrganicCalendarDraft): PublishPlatfo
 }
 
 /**
- * One publishable row of a draft group: the backend draft id the publish routes key on,
- * plus the platform that row goes out on.
- *
- * A group is N sibling rows minted by fan-out, each publishing through the UNCHANGED
- * single-platform path — so a "group publish" is N single publishes keyed by row id, not
- * one multi-platform publish.
+ * The account a new post on `platform` goes to before anyone picks one: the brand's default,
+ * else its only usable account. Null when there is a choice to make, or nothing connected.
  */
-export type GroupPublishTarget = {
-  draftId: string;
-  platform: PublishPlatform;
-};
+export function defaultPublishAccount<T extends PublishAccountCandidate>(
+  accounts: readonly T[],
+  platform: PublishPlatform,
+): T | null {
+  const usable = accounts.filter(
+    (account) => account.platform === platform && !account.needsReauth,
+  );
+  return (
+    usable.find((account) => account.isDefault) ?? (usable.length === 1 ? usable[0] : null) ?? null
+  );
+}
+
+/** The members a publish of `card` sends: every row of its group not already live. */
+export function unpublishedMembers(card: OrganicCalendarDraft): OrganicCalendarDraft[] {
+  return groupMemberDrafts(card).filter((draft) => draft.status !== 'published');
+}
 
 /**
- * The rows a "publish this group" action should send, in canonical platform order.
- *
- * Rules, each of which has a failure mode behind it:
- * - Members with no `backendDraftId` are dropped — an unpersisted row has no id for the
- *   publish route to claim.
- * - Members on a platform we cannot publish to are dropped rather than sent and rejected.
- * - Already-published members are dropped: a group publish must never re-post a live post.
- * - Duplicate platforms collapse to the first member, so a malformed group cannot double-post.
- *
- * An ungrouped draft (no `groupMembers`) resolves to its own single target, which is what
- * lets one code path serve both cases.
+ * Why `card` cannot be published, or null. Every member is judged on its OWN platform with its
+ * own content — the card's row carries the group's platform union, and judging TikTok against
+ * the Instagram row's image refused a group whose TikTok row had its video.
  */
-export function resolveGroupPublishTargets(draft: OrganicCalendarDraft): GroupPublishTarget[] {
-  const members = draft.groupMembers ?? [];
-
-  if (members.length === 0) {
+export function groupPublishBlocker(card: OrganicCalendarDraft): string | null {
+  const drafts = unpublishedMembers(card);
+  if (drafts.length === 0) return 'Every platform of this post is already live.';
+  for (const draft of drafts) {
     const platform = inferPublishPlatform(draft);
-    if (!platform || !draft.backendDraftId) return [];
-    if (draft.status === 'published') return [];
-    return [{ draftId: draft.backendDraftId, platform }];
+    if (!platform) return 'This draft has no platform we can publish to.';
+    const readiness = evaluateDraftReadiness({ ...draft, platforms: [platform] });
+    if (readiness.ready) continue;
+    const reason = readiness.reason ?? 'This post is not ready to publish yet.';
+    return drafts.length > 1 ? `${PUBLISH_PLATFORM_LABELS[platform]}: ${reason}` : reason;
   }
-
-  const byPlatform = new Map<PublishPlatform, GroupPublishTarget>();
-  for (const member of members) {
-    if (!member.backendDraftId) continue;
-    if (member.status === 'published') continue;
-    const platform = PUBLISHABLE_PLATFORMS.find((candidate) => candidate === member.platform);
-    if (!platform) continue;
-    if (byPlatform.has(platform)) continue;
-    byPlatform.set(platform, { draftId: member.backendDraftId, platform });
-  }
-
-  return PUBLISHABLE_PLATFORMS.flatMap((platform) => {
-    const target = byPlatform.get(platform);
-    return target ? [target] : [];
-  });
+  return null;
 }
 
 // ── Shared publish-stream plumbing ──────────────────────────────────────────

@@ -16,10 +16,19 @@ import {
   normalizeWorkflowSnapshot,
   serializeWorkflowSnapshot,
 } from '../src/StudioCanvas/utils/workflowSerialization';
+import { createBenchRecorder } from './support/benchRecorder';
+
+// Pure fixtures — no network, DB, model or browser. Each assertion is one Recorder row and
+// the last stdout line is the JSON envelope the factory and organic:qa:bench read.
+const recorder = createBenchRecorder('planner:composition:bench', [
+  'pure: fixture clips → composition cluster → persisted graph; no render, storage or route hop',
+]);
+let failures = 0;
 
 const assert = (condition: unknown, message: string) => {
-  if (!condition) throw new Error(message);
-  console.log(`✓ ${message}`);
+  if (!condition) failures += 1;
+  recorder.record(message, condition ? 'PASS' : 'FAIL');
+  console.log(`${condition ? '✓' : '✗'} ${message}`);
 };
 
 const contentJson = {
@@ -89,7 +98,7 @@ assert(
   Array.isArray(timeline?.data.items) && timeline.data.items.length === clips.length,
   'places every clip on the timeline',
 );
-assert(publish?.type === 'organicPublisher', 'adds the Planner attachment sink');
+assert(publish?.type === 'plannerDraft', 'adds the Planner attachment sink (plannerDraft)');
 assert(
   publishEdge?.targetHandle === PUBLISH_VIDEO_INPUT_HANDLE,
   'connects the rendered timeline output to Planner',
@@ -117,6 +126,5 @@ assert(
   'validates the automatic attachment request',
 );
 
-console.log(
-  '\nPlanner reel bench passed: clips → Planner stitch or Canvas timeline → persisted graph → Planner sink.',
-);
+recorder.print();
+process.exit(failures > 0 ? 1 : 0);

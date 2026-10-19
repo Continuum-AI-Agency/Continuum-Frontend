@@ -321,8 +321,9 @@ export type TrialReelPublishSpec = z.infer<typeof trialReelPublishSpecSchema>;
  * did it beat the account's own ordinary reels? Stored on `organic_published_posts.trial_verdict`.
  *
  * `unmeasured` is not a loss: Instagram had not delivered enough, or reported no skip rate, or the
- * account has too few ordinary reels to compare against. It is written so the poller stops asking,
- * and it never enters the winners pool or the rankings.
+ * account has too few ordinary reels to compare against. A slow delivery is retried nightly until the
+ * trial is a week old; then it is written so the poller stops asking. It never enters the winners
+ * pool or the rankings.
  */
 export const trialReelVerdictSchema = z
   .object({
@@ -340,3 +341,68 @@ export const trialReelVerdictSchema = z
   })
   .strict();
 export type TrialReelVerdict = z.infer<typeof trialReelVerdictSchema>;
+
+// --- a post that went out as a trial ---------------------------------------------------
+
+/** The trial facts carried on one post wherever it is listed: the gallery, the winners pool, the
+ *  agents' reads. A trial reached non-followers only, so it is never ranked against ordinary posts. */
+export const postTrialSchema = z
+  .object({
+    graduationStrategy: trialGraduationStrategySchema,
+    verdict: trialReelVerdictSchema.nullable(),
+  })
+  .strict();
+export type PostTrial = z.infer<typeof postTrialSchema>;
+
+/** `measuring` = no verdict yet: inside the dwell, or a slow delivery still being retried. */
+export const trialStatusSchema = z.enum(['winner', 'measuring', 'loser', 'unmeasured']);
+export type TrialStatus = z.infer<typeof trialStatusSchema>;
+
+/** The order trials are listed in: what to act on first, what is still unknown last. */
+export const TRIAL_STATUS_ORDER: readonly TrialStatus[] = trialStatusSchema.options;
+
+export const trialStatusOf = (trial: PostTrial): TrialStatus => trial.verdict?.verdict ?? 'measuring';
+
+/** Meta has no API to graduate a trial, so a MANUAL winner waits for a person in the Instagram app. */
+export const trialNextStepOf = (trial: PostTrial): 'graduate_in_app' | null =>
+  trial.graduationStrategy === 'MANUAL' && trial.verdict?.verdict === 'winner'
+    ? 'graduate_in_app'
+    : null;
+
+/** Hook rate ÷ the account's ordinary-reel median: the one number trials are ranked on. */
+export const trialHookLiftOf = (trial: PostTrial): number | null => {
+  const verdict = trial.verdict;
+  return verdict?.hookRate != null && verdict.medianHookRate
+    ? verdict.hookRate / verdict.medianHookRate
+    : null;
+};
+
+/** Status first (TRIAL_STATUS_ORDER), then the higher hook lift; unmeasured lifts sort last. */
+export const compareTrials = (a: PostTrial, b: PostTrial): number =>
+  TRIAL_STATUS_ORDER.indexOf(trialStatusOf(a)) - TRIAL_STATUS_ORDER.indexOf(trialStatusOf(b)) ||
+  (trialHookLiftOf(b) ?? -1) - (trialHookLiftOf(a) ?? -1);
+
+const nullableTag = z.string().nullable();
+
+/** One trial reel as an agent reads it: the post, its verdict, and the creative elements tagged on
+ *  it, so a win or a loss lands on the same hook / angle / format vocabulary as every other read. */
+export const trialReelResultSchema = postTrialSchema
+  .extend({
+    mediaId: idSchema,
+    permalink: z.string().nullable(),
+    publishedAt: timestampSchema,
+    status: trialStatusSchema,
+    nextStep: z.enum(['graduate_in_app']).nullable(),
+    elements: z
+      .object({
+        hookText: nullableTag,
+        hookClass: nullableTag,
+        angleId: nullableTag,
+        contentFormat: nullableTag,
+        ctaClass: nullableTag,
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type TrialReelResult = z.infer<typeof trialReelResultSchema>;

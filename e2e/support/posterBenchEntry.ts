@@ -83,6 +83,73 @@ export async function makeSampleMp4(): Promise<SampleVideo> {
   return { base64: bytesToBase64(bytes), byteLength: bytes.byteLength, mimeType: 'video/mp4' };
 }
 
+// Fixtures of an EXACT pixel size for the planner UX bench (e2e/organic-planner-preview.spec.ts,
+// "planner UX"): a preview frame's aspect is asserted against the media it was handed, so the
+// media has to be the size it claims to be — 1080x1920 for a reel, 1920x1080 for long-form.
+function paintSizedFrame(
+  ctx: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  frameIndex: number,
+): void {
+  ctx.fillStyle = SECOND_COLORS[Math.floor(frameIndex / FPS) % SECOND_COLORS.length] ?? '#000000';
+  ctx.fillRect(0, 0, width, height);
+  const radius = Math.min(width, height) * 0.2;
+  ctx.fillStyle = `hsl(${(frameIndex * 9) % 360} 80% 55%)`;
+  ctx.beginPath();
+  ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fafafa';
+  ctx.lineWidth = Math.max(4, Math.round(Math.min(width, height) / 90));
+  ctx.strokeRect(
+    ctx.lineWidth,
+    ctx.lineWidth,
+    width - ctx.lineWidth * 2,
+    height - ctx.lineWidth * 2,
+  );
+}
+
+export async function makeMp4OfSize(
+  width: number,
+  height: number,
+  seconds = 2,
+): Promise<SampleVideo> {
+  const { Output, BufferTarget, Mp4OutputFormat, CanvasSource, QUALITY_MEDIUM } = await import(
+    'mediabunny'
+  );
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('no 2d context');
+
+  const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+  const source = new CanvasSource(canvas, { codec: 'avc', bitrate: QUALITY_MEDIUM });
+  output.addVideoTrack(source);
+  await output.start();
+
+  for (let frame = 0; frame < FPS * seconds; frame += 1) {
+    paintSizedFrame(ctx, width, height, frame);
+    await source.add(frame / FPS, 1 / FPS);
+  }
+  await output.finalize();
+
+  const buffer = output.target.buffer;
+  if (!buffer) throw new Error('encoder produced no bytes');
+  const bytes = new Uint8Array(buffer);
+  return { base64: bytesToBase64(bytes), byteLength: bytes.byteLength, mimeType: 'video/mp4' };
+}
+
+export async function makePngOfSize(width: number, height: number): Promise<SampleVideo> {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('no 2d context');
+  paintSizedFrame(ctx, width, height, FPS);
+  const bytes = new Uint8Array(
+    await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer(),
+  );
+  return { base64: bytesToBase64(bytes), byteLength: bytes.byteLength, mimeType: 'image/png' };
+}
+
 // Decodes the produced poster back into pixels so the bench can assert it is a
 // real frame from the real second — not an empty canvas and not frame 0.
 async function probeCenterColor(blob: Blob): Promise<[number, number, number]> {
@@ -134,8 +201,13 @@ export async function runPoster(mp4Base64: string): Promise<PosterProbe | null> 
 
 declare global {
   interface Window {
-    __posterBench: { makeSampleMp4: typeof makeSampleMp4; runPoster: typeof runPoster };
+    __posterBench: {
+      makeSampleMp4: typeof makeSampleMp4;
+      runPoster: typeof runPoster;
+      makeMp4OfSize: typeof makeMp4OfSize;
+      makePngOfSize: typeof makePngOfSize;
+    };
   }
 }
 
-window.__posterBench = { makeSampleMp4, runPoster };
+window.__posterBench = { makeSampleMp4, runPoster, makeMp4OfSize, makePngOfSize };

@@ -568,6 +568,7 @@ export function TemplateLayerEditor({
     queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const baseScene = useQuery({
@@ -575,6 +576,7 @@ export function TemplateLayerEditor({
     queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     placeholderData: keepPreviousData,
     retry: false,
   });

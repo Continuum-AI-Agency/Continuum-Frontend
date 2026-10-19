@@ -10,13 +10,17 @@
  * What a platform ACCEPTS (formats, carousel and caption limits, media transport) is not
  * repeated here; it lives in `PLATFORM_CAPABILITIES` in `@continuum/contracts`.
  */
-import { type PublishPlatform, publishPlatformSchema, supportsFormat } from '@continuum/contracts';
+import {
+  PUBLISH_PLATFORM_LABELS,
+  type PublishPlatform,
+  publishPlatformSchema,
+  supportsFormat,
+} from '@continuum/contracts';
 
 export type PostPreviewFrame = 'phone' | 'vertical' | 'feed' | 'desktop';
 
 export type PostPlatformConfig = {
   label: string;
-  abbr: string;
   color: string;
   gradient: [string, string];
   /** Which shared preview chrome the platform renders in (`SocialPostFrame`). */
@@ -31,8 +35,7 @@ export type PostPlatformConfig = {
 
 export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig>> = {
   instagram: {
-    label: 'Instagram',
-    abbr: 'IG',
+    label: PUBLISH_PLATFORM_LABELS.instagram,
     color: '#E1306C',
     gradient: ['#E1306C', '#833AB4'],
     frame: 'phone',
@@ -41,8 +44,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     permalink: (postId) => `https://www.instagram.com/p/${postId}/`,
   },
   facebook: {
-    label: 'Facebook',
-    abbr: 'FB',
+    label: PUBLISH_PLATFORM_LABELS.facebook,
     color: '#1877F2',
     gradient: ['#1877F2', '#0550AE'],
     frame: 'feed',
@@ -50,8 +52,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     reelAspect: 4 / 5,
   },
   linkedin: {
-    label: 'LinkedIn',
-    abbr: 'LI',
+    label: PUBLISH_PLATFORM_LABELS.linkedin,
     color: '#0A66C2',
     gradient: ['#0A66C2', '#004182'],
     frame: 'desktop',
@@ -59,8 +60,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     reelAspect: 4 / 5,
   },
   tiktok: {
-    label: 'TikTok',
-    abbr: 'TT',
+    label: PUBLISH_PLATFORM_LABELS.tiktok,
     color: '#69C9D0',
     gradient: ['#69C9D0', '#010101'],
     frame: 'vertical',
@@ -68,8 +68,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     reelAspect: 9 / 16,
   },
   youtube: {
-    label: 'YouTube',
-    abbr: 'YT',
+    label: PUBLISH_PLATFORM_LABELS.youtube,
     color: '#FF0000',
     gradient: ['#FF0000', '#CC0000'],
     frame: 'vertical',
@@ -77,8 +76,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     reelAspect: 9 / 16,
   },
   x: {
-    label: 'X',
-    abbr: 'X',
+    label: PUBLISH_PLATFORM_LABELS.x,
     color: '#0F1419',
     gradient: ['#0F1419', '#536471'],
     frame: 'feed',

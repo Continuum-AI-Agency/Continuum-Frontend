@@ -68,12 +68,17 @@ export function organicSessionContent(
         .filter(Boolean)
         .join(' · '),
       reference,
+      // A restored card's URLs were replayed from history and lapsed long ago: carried on a chip
+      // they would be persisted again, so the chip goes without and the tray shows the draft's
+      // own re-signed media instead.
       preview: {
-        url: [
-          ...resolveConceptPreviewUrls(card?.preview),
-          ...(job?.previewImages ?? []),
-          post?.imageUrl,
-        ].find(isLinkable),
+        url: card?.previewStale
+          ? undefined
+          : [
+              ...resolveConceptPreviewUrls(card?.preview),
+              ...(job?.previewImages ?? []),
+              post?.imageUrl,
+            ].find(isLinkable),
         kind: 'image',
       },
     });

@@ -27,6 +27,24 @@ describe('headlessGuidanceSchema', () => {
     expect(guidance.characterElementIds).toEqual([ACTRESS]);
   });
 
+  it('takes the locks: the edit (pacing, collage) and the product', () => {
+    const guidance = organicHeadlessGuidanceSchema.parse({
+      reels: 1,
+      stills: 0,
+      language: 'en',
+      pacing: 'build',
+      layout: 'collage',
+      productElementIds: [ACTRESS],
+    });
+    expect(guidance).toMatchObject({ pacing: 'build', layout: 'collage' });
+    expect(() =>
+      headlessGuidanceSchema.parse({ reels: 1, stills: 0, language: 'en', layout: 'grid' }),
+    ).toThrow();
+    expect(() =>
+      headlessGuidanceSchema.parse({ reels: 1, stills: 0, language: 'en', pacing: 'fast' }),
+    ).toThrow();
+  });
+
   it('refuses creative strings it has no field for, and counts past the bound', () => {
     expect(() =>
       headlessGuidanceSchema.parse({ reels: 1, stills: 0, language: 'es', cta: 'Compra ya' }),

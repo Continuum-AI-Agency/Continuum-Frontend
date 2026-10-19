@@ -109,4 +109,16 @@ describe('buildPlannerPlatforms', () => {
       expect(comingSoonKeys.has(publishable as never)).toBe(false);
     }
   });
+
+  // Every memoised cell and dock tile takes a row as a prop: a draft edit that leaves the set
+  // of rows alone must hand back the very same array, or one keystroke re-renders the week.
+  it('returns the same rows for the same platform set, and new rows when the set changes', () => {
+    const before = buildPlannerPlatforms(['instagram'], [makeDay([makeDraft('instagram')])]);
+    const edited = { ...makeDraft('instagram'), captionPreview: 'typed' };
+
+    expect(buildPlannerPlatforms(['instagram'], [makeDay([edited])])).toBe(before);
+    expect(
+      buildPlannerPlatforms(['instagram'], [makeDay([edited, makeDraft('linkedin')])]),
+    ).not.toBe(before);
+  });
 });

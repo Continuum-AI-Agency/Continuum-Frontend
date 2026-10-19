@@ -1,18 +1,19 @@
 import {
   applyPlannerFutureFloor,
   deriveOrganicMediaStage,
+  draftFormatCandidates,
   formatPlannerTimeOfDay,
   type OrganicMediaStage,
   organicMediaStageSchema,
   organicUgcSpecSchema,
   PLANNER_DEFAULT_TIME_OF_DAY,
-  type PlannerDraftFieldPatch,
+  PUBLISH_PLATFORM_ORDER,
   parsePlannerTimeOfDay,
   parseSiblingClientKey,
   plannerCompositionSchema,
+  plannerDayIdInZone,
   plannerDraftHasCopy,
   plannerInstantFromDayTime,
-  plannerDayIdInZone,
   plannerTimeOfDayInZone,
   publishOptionsByPlatformSchema,
   resolvePlannerTimeZone,
@@ -27,8 +28,10 @@ import type {
   OrganicCalendarDraft,
   OrganicDraftStatus,
 } from '@/components/organic/primitives/types';
+import { groupMemberDrafts } from '@/lib/organic/groupDraft';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
+import { publishPlanSource } from '@/lib/organic/publishPlan';
 
 type PersistedDraftStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'placeholder';
 
@@ -248,6 +251,8 @@ function restoreAssetHints(value: unknown): OrganicCalendarDraft['assetHints'] {
 
 export type PersistedOrganicDraftRow = {
   id: string;
+  /** The row's platform column — what it publishes on. */
+  platform?: string | null;
   status: string | null;
   scheduled_date: string | null;
   slot_data: unknown;
@@ -449,11 +454,16 @@ export function buildPersistedDraftPayload(args: {
     draft.targetAccountId ?? platformAccountIds[primaryPlatform] ?? UNASSIGNED_PLATFORM_ACCOUNT_ID;
 
   const status = normalizeLocalStatus(draft.status);
-  const snapshot: OrganicCalendarDraft = {
-    ...draft,
-    status,
-    backendDraftId: undefined,
-  };
+  // The row it was read from never goes back into that row; nor do the platform list, the
+  // account and the group, which the row's own columns and its sibling rows hold (C2, A11).
+  const {
+    planSource: _readFrom,
+    platforms: _platforms,
+    targetAccountId: _stamp,
+    groupMembers: _members,
+    ...rest
+  } = draft;
+  const snapshot = { ...rest, status, backendDraftId: undefined };
   const resolvedTimeZone = resolvePlannerTimeZone(timeZone);
   const timeOfDay = parsePlannerTimeOfDay(draft.timeLabel);
 
@@ -492,22 +502,6 @@ export function buildPersistedDraftPayload(args: {
 }
 
 /**
- * The copy a freshly-inserted manual row must still send through the field-edit route.
- *
- * The field editor skips its PATCH while a draft has no row, trusting the autosave
- * insert to carry the edit. The insert writes `slot_data` only, while the approve gate
- * and the publisher read `content_json.copy` — so a caption typed before the row
- * existed showed in the planner and was refused at approve as `caption_missing`.
- */
-export function newRowCopyPatch(draft: OrganicCalendarDraft): PlannerDraftFieldPatch | null {
-  const caption = draft.captionPreview.trim() ? draft.captionPreview : undefined;
-  const { high = [], medium = [], low = [] } = draft.hashtags ?? {};
-  const hashtags = high.length + medium.length + low.length > 0 ? draft.hashtags : undefined;
-  if (!caption && !hashtags) return null;
-  return { ...(caption ? { caption } : {}), ...(hashtags ? { hashtags } : {}) };
-}
-
-/**
  * Reconcile a server-authoritative day set with the local one WITHOUT dropping
  * in-flight local drafts. A freshly-constructed manual draft lives only in the
  * local store until the debounced autosave inserts it (~500ms); a refetch in that
@@ -543,15 +537,16 @@ export function mergeUnsavedLocalDrafts(
   // OLD generated creative, so a refetch would clobber the applied one. Keep the
   // local user-supplied media (keyed on every identity axis) and splice it back
   // onto the matching server slot so the applied creative does not flicker away.
+  // A member row's own draft counts too: a creative applied on the TikTok frame is that row's.
   const userSuppliedLocal = new Map<string, OrganicCalendarDraft>();
   for (const localDay of localDays) {
-    for (const draft of localDay.slots) {
+    for (const draft of localDay.slots.flatMap(groupMemberDrafts)) {
       if (draft.mediaSuggestion?.mediaStatus !== 'user_supplied') continue;
       if (draft.backendDraftId) userSuppliedLocal.set(draft.backendDraftId, draft);
       if (draft.clientKey) userSuppliedLocal.set(draft.clientKey, draft);
     }
   }
-  const preserveUserSuppliedMedia = (slot: OrganicCalendarDraft): OrganicCalendarDraft => {
+  const withLocalMedia = (slot: OrganicCalendarDraft): OrganicCalendarDraft => {
     const local =
       (slot.backendDraftId ? userSuppliedLocal.get(slot.backendDraftId) : undefined) ??
       (slot.clientKey ? userSuppliedLocal.get(slot.clientKey) : undefined);
@@ -561,6 +556,16 @@ export function mergeUnsavedLocalDrafts(
       mediaSuggestion: local.mediaSuggestion,
       publishingAssets: local.publishingAssets,
       mediaCount: local.mediaCount,
+    };
+  };
+  const preserveUserSuppliedMedia = (slot: OrganicCalendarDraft): OrganicCalendarDraft => {
+    const card = withLocalMedia(slot);
+    if (!card.groupMembers?.some((member) => member.draft)) return card;
+    return {
+      ...card,
+      groupMembers: card.groupMembers.map((member) =>
+        member.draft ? { ...member, draft: withLocalMedia(member.draft) } : member,
+      ),
     };
   };
   const serverDaysWithLocalMedia =
@@ -620,20 +625,11 @@ function resolveMediaStage(
   return deriveOrganicMediaStage(placement as Parameters<typeof deriveOrganicMediaStage>[0]);
 }
 
-// Canonical platform order for a collapsed group. Fixed rather than
-// insertion-ordered so a card's badges do not reshuffle between refetches
+// The contracts platform order, so a card's badges do not reshuffle between refetches
 // (Supabase does not promise a stable row order).
-const CANONICAL_GROUP_PLATFORM_ORDER: readonly OrganicPlatformKey[] = [
-  'instagram',
-  'facebook',
-  'linkedin',
-  'tiktok',
-  'youtube',
-];
-
-function canonicalPlatformRank(platform: OrganicPlatformKey): number {
-  const index = CANONICAL_GROUP_PLATFORM_ORDER.indexOf(platform);
-  return index === -1 ? CANONICAL_GROUP_PLATFORM_ORDER.length : index;
+function platformRank(platform: OrganicPlatformKey): number {
+  const index = (PUBLISH_PLATFORM_ORDER as readonly string[]).indexOf(platform);
+  return index === -1 ? PUBLISH_PLATFORM_ORDER.length : index;
 }
 
 /**
@@ -655,14 +651,23 @@ function findGroupSourceEntry(entries: PersistedCalendarEntry[]): PersistedCalen
  * Collapse fanned-out sibling rows into ONE calendar entry per group.
  *
  * A multi-platform post is N rows sharing a `group_id`; without this the planner renders
- * N identical cards. The renderers already map over `draft.platforms`, so the whole fix
- * is upstream: union the members' platforms onto the source row and carry the per-row
- * identities in `groupMembers` for publish/approve.
+ * N identical cards. The card is the source row's draft with the members' platforms as its
+ * `platforms`; every other member keeps its own mapped draft in `groupMembers[].draft`, which
+ * is what the frame for that platform shows and edits.
  *
  * Grouping is keyed on `(dayId, groupId)`, never `groupId` alone. Siblings can be
  * rescheduled apart, and a group spanning two days is genuinely two cards — merging them
  * would make one of the days silently lose its post.
  */
+// The store addresses a member by its draft id, so it must not collide with the card's
+// (legacy siblings copied the source's placement id).
+function memberDraft(
+  draft: OrganicCalendarDraft,
+  card: OrganicCalendarDraft,
+): OrganicCalendarDraft {
+  return draft.id === card.id ? { ...draft, id: `${card.id}::${draft.platforms[0]}` } : draft;
+}
+
 export function collapseDraftGroups(entries: PersistedCalendarEntry[]): PersistedCalendarEntry[] {
   const groups = new Map<string, PersistedCalendarEntry[]>();
   for (const entry of entries) {
@@ -682,8 +687,12 @@ export function collapseDraftGroups(entries: PersistedCalendarEntry[]): Persiste
 
     const source = findGroupSourceEntry(members);
     const groupMembers = members
-      .flatMap((entry) => entry.draft.groupMembers ?? [])
-      .sort((a, b) => canonicalPlatformRank(a.platform) - canonicalPlatformRank(b.platform));
+      .flatMap((entry) =>
+        (entry.draft.groupMembers ?? []).map((member) =>
+          entry === source ? member : { ...member, draft: memberDraft(entry.draft, source.draft) },
+        ),
+      )
+      .sort((a, b) => platformRank(a.platform) - platformRank(b.platform));
 
     const platforms: OrganicPlatformKey[] = [];
     for (const member of groupMembers) {
@@ -730,17 +739,16 @@ export function mapPersistedRowToCalendarEntry(
   if (!day) return null;
   const isUnscheduled = dayId === UNSCHEDULED_DAY_ID;
 
-  const snapshotPlatforms = readStringArray(snapshot.platforms);
-  const platforms =
-    snapshotPlatforms.length > 0
-      ? snapshotPlatforms.map((platform) => normalizePlatform(platform))
-      : [
-          normalizePlatform(
-            readString(asRecord(slotData.platform).name) ??
-              slotData.platform ??
-              placementPlatform.name,
-          ),
-        ];
+  // One row, one platform: the column, then what older rows stamped in slot_data. A browser
+  // platform list (`draftSnapshot.platforms`) is never read — the group's rows are the list.
+  const platform = normalizePlatform(
+    readString(row.platform) ??
+      readString(asRecord(slotData.platform).name) ??
+      slotData.platform ??
+      placementPlatform.name,
+  );
+  const stamp = readString(row.platform_account_id);
+  const accountId = stamp && stamp !== UNASSIGNED_PLATFORM_ACCOUNT_ID ? stamp : null;
 
   const draftId = mapSlotDataDraftId(slotData, row.id);
   const status = normalizePersistedStatus(row.status);
@@ -761,7 +769,7 @@ export function mapPersistedRowToCalendarEntry(
     // A group of one until collapseDraftGroups merges the siblings. Stamping it here
     // (rather than only on grouped rows) is what lets every consumer read groupMembers
     // without a "not grouped" branch.
-    groupMembers: [{ backendDraftId: row.id, platform: platforms[0], status, clientKey }],
+    groupMembers: [{ backendDraftId: row.id, platform, status, clientKey, accountId }],
     title:
       readString(snapshot.title) ??
       readString(slotData.title) ??
@@ -788,12 +796,11 @@ export function mapPersistedRowToCalendarEntry(
     // manual row) left the COPY chip unchecked, while a media-only attach checked it
     // with no copy written at all. The second clause covers those legacy rows.
     hasCopy: plannerDraftHasCopy(placement) || readString(slotData.caption) !== null,
-    platforms,
+    platforms: [platform],
     contentPlanId: readString(row.content_plan_id) ?? null,
-    // content_json-first for the same reason as the caption: the field-edit route
-    // writes there, so a user's chosen format lives there. A stale draftSnapshot
-    // format is what made a Reel-to-Carousel change revert on reload.
-    format: readString(placementContent.format) ?? readString(snapshot.format) ?? 'Post',
+    // The publisher's own order (snapshot first): a format edit rewrites the snapshot's format
+    // too, and reading content first previewed a format the post would not go out as.
+    format: draftFormatCandidates(row)[0] ?? 'Post',
     objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? 'Draft',
     // content_json-first: it is canonical for copy — the publisher and the
     // scheduled worker read it, and planner manual edits persist there. The
@@ -808,11 +815,10 @@ export function mapPersistedRowToCalendarEntry(
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
     inspirationSourceUrl:
       generation.source === 'competitor_inspiration'
-        ? readString(inspiration.permalink) ?? undefined
+        ? (readString(inspiration.permalink) ?? undefined)
         : undefined,
     origin: resolveDraftOrigin(snapshot.origin ?? slotData.origin),
-    targetAccountId:
-      readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,
+    targetAccountId: accountId ?? undefined,
     creativeIdea: readString(snapshot.creativeIdea) ?? undefined,
     titleTopic: readString(snapshot.titleTopic) ?? undefined,
     target: readString(snapshot.target) ?? undefined,
@@ -832,10 +838,13 @@ export function mapPersistedRowToCalendarEntry(
     adjusted: typeof snapshot.adjusted === 'boolean' ? snapshot.adjusted : undefined,
     generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
     mediaSuggestion,
+    // content_json first: it is what the field route writes and the publisher sends. A
+    // snapshot's media differing from it previewed one image and posted another; the snapshot
+    // stays only for legacy rows with no content_json media, which the plan reports missing.
     publishingAssets: restorePublishingAssets(
-      asArray(snapshot.publishingAssets).length > 0
-        ? snapshot.publishingAssets
-        : placement.publishingAssets,
+      asArray(placement.publishingAssets).length > 0
+        ? placement.publishingAssets
+        : snapshot.publishingAssets,
       mediaSuggestion?.bucket ?? null,
     ),
     // Agent drafts have no draftSnapshot — their copy lives in content_json. Reading only the
@@ -845,5 +854,14 @@ export function mapPersistedRowToCalendarEntry(
     publishOptions: publishOptionsByPlatformSchema.safeParse(placement.publishOptions).data,
   };
 
-  return { dayId, draft };
+  return {
+    dayId,
+    draft: {
+      ...draft,
+      planSource: publishPlanSource(
+        { id: row.id, content_json: row.content_json ?? null, slot_data: row.slot_data },
+        draft,
+      ),
+    },
+  };
 }

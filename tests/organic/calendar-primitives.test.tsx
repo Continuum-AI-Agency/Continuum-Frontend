@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -12,15 +13,17 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 
 test('OrganicCalendarWorkspace renders calendar controls and workflow actions', () => {
   const html = renderToStaticMarkup(
-    <ToastProvider>
-      <OrganicCalendarWorkspaceClient
-        days={organicCalendarDays}
-        steps={organicCreationSteps}
-        editorSlides={organicEditorSlides}
-        trendTypes={organicTrendTypes}
-        initialSelectedDraftId={null}
-      />
-    </ToastProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <ToastProvider>
+        <OrganicCalendarWorkspaceClient
+          days={organicCalendarDays}
+          steps={organicCreationSteps}
+          editorSlides={organicEditorSlides}
+          trendTypes={organicTrendTypes}
+          initialSelectedDraftId={null}
+        />
+      </ToastProvider>
+    </QueryClientProvider>,
   );
 
   expect(html).toContain('Month');

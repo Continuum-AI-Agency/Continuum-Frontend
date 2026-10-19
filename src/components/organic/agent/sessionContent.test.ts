@@ -72,6 +72,20 @@ describe('organicSessionContent', () => {
     ]);
   });
 
+  it('does not trust a restored preview: its signature lapsed while it sat in history', () => {
+    const [item] = organicSessionContent(
+      {
+        j1: card('j1', {
+          draftId: 'd1',
+          previewStale: true,
+          preview: { caption: 'Hi', imageUrl: 'https://x/expired.png', format: null },
+        }),
+      },
+      { j1: job('j1', { draftId: 'd1', previewImages: ['https://x/also-expired.png'] }) },
+    );
+    expect(item?.preview?.url).toBeUndefined();
+  });
+
   it('never carries a base64 preview, which would ride every later turn', () => {
     const [item] = organicSessionContent(
       {

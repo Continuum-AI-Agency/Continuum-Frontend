@@ -11,6 +11,9 @@
 // card shows per-item status and a reloaded media card shows its storyboard
 // previews — progressive signals that were previously emitted live-only and lost
 // on reload.
+//
+// ui.media_strip carries refs only (organic/chat-media.ts): a reloaded strip signs
+// its tiles again on view, so a session of any age never replays a dead URL.
 
 import { z } from "zod";
 import { organicStreamFrameSchema } from "../streaming/organic";
@@ -39,6 +42,10 @@ export const PERSISTED_CARD_FRAME_TYPES = [
   // Jaina" card must survive reload. Keyed by callId, so the running frame and
   // its terminal follow-up collapse to the final status instead of stacking.
   "agent.delegated",
+  // One media strip per tool call, keyed by toolCallId.
+  "ui.media_strip",
+  // A headless batch's latest status, keyed by batchId (organic/headless-batch.ts).
+  "ui.headless_batch",
 ] as const;
 
 /**
@@ -114,6 +121,10 @@ export const persistedCardKey = (type: string, data: Record<string, unknown>): s
       return `brandbook_applied:${readString(data, "brandId")}`;
     case "agent.delegated":
       return `xcall:${readString(data, "callId")}`;
+    case "ui.media_strip":
+      return `media_strip:${readString(data, "toolCallId")}`;
+    case "ui.headless_batch":
+      return `headless_batch:${readString(data, "batchId")}`;
     default:
       return `${type}:${readString(data, "id")}`;
   }

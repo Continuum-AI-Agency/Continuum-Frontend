@@ -1,7 +1,7 @@
 'use client';
 
-import { FileText, Layers } from 'lucide-react';
-import { useState } from 'react';
+import { FileText, Layers, Video } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentMentionSuggestion } from '@/lib/agent-references';
 import { cn } from '@/lib/utils';
@@ -13,10 +13,15 @@ export const MENTION_DRAG_TYPE = 'application/vnd.continuum.mention+json';
 type Props = {
   items: AgentMentionSuggestion[];
   onInsert: (item: AgentMentionSuggestion) => void;
+  /**
+   * The tile's still, when the caller can resolve a better one than `item.preview` (a draft's
+   * own re-signed media). Rendered only while the tray is open. Returning null falls back.
+   */
+  renderPreview?: (item: AgentMentionSuggestion) => ReactNode;
 };
 
 /** Everything the agent generated in this session, each one a click or a drag away from the composer. */
-export function SessionContentTray({ items, onInsert }: Props) {
+export function SessionContentTray({ items, onInsert, renderPreview }: Props) {
   const [open, setOpen] = useState(false);
   // The tray opens over the composer it feeds, so while a tile is in flight it lets the drag
   // through to the editor underneath instead of catching the drop itself.
@@ -70,19 +75,15 @@ export function SessionContentTray({ items, onInsert }: Props) {
                 className="group flex w-full cursor-grab flex-col gap-1 rounded-md text-left active:cursor-grabbing"
               >
                 <span className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/40 group-hover:border-primary/60">
-                  {item.preview?.url && item.preview.kind === 'video' ? (
-                    <video src={item.preview.url} muted className="h-full w-full object-cover" />
-                  ) : item.preview?.url ? (
-                    // biome-ignore lint/performance/noImgElement: signed storage URLs, not next/image-optimizable
-                    <img
-                      src={item.preview.url}
-                      alt=""
-                      draggable={false}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                  )}
+                  {renderPreview?.(item) ??
+                    (item.preview?.url && item.preview.kind === 'video' ? (
+                      // A glyph, not a <video>: opening the tray is not asking to play anything.
+                      <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    ) : item.preview?.url ? (
+                      <TrayStill url={item.preview.url} />
+                    ) : (
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    ))}
                 </span>
                 <span className="line-clamp-2 text-2xs leading-tight">{item.label}</span>
               </button>
@@ -91,5 +92,21 @@ export function SessionContentTray({ items, onInsert }: Props) {
         </ul>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** A still the session carried; once its URL has lapsed it is the glyph, not a broken image. */
+function TrayStill({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <FileText className="h-5 w-5 text-muted-foreground" />;
+  return (
+    // biome-ignore lint/performance/noImgElement: signed storage URLs, not next/image-optimizable
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(true)}
+      className="h-full w-full object-cover"
+    />
   );
 }

@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'bun:test';
+import {
+  checkPublishability,
+  publishPlanDraftFromRow,
+  resolvePublishPlan,
+  retargetDraftPlatformRow,
+} from '@continuum/contracts';
 
 import { buildWeekDays } from '@/components/organic/primitives/calendar-utils';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { publishPlanDraftFromCalendarDraft } from '@/lib/organic/publishPlan';
 import {
   buildPersistedDraftPayload,
   collapseDraftGroups,
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
-  newRowCopyPatch,
   normalizePersistedStatus,
-  resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
+  resolvePersistedRowDayId,
 } from './calendar-draft-persistence';
 
 function makeDraft(partial: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
@@ -728,8 +734,9 @@ describe('field-edit read derivations', () => {
     expect(mapped?.draft.hasCopy).toBe(true);
   });
 
-  // The format revert: a stale draftSnapshot beat the value the user just saved.
-  it('format prefers content_json over a stale draftSnapshot', () => {
+  // The publisher reads the snapshot's format first (a format edit rewrites it too), so a
+  // preview that read content first showed a carousel for a post that goes out as a reel.
+  it("format follows the publisher's order: the snapshot's format first", () => {
     const mapped = mapPersistedRowToCalendarEntry(
       rowWith({
         content_json: { content: { format: 'Carousel' } },
@@ -740,7 +747,7 @@ describe('field-edit read derivations', () => {
       }),
       days(),
     );
-    expect(mapped?.draft.format).toBe('Carousel');
+    expect(mapped?.draft.format).toBe('Reel');
   });
 
   it('hashtags prefer content_json over a stale draftSnapshot', () => {
@@ -819,25 +826,209 @@ describe('field-edit read derivations', () => {
   });
 });
 
-describe('newRowCopyPatch', () => {
-  it('carries a caption typed before the row existed to the field-edit route', () => {
-    expect(newRowCopyPatch(makeDraft({ captionPreview: 'La resiliencia operativa…' }))).toEqual({
-      caption: 'La resiliencia operativa…',
+// The field-edit route writes a platform change with the contract's retargetDraftPlatformRow;
+// the planner's mapping must read that row back on the new platform.
+describe("retargetDraftPlatformRow (the field route's platform write)", () => {
+  it('rewrites every platform field the create path stamps, keeping the rest of slot_data', () => {
+    const slotData = {
+      dayId: '2026-04-21',
+      timeLabel: '9:00 AM',
+      platform: 'facebook',
+      draftSnapshot: { id: 'draft-1', platforms: ['facebook'], targetAccountId: 'acct-fb' },
+    };
+    // The account lives only in the column: the snapshot's copy is removed, never rewritten.
+    expect(retargetDraftPlatformRow(slotData, 'instagram', 'acct-ig')).toEqual({
+      platform: 'instagram',
+      platform_account_id: 'acct-ig',
+      slot_data: {
+        dayId: '2026-04-21',
+        timeLabel: '9:00 AM',
+        platform: 'instagram',
+        draftSnapshot: { id: 'draft-1', platforms: ['instagram'] },
+      },
     });
   });
 
-  it('carries hashtags beside the caption, since the publisher appends them', () => {
-    const hashtags = { high: ['#ITSM'], medium: [], low: [] };
-    expect(newRowCopyPatch(makeDraft({ captionPreview: 'Copy', hashtags }))).toEqual({
-      caption: 'Copy',
-      hashtags,
+  it('keeps an agent row snapshot-free and its { name } platform shape', () => {
+    const patch = retargetDraftPlatformRow(
+      { dayId: '2026-04-21', platform: { name: 'facebook', placement: 'feed' } },
+      'tiktok',
+      null,
+    );
+    expect(patch.platform_account_id).toBeNull();
+    expect(patch.slot_data).toEqual({
+      dayId: '2026-04-21',
+      platform: { name: 'tiktok', placement: 'feed' },
     });
   });
 
-  it('sends nothing for a draft with no copy yet', () => {
-    expect(newRowCopyPatch(makeDraft({ captionPreview: '   ' }))).toBeNull();
-    expect(
-      newRowCopyPatch(makeDraft({ captionPreview: '', hashtags: { high: [], low: [] } })),
-    ).toBeNull();
+  // The defect: the drop restamped the store, the refetch read the row, and the card went
+  // back to its old row. Whatever the patch writes must map back to the new platform.
+  it('maps back onto the new platform at the next refetch', () => {
+    const days = buildWeekDays(new Date('2026-04-20T12:00:00'));
+    const rowFor = (slotData: Record<string, unknown>): PersistedOrganicDraftRow => {
+      const patch = retargetDraftPlatformRow(slotData, 'instagram', 'acct-ig');
+      return {
+        id: 'row-1',
+        status: 'draft',
+        scheduled_date: null,
+        slot_data: patch.slot_data,
+        platform_account_id: patch.platform_account_id,
+      };
+    };
+    const manual = mapPersistedRowToCalendarEntry(
+      rowFor({
+        dayId: '2026-04-21',
+        platform: 'facebook',
+        draftSnapshot: { platforms: ['facebook'] },
+      }),
+      days,
+    );
+    const agent = mapPersistedRowToCalendarEntry(
+      rowFor({ dayId: '2026-04-21', platform: 'facebook' }),
+      days,
+    );
+    expect(manual?.draft.platforms).toEqual(['instagram']);
+    expect(manual?.draft.targetAccountId).toBe('acct-ig');
+    expect(agent?.draft.platforms).toEqual(['instagram']);
+    expect(agent?.draft.groupMembers?.[0]?.platform).toBe('instagram');
+  });
+});
+
+// The preview gates and renders on the plan the backend resolves from the SAME row. The store
+// draft keeps display fallbacks (a snapshot caption, snapshot media) the publisher never reads;
+// a plan built from those called ~23 live drafts ready that approve refused.
+describe('the plan a mapped draft resolves equals the plan the backend resolves from its row', () => {
+  const days = () => buildWeekDays(new Date('2026-04-20T12:00:00'));
+  const asset = (storagePath: string) => ({
+    role: 'primary',
+    kind: 'image',
+    slideIndex: 0,
+    bucket: 'brand-profile-assets',
+    storagePath,
+    storageUrl: `https://cdn.test/${storagePath}`,
+    width: 1080,
+    height: 1080,
+  });
+  const row = (overrides: Partial<PersistedOrganicDraftRow>): PersistedOrganicDraftRow => ({
+    id: 'row-plan-1',
+    status: 'draft',
+    scheduled_date: '2026-04-21T00:00:00+00:00',
+    platform_account_id: 'acct-1',
+    slot_data: { dayId: '2026-04-21' },
+    ...overrides,
+  });
+  const resolve = (draft: ReturnType<typeof publishPlanDraftFromRow>) =>
+    resolvePublishPlan({
+      draft,
+      platform: 'instagram',
+      account: { requestedAccountId: null, boundAccountId: 'acct-1', accounts: null },
+      publishOptions: null,
+      mediaGenerated: null,
+    });
+  const mapped = (source: PersistedOrganicDraftRow) => {
+    const entry = mapPersistedRowToCalendarEntry(source, days());
+    if (!entry) throw new Error('row did not map');
+    return entry.draft;
+  };
+  const bePlan = (source: PersistedOrganicDraftRow) =>
+    resolve(
+      publishPlanDraftFromRow({
+        id: source.id,
+        content_json: source.content_json ?? null,
+        slot_data: source.slot_data,
+      }),
+    );
+  const fePlan = (draft: OrganicCalendarDraft) => resolve(publishPlanDraftFromCalendarDraft(draft));
+  const paths = (plan: ReturnType<typeof resolve>) => plan.media.map((item) => item.storagePath);
+  const reasons = (plan: ReturnType<typeof resolve>) =>
+    checkPublishability(plan).blockers.map((issue) => issue.reason);
+
+  it('previews the media the plan sends when the snapshot media differs', () => {
+    const source = row({
+      content_json: { copy: { caption: 'Sent' }, publishingAssets: [asset('sent.png')] },
+      slot_data: {
+        dayId: '2026-04-21',
+        draftSnapshot: makeDraft({ publishingAssets: [asset('stale.png') as never] }),
+      },
+    });
+    const draft = mapped(source);
+    expect(draft.publishingAssets?.map((item) => item.storagePath)).toEqual(['sent.png']);
+    expect(paths(fePlan(draft))).toEqual(['sent.png']);
+    expect(paths(fePlan(draft))).toEqual(paths(bePlan(source)));
+  });
+
+  it('calls a snapshot-only caption missing, as approve does, though the editor still shows it', () => {
+    const source = row({
+      content_json: { publishingAssets: [asset('a.png')] },
+      slot_data: {
+        dayId: '2026-04-21',
+        draftSnapshot: makeDraft({ captionPreview: 'Only in the snapshot' }),
+      },
+    });
+    const draft = mapped(source);
+    expect(draft.captionPreview).toBe('Only in the snapshot');
+    expect(fePlan(draft).caption.text).toBeNull();
+    expect(reasons(fePlan(draft))).toEqual(reasons(bePlan(source)));
+    expect(reasons(fePlan(draft))).toContain('caption_missing');
+  });
+
+  it('calls snapshot-only media missing, as approve does', () => {
+    const source = row({
+      content_json: { copy: { caption: 'Sent' } },
+      slot_data: {
+        dayId: '2026-04-21',
+        draftSnapshot: makeDraft({ publishingAssets: [asset('snap.png') as never] }),
+      },
+    });
+    const draft = mapped(source);
+    expect(paths(fePlan(draft))).toEqual([]);
+    expect(reasons(fePlan(draft))).toEqual(reasons(bePlan(source)));
+  });
+
+  it('resolves the format the backend resolves', () => {
+    const source = row({
+      content_json: {
+        copy: { caption: 'Sent' },
+        content: { format: 'Carousel' },
+        publishingAssets: [asset('a.png')],
+      },
+      slot_data: { dayId: '2026-04-21', draftSnapshot: makeDraft({ format: 'Reel' }) },
+    });
+    expect(fePlan(mapped(source)).format).toBe(bePlan(source).format);
+  });
+
+  it('previews an unsaved edit as the field route will store it', () => {
+    const source = row({
+      content_json: { copy: { caption: 'Saved' }, publishingAssets: [asset('a.png')] },
+    });
+    const draft = mapped(source);
+    const edited = {
+      ...draft,
+      captionPreview: 'Typed, not saved yet',
+      publishingAssets: [
+        ...(draft.publishingAssets ?? []),
+        { ...asset('b.png'), kind: 'image' as const, slideIndex: 1, role: 'slide' },
+      ],
+      format: 'Carousel',
+    };
+    const plan = fePlan(edited);
+    expect(plan.caption.text).toContain('Typed, not saved yet');
+    expect(paths(plan)).toEqual(['a.png', 'b.png']);
+    expect(plan.format).toBe('CAROUSEL');
+  });
+
+  it('never writes the row it was read from back into the snapshot', () => {
+    const draft = mapped(row({ content_json: { copy: { caption: 'Saved' } } }));
+    expect(draft.planSource?.row.id).toBe('row-plan-1');
+    const payload = buildPersistedDraftPayload({
+      brandId: 'brand-1',
+      weekStartId: '2026-04-20',
+      dayId: '2026-04-21',
+      draft,
+    });
+    expect('planSource' in (payload.slot_data.draftSnapshot as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 });

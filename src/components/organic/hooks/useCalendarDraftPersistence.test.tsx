@@ -37,6 +37,7 @@ mock.module('@/lib/supabase/client', () => ({
 }));
 
 const { useCalendarDraftPersistence } = await import('./useCalendarDraftPersistence');
+const { withGroupAfterRemoval } = await import('./useFanOutDraft');
 
 const BRAND = 'brand-1';
 const DAY = '2026-10-14';
@@ -111,25 +112,30 @@ describe('useCalendarDraftPersistence autosave', () => {
     expect(upsertCalls).toEqual([]);
   });
 
-  it('a real edit to a manual draft writes exactly that draft', async () => {
-    requestMock.mockResolvedValue({
-      drafts: [manualRow('be-1', 'Hello'), manualRow('be-2', 'World')],
-    });
+  it('an older refetch answering after a newer one never overwrites the grid', async () => {
+    requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
     const { result } = renderHook(useHarness);
     await waitFor(() => expect(result.current.isHydrated).toBe(true));
-    await waitFor(() =>
-      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(2),
-    );
-    await act(settle);
-    expect(updateCalls).toEqual([]);
 
+    let answerOld: (value: unknown) => void = () => {};
+    let answerNew: (value: unknown) => void = () => {};
+    requestMock
+      .mockImplementationOnce(() => new Promise((resolve) => (answerOld = resolve)) as never)
+      .mockImplementationOnce(() => new Promise((resolve) => (answerNew = resolve)) as never);
+    let older: Promise<void> = Promise.resolve();
+    let newer: Promise<void> = Promise.resolve();
     act(() => {
-      result.current.updateDraftById('be-1', (draft) => ({ ...draft, title: 'Hello, edited' }));
+      older = result.current.refetch();
+      newer = result.current.refetch();
     });
-    await act(settle);
+    await act(async () => {
+      answerNew({ drafts: [manualRow('be-1', 'Hello'), manualRow('be-2', 'World')] });
+      await newer;
+      answerOld({ drafts: [manualRow('be-1', 'Hello')] });
+      await older;
+    });
 
-    expect(updateCalls).toHaveLength(1);
-    expect(upsertCalls).toEqual([]);
+    expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(2);
   });
 
   it('a never-persisted manual draft is upserted once and only once', async () => {
@@ -155,6 +161,82 @@ describe('useCalendarDraftPersistence autosave', () => {
     await act(settle);
 
     expect(upsertCalls).toHaveLength(1);
+    expect(updateCalls).toEqual([]);
+  });
+
+  // group/remove on the card's own row promotes another member and gives it the card's key.
+  // Until the refetch maps the rows again, the card must still name a row, or the insert-only
+  // autosave would write it: under the card's key it overwrites the promoted row, under the
+  // promoted row's OLD key it mints a duplicate post.
+  it('after the card row is removed, no autosave fires before or after the refetch', async () => {
+    requestMock.mockResolvedValue({ drafts: [manualRow('be-1', 'Hello')] });
+    const { result } = renderHook(useHarness);
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    await waitFor(() =>
+      expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(1),
+    );
+    await act(settle);
+    const cardId = result.current.calendarDays.flatMap((d) => d.slots)[0]?.id as string;
+
+    act(() => {
+      result.current.updateDraftById(cardId, (card) =>
+        withGroupAfterRemoval(
+          {
+            ...card,
+            platforms: ['instagram', 'linkedin'],
+            groupMembers: [
+              { backendDraftId: 'be-1', platform: 'instagram', status: 'draft', accountId: 'ig-1' },
+              {
+                backendDraftId: 'be-2',
+                platform: 'linkedin',
+                status: 'draft',
+                clientKey: 'ck-be-1::linkedin',
+                accountId: 'li-1',
+                draft: {
+                  ...card,
+                  id: 'ck-be-1::linkedin',
+                  clientKey: 'ck-be-1::linkedin',
+                  backendDraftId: 'be-2',
+                  platforms: ['linkedin'],
+                  groupMembers: undefined,
+                },
+              },
+            ],
+          },
+          {
+            groupId: 'group-1',
+            sourceId: 'be-2',
+            format: 'POST',
+            status: 'draft',
+            verdicts: [],
+            members: [
+              {
+                id: 'be-2',
+                platform: 'linkedin',
+                status: 'draft',
+                accountId: 'li-1',
+                account: null,
+                caption: 'LinkedIn words',
+                scheduledDate: null,
+                updatedAt: 'T2',
+                platformPostId: null,
+                isSource: true,
+              },
+            ],
+          },
+        ),
+      );
+    });
+    await act(settle);
+    expect(upsertCalls).toEqual([]);
+
+    requestMock.mockResolvedValue({
+      drafts: [{ ...manualRow('be-2', 'LinkedIn words'), client_key: 'ck-be-1' }],
+    });
+    await act(() => result.current.refetch());
+    await act(settle);
+    expect(result.current.calendarDays.flatMap((d) => d.slots)).toHaveLength(1);
+    expect(upsertCalls).toEqual([]);
     expect(updateCalls).toEqual([]);
   });
 

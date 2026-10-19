@@ -51,6 +51,8 @@ export type CaptionStyle = {
   uppercase?: boolean;
   /** Overrides the renderer's 1.25 line-height constant. */
   lineHeightFactor?: number;
+  /** Letter spacing in ems of the font px (a text clip's `trackingEm`). Absent draws none. */
+  trackingEm?: number;
   /** 'line' is the historical per-line fillRect. 'word' is one pill per word. */
   backgroundMode?: 'none' | 'line' | 'word';
   /** roundRect radius as a fraction of the font px. 0 keeps the square fillRect. */

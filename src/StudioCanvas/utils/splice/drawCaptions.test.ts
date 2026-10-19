@@ -40,7 +40,7 @@ type Op = { op: string; args: unknown[]; font?: string; fillStyle?: string; alph
 function fakeCtx() {
   const ops: Op[] = [];
   const measured: string[] = [];
-  const state = { font: '', fillStyle: '', strokeStyle: '', globalAlpha: 1 };
+  const state = { font: '', fillStyle: '', strokeStyle: '', globalAlpha: 1, letterSpacing: '0px' };
   const stack: (typeof state)[] = [];
   const ctx = {
     get font() {
@@ -67,6 +67,12 @@ function fakeCtx() {
     set globalAlpha(value: number) {
       state.globalAlpha = value;
     },
+    get letterSpacing() {
+      return state.letterSpacing;
+    },
+    set letterSpacing(value: string) {
+      state.letterSpacing = value;
+    },
     textBaseline: '',
     lineJoin: '',
     lineWidth: 0,
@@ -76,8 +82,9 @@ function fakeCtx() {
     measureText(text: string) {
       measured.push(text);
       const px = Number(state.font.match(/(\d+(?:\.\d+)?)px/)?.[1] ?? 10);
+      // Canvas letter spacing follows every character, the last one included.
       return {
-        width: text.length * px * 0.5,
+        width: text.length * (px * 0.5 + Number.parseFloat(state.letterSpacing)),
         fontBoundingBoxAscent: px * 0.8,
         fontBoundingBoxDescent: px * 0.2,
       };
@@ -432,5 +439,48 @@ describe('drawActiveCaption — presets that need the new fields', () => {
         if (typeof arg === 'number') expect(Number.isFinite(arg)).toBe(true);
       }
     }
+  });
+});
+
+describe('drawActiveCaption — font size and tracking keys', () => {
+  const linear = (t: number, value: number) => ({ t, value, interpolation: 'linear' as const });
+  const keyed = (channels: NonNullable<CaptionCue['motion']>['motionChannels']): CaptionCue => ({
+    ...cueOf([w('ab'), w('cd')]),
+    motion: { motionChannels: channels, motionDurationSec: 4 },
+  });
+  const draw = (cue: CaptionCue, atSec: number, style = DEFAULT_CAPTION_STYLE) => {
+    const { ctx, ops, state } = fakeCtx();
+    drawActiveCaption(ctx as unknown as Ctx, cue, atSec, W, H, style);
+    return { fills: fillTexts(ops), state };
+  };
+
+  it('draws the font size the keys reach at this frame, not the static one', () => {
+    const cue = keyed({ fontSizeFrac: [linear(0, 0.025), linear(1, 0.05)] });
+    expect(draw(cue, 0).fills[0]?.font).toContain(' 48px ');
+    expect(draw(cue, 2).fills[0]?.font).toContain(' 72px ');
+    expect(draw(cue, 3.99).fills[0]?.font).toContain(' 96px ');
+  });
+
+  it('spaces letters by the static tracking, measured into the layout', () => {
+    const plain = draw(cueOf([w('ab'), w('cd')]), 0.5);
+    const tracked = draw(cueOf([w('ab'), w('cd')]), 0.5, {
+      ...DEFAULT_CAPTION_STYLE,
+      trackingEm: 0.3,
+    });
+    const fontPx = Math.round(H * (DEFAULT_CAPTION_STYLE.fontSizeFrac ?? 0));
+    const width = (fills: Op[]) =>
+      (fills.at(-1)?.args[1] as number) - (fills[0]?.args[1] as number);
+    // Two glyphs and a space before "cd", each followed by the tracking.
+    expect(width(tracked.fills) - width(plain.fills)).toBeCloseTo(3 * 0.3 * fontPx, 6);
+    expect(plain.state.letterSpacing).toBe('0px');
+  });
+
+  it('samples tracking keys over the cue, from the static tracking before the first key', () => {
+    const cue = keyed({ trackingEm: [linear(0.5, 0), linear(1, 0.5)] });
+    const style = { ...DEFAULT_CAPTION_STYLE, trackingEm: 0.1 };
+    const left = (atSec: number) => draw(cue, atSec, style).fills[0]?.args[1] as number;
+    expect(left(1)).toBeLessThan(left(2));
+    expect(left(2)).toBeGreaterThan(left(3));
+    expect(left(3)).toBeGreaterThan(left(3.9));
   });
 });

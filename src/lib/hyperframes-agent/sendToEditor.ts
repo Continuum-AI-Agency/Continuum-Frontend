@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type EditorHyperframesLink,
   type EditorProjectV2,
   editorCommandBatchSchema,
   editorTrackSchema,
@@ -20,6 +21,8 @@ export function buildHyperframesEditorTrack(input: {
   versionId: string;
   durationSeconds: number;
   storyboard?: HyperframesStoryboard;
+  /** The revision the film was rendered from: the editor's HyperFrames motion ops edit through it. */
+  hyperframes?: EditorHyperframesLink;
 }) {
   const scenes = input.storyboard?.scenes ?? [
     {
@@ -51,6 +54,7 @@ export function buildHyperframesEditorTrack(input: {
         renditionId: input.versionId,
       },
       tags: [`scene:${scene.id}`],
+      ...(input.hyperframes ? { hyperframes: input.hyperframes } : {}),
     })),
   });
 }
@@ -121,6 +125,7 @@ export async function sendHyperframesToEditor(input: {
   width: number;
   height: number;
   storyboard?: HyperframesStoryboard;
+  hyperframes?: EditorHyperframesLink;
 }): Promise<string> {
   const versions = await listAssetVersions({ brandId: input.brandId, assetId: input.assetId });
   const version = versions.find((candidate) => candidate.id === input.versionId);
@@ -152,6 +157,7 @@ export async function sendHyperframesToEditor(input: {
       versionId: version.id,
       durationSeconds: input.durationSeconds,
       storyboard: input.storyboard,
+      hyperframes: input.hyperframes,
     }),
   );
   return studioVideoHref({ projectId, origin: 'canvas', view: 'assembly' });

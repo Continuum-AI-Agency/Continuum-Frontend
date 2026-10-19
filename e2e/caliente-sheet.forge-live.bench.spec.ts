@@ -49,6 +49,7 @@ const CARDS = [
     firstRow: 'Alianza Atletico vs Comerciantes Unidos',
     ask: 'Pon la cuota B de Alianza Atletico vs Comerciantes Unidos en 1.95',
     field: 'Right Odds (Menos de 2.5 / No)',
+    fieldKey: 'template_field_1',
     before: '1.90',
     after: '1.95',
   },
@@ -63,6 +64,7 @@ const CARDS = [
     firstRow: 'Alianza Atletico',
     ask: 'Cambia la cuota del empate de FC Cajamarca y Cusco FC a 3.70',
     field: 'Draw Bet',
+    fieldKey: 'draw_bet',
     before: '3.65',
     after: '3.70',
   },
@@ -170,7 +172,14 @@ async function openRenderTab(browser: Browser): Promise<Page> {
   });
   const tab = page.getByRole('tab', { name: 'Render', exact: true });
   await expect(async () => {
-    await tab.click();
+    // A pointer resting where the sidebar hover-expands holds it open over the tabs: park it
+    // over the page first, and give each click its own deadline so this loop can retry.
+    await page.mouse.move(1200, 600);
+    await expect(page.locator('.group.peer[data-state]').first()).toHaveAttribute(
+      'data-state',
+      'collapsed',
+    );
+    await tab.click({ timeout: 5_000 });
     await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1_000 });
     // A cold dev server compiles the Forge's client chunks after the first paint.
   }).toPass({ timeout: 180_000 });
@@ -192,6 +201,20 @@ const holding = (page: Page, field: string, value: string) =>
         inputs.filter((input) => (input as HTMLInputElement).value === wanted).length,
       value,
     );
+
+/** How many rows of this run's set, as SAVED, hold `value` for `key` — the autosave's proof. */
+async function savedHolding(templateKey: string, key: string, value: string) {
+  const { data } = await service
+    .schema('media')
+    .from('render_sets')
+    .select('rows')
+    .eq('brand_id', STARCRAFT_BRAND_ID)
+    .eq('template_key', templateKey)
+    .eq('name', `Bench · Caliente ${RUN_ID}`)
+    .maybeSingle();
+  const rows = (data?.rows ?? []) as Array<{ overrides?: Record<string, unknown> }>;
+  return rows.filter((row) => row.overrides?.[key] === value).length;
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -337,6 +360,11 @@ for (const spec of CARDS) {
     await assistClick(page.getByRole('menuitem', { name: /Draft with AI/ }));
     const bubble = page.getByRole('dialog', { name: 'Draft rows with AI' });
     await bubble.getByLabel(/^Ask/).fill(spec.ask);
+    const liveBefore = await page
+      .locator('#render-preview img[alt="Live preview"]')
+      .first()
+      .getAttribute('src', { timeout: 1_000 })
+      .catch(() => null);
     const sent = Date.now();
     await assistClick(bubble.getByRole('button', { name: 'Send' }));
     await expect(bubble.getByRole('status')).toBeVisible({ timeout: 30_000 });
@@ -344,6 +372,37 @@ for (const spec of CARDS) {
     const held = () => holding(page, spec.field, spec.after);
     await expect.poll(held, { timeout: 10_000 }).toBe(1);
     steps.askToValueMs = Date.now() - editStarted;
+    const landed = Date.now();
+    // Kept without a click: the edit reaches the saved set by the grid's own autosave.
+    await expect
+      .poll(() => savedHolding(spec.key, spec.fieldKey, spec.after), { timeout: 15_000 })
+      .toBe(1);
+    steps.valueToSavedMs = Date.now() - landed;
+    // The Live preview repaints the edited row with no click: a new frame whose drawing holds the
+    // new value. Recorded, not asserted — a template whose scene cannot be read has no Live frame.
+    const pane = page.locator('#render-preview');
+    const live = pane.locator('img[alt="Live preview"]');
+    const liveSrc = () =>
+      live
+        .first()
+        .getAttribute('src', { timeout: 1_000 })
+        .catch(() => null);
+    const previewDrawsEdit = await expect
+      .poll(
+        async () => {
+          const src = await liveSrc();
+          if (!src || src === liveBefore) return false;
+          return page.evaluate(
+            async ({ url, wanted }) => (await (await fetch(url)).text()).includes(wanted),
+            { url: src, wanted: spec.after },
+          );
+        },
+        { timeout: 8_000 },
+      )
+      .toBe(true)
+      .then(() => true)
+      .catch(() => false);
+    const previewText = ((await pane.textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
     await assistClick(bubble.getByRole('button', { name: 'Done' }));
     await expect(bubble).toHaveCount(0);
     await page.keyboard.press('ControlOrMeta+z');
@@ -354,7 +413,17 @@ for (const spec of CARDS) {
     // Render opens the review with the nine imported rows — once each has passed its dry-run.
     mark = Date.now();
     const renderButton = page.getByRole('button', { name: /^Render 9 rows/ }).first();
-    await expect(renderButton).toBeEnabled({ timeout: 180_000 });
+    await expect(renderButton)
+      .toBeEnabled({ timeout: 180_000 })
+      .catch(async (error: unknown) => {
+        // Name what each row is waiting on: the grid's own status cells, as a person reads them.
+        const rows = await page
+          .locator('tr[data-row-id]')
+          .evaluateAll((items) =>
+            items.map((item) => (item as HTMLElement).innerText.replace(/\s+/g, ' ').slice(-220)),
+          );
+        throw new Error(`rows never became Ready:\n${rows.join('\n')}`, { cause: error });
+      });
     steps.rowsReadyMs = Date.now() - mark;
     await click(renderButton);
     await expect(
@@ -373,6 +442,8 @@ for (const spec of CARDS) {
       importToTrayClicks: clicks,
       mappingClicks,
       assistantClicks: assistClicks,
+      previewDrawsEdit,
+      previewText: previewText.slice(0, 240),
       steps,
     };
     await page.context().close();
@@ -383,6 +454,14 @@ test.afterAll(async () => {
   const documentsAfter = await countDocuments().catch(() => -1);
   measured.brandDocumentsBefore = documentsBefore;
   measured.brandDocumentsAfter = documentsAfter;
+  // Import and assistant never render: no job for StarCraft may start during the run.
+  const { count: jobs } = await service
+    .schema('media')
+    .from('ad_render_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', STARCRAFT_BRAND_ID)
+    .gte('created_at', RUN_STARTED);
+  measured.renderJobsDuringRun = jobs ?? -1;
   // The sets the imports autosaved, removed; the saved mappings stay — they are week 2's input.
   const { data: sets } = await service
     .schema('media')
@@ -418,4 +497,5 @@ test.afterAll(async () => {
   writeFileSync(OUT, JSON.stringify(measured, null, 2));
   console.log(`[caliente-bench] ${JSON.stringify(measured)}`);
   expect(documentsAfter).toBe(documentsBefore);
+  expect(measured.renderJobsDuringRun).toBe(0);
 });

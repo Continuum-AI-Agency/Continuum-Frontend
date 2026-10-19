@@ -766,6 +766,32 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
   });
 
+  test('a slot a re-parse would make measurable reads "Needs review", and the hover says what to do', async () => {
+    preflightMock.mockImplementation(async () => ({
+      ...READY_RESPONSE,
+      fit: {
+        comp: null,
+        escalate: true,
+        why: '1 slot could not be measured',
+        repairable: ['hero'],
+        slots: [
+          {
+            key: 'hero',
+            state: 'unknown',
+            unknownReason: 'unplaced',
+            why: 'this template has no measured placement for the slot',
+          },
+        ],
+      },
+    }));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const status = await screen.findByText('Needs review', undefined, { timeout: 3000 });
+    const trigger = status.closest('button')!;
+    fireEvent.mouseEnter(trigger);
+    fireEvent.focus(trigger);
+    expect(await screen.findByText(/Re-parse the template to check it\.$/)).toBeTruthy();
+  });
+
   test('a paste onto the grid is reviewed like a sheet: its fields, its errors, its row cap', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
@@ -2243,12 +2269,10 @@ describe('RenderRequestsGrid', () => {
     expect(within(tray).queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
 
     // The rename re-checks the row; once it is Ready the tray saves the edit and reviews again.
-    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2), { timeout: 5000 });
-    expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
-    expect(within(tray).queryByText('Rows changed since review')).toBeNull();
-    expect(batchPreflightMock.mock.calls[1]?.[0].records).toMatchObject([
-      { label: 'Renamed row', expectedRenderSetRevision: 2 },
-    ]);
+    // A name is nothing a check reads, so the review settles on the verdict it already has.
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    await waitFor(() => expect(within(tray).queryByText('Rows changed since review')).toBeNull());
+    expect(batchPreflightMock).toHaveBeenCalledTimes(1);
   });
 
   test('the per-row Output settings column exists only when the template publishes settings', async () => {

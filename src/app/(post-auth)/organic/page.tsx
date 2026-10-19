@@ -19,7 +19,10 @@ import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import { deriveMetricAccountsByPlatform } from '@/lib/organic/metricAccounts';
-import { deriveOrganicPlatformAccounts } from '@/lib/organic/platformAccountOptions';
+import {
+  deriveOrganicPlatformAccounts,
+  type OrganicAccountOption,
+} from '@/lib/organic/platformAccountOptions';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isPostPlatform, ORGANIC_POST_PLATFORM_KEYS } from '@/lib/organic/postPlatforms';
 import type { Trend } from '@/lib/organic/trends';
@@ -139,15 +142,18 @@ async function OrganicContent({
     return acc;
   }, {});
 
-  // Every account the brand could publish to, per platform — what the switcher offers.
-  const platformAccountOptions = platformAccounts.reduce<
-    Record<string, Array<{ id: string; label: string }>>
-  >((acc, account) => {
-    if (account.connected && account.options.length > 0) {
-      acc[account.platform] = account.options;
-    }
-    return acc;
-  }, {});
+  // Every account the brand could publish to, per platform, as the page resolved them. Handles,
+  // avatars and reauth state come from the candidates endpoint (usePublishAccounts), which the
+  // switcher, the cards and the workspace's default seeding all read.
+  const platformAccountOptions = platformAccounts.reduce<Record<string, OrganicAccountOption[]>>(
+    (acc, account) => {
+      if (account.connected && account.options.length > 0) {
+        acc[account.platform] = account.options;
+      }
+      return acc;
+    },
+    {},
+  );
   const fallbackPlatforms =
     activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_POST_PLATFORM_KEYS];
 

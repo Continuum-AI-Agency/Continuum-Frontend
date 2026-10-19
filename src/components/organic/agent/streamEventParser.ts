@@ -3,20 +3,21 @@ import {
   agentDelegatedFrameDataSchema,
   type BulkContentPlan,
   bulkContentPlanSchema,
+  chatMediaStripDataSchema,
+  headlessBatchQuoteSchema,
   type MediaSearchResultsFrame,
   mediaSearchResultsFrameSchema,
   type OrganicStreamFrame,
-  organicFetchedPostContentKey,
   organicPlanStatusDataSchema,
   organicPostCardDataSchema,
   organicStreamFrameSchema,
   organicTrendChartDataSchema,
-  POST_FETCHING_TOOL_NAMES,
   proposedPlanSchema,
-  type UiFetchedPost,
 } from '@continuum/contracts';
+import { z } from 'zod';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
+import { headlessBatchStatusReader } from '@/lib/organic-agent/headlessBatch';
 import type {
   AgentJobState,
   CheckpointState,
@@ -34,28 +35,6 @@ import type {
   UiTrendChart,
 } from './types';
 import { PIPELINE_STAGES } from './types';
-
-// Labels for the post_list card synthesized from a post-fetching tool's result.
-// Shared by the live stream hook AND the session-restore path so both build the
-// same card from a tool result — one source, no drift.
-export const POST_TOOL_LABELS: Record<string, string> = {
-  listDrafts: 'Drafts',
-  getTopPosts: 'Top Posts',
-  listOwnInstagramMedia: 'Recent Media',
-  getCalendarPostedContent: 'Posted Content',
-  getCompetitorInstagramTopPosts: 'Competitor Posts',
-};
-
-/**
- * The post_list UiCard a post-fetching tool result should surface, or null if the
- * tool is not a post-fetcher or returned no posts. Used live and on reload.
- */
-export function postListCardFromToolResult(toolName: string, result: unknown): UiCard | null {
-  if (!(POST_FETCHING_TOOL_NAMES as readonly string[]).includes(toolName)) return null;
-  const posts = normalizePostToolResult(toolName, result);
-  if (posts.length === 0) return null;
-  return { type: 'post_list', data: posts, label: POST_TOOL_LABELS[toolName] };
-}
 
 export type ParsedPipelineStage = {
   jobId: string;
@@ -87,7 +66,6 @@ export type ParsedOrganicStreamEvent =
       ok: boolean;
       reason?: string;
     }
-  | { kind: 'postList'; posts: UiFetchedPost[] }
   | { kind: 'error'; message: string; code?: string; transient?: boolean }
   | { kind: 'retrying'; attempt: number; reason?: string }
   | { kind: 'complete' }
@@ -525,219 +503,24 @@ function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | nul
   return { planId: planId ?? null, itemId, status, jobId, draftId };
 }
 
+// The contract's quote is strict; read here, an additive Backend field must not drop the quote
+// (and with it the only card that may approve the batch's money).
+const lenientBatchQuoteSchema = z.object(headlessBatchQuoteSchema.shape);
+
 function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
   const payload = getEventPayload(event);
   const approvalId = readNonEmptyString(payload.approvalId);
   const toolCallId = readNonEmptyString(payload.toolCallId);
   const toolName = readNonEmptyString(payload.toolName);
   if (!approvalId || !toolCallId || !toolName) return null;
-  return { approvalId, toolCallId, toolName, input: payload.input };
-}
-
-function toSourcePlatform(raw: unknown): UiFetchedPost['source'] {
-  if (raw === 'facebook') return 'facebook';
-  if (raw === 'tiktok') return 'tiktok';
-  if (raw === 'instagram') return 'instagram';
-  return 'instagram';
-}
-
-function extractArray(result: unknown, ...keys: string[]): unknown[] {
-  if (Array.isArray(result)) return result;
-  if (!isRecord(result)) return [];
-  for (const key of keys) {
-    if (Array.isArray(result[key])) return result[key] as unknown[];
-  }
-  return [];
-}
-
-export function normalizePostToolResult(toolName: string, result: unknown): UiFetchedPost[] {
-  // Organic tools return a unified envelope `{ status, summary, data }`. Unwrap
-  // to the structured payload here; a non-success status carries no post rows.
-  const envelope = isRecord(result) && typeof result.status === 'string' ? result : null;
-  if (envelope && envelope.status === 'error') return [];
-  const payload: unknown = envelope ? envelope.data : result;
-
-  switch (toolName) {
-    case 'listDrafts': {
-      return extractArray(payload, 'drafts').flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const draftId = readNonEmptyString(item.draftId);
-        if (!draftId) return [];
-        return [
-          {
-            contentKey: organicFetchedPostContentKey(
-              'draft',
-              readNonEmptyString(item.platform),
-              draftId,
-            ),
-            postId: draftId,
-            source: 'draft' as const,
-            platform: readNonEmptyString(item.platform),
-            caption: readNonEmptyString(item.caption),
-            mediaUrl: null,
-            permalink: null,
-            postedAt: null,
-            scheduledAt: readNonEmptyString(item.scheduledAt),
-            format: readNonEmptyString(item.format),
-            status: readNonEmptyString(item.status),
-            topic: readNonEmptyString(item.topic),
-            metrics: null,
-            rank: null,
-            quality: isRecord(item.quality) ? { passed: item.quality.passed === true } : null,
-          },
-        ];
-      });
-    }
-
-    case 'getTopPosts': {
-      if (!isRecord(payload)) return [];
-      const platform = toSourcePlatform(payload.platform);
-      return extractArray(payload, 'rows').flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const postId = readNonEmptyString(item.post_id);
-        if (!postId) return [];
-        const metrics = isRecord(item.metrics)
-          ? (item.metrics as Record<string, number | null>)
-          : null;
-        return [
-          {
-            contentKey: organicFetchedPostContentKey(
-              platform,
-              typeof payload.platform === 'string' ? payload.platform : null,
-              postId,
-            ),
-            postId,
-            source: platform,
-            platform: typeof payload.platform === 'string' ? payload.platform : null,
-            caption: readNonEmptyString(item.caption_snippet),
-            mediaUrl: readNonEmptyString(item.thumbnail_url),
-            permalink: readNonEmptyString(item.permalink),
-            postedAt: readNonEmptyString(item.posted_at),
-            scheduledAt: null,
-            format: null,
-            status: 'published',
-            topic: null,
-            metrics,
-            rank: typeof item.rank === 'number' ? item.rank : null,
-            quality: null,
-          },
-        ];
-      });
-    }
-
-    case 'listOwnInstagramMedia': {
-      return extractArray(payload, 'posts').flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const mediaId = readNonEmptyString(item.mediaId);
-        if (!mediaId) return [];
-        const likeCount = typeof item.likeCount === 'number' ? item.likeCount : null;
-        const commentsCount = typeof item.commentsCount === 'number' ? item.commentsCount : null;
-        return [
-          {
-            contentKey: organicFetchedPostContentKey('instagram', 'instagram', mediaId),
-            postId: mediaId,
-            source: 'instagram' as const,
-            platform: 'instagram',
-            caption: readNonEmptyString(item.captionSnippet),
-            mediaUrl: null,
-            permalink: readNonEmptyString(item.permalink),
-            postedAt: readNonEmptyString(item.timestamp),
-            scheduledAt: null,
-            format: readNonEmptyString(item.productType) ?? readNonEmptyString(item.mediaType),
-            status: 'published',
-            topic: null,
-            metrics: { likes: likeCount, comments: commentsCount },
-            rank: typeof item.rank === 'number' ? item.rank : null,
-            quality: null,
-          },
-        ];
-      });
-    }
-
-    case 'getCalendarPostedContent': {
-      if (!isRecord(payload)) return [];
-      return extractArray(payload, 'posts').flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const postId = readNonEmptyString(item.post_id);
-        if (!postId) return [];
-        const platform = toSourcePlatform(item.platform);
-        const metrics = isRecord(item.metrics)
-          ? (item.metrics as Record<string, number | null>)
-          : null;
-        return [
-          {
-            contentKey: organicFetchedPostContentKey(
-              platform,
-              typeof item.platform === 'string' ? item.platform : null,
-              postId,
-            ),
-            postId,
-            source: platform,
-            platform: typeof item.platform === 'string' ? item.platform : null,
-            caption: readNonEmptyString(item.caption),
-            mediaUrl: readNonEmptyString(item.media_url),
-            permalink: readNonEmptyString(item.permalink),
-            postedAt: readNonEmptyString(item.posted_at),
-            scheduledAt: null,
-            format: null,
-            status: 'published',
-            topic: null,
-            metrics,
-            rank: null,
-            quality: null,
-          },
-        ];
-      });
-    }
-
-    case 'getCompetitorInstagramTopPosts': {
-      if (!isRecord(payload)) return [];
-      return extractArray(payload, 'posts').flatMap((item) => {
-        if (!isRecord(item)) return [];
-        const postId = readNonEmptyString(item.id);
-        if (!postId) return [];
-        const creative = isRecord(item.creative) ? item.creative : null;
-        const children = Array.isArray(creative?.children) ? (creative.children as unknown[]) : [];
-        const firstChild =
-          children.length > 0 && isRecord(children[0])
-            ? (children[0] as Record<string, unknown>)
-            : null;
-        const firstChildMedia = firstChild
-          ? (readNonEmptyString(firstChild.mediaUrl) ?? readNonEmptyString(firstChild.thumbnailUrl))
-          : null;
-        const resolvedMediaUrl =
-          firstChildMedia ??
-          readNonEmptyString(creative?.mediaUrl as unknown) ??
-          readNonEmptyString(creative?.thumbnailUrl as unknown);
-        return [
-          {
-            contentKey: organicFetchedPostContentKey('instagram', 'instagram', postId),
-            postId,
-            source: 'instagram' as const,
-            platform: 'instagram',
-            caption: readNonEmptyString(item.captionSnippet),
-            mediaUrl: resolvedMediaUrl,
-            permalink: readNonEmptyString(item.permalink),
-            postedAt: readNonEmptyString(item.timestamp),
-            scheduledAt: null,
-            format: readNonEmptyString(item.mediaType),
-            status: null,
-            topic: null,
-            metrics: {
-              likes: typeof item.likes === 'number' ? item.likes : null,
-              comments: typeof item.comments === 'number' ? item.comments : null,
-              engagement: typeof item.engagement === 'number' ? item.engagement : null,
-            },
-            rank: null,
-            quality: null,
-          },
-        ];
-      });
-    }
-
-    default:
-      return [];
-  }
+  const batchPreview = lenientBatchQuoteSchema.safeParse(payload.batchPreview);
+  return {
+    approvalId,
+    toolCallId,
+    toolName,
+    input: payload.input,
+    ...(batchPreview.success ? { batchPreview: batchPreview.data } : {}),
+  };
 }
 
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
@@ -848,6 +631,21 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case 'ui.post_card': {
       const card = parseUiPostCard(frame);
       return card ? { kind: 'postCard', card } : { kind: 'invalid', type };
+    }
+    // One typed strip per media tool call: refs only, signed on view (contracts chat-media.ts).
+    // It replaced the post lists this parser used to rebuild from each tool's own result shape.
+    case 'ui.media_strip': {
+      const strip = chatMediaStripDataSchema.safeParse(getEventPayload(frame));
+      return strip.success
+        ? { kind: 'uiCard', card: { type: 'media_strip', data: strip.data } }
+        : { kind: 'invalid', type };
+    }
+    // Latest wins per batchId (upsertUiCard); the card polls the batch route from here on.
+    case 'ui.headless_batch': {
+      const batch = headlessBatchStatusReader.safeParse(getEventPayload(frame));
+      return batch.success
+        ? { kind: 'uiCard', card: { type: 'headless_batch', data: batch.data } }
+        : { kind: 'invalid', type };
     }
     case 'ui.skill_proposal': {
       const card = parseSkillProposalCard(frame);

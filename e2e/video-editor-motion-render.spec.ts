@@ -9,6 +9,9 @@
 //   crossfade    mid-transition pixels blend both clips
 //   VHS          the look changes pixels versus the same frame without it
 //   box + shadow a text box renders; its drop shadow darkens the box around the glyphs
+//   text keys    text.fontSize keys drive the glyph height, text.tracking keys and a static
+//                trackingEm the line's ink width, frame by frame as keyed
+//   effect keys  an effect.parameter key moves only the effect it names, monotonically
 //
 // Two renders — control and styled (VHS + shadow) — so each look is judged against the
 // same frame without it, and the shared text measurements double as a determinism check.
@@ -27,6 +30,7 @@ import { expect, test } from '@playwright/test';
 import { createBenchRecorder } from './support/benchRecorder';
 import type {
   EntranceSample,
+  KeyframeRenderRun,
   MotionRenderRun,
   ServerCompareInput,
   ServerCompareRun,
@@ -138,6 +142,9 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
     (frame) => window.__motionRenderBench.dust(frame),
     recordedLookFrame(),
   );
+  const keyed = (await page.evaluate(() =>
+    window.__motionRenderBench.keyframes(),
+  )) as KeyframeRenderRun;
   await context.close();
 
   const lines: string[] = [];
@@ -321,6 +328,70 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
     `slide-up ${describe(control.slideUp.slice(0, 3))} vs ${describe(styled.slideUp.slice(0, 3))}`,
   );
 
+  // text.fontSize 48 → 96 px (bezier): each frame's glyph height against the same glyphs
+  // drawn statically at the size the keys reach at that frame, plus the encoder's edge spread
+  // measured on a static 48 px title in the same master.
+  const growError = keyed.grow.map(
+    (frame) => Math.abs(frame.height - frame.referenceHeight) / frame.referenceHeight,
+  );
+  check(
+    'text.fontSize keys: the glyph height tracks the keyed size frame by frame (within 6%)',
+    keyed.grow.length >= 10 &&
+      Math.abs(keyed.encodeSpreadPx) <= 3 &&
+      growError.every((error) => error <= 0.06) &&
+      (keyed.grow.at(-1)?.sampledPx ?? 0) >= 94 &&
+      (keyed.grow.at(-1)?.height ?? 0) >= 1.8 * (keyed.grow[0]?.height ?? Infinity),
+    `${keyed.grow.map((frame) => `${frame.timeSec.toFixed(3)}s ${frame.height}px vs ${frame.referenceHeight}px@${frame.sampledPx}`).join(' | ')} · encode spread ${keyed.encodeSpreadPx}px · worst ${(Math.max(...growError) * 100).toFixed(1)}%`,
+  );
+
+  // text.tracking 0 → 0.5 em: five glyphs, so the ink widens by four trackings.
+  const gaps = keyed.staticTracking.glyphs - 1;
+  const bareInk = (keyed.tracking[0]?.width ?? 0) - gaps * (keyed.tracking[0]?.trackingPx ?? 0);
+  const trackingError = keyed.tracking.map((frame) =>
+    Math.abs(frame.width - (bareInk + gaps * frame.trackingPx)),
+  );
+  check(
+    'text.tracking keys: the line ink widens frame by frame as keyed (within 3 px)',
+    keyed.tracking.length >= 10 &&
+      trackingError.every((error) => error <= 3) &&
+      nonDecreasing(keyed.tracking.map((frame) => frame.width)) &&
+      (keyed.tracking.at(-1)?.width ?? 0) - (keyed.tracking[0]?.width ?? 0) >=
+        0.9 * gaps * 0.45 * FONT_PX,
+    `${keyed.tracking.map((frame) => `${frame.timeSec.toFixed(3)}s ${frame.width}px@+${(gaps * frame.trackingPx).toFixed(1)}`).join(' | ')} · bare ${bareInk.toFixed(1)}px`,
+  );
+  const spacedBy = keyed.staticTracking.spaced - keyed.staticTracking.plain;
+  const spacedExpected = gaps * 0.3 * keyed.staticTracking.fontPx;
+  check(
+    'static trackingEm 0.3 draws the line wider than 0, by the tracking',
+    Math.abs(spacedBy - spacedExpected) <= 3,
+    `ink ${keyed.staticTracking.plain}px → ${keyed.staticTracking.spaced}px (+${spacedBy}, keyed +${spacedExpected.toFixed(1)})`,
+  );
+
+  // effect.parameter: the vignette, named by id, ramps 0 → 1 while the tint (the first effect
+  // with amount) holds; with no id, the tint is the one that ramps.
+  const strictlyRising = (values: readonly number[]) =>
+    values.every((value, index) => index === 0 || value > (values[index - 1] ?? value));
+  const describeDeltas = (frames: KeyframeRenderRun['named']) =>
+    frames
+      .map(
+        (frame) =>
+          `${frame.timeSec}s Δ${frame.frameDelta.toFixed(2)} centre Δ${frame.centreDelta.toFixed(2)}`,
+      )
+      .join(' | ');
+  check(
+    'effect.parameter key on a named effect: its delta rises monotonically, the other effect holds',
+    strictlyRising(keyed.named.map((frame) => frame.frameDelta)) &&
+      (keyed.named.at(-1)?.frameDelta ?? 0) > 10 &&
+      keyed.named.every((frame) => frame.centreDelta < 1.5),
+    describeDeltas(keyed.named),
+  );
+  check(
+    'effect.parameter key naming no effect drives the first enabled effect with that parameter',
+    strictlyRising(keyed.unnamed.map((frame) => frame.centreDelta)) &&
+      (keyed.unnamed.at(-1)?.centreDelta ?? 0) > 20,
+    describeDeltas(keyed.unnamed),
+  );
+
   // Every entrance id: 0.1 s in, the text is visibly mid-motion (moved, sized, partly
   // revealed or faded) against the same text once settled.
   for (const [direction, samples] of [
@@ -358,7 +429,7 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
         {
           lines,
           notExercised: [
-            'server export via Render /v1/timeline — the Render image bundles timeline-editor.js and needs an owner rebuild',
+            'server export via Render /v1/timeline — the Render image bundles timeline-editor.js and needs an owner rebuild; that includes the text.fontSize, text.tracking and effect.parameter keys',
           ],
         },
         null,

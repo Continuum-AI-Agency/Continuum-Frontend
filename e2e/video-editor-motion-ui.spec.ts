@@ -32,7 +32,7 @@ import {
   TRANSITION_LABELS,
 } from '../src/components/video-studio/motion/TransitionSeam';
 import { mintSessionBundleForEmail } from './support/auth';
-import { createBenchRecorder } from './support/benchRecorder';
+import { type BenchRecorder, createBenchRecorder } from './support/benchRecorder';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
 import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import {
@@ -45,8 +45,23 @@ import {
   judgeWordTiming,
   spokenWordPerFrame,
 } from './video-editor-journey/frames';
+import {
+  FRONTEND_REVISION_STEP,
+  PRODUCTION_BACKEND,
+  productionOrigin,
+  type Revisions,
+  servingRevisions,
+  verifyServingRevisions,
+} from './video-editor-prod/prodMode';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
-import { removeProjects } from './video-editor-workspace/ledger';
+import {
+  AI_STUDIO_BUCKET,
+  keptTranscript,
+  ownedStorage,
+  proveNetZero,
+  receiptRows,
+  removeProjects,
+} from './video-editor-workspace/ledger';
 
 // ---------------------------------------------------------------------------
 // videoeditor:motion:e2e:bench — the Video Studio motion UI, end to end, as the bench login
@@ -76,6 +91,31 @@ const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY ===
 const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const MENU_JOURNEY = process.env.VIDEO_EDITOR_MENU_JOURNEY === '1';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
+// Production mode (VIDEO_EDITOR_PROD): the same bound proof journeys, on the deployed Frontend,
+// the production Backend and hosted Supabase as the bench user. LOCAL_CURVE_JOURNEY still selects
+// the proof journey; LOCAL_STORE alone chooses the loopback store, identity and booted servers.
+const PROD = productionOrigin();
+const LOCAL_STORE = LOCAL_CURVE_JOURNEY && !PROD;
+if (PROD && !(LOCAL_CURVE_JOURNEY && process.env.VIDEO_EDITOR_CURVE_JOURNEY === '1'))
+  throw new Error(
+    'Production mode covers only the retained proof journeys (VIDEO_EDITOR_CURVE_JOURNEY=1 VIDEO_EDITOR_CURVE_JOURNEY_LOCAL=1).',
+  );
+/** Both revisions the deployed run started on; read once, so the vintage shards share it. */
+let productionBefore: Revisions | undefined;
+/** Production: the deployed revisions read again at the end, graded into `r`'s envelope. */
+const verifyProductionRevisions = (r: BenchRecorder) =>
+  PROD && productionBefore
+    ? verifyServingRevisions(
+        {
+          check: (step, ok, detail) => r.record(step, ok ? 'PASS' : 'FAIL', detail),
+          note: (message) => r.notes.push(message),
+        },
+        PROD,
+        productionBefore,
+      )
+    : undefined;
+/** Where f15 seeds its kept transcript: the booted Backend's bucket, or production's. */
+const TRANSCRIPT_BUCKET = PROD ? AI_STUDIO_BUCKET : 'brand-profile-assets';
 const AUTO_CAPTIONS_ONLY = process.env.VIDEO_EDITOR_AUTO_CAPTIONS_ONLY === '1';
 const SPEECH_JOURNEY = AUTO_CAPTIONS_ONLY || process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
@@ -91,10 +131,8 @@ const STAGE_JOURNEY = process.env.VIDEO_EDITOR_STAGE_JOURNEY === '1';
 const NESTED_CONTROLS_JOURNEY = process.env.VIDEO_EDITOR_NESTED_CONTROLS_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
-  (LOCAL_CURVE_JOURNEY
-    ? '00000000-0000-4000-8000-0000000000b2'
-    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
-const OWNER_EMAIL = LOCAL_CURVE_JOURNEY
+  (LOCAL_STORE ? '00000000-0000-4000-8000-0000000000b2' : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = LOCAL_STORE
   ? 'local@continuum.test'
   : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip on the bench brand. */
@@ -115,7 +153,7 @@ if (
 )
   throw new Error('Auto-caption proof requires only the owned loopback speech journey.');
 
-const { url: supabaseUrl, serviceRoleKey } = LOCAL_CURVE_JOURNEY
+const { url: supabaseUrl, serviceRoleKey } = LOCAL_STORE
   ? loadLocalSupabaseEnv()
   : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
@@ -211,13 +249,14 @@ async function seek(page: Page, pxPerSec: number, sec: number) {
   const box = await ruler.boundingBox();
   if (!box) throw new Error('ruler not visible');
   await ruler.click({ position: { x: pxPerSec * sec, y: box.height / 2 } });
+  // The clock shows tenths, so 1.25 s reads "1.3": half a tenth off, plus float noise.
   await expect
     .poll(async () => {
       const clock = await page.locator('[data-testid="timeline-clock"]:visible').innerText();
       const match = /^(\d+):([\d.]+)/.exec(clock);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
+      return match ? Math.abs(Number(match[1]) * 60 + Number(match[2]) - sec) : Number.NaN;
     })
-    .toBeCloseTo(sec, 1);
+    .toBeLessThanOrEqual(0.05 + 1e-9);
 }
 async function selectClip(page: Page, clipId: string, fraction = 0.5) {
   const clip = page.locator(`[data-clip-id="${clipId}"]:visible`);
@@ -1112,7 +1151,7 @@ test.describe('retained project', () => {
     test(`retained project journey: native splits and deletes preserve stored picture and gain${shard ? ` (${shard} looks)` : ''}`, ({
       browser,
     }) => retainedProjectJourney(browser, shard));
-  test.afterAll(() => {
+  test.afterAll(async () => {
     if (!vintageProof) return;
     vintageProof.record(
       'all three format shards of the 48-case look matrix completed',
@@ -1138,6 +1177,7 @@ test.describe('retained project', () => {
       collageCeiling ? 'PASS' : 'FAIL',
       JSON.stringify(vintageRun.collageSaveMs),
     );
+    await verifyProductionRevisions(vintageProof);
     vintageProof.print();
   });
 });
@@ -1180,7 +1220,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       [],
     );
   proof.notes.push(
-    `store target: ${LOCAL_CURVE_JOURNEY ? 'local loopback Supabase, existing authorization migration' : 'hosted designated bench store'}`,
+    `store target: ${LOCAL_STORE ? 'local loopback Supabase, existing authorization migration' : 'hosted designated bench store'}`,
   );
   const servers: Server[] = [];
   const ids: string[] = [];
@@ -1191,6 +1231,8 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
   let localSource: { path: string; assetId?: string; receiptKey?: string } | null = null;
   const ownedSources: Array<{ path: string; assetId?: string; receiptKey?: string }> = [];
   let transcriptPath: string | null = null;
+  /** Production f15: the cached-transcript claim, graded only after the Auto-captions it covers. */
+  let seededTranscript: { covers: boolean; sha256: string } | null = null;
   let sourceWords: Array<{ text: string; startSec: number; endSec: number }> = [];
   const folder =
     process.env.VIDEO_EDITOR_CURVE_JOURNEY_OUTPUT ??
@@ -1255,42 +1297,62 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       throw new Error('Animated speech requires the loopback speech journey only.');
     if (SPEECH_JOURNEY && !LOCAL_CURVE_JOURNEY)
       throw new Error('Speech journey fixtures are loopback-only.');
-    const fePort = await freePort();
-    const backend = await bootBackend(
-      `http://localhost:${fePort}`,
-      SPEECH_JOURNEY
-        ? {
-            AI_STUDIO_BUCKET: 'brand-profile-assets',
-            ...(AUTO_CAPTIONS_ONLY
-              ? {
-                  GEMINI_API_KEY: '',
-                  GOOGLE_API_KEY: '',
-                  GOOGLE_GENAI_API_KEY: '',
-                  OPENAI_API_KEY: '',
-                  ANTHROPIC_API_KEY: '',
-                  VERTEX_API_KEY: '',
-                  GOOGLE_APPLICATION_CREDENTIALS:
-                    '/tmp/continuum-caption-bench-no-provider-credentials',
-                }
-              : {}),
-          }
-        : {},
-    );
-    servers.push(backend);
-    const frontend = await bootFrontend(fePort, backend.url, '.next/video-curve-journey-e2e');
-    servers.push(frontend);
-    if (AUTO_CAPTIONS_ONLY)
-      writeFileSync(
-        join(folder, 'server-logs.json'),
-        JSON.stringify(
-          servers.map(({ url, log }) => ({ url, log })),
-          null,
-          2,
-        ),
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (PROD) {
+      productionBefore ??= await servingRevisions(PROD).catch((error: unknown) => {
+        proof.record(
+          FRONTEND_REVISION_STEP,
+          'FAIL',
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      });
+      frontendUrl = PROD;
+      backendUrl = PRODUCTION_BACKEND;
+      proof.notes.push(
+        `production mode: Frontend ${PROD} at ${productionBefore.frontend}, Backend ${PRODUCTION_BACKEND} at ${productionBefore.backend}`,
       );
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    } else {
+      const fePort = await freePort();
+      const backend = await bootBackend(
+        `http://localhost:${fePort}`,
+        SPEECH_JOURNEY
+          ? {
+              AI_STUDIO_BUCKET: 'brand-profile-assets',
+              ...(AUTO_CAPTIONS_ONLY
+                ? {
+                    GEMINI_API_KEY: '',
+                    GOOGLE_API_KEY: '',
+                    GOOGLE_GENAI_API_KEY: '',
+                    OPENAI_API_KEY: '',
+                    ANTHROPIC_API_KEY: '',
+                    VERTEX_API_KEY: '',
+                    GOOGLE_APPLICATION_CREDENTIALS:
+                      '/tmp/continuum-caption-bench-no-provider-credentials',
+                  }
+                : {}),
+            }
+          : {},
+      );
+      servers.push(backend);
+      const frontend = await bootFrontend(fePort, backend.url, '.next/video-curve-journey-e2e');
+      servers.push(frontend);
+      if (AUTO_CAPTIONS_ONLY)
+        writeFileSync(
+          join(folder, 'server-logs.json'),
+          JSON.stringify(
+            servers.map(({ url, log }) => ({ url, log })),
+            null,
+            2,
+          ),
+        );
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
     const { data: preference, error: preferenceError } = await admin
       .schema('brand_profiles')
       .from('user_brand_preferences')
@@ -1362,7 +1424,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       if (uploadError) throw uploadError;
       localSource.receiptKey = operation.idempotencyKey;
       // The pure builder + RPC register a real exact version, without the Outcome
-      // helper's automatic video-analysis call. This branch is loopback-only.
+      // helper's automatic video-analysis call, on the loopback or the production store.
       const { data, error: registerError } = await admin
         .schema('media')
         .rpc('library_execute_operation', {
@@ -1397,32 +1459,36 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
           }>;
         };
         const source = cached.sources?.[0];
-        assert(
-          'cached real transcript covers the exact source without a new STT call',
+        const covers =
           cached.setId === 'nasa-melvin' &&
-            source?.versionId === 'fixture:nasa-ksc-122210-itow-melvin@59c4807dc9c3' &&
-            source.durationSec >= Number(probe.format.duration) - 0.01 &&
-            Array.isArray(source.words) &&
-            source.words.length > 0,
-        );
+          source?.versionId === 'fixture:nasa-ksc-122210-itow-melvin@59c4807dc9c3' &&
+          source.durationSec >= Number(probe.format.duration) - 0.01 &&
+          Array.isArray(source.words) &&
+          source.words.length > 0;
+        // Locally the blanked provider keys are the no-STT proof. Production has real keys, so
+        // there the step also waits for the kept transcript to come back unchanged after the
+        // Auto-captions commits; a transcript that cannot cover fails here either way.
+        if (!PROD || !covers)
+          assert('cached real transcript covers the exact source without a new STT call', covers);
         if (!source) throw new Error('Real transcript source missing.');
         sourceWords = source.words.map((word) => editorCaptionWordSchema.parse(word));
         transcriptPath = `${BRAND}/video-editor/transcripts/${versionId}.json`;
-        const { error } = await admin.storage.from('brand-profile-assets').upload(
-          transcriptPath,
-          JSON.stringify({
-            ranges: [
-              {
-                startSec: 0,
-                endSec: source.durationSec,
-                words: sourceWords,
-                language: source.language,
-              },
-            ],
-          }),
-          { contentType: 'application/json' },
-        );
+        const seeded = JSON.stringify({
+          ranges: [
+            {
+              startSec: 0,
+              endSec: source.durationSec,
+              words: sourceWords,
+              language: source.language,
+            },
+          ],
+        });
+        const { error } = await admin.storage
+          .from(TRANSCRIPT_BUCKET)
+          .upload(transcriptPath, seeded, { contentType: 'application/json' });
         if (error) throw error;
+        if (PROD)
+          seededTranscript = { covers, sha256: createHash('sha256').update(seeded).digest('hex') };
         proof.notes.push(
           `Existing transcript SHA256: ${createHash('sha256').update(readFileSync(transcriptFile)).digest('hex')}; actual silence detection remains exercised.`,
         );
@@ -1451,8 +1517,8 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       storageState: session.state,
       viewport: { width: 1600, height: 1000 },
     });
-    if (LOCAL_CURVE_JOURNEY)
-      await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    if (LOCAL_STORE)
+      await context.grantPermissions(['local-network-access'], { origin: frontendUrl });
     const page = await context.newPage();
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -1468,7 +1534,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         '--outfile',
         bundle,
         '--define',
-        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backend.url })}`,
+        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backendUrl })}`,
       ],
       { stdio: 'pipe' },
     );
@@ -1484,7 +1550,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         body: '<!doctype html><html><body></body></html>',
       }),
     );
-    await compositor.goto(`${frontend.url}/curve-compositor`);
+    await compositor.goto(`${frontendUrl}/curve-compositor`);
     await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
     await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
     const mediaVersions = new Map([
@@ -1755,7 +1821,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
           ['square', 576, 576],
         ] as const
       ).filter(([format]) => !shard || format === shard)) {
-        await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+        await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
         await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
         const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
         if (!projectId) throw new Error('Collage project missing');
@@ -2793,6 +2859,21 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         );
       }
     }
+    // Production f15: the transient caption audio a fresh STT would leave, listed around the run.
+    const captionAudio = async () => {
+      const names: string[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await admin.storage
+          .from(AI_STUDIO_BUCKET)
+          .list(`${BRAND}/creative-ops/audio`, { search: 'caption-', limit: 1000, offset });
+        if (error) throw new Error(`caption audio list: ${error.message}`);
+        const entries = data ?? [];
+        for (const entry of entries)
+          if (entry.id !== null && entry.name.startsWith('caption-')) names.push(entry.name);
+        if (entries.length < 1000) return names;
+      }
+    };
+    const captionAudioBefore = PROD && SPEECH_JOURNEY ? await captionAudio() : [];
     let speechCaseIndex = 0;
     for (const interpolation of !SPEECH_JOURNEY
       ? []
@@ -2814,7 +2895,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
           ? join(folder, interpolation)
           : folder;
       mkdirSync(speechFolder, { recursive: true });
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
       if (!projectId) throw new Error('New speech project URL missing');
@@ -3493,6 +3574,25 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         wordTiming,
       });
     }
+    if (PROD && SPEECH_JOURNEY) {
+      const kept = keptTranscript(BRAND, versionId);
+      const { data: keptNow, error: keptError } = await admin.storage
+        .from(kept.bucket)
+        .download(kept.path);
+      const keptSha256 = keptNow
+        ? createHash('sha256')
+            .update(Buffer.from(await keptNow.arrayBuffer()))
+            .digest('hex')
+        : `unreadable (${keptError?.message})`;
+      const newAudio = (await captionAudio()).filter((name) => !captionAudioBefore.includes(name));
+      assert(
+        'cached real transcript covers the exact source without a new STT call',
+        seededTranscript?.covers === true &&
+          keptSha256 === seededTranscript.sha256 &&
+          newAudio.length === 0,
+        `kept transcript sha256 ${seededTranscript?.sha256} → ${keptSha256}; new caption audio ${JSON.stringify(newAudio)}`,
+      );
+    }
     for (const interpolation of SPEECH_JOURNEY || COLLAGE_JOURNEY
       ? []
       : KEYFRAME_LOCAL
@@ -3500,7 +3600,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         : MENU_JOURNEY
           ? (['hold', 'linear', 'bezier'] as const)
           : (['hold', 'linear', 'bezier', 'spring'] as const)) {
-      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
       if (!projectId) throw new Error('New project URL missing');
@@ -4549,7 +4649,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
             JSON.stringify(editTimings),
           );
         proof.record(
-          `${feature} native Export dialog, physical device audio, arbitrary expressions/3D/nested combinations, agent and production remain open`,
+          `${feature} native Export dialog, physical device audio, arbitrary expressions/3D/nested combinations${PROD ? ' and agent' : ', agent and production'} remain open`,
           'SKIP',
         );
         continue;
@@ -4691,7 +4791,7 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
           path ?? 'missing path',
         );
         proof.record(
-          'hold lane: other easing modes, channels, gestures, all-sample speed, native Export, agent and production remain open',
+          `hold lane: other easing modes, channels, gestures, all-sample speed, native Export${PROD ? ' and agent' : ', agent and production'} remain open`,
           'SKIP',
         );
         continue;
@@ -6556,22 +6656,33 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       );
     }
     if (shard) vintageRun.completed.push(shard);
+    // Production mode runs on the deployed store and surfaces, so its scope never claims otherwise.
+    const productionScope =
+      PROD &&
+      (AUTO_CAPTIONS_ONLY
+        ? 'Real cached NASA speech, native Auto-captions, deployed store/reload and actual browser compositor MP4s in three cases. Fresh STT and independent transcript accuracy, native Export dialog, hosted Render and agent/MCP decisions are unexercised.'
+        : MENU_JOURNEY
+          ? 'Every offered motion preset/look/seam through both native menus, deployed store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection and model agent are unexercised.'
+          : COLLAGE_JOURNEY
+            ? 'Real recorded videos/stills, native collage UI/store/browser export exercised on the deployed store. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations and agent/MCP model are unexercised. Rendered media stayed local.'
+            : undefined);
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      AUTO_CAPTIONS_ONLY
-        ? 'Real cached NASA speech, native Auto-captions, local store/reload and actual browser compositor MP4s in three cases. Fresh STT and independent transcript accuracy, native Export dialog, hosted Render, agent/MCP decisions and current production are unexercised. No provider call.'
-        : MENU_JOURNEY
-          ? 'Every offered motion preset/look/seam through both native menus, real loopback store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection, hosted production and model agent are unexercised.'
-          : COLLAGE_JOURNEY
-            ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
-            : KEYFRAME_JOURNEY
-              ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
-              : ANIMATED_SPEECH_JOURNEY
-                ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-                : SPEECH_JOURNEY
-                  ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-                  : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      productionScope ||
+        (AUTO_CAPTIONS_ONLY
+          ? 'Real cached NASA speech, native Auto-captions, local store/reload and actual browser compositor MP4s in three cases. Fresh STT and independent transcript accuracy, native Export dialog, hosted Render, agent/MCP decisions and current production are unexercised. No provider call.'
+          : MENU_JOURNEY
+            ? 'Every offered motion preset/look/seam through both native menus, real loopback store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection, hosted production and model agent are unexercised.'
+            : COLLAGE_JOURNEY
+              ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
+              : KEYFRAME_JOURNEY
+                ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
+                : ANIMATED_SPEECH_JOURNEY
+                  ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+                  : SPEECH_JOURNEY
+                    ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+                    : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.'),
     );
   } catch (error) {
     proof.record(
@@ -6599,6 +6710,18 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
         ),
       );
     await context?.close();
+    // Production: the storage the owned assets hold, read off their rows before any is deleted.
+    const ownedAssets = ownedSources.flatMap(({ path, assetId }) =>
+      assetId ? [{ id: assetId, storagePath: path }] : [],
+    );
+    const NET_ZERO =
+      'net zero: no media.assets rows, storage objects or projects left from this run';
+    const ledger = PROD
+      ? await ownedStorage(admin, BRAND, ownedAssets).catch((error: unknown) => {
+          proof.record(NET_ZERO, 'FAIL', `storage ledger read: ${String(error)}`);
+          return undefined;
+        })
+      : undefined;
     try {
       await removeProjects(admin, BRAND, ids);
       if (ids.length > 0) {
@@ -6638,11 +6761,9 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       }
       for (const localSource of ownedSources) {
         if (transcriptPath) {
-          const { error } = await admin.storage
-            .from('brand-profile-assets')
-            .remove([transcriptPath]);
+          const { error } = await admin.storage.from(TRANSCRIPT_BUCKET).remove([transcriptPath]);
           const { data, error: listError } = await admin.storage
-            .from('brand-profile-assets')
+            .from(TRANSCRIPT_BUCKET)
             .list(transcriptPath.slice(0, transcriptPath.lastIndexOf('/')), {
               search: transcriptPath.slice(transcriptPath.lastIndexOf('/') + 1),
             });
@@ -6669,27 +6790,41 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
             /^generated:[a-f0-9]{64}$/.test(localSource.receiptKey) &&
               /^[a-f0-9-]{36}$/.test(BRAND),
           );
-          const receiptsLeft = execFileSync(
-            'docker',
-            [
-              'exec',
-              'supabase_db_continuum',
-              'psql',
-              '-U',
-              'postgres',
-              '-d',
-              'postgres',
-              '-v',
-              'ON_ERROR_STOP=1',
-              '-Atc',
-              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}';`,
-            ],
-            { stdio: 'pipe', encoding: 'utf8' },
-          );
-          assert(
-            'local recorded fixture registration receipt removed',
-            receiptsLeft.trim().split('\n').at(-1) === '0',
-          );
+          if (PROD) {
+            // No psql on hosted: the service-role sweep, by the registered asset id.
+            const receipts = await receiptRows(
+              admin,
+              BRAND,
+              localSource.assetId ? [localSource.assetId] : [],
+            );
+            assert(
+              'local recorded fixture registration receipt removed',
+              receipts.grade === 'PASS',
+              receipts.detail,
+            );
+          } else {
+            const receiptsLeft = execFileSync(
+              'docker',
+              [
+                'exec',
+                'supabase_db_continuum',
+                'psql',
+                '-U',
+                'postgres',
+                '-d',
+                'postgres',
+                '-v',
+                'ON_ERROR_STOP=1',
+                '-Atc',
+                `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}';`,
+              ],
+              { stdio: 'pipe', encoding: 'utf8' },
+            );
+            assert(
+              'local recorded fixture registration receipt removed',
+              receiptsLeft.trim().split('\n').at(-1) === '0',
+            );
+          }
         }
         const { data: objects, error: objectError } = await admin.storage
           .from('media-library')
@@ -6708,6 +6843,20 @@ async function retainedProjectJourney(browser: Browser, shard?: VintageFormat) {
       }
     } finally {
       for (const server of servers.reverse()) server.stop();
+      if (ledger && (ownedAssets.length > 0 || ids.length > 0))
+        try {
+          const proven = await proveNetZero(admin, BRAND, {
+            id: RUN,
+            ledger,
+            assets: ownedAssets,
+            projects: ids,
+          });
+          for (const { step, grade, detail } of proven.steps) proof.record(step, grade, detail);
+          proof.notes.push(...proven.notes);
+        } catch (error) {
+          proof.record(NET_ZERO, 'FAIL', String(error));
+        }
+      if (!shard) await verifyProductionRevisions(proof);
       proof.notes.push(`local media retained: ${folder}`);
       if (!shard) proof.print();
     }

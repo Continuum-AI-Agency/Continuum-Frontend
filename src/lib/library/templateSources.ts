@@ -83,7 +83,7 @@ import {
   templateVariantsResponseSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
-  templateSourceSummarySchema,
+  templateSourceListResponseSchema,
   templateTextMoveResponseSchema,
   workspaceTemplateDiscoveryResponseSchema,
 } from '@continuum/contracts';
@@ -168,12 +168,31 @@ async function unwrap<T>(response: Response, what: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** The brand's templates a page at a time, newest first, until the list runs out. */
+export async function* streamTemplateSources(
+  brandId: string,
+  pageSize = 24,
+): AsyncGenerator<TemplateSourceSummary[]> {
+  let cursor: string | null = null;
+  do {
+    const params = new URLSearchParams({
+      brandId,
+      limit: String(pageSize),
+      ...(cursor ? { cursor } : {}),
+    });
+    const page = templateSourceListResponseSchema.parse(
+      await unwrap(await authorizedFetch(`/api/ai-studio/templates?${params}`), 'Template list'),
+    );
+    yield page.items;
+    cursor = page.nextCursor;
+  } while (cursor);
+}
+
+/** Every template at once, for callers that need the whole list before they can use any of it. */
 export async function fetchTemplateSources(brandId: string): Promise<TemplateSourceSummary[]> {
-  const response = await authorizedFetch(
-    `/api/ai-studio/templates?brandId=${encodeURIComponent(brandId)}`,
-  );
-  const body = await unwrap<{ items?: unknown[] }>(response, 'Template list');
-  return (body.items ?? []).map((item) => templateSourceSummarySchema.parse(item));
+  const sources: TemplateSourceSummary[] = [];
+  for await (const page of streamTemplateSources(brandId, 100)) sources.push(...page);
+  return sources;
 }
 
 export async function fetchTemplateForgeBundle(

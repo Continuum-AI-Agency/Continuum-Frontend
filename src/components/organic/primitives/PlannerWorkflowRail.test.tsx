@@ -47,7 +47,7 @@ describe('PlannerWorkflowRail', () => {
 
   it('marks the current stage for assistive technology', () => {
     render(<PlannerWorkflowRail currentStage="review" />);
-    expect(screen.getByText('Review').getAttribute('aria-current')).toBe('step');
-    expect(screen.getByText('Generate').getAttribute('aria-current')).toBeNull();
+    expect(screen.getByText('Review').parentElement?.getAttribute('aria-current')).toBe('step');
+    expect(screen.getByText('Generate').parentElement?.getAttribute('aria-current')).toBeNull();
   });
 });

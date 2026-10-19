@@ -21,6 +21,7 @@
 
 import { z } from 'zod';
 import {
+  cutLayoutSchema,
   cutPacingSchema,
   cutRungSchema,
   cutTransientKindSchema,
@@ -469,6 +470,8 @@ export const fastCutRecipeSchema = z
     rung: cutRungSchema.optional(),
     bars: z.number().int().min(2).max(16).default(4),
     transients: z.array(cutTransientKindSchema).max(4).default([...DEFAULT_CUT_TRANSIENTS]),
+    /** collage: each cut snaps in as a tile on one canvas (the event-recap photo wall). */
+    layout: cutLayoutSchema.default('cut'),
     imageModel: z.string().min(1).default('nano-banana-2'),
   })
   .strict()
@@ -529,6 +532,7 @@ export function compileFastCutWorkflow(input: FastCutRecipe): CompiledFormatWork
       ...(recipe.rung !== undefined ? { rung: recipe.rung } : {}),
       bars: recipe.bars,
       transients: recipe.transients,
+      layout: recipe.layout,
       aspectRatio: '9:16',
     },
   });

@@ -9,6 +9,7 @@ import {
   HYPERFRAMES_PROMPT_INPUT_HANDLE,
   HYPERFRAMES_VIDEO_INPUT_HANDLE,
   type HyperframesAgentAssetRef,
+  type MotionTarget,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useAgentRunStore } from '@/lib/agents/runStore';
@@ -204,6 +205,8 @@ export async function startHyperframesAgentNode(params: {
   nodeId: string;
   roomId: string;
   brandId: string;
+  /** The timeline selection a motion-only turn may change; null for every other turn. */
+  motionTarget: MotionTarget | null;
 }): Promise<AgentRunDto> {
   const studio = useStudioStore.getState();
   const nodes = studio.nodes as StudioNode[];
@@ -221,12 +224,19 @@ export async function startHyperframesAgentNode(params: {
     data.referenceImageAssetIds,
   );
   const brief = (inputs.prompt?.value ?? data.prompt).trim();
+  const { motionTarget } = params;
+  const feedback = data.feedbackPrompt?.trim();
+  // A motion turn changes only the selected animations, so it sends the spoken change alone.
   const prompt = data.revisionTarget
     ? resolveHyperframesPrompt(data, inputs.prompt?.value)
-    : data.feedbackPrompt?.trim()
-      ? `${brief}\n\nRevision feedback: ${data.feedbackPrompt.trim()}`
-      : brief;
+    : motionTarget && feedback
+      ? feedback
+      : feedback
+        ? `${brief}\n\nRevision feedback: ${feedback}`
+        : brief;
   if (!brief || !prompt) throw new Error('Add a prompt or connect a Text node.');
+  if (motionTarget && !data.revisionTarget && !feedback)
+    throw new Error('Say or type the change for the selected animations.');
   if (inputs.issues[0]) throw new Error(inputs.issues[0].message);
   const inputKey = hyperframesStoryboardInputKey({
     prompt: brief,
@@ -237,6 +247,7 @@ export async function startHyperframesAgentNode(params: {
   });
   if (
     !data.revisionTarget &&
+    !motionTarget &&
     (!data.storyboardApproved || !data.storyboard || data.storyboardInputKey !== inputKey)
   ) {
     throw new Error('Approve a current storyboard before creating the video.');
@@ -268,6 +279,7 @@ export async function startHyperframesAgentNode(params: {
     resolution: data.resolution,
     shaderStack: data.shaderStack,
     revisionTarget: data.revisionTarget,
+    motionTarget: motionTarget ?? undefined,
     approvedStoryboard: data.storyboardApproved ? data.storyboard : undefined,
     idempotencyKey: `${params.nodeId}:${crypto.randomUUID()}`,
   });

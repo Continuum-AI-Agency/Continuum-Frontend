@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { agentDelegatedFrameSchema } from '../agents/cross-agent';
 import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { aeoSnapshotCardSchema } from '../organic/aeo';
+import { uiMediaStripFrameSchema } from '../organic/chat-media';
+import { headlessBatchQuoteSchema, uiHeadlessBatchFrameSchema } from '../organic/headless-batch';
 import { organicGeneratablePlatformSchema } from '../organic/publishing';
 import {
   uiBrandBookAppliedFrameSchema,
@@ -615,6 +617,9 @@ export const angleEvidenceSourceEnum = z.enum([
   // joined to what they actually did. Every other source here measures the account
   // or the market; this one measures US.
   'publishedPostAttribution',
+  // Our Instagram trial reels and their nightly verdicts (hook rate vs the brand's
+  // ordinary reels). A trial reached non-followers only, so it is its own source.
+  'trialLedger',
 ]);
 export type AngleEvidenceSource = z.infer<typeof angleEvidenceSourceEnum>;
 
@@ -633,6 +638,9 @@ export const angleEvidenceItemSchema = z.object({
     // brand's own median. The only evidence kind that closes the loop on our own
     // recommendations rather than reporting the account at large.
     'own_post_result',
+    // A trial reel WE published and its verdict against the brand's ordinary reels:
+    // an opener tested on non-followers, never a number to set beside ordinary reach.
+    'trial_result',
   ]),
   refId: z.string().nullable().describe('trendId / mediaId / competitor handle'),
   label: z.string().describe('Human-readable, e.g. "Trend: cold brew hacks"'),
@@ -904,6 +912,8 @@ const toolApprovalRequiredSchema = z.object({
       toolCallId: z.string().min(1),
       toolName: z.string().min(1),
       input: z.unknown(),
+      /** headlessBatchCreate only: the batch's bound, cost and cast step, for its one card. */
+      batchPreview: headlessBatchQuoteSchema.optional(),
     })
     .loose(),
 });
@@ -1269,6 +1279,8 @@ export const organicStreamFrameSchema = z.discriminatedUnion('type', [
   pipelineStageSchema,
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
+  uiMediaStripFrameSchema,
+  uiHeadlessBatchFrameSchema,
   contextMediaResolutionSchema,
   uiBrandBookFrameSchema,
   uiReadinessScorecardFrameSchema,

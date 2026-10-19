@@ -672,6 +672,43 @@ describe('PIPELINE_STAGE', () => {
 });
 
 describe('PIPELINE_CARD', () => {
+  it('a restored stale preview stays stale until a live frame brings a fresh one', () => {
+    const preview = { caption: null, imageUrl: null, images: ['https://old/p'], format: 'post' };
+    const restored = panelReducer(initialPanelState(), {
+      type: 'PIPELINE_CARD',
+      card: { jobId: 'j', status: 'completed', draftId: 'd', preview, previewStale: true },
+    });
+    expect(restored.pipeline['j']?.previewStale).toBe(true);
+
+    // A frame with no preview (a stage tick, a status update) keeps the flag.
+    const ticked = panelReducer(restored, {
+      type: 'PIPELINE_STAGE',
+      event: {
+        jobId: 'j',
+        brandId: 'b',
+        planId: null,
+        planItemId: null,
+        stage: 'draft',
+        status: 'active',
+      },
+    });
+    expect(ticked.pipeline['j']?.previewStale).toBe(true);
+
+    const live = panelReducer(ticked, {
+      type: 'PIPELINE_CARD',
+      card: { jobId: 'j', preview: { ...preview, images: ['https://new/p'] } },
+    });
+    expect(live.pipeline['j']?.previewStale).toBe(false);
+
+    const reblueprinted = panelReducer(restored, {
+      type: 'DRAFT_BLUEPRINT',
+      draftId: 'd',
+      previewRevision: 'r2',
+      previews: ['https://new/sb'],
+    });
+    expect(reblueprinted.pipeline['j']?.previewStale).toBe(false);
+  });
+
   it('on completed, marks all stages done and merges preview + quality', () => {
     const start = panelReducer(initialPanelState(), {
       type: 'PIPELINE_STAGE',
@@ -1207,5 +1244,91 @@ describe('useOrganicAgentReducer media-choice approval token', () => {
 
     expect(next.pipeline['job-f'].checkpoint?.previewRevision).toBe('revision-f');
     expect(next.pipeline['job-f'].checkpoint?.awaitingMediaChoice).toBe(true);
+  });
+});
+
+describe('media strips', () => {
+  it('a strip replayed for the same tool call replaces it where it stands', () => {
+    const strip = (label: string, toolCallId = 'call_1') => ({
+      type: 'media_strip' as const,
+      data: {
+        toolCallId,
+        toolName: 'listDrafts',
+        items: [
+          {
+            ref: { type: 'draft' as const, draftId: 'd1' },
+            kind: 'image' as const,
+            w: null,
+            h: null,
+            label,
+          },
+        ],
+        total: 1,
+      },
+    });
+    let state = {
+      ...initialPanelState(),
+      streamingMessageId: 'a1',
+      messages: [{ id: 'a1', role: 'assistant' as const, content: '' }],
+    };
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('first') });
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('second', 'call_2') });
+    state = panelReducer(state, { type: 'STREAM_UI_CARD', card: strip('replayed') });
+    expect(state.messages[0]?.uiCards).toEqual([strip('replayed'), strip('second', 'call_2')]);
+  });
+});
+
+describe('the reply to an approval', () => {
+  const approval = {
+    approvalId: 'approval-1',
+    toolCallId: 'call_publish',
+    toolName: 'publishDraft',
+    input: {},
+  };
+
+  // The turn that asked for approval has finished: no row is open.
+  function awaitingApproval() {
+    let state = panelReducer(initialPanelState(), {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'Publish it',
+      messageId: 'user-1',
+    });
+    state = panelReducer(state, { type: 'TOOL_APPROVAL_ADD', approval });
+    state = panelReducer(state, { type: 'STREAM_COMPLETE' });
+    state = panelReducer(state, { type: 'TOOL_APPROVAL_RESOLVE', approvalId: 'approval-1' });
+    return panelReducer(state, { type: 'BEGIN_STREAMING', messageId: 'reply-1' });
+  }
+
+  it('streams into a new assistant row', () => {
+    let state = awaitingApproval();
+    applyOrganicFrame(
+      { type: 'response.output_text.delta', data: { delta: 'Published.' } },
+      (action) => {
+        state = panelReducer(state, action);
+      },
+      'chat',
+    );
+
+    expect(state.messages.map((m) => m.id)).toEqual(['user-1', expect.any(String), 'reply-1']);
+    expect(state.messages[2]?.content).toBe('Published.');
+  });
+
+  it('paints a transient error instead of silently re-sending the previous message', () => {
+    const state = panelReducer(awaitingApproval(), {
+      type: 'STREAM_ERROR',
+      error: 'Upstream hiccup',
+      transient: true,
+    });
+
+    expect(state.pendingAutoRetry).toBeNull();
+    expect(state.messages.find((m) => m.id === 'reply-1')?.error).toBe('Upstream hiccup');
+  });
+
+  it('leaves no row behind when the decision was never delivered', () => {
+    let state = panelReducer(awaitingApproval(), { type: 'STREAM_ERROR', error: 'offline' });
+    state = panelReducer(state, { type: 'STREAM_COMPLETE' });
+    state = panelReducer(state, { type: 'DISCARD_MESSAGE', messageId: 'reply-1' });
+
+    expect(state.messages.map((m) => m.id)).not.toContain('reply-1');
   });
 });

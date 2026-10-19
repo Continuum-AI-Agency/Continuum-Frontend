@@ -22,6 +22,7 @@ import {
   ConversationEmptyState,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
+import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -418,7 +419,7 @@ export function EditorAgentPanel({
               ref={textareaRef}
               value={draft}
               placeholder="Ask the editor… (@ to mention a clip or asset)"
-              className="min-h-16 resize-none pr-20 text-sm"
+              className="min-h-16 resize-none pr-28 text-sm"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
                 setDraft(value);
@@ -434,6 +435,10 @@ export function EditorAgentPanel({
               data-testid="editor-agent-input"
             />
             <div className="absolute right-2 bottom-2 flex gap-1">
+              <DictationButton
+                disabled={running}
+                onTranscript={(spoken) => setDraft((current) => appendDictation(current, spoken))}
+              />
               <Button
                 size="icon"
                 variant="ghost"

@@ -75,6 +75,63 @@ export function clampInstagramCaption(
 }
 
 /**
+ * The assembled caption plus what assembly did to it: which tags survived the tag cap and
+ * the length clamp, and where the clamp cut. The publish plan shows these to the user, so
+ * a dropped tag or a cut sentence is a visible notice instead of a silent loss.
+ */
+export interface CaptionAssembly {
+  /** Exactly what is sent. */
+  text: string;
+  /** The body as typed, trimmed. */
+  body: string;
+  keptHashtags: string[];
+  droppedHashtags: string[];
+  truncated: boolean;
+  /** Offset in the assembled caption where the clamp cut, or null when nothing was cut. */
+  truncatedAt: number | null;
+  limit: number;
+  hashtagLimit: number;
+}
+
+export function assembleCaption(
+  caption: string | null | undefined,
+  hashtags?: HashtagTiers | string[] | null,
+  opts: BuildInstagramCaptionOptions = {},
+): CaptionAssembly {
+  const limit = opts.maxLength ?? INSTAGRAM_CAPTION_MAX_LENGTH;
+  const hashtagLimit = opts.maxHashtags ?? INSTAGRAM_HASHTAG_MAX;
+
+  const body = (caption ?? '').trim();
+  const tags = normalizeHashtags(hashtags);
+  const capped = tags.slice(0, hashtagLimit);
+  const tagBlock = capped.join(' ');
+
+  const full = body && tagBlock ? `${body}\n\n${tagBlock}` : body || tagBlock;
+  const text = clampInstagramCaption(full, limit);
+  const truncated = text.length < full.trimEnd().length;
+
+  // A tag is kept only when the clamp left all of it standing.
+  const keptHashtags: string[] = [];
+  let offset = body && tagBlock ? body.length + 2 : 0;
+  for (const tag of capped) {
+    if (offset + tag.length <= text.length) keptHashtags.push(tag);
+    offset += tag.length + 1;
+  }
+  const droppedHashtags = tags.filter((tag) => !keptHashtags.includes(tag));
+
+  return {
+    text,
+    body,
+    keptHashtags,
+    droppedHashtags,
+    truncated,
+    truncatedAt: truncated ? text.length : null,
+    limit,
+    hashtagLimit,
+  };
+}
+
+/**
  * Assemble a publishable caption: `caption` body + `\n\n` + up to `maxHashtags`
  * hashtags (deduped, `#`-prefixed), then clamp the whole to `maxLength`.
  */
@@ -83,14 +140,7 @@ export function buildInstagramCaption(
   hashtags?: HashtagTiers | string[] | null,
   opts: BuildInstagramCaptionOptions = {},
 ): string {
-  const maxLength = opts.maxLength ?? INSTAGRAM_CAPTION_MAX_LENGTH;
-  const maxHashtags = opts.maxHashtags ?? INSTAGRAM_HASHTAG_MAX;
-
-  const body = (caption ?? '').trim();
-  const tagBlock = normalizeHashtags(hashtags).slice(0, maxHashtags).join(' ');
-
-  const full = body && tagBlock ? `${body}\n\n${tagBlock}` : body || tagBlock;
-  return clampInstagramCaption(full, maxLength);
+  return assembleCaption(caption, hashtags, opts).text;
 }
 
 /**
@@ -105,6 +155,33 @@ export function buildPlatformCaption(
   hashtags?: HashtagTiers | string[] | null,
 ): string {
   return buildInstagramCaption(caption, hashtags, captionLimits(platform));
+}
+
+/** `assembleCaption` against the destination platform's limits. */
+export function assemblePlatformCaption(
+  platform: PublishPlatform,
+  caption: string | null | undefined,
+  hashtags?: HashtagTiers | string[] | null,
+): CaptionAssembly {
+  return assembleCaption(caption, hashtags, captionLimits(platform));
+}
+
+/**
+ * The length of the caption `platform` would be sent — body + `\n\n` + the tags under its tag
+ * cap — before any clamp. The one number every caption check compares to `maxLength`: the
+ * editor counter, the write paths, the verdict and the publish gate. Measuring the body alone
+ * let a caption save and show "fits" that approve then refused once its hashtags were added.
+ */
+export function platformCaptionLength(
+  platform: PublishPlatform,
+  caption: string | null | undefined,
+  hashtags?: HashtagTiers | string[] | null,
+): number {
+  const { maxHashtags } = captionLimits(platform);
+  return assembleCaption(caption, hashtags, {
+    maxLength: Number.POSITIVE_INFINITY,
+    maxHashtags,
+  }).text.trimEnd().length;
 }
 
 /** The final pre-publish clamp, against the destination platform's own maximum. */

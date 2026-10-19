@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
-import { evaluateDraftReadiness, hasDraftMedia } from './draftReadiness';
+import { evaluateDraftReadiness } from './draftReadiness';
 
 function makeDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalendarDraft {
   return {
@@ -20,211 +20,183 @@ function makeDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalend
   };
 }
 
-const storageAsset = {
+const image = {
   role: 'primary',
   kind: 'image' as const,
   storagePath: 'brand/asset.jpg',
   storageUrl: 'https://storage.example/asset.jpg',
 };
+const video = {
+  role: 'primary',
+  kind: 'video' as const,
+  storagePath: 'brand/clip.mp4',
+  storageUrl: 'https://storage.example/clip.mp4',
+  mimeType: 'video/mp4',
+};
 
-describe('hasDraftMedia', () => {
-  it('is false for a draft with no publishing assets and no media suggestion', () => {
-    expect(hasDraftMedia(makeDraft())).toBe(false);
+const reasons = (draft: OrganicCalendarDraft) =>
+  evaluateDraftReadiness(draft).blockers.map((issue) => issue.reason);
+const fixes = (draft: OrganicCalendarDraft) =>
+  evaluateDraftReadiness(draft).blockers.map((issue) => issue.fix);
+
+describe('evaluateDraftReadiness — the shared publish gate', () => {
+  it('flags caption and media on an empty post, each pointing at its fix', () => {
+    const readiness = evaluateDraftReadiness(makeDraft());
+    expect(readiness.ready).toBe(false);
+    expect(fixes(makeDraft()).sort()).toEqual(['caption', 'media']);
+    expect(readiness.reason).toContain('caption');
   });
 
-  it('is true when a durable publishing asset is attached', () => {
-    expect(hasDraftMedia(makeDraft({ publishingAssets: [storageAsset] }))).toBe(true);
-  });
-
-  it('is false when a publishing asset has no usable storage url', () => {
-    const draft = makeDraft({
-      publishingAssets: [{ ...storageAsset, storageUrl: '' }],
-    });
-    expect(hasDraftMedia(draft)).toBe(false);
-  });
-
-  it('is true for an agent media suggestion with an asset url', () => {
-    const draft = makeDraft({ mediaSuggestion: { assetUrl: 'https://cdn/x.jpg' } });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-
-  it('is true when the media suggestion carries a reel url', () => {
-    const draft = makeDraft({ mediaSuggestion: { reel: { url: 'https://cdn/r.mp4' } } });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-
-  it('is true when a suggestion asset entry has a signed url', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { assets: [{ signedUrl: 'https://cdn/s.jpg' }] },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-
-  it('is true when a hyperframe cover image exists', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { hyperframe: { coverImageUrl: 'https://cdn/cover.jpg' } },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-});
-
-// While a generation is in flight (or never started) any URLs still sitting on
-// the suggestion are stale leftovers from a previous attempt — only realized
-// publishingAssets or a settled status may count as media.
-describe('hasDraftMedia — unsettled media status', () => {
-  it('ignores leftover suggestion URLs while media is generating', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { mediaStatus: 'generating', assetUrl: 'https://cdn/stale.jpg' },
-    });
-    expect(hasDraftMedia(draft)).toBe(false);
-  });
-
-  it('ignores leftover suggestion URLs while media is pending', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { mediaStatus: 'pending', signedUrl: 'https://cdn/stale.jpg' },
-    });
-    expect(hasDraftMedia(draft)).toBe(false);
-  });
-
-  it('counts user-supplied media', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { mediaStatus: 'user_supplied', assetUrl: 'https://cdn/mine.jpg' },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-
-  it('counts ready media', () => {
-    const draft = makeDraft({
-      mediaSuggestion: { mediaStatus: 'ready', assetUrl: 'https://cdn/final.jpg' },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-
-  it('counts realized publishing assets even while a regeneration is in flight', () => {
-    const draft = makeDraft({
-      publishingAssets: [storageAsset],
-      mediaSuggestion: { mediaStatus: 'generating' },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
-  });
-});
-
-describe('evaluateDraftReadiness', () => {
-  it('is not ready and flags both checks for an empty draft', () => {
-    const result = evaluateDraftReadiness(makeDraft());
-    expect(result.ready).toBe(false);
-    const caption = result.checks.find((c) => c.id === 'caption');
-    const media = result.checks.find((c) => c.id === 'media');
-    expect(caption?.met).toBe(false);
-    expect(media?.met).toBe(false);
-    expect(result.reason).not.toBeNull();
+  it('is ready with a caption and an image', () => {
+    const readiness = evaluateDraftReadiness(
+      makeDraft({ captionPreview: 'Hello', publishingAssets: [image] }),
+    );
+    expect(readiness).toEqual({ ready: true, blockers: [], reason: null });
   });
 
   it('treats a whitespace-only caption as missing', () => {
-    const result = evaluateDraftReadiness(makeDraft({ captionPreview: '   \n  ' }));
-    expect(result.checks.find((c) => c.id === 'caption')?.met).toBe(false);
+    expect(reasons(makeDraft({ captionPreview: '   ', publishingAssets: [image] }))).toEqual([
+      'caption_missing',
+    ]);
   });
 
-  it('is not ready with a caption but no media', () => {
-    const result = evaluateDraftReadiness(makeDraft({ captionPreview: 'Hello world' }));
-    expect(result.ready).toBe(false);
-    expect(result.checks.find((c) => c.id === 'caption')?.met).toBe(true);
-    expect(result.checks.find((c) => c.id === 'media')?.met).toBe(false);
+  // The backend signs bucket + storagePath; an expired or empty signed URL is not missing media.
+  it('counts an attached asset whose signed url is empty', () => {
+    expect(
+      evaluateDraftReadiness(
+        makeDraft({ captionPreview: 'Hi', publishingAssets: [{ ...image, storageUrl: '' }] }),
+      ).ready,
+    ).toBe(true);
   });
 
-  it('is not ready with media but no caption', () => {
-    const result = evaluateDraftReadiness(makeDraft({ publishingAssets: [storageAsset] }));
-    expect(result.ready).toBe(false);
-    expect(result.checks.find((c) => c.id === 'media')?.met).toBe(true);
-    expect(result.checks.find((c) => c.id === 'caption')?.met).toBe(false);
+  it('ignores leftover generated URLs while media is generating', () => {
+    expect(
+      reasons(
+        makeDraft({
+          captionPreview: 'Hi',
+          mediaSuggestion: { mediaStatus: 'generating', assetUrl: 'https://old.example/a.png' },
+        }),
+      ),
+    ).toEqual(['media_missing']);
   });
 
-  it('is ready with both caption and at least one media asset', () => {
-    const result = evaluateDraftReadiness(
-      makeDraft({ captionPreview: 'Launch day', publishingAssets: [storageAsset] }),
+  it('never needs an account here: cards hold no account list', () => {
+    expect(reasons(makeDraft({ captionPreview: 'Hi', publishingAssets: [image] }))).not.toContain(
+      'account_missing',
     );
-    expect(result.ready).toBe(true);
-    expect(result.reason).toBeNull();
-    expect(result.checks.every((c) => c.met)).toBe(true);
-  });
-
-  it('is ready for an agent draft with caption and a media suggestion', () => {
-    const result = evaluateDraftReadiness(
-      makeDraft({
-        captionPreview: 'From the agent',
-        mediaSuggestion: { assetUrl: 'https://cdn/x.jpg' },
-      }),
-    );
-    expect(result.ready).toBe(true);
-  });
-
-  it('is not ready while media is generating even with leftover suggestion URLs', () => {
-    const result = evaluateDraftReadiness(
-      makeDraft({
-        captionPreview: 'Caption is done',
-        mediaSuggestion: { mediaStatus: 'generating', assetUrl: 'https://cdn/stale.jpg' },
-      }),
-    );
-    expect(result.ready).toBe(false);
-    expect(result.checks.find((c) => c.id === 'media')?.met).toBe(false);
   });
 });
 
-// Readiness must agree with what the card/preview render. A video-only draft has
-// media, whichever leg carries it — a video publishing asset or just the reel.
-describe('hasDraftMedia — video-only drafts', () => {
-  it('is true for a video publishing asset', () => {
-    const draft = makeDraft({
-      publishingAssets: [
-        {
-          role: 'primary',
-          kind: 'video',
-          storagePath: 'library/clip.mp4',
-          storageUrl: 'https://storage.example/clip.mp4',
-        },
-      ],
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
+describe('evaluateDraftReadiness — stories', () => {
+  it('needs no caption, only media', () => {
+    expect(reasons(makeDraft({ format: 'Story' }))).toEqual(['media_missing']);
+    expect(
+      evaluateDraftReadiness(makeDraft({ format: 'story', publishingAssets: [image] })).ready,
+    ).toBe(true);
+  });
+});
+
+describe('evaluateDraftReadiness — media kind', () => {
+  it('blocks a reel that only has an image', () => {
+    expect(
+      reasons(makeDraft({ format: 'Reel', captionPreview: 'Hi', publishingAssets: [image] })),
+    ).toEqual(['media_missing']);
   });
 
-  it('is true for an attached reel whose publishing asset was not signed yet', () => {
-    const draft = makeDraft({
-      publishingAssets: [
-        { role: 'primary', kind: 'video', storagePath: 'library/clip.mp4', storageUrl: '' },
-      ],
-      mediaSuggestion: {
-        kind: 'reel',
-        mediaStatus: 'user_supplied',
-        url: null,
-        assetUrl: null,
-        signedUrl: null,
-        assets: null,
-        reel: {
-          generated: true,
-          url: 'library/clip.mp4',
-          bucket: 'brand-profile-assets',
-          signedUrl: 'https://storage.example/clip.mp4',
-          durationSec: 12,
-        },
-      },
-    });
-    expect(hasDraftMedia(draft)).toBe(true);
+  it('passes a reel that has a video', () => {
+    expect(
+      evaluateDraftReadiness(
+        makeDraft({ format: 'Reel', captionPreview: 'Hi', publishingAssets: [video] }),
+      ).ready,
+    ).toBe(true);
   });
 
-  it('gates scheduling on the caption only, once a video is attached', () => {
+  it('blocks a hyperframe until its mp4 is rendered, then passes', () => {
+    const hyperframe = (mp4Status: 'pending' | 'ready') =>
+      makeDraft({
+        format: 'hyperframe',
+        captionPreview: 'Hi',
+        mediaSuggestion: {
+          mediaStatus: 'ready',
+          hyperframe: { mp4Status, mp4Path: 'hf/a.mp4', coverPath: 'hf/a.png' },
+        },
+      });
+    expect(reasons(hyperframe('pending'))).toEqual(['hyperframe_mp4_not_ready']);
+    expect(evaluateDraftReadiness(hyperframe('ready')).ready).toBe(true);
+  });
+
+  it('blocks a YouTube video without a video, and a YouTube photo post outright', () => {
+    const youtube = (format: string) =>
+      makeDraft({
+        platforms: ['youtube'],
+        format,
+        captionPreview: 'Hi',
+        publishingAssets: [image],
+      });
+    expect(reasons(youtube('Reel'))).toEqual(['media_missing']);
+    expect(fixes(youtube('Post'))).toContain('format');
+  });
+
+  it('lets a one-image carousel through only once it has two slides', () => {
+    const carousel = (slides: number) =>
+      makeDraft({
+        format: 'Carousel',
+        captionPreview: 'Hi',
+        publishingAssets: Array.from({ length: slides }, (_, index) => ({
+          ...image,
+          storagePath: `brand/${index}.jpg`,
+          slideIndex: index,
+        })),
+      });
+    expect(reasons(carousel(1))).toEqual(['media_missing']);
+    expect(evaluateDraftReadiness(carousel(2)).ready).toBe(true);
+  });
+
+  it('lets a text post through on Facebook and LinkedIn', () => {
+    for (const platform of ['facebook', 'linkedin'] as const) {
+      expect(
+        evaluateDraftReadiness(makeDraft({ platforms: [platform], captionPreview: 'Hi' })).ready,
+      ).toBe(true);
+    }
+  });
+});
+
+describe('evaluateDraftReadiness — several platforms', () => {
+  // Approve fans the draft out into one row per platform; each row meets its own gate.
+  it('is ready only when every selected platform is', () => {
     const draft = makeDraft({
-      captionPreview: 'Ready caption',
-      publishingAssets: [
+      platforms: ['facebook', 'youtube'],
+      format: 'Reel',
+      captionPreview: 'Hi',
+      publishingAssets: [image],
+    });
+    // One item per fix: both platforms want a video, and the line says so once.
+    expect(reasons(draft)).toEqual(['media_missing']);
+  });
+
+  // Each member is its own row: the TikTok row's empty caption blocks even when Instagram's is set.
+  it("judges each platform on its own member row's content", () => {
+    const tiktok = makeDraft({
+      id: 'draft-1::tiktok',
+      platforms: ['tiktok'],
+      publishingAssets: [video],
+    });
+    const card = makeDraft({
+      platforms: ['instagram', 'tiktok'],
+      format: 'Reel',
+      captionPreview: 'Instagram words',
+      publishingAssets: [video],
+      groupMembers: [
+        { backendDraftId: 'be-ig', platform: 'instagram', status: 'draft', accountId: null },
         {
-          role: 'primary',
-          kind: 'video',
-          storagePath: 'library/clip.mp4',
-          storageUrl: 'https://storage.example/clip.mp4',
+          backendDraftId: 'be-tt',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: { ...tiktok, format: 'Reel' },
         },
       ],
     });
-    const readiness = evaluateDraftReadiness(draft);
-    expect(readiness.checks.find((check) => check.id === 'media')?.met).toBe(true);
-    expect(readiness.ready).toBe(true);
+    expect(reasons(card)).toEqual(['caption_missing']);
   });
 });

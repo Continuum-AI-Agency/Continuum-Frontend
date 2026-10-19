@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import {
   CUT_RUNGS_SEC,
+  type CutLayout,
   type CutPacing,
   type CutRungSec,
   type CutTransientKind,
   cutPacingSchema,
   cutRungSchema,
   cutTransientKindSchema,
+  MAX_COLLAGE_TILES,
 } from './cutEdit';
 
 /**
@@ -17,15 +19,19 @@ import {
 
 export {
   CUT_RUNGS_SEC,
+  type CutLayout,
   type CutPacing,
   type CutRungSec,
   type CutTransientKind,
   cutPacingSchema,
   cutRungSchema,
+  cutLayoutSchema,
   cutTransientKindSchema,
+  DEFAULT_COLLAGE_ACCENT,
   DEFAULT_CUT_TRANSIENTS,
   type HeadlessEdit,
   headlessEditSchema,
+  MAX_COLLAGE_TILES,
 } from './cutEdit';
 
 /** A source that shows the product or the presenter; absent is b-roll. */
@@ -585,4 +591,35 @@ function assignFootage(
       grid: cut.grid,
     };
   });
+}
+
+/**
+ * The plan a layout can draw. A collage holds at most MAX_COLLAGE_TILES tiles, so a plan with more
+ * cuts is planned again, steady on the shortest rung that fits: the wall still fills on the beat,
+ * and the edit is never refused after its takes are paid for.
+ */
+export function planLayoutCuts(input: CutPlanInput, layout: CutLayout = 'cut'): CutPlan {
+  if (layout === 'cut') return planCuts(input);
+  const asked = planUnlessTooMany(input);
+  if (asked && asked.cuts.length <= MAX_COLLAGE_TILES) return asked;
+  const seconds = ((input.bars * TICKS_PER_BAR) / CUT_TICKS_PER_BEAT) * input.beat.periodSec;
+  for (const rung of [...CUT_RUNGS_SEC].reverse()) {
+    // Steady is about seconds / rung cuts: skip the rungs that cannot fit before planning them.
+    if (seconds / rung > MAX_COLLAGE_TILES + 1) continue;
+    const steady = planCuts({ ...input, pacing: 'steady', rung });
+    if (steady.cuts.length <= MAX_COLLAGE_TILES) return steady;
+  }
+  throw new Error(
+    `cut_plan_collage_too_long: ${input.bars} bars at ${(60 / input.beat.periodSec).toFixed(1)} BPM hold more than ${MAX_COLLAGE_TILES} one-second tiles`,
+  );
+}
+
+/** planCuts, or null when the plan has more cuts than it may: a collage then plans steady instead. */
+function planUnlessTooMany(input: CutPlanInput): CutPlan | null {
+  try {
+    return planCuts(input);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('cut_plan_too_many_cuts')) return null;
+    throw error;
+  }
 }

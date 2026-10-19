@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
+import { publishAccountsKey } from '@/lib/organic/publishTargets';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
 
 // happy-dom does not expose SyntaxError on its window object, which causes
@@ -16,13 +18,25 @@ mock.module('next/image', () => ({
 
 import { AiStudioHandoffProvider } from './AiStudioHandoffContext';
 import { CalendarDraftCard } from './CalendarDraftCard';
-import type { OrganicCalendarDraft } from './types';
+import { makeCalendarDay } from './calendar-utils';
+import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 
+type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+const requestCalls: RequestOptions[] = [];
+const request = mock(async (opts: RequestOptions) => {
+  requestCalls.push(opts);
+  return { updated_at: 'T1' };
+});
+mock.module('@/lib/api/http', () => ({ request, http: { request } }));
+
+const storeDays: OrganicCalendarDay[] = [];
 const store = {
   updateDraft: mock(),
   bulkDeleteDrafts: mock(),
   duplicateDraft: mock(),
   beginEditingDraft: mock((_id: string) => undefined),
+  days: storeDays,
+  accountContext: { accountIds: { linkedin: 'li-acct' }, accountOptions: {}, brandId: 'b1' },
 };
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub(store));
@@ -113,6 +127,28 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
+// The brand's posting accounts, already cached: the card names its account by handle and
+// makes no request of its own for them.
+const ACCOUNT_ID = '6f1c0b9e-0000-4000-8000-000000000001';
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+queryClient.setQueryData(publishAccountsKey('b1'), {
+  accounts: [
+    {
+      id: ACCOUNT_ID,
+      platform: 'instagram',
+      handle: 'acme_a',
+      displayName: 'Acme',
+      avatarUrl: null,
+      needsReauth: false,
+      isDefault: true,
+    },
+  ],
+});
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
+
 const draft: OrganicCalendarDraft = {
   id: 'draft-1',
   title: 'Draft title',
@@ -138,6 +174,8 @@ describe('CalendarDraftCard', () => {
     store.beginEditingDraft.mockClear();
     approveAndSchedule.mockClear();
     unschedule.mockClear();
+    requestCalls.length = 0;
+    storeDays.length = 0;
   });
 
   afterEach(() => {
@@ -195,16 +233,18 @@ describe('CalendarDraftCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+    fireEvent.click(screen.getAllByText('Time: 1:00 PM')[0]);
 
     expect(store.beginEditingDraft).not.toHaveBeenCalled();
   });
 
-  it('quick platform edit updates draft and keeps editor focused', () => {
+  // A15/C9: the card had its own platform list that changed only the browser's copy of a
+  // grouped card. Platforms change in the review panel's selector, so the menu opens it.
+  it('"Change platforms…" opens the review panel and writes nothing itself', () => {
     const onSelect = mock();
     render(
       <CalendarDraftCard
-        draft={draft}
+        draft={{ ...draft, backendDraftId: 'srv-1' }}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
@@ -212,15 +252,12 @@ describe('CalendarDraftCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText('Platform: LinkedIn')[0]);
+    expect(screen.queryByText(/^Platform: /)).toBeNull();
+    fireEvent.click(screen.getByText('Change platforms…'));
 
-    expect(store.updateDraft).toHaveBeenCalledTimes(1);
-    expect(store.updateDraft.mock.calls[0]?.[0]).toBe('draft-1');
-    const updater = store.updateDraft.mock.calls[0]?.[1] as (
-      currentDraft: OrganicCalendarDraft,
-    ) => OrganicCalendarDraft;
-    expect(updater(draft).platforms).toEqual(['linkedin']);
     expect(onSelect).toHaveBeenCalledWith('draft-1');
+    expect(store.updateDraft).not.toHaveBeenCalled();
+    expect(requestCalls).toHaveLength(0);
   });
 
   it('retry generation action calls onRegenerate', () => {
@@ -263,6 +300,114 @@ describe('CalendarDraftCard', () => {
     ) => OrganicCalendarDraft;
     expect(updater(draft).timeLabel).toBe('1:00 PM');
     expect(onSelect).toHaveBeenCalledWith('draft-1');
+  });
+
+  it('saves a time preset on a draft with a row through the field route, on its own day', async () => {
+    const saved = { ...draft, backendDraftId: 'srv-1', updatedAt: 'T0' };
+    storeDays.push({ ...makeCalendarDay('2030-01-07'), slots: [saved] });
+    render(
+      <CalendarDraftCard
+        draft={saved}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText('Time: 1:00 PM')[0]);
+
+    await waitFor(() => expect(requestCalls).toHaveLength(1));
+    expect(requestCalls[0]).toMatchObject({
+      path: '/api/organic/calendar/drafts/srv-1/fields',
+      method: 'PATCH',
+      body: { dayId: '2030-01-07', timeOfDay: '13:00', expected_updated_at: 'T0' },
+    });
+  });
+
+  // C7 / end state 8-9: one card per group, saying every platform it goes to and the account.
+  describe('a grouped card', () => {
+    const grouped: OrganicCalendarDraft = {
+      ...draft,
+      backendDraftId: 'srv-1',
+      groupId: 'group-1',
+      targetAccountId: ACCOUNT_ID,
+      platforms: ['instagram', 'tiktok'],
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: ACCOUNT_ID },
+        {
+          backendDraftId: 'srv-2',
+          platform: 'tiktok',
+          status: 'draft',
+          accountId: null,
+          draft: {
+            ...draft,
+            id: 'draft-1::tiktok',
+            backendDraftId: 'srv-2',
+            platforms: ['tiktok'],
+          },
+        },
+      ],
+    };
+
+    it('carries the contract attributes the benches read', () => {
+      const { container } = render(
+        <CalendarDraftCard
+          draft={grouped}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      const card = container.querySelector('[data-draft-card]');
+      expect(card?.getAttribute('data-group-id')).toBe('group-1');
+      expect(card?.getAttribute('data-backend-draft-id')).toBe('srv-1');
+    });
+
+    it('shows one brand mark per platform and the account by handle, never its id', () => {
+      const { container } = render(
+        <CalendarDraftCard
+          draft={grouped}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      const platforms = container.querySelector('[data-card-platforms]');
+      expect(platforms?.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+      expect(platforms?.textContent).toContain('Instagram, TikTok');
+      expect(container.querySelector('[data-card-account]')?.textContent).toBe('@acme_a');
+      expect(container.textContent).not.toContain(ACCOUNT_ID);
+    });
+
+    it('offers to publish every platform of the group', () => {
+      render(
+        <CalendarDraftCard
+          draft={{ ...grouped, publishingAssets: [] }}
+          isSelected={false}
+          isMultiSelected={false}
+          onSelect={mock()}
+          onToggleSelection={mock()}
+        />,
+      );
+      expect(screen.getByText(/^Publish to 2 platforms/)).toBeTruthy();
+    });
+  });
+
+  // K8: the card shows the caption that gets sent, hashtags included.
+  it('shows the caption its first platform receives, hashtags included', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, hashtags: { high: ['#launch'], medium: [], low: [] } }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+    expect(container.textContent).toContain('#launch');
   });
 
   it('exposes a custom time picker entry that defers mutation to the popover', () => {
@@ -405,6 +550,171 @@ describe('CalendarDraftCard', () => {
 
     fireEvent.mouseEnter(cardButton);
     expect(onMouseEnter).toHaveBeenCalledTimes(1);
+  });
+
+  // The compact card is a container query, not a prop (a prop would re-render every memoised
+  // week cell). What the test DOM can prove is the contract the query switches between: the
+  // card is its own size container, the compact line names the status and format, and the
+  // detail block it folds away is one element.
+  it('is a size container whose compact line names the status and the format', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, format: 'Reel' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.className).toContain('@container/draft-card');
+    const compactLine = card?.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.textContent).toContain('Reel');
+    expect(compactLine?.querySelector('[title]')).toBeTruthy();
+    const detail = screen
+      .getByText('Caption text')
+      .closest('[class*="@max-[14rem]/draft-card:hidden"]');
+    expect(detail).toBeTruthy();
+  });
+
+  // A week column beside the preview is ~6rem of card. The time used to truncate there
+  // ("10:0…") while the decorative glyphs kept their room.
+  it('never shrinks the compact time: the format glyph, then the status dot, give way first', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, timeLabel: '12:45 PM', format: 'Reel' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const time = container.querySelector('[data-card-time]');
+    expect(time?.textContent).toBe('12:45 PM');
+    expect(time?.className).toContain('shrink-0');
+    expect(time?.className).toContain('whitespace-nowrap');
+    expect(time?.className).toContain('tabular-nums');
+    expect(time?.className).not.toContain('truncate');
+    const compactLine = container.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.querySelector('svg')?.getAttribute('class')).toContain(
+      '@max-[7rem]/draft-card:hidden',
+    );
+    expect(compactLine?.querySelector('[title]')?.className).toContain(
+      '@max-[5.5rem]/draft-card:hidden',
+    );
+    // The dot can go; the status it names cannot.
+    expect(compactLine?.textContent).toContain('Draft');
+  });
+
+  it('keeps a status strip and a needs-media marker on a compact draft that has no media', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, mediaSuggestion: { mediaStatus: 'pending' } }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.querySelector('[class*="@max-[14rem]/draft-card:block"]')).toBeTruthy();
+    const compactLine = card?.querySelector('[class*="@max-[14rem]/draft-card:inline-flex"]');
+    expect(compactLine?.querySelector('[title="Needs media"]')?.textContent).toBe('Needs media');
+  });
+
+  it('shows no needs-media marker once the draft is scheduled', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'scheduled', mediaSuggestion: { mediaStatus: 'pending' } }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    expect(container.querySelector('[title="Needs media"]')).toBeNull();
+  });
+
+  it('keeps Retry on a failed card in the compact layout without selecting the card', () => {
+    const onRegenerate = mock((_id: string) => undefined);
+    const onSelect = mock((_id: string) => undefined);
+    render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'failed' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={onSelect}
+        onToggleSelection={mock()}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    const retry = screen.getByText('Retry');
+    expect(retry.closest('[class*="@max-[14rem]/draft-card:flex"]')).toBeTruthy();
+    fireEvent.click(retry);
+    expect(onRegenerate).toHaveBeenCalledWith('draft-1');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('outlines the selected card so a failed card ring cannot hide the selection', () => {
+    const { container } = render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'failed' }}
+        isSelected
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(card?.className).toContain('outline-2!');
+    expect(card?.className).toContain('outline-offset-1');
+    expect(card?.className).toContain('outline-primary!');
+    expect(card?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('makes its own button the drag activator, so the card is one tab stop', () => {
+    const activatorRef = mock((_node: HTMLElement | null) => undefined);
+    const { container } = render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        dragActivatorRef={activatorRef}
+        dragActivatorAttributes={{
+          'aria-roledescription': 'draggable',
+          'aria-describedby': 'dnd-instructions',
+        }}
+      />,
+    );
+
+    const card = container.querySelector('button[data-draft-id="draft-1"]');
+    expect(activatorRef).toHaveBeenCalledWith(card);
+    expect(card?.getAttribute('aria-roledescription')).toBe('draggable');
+    expect(card?.getAttribute('aria-describedby')).toBe('dnd-instructions');
+    expect(card?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps the hover-only Regenerate shortcut out of the tab order', () => {
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Regenerate draft').getAttribute('tabindex')).toBe('-1');
   });
 
   it("shows an explicit 'Text only' state for a pending draft with no media or storyboard", () => {

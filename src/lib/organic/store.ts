@@ -1,4 +1,5 @@
 import type { PublishPlatform } from '@continuum/contracts';
+import { replaceEqualDeep } from '@tanstack/react-query';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { makeCalendarDay } from '@/components/organic/primitives/calendar-utils';
@@ -6,6 +7,7 @@ import type {
   EventHistory,
   OrganicCalendarDay,
   OrganicCalendarDraft,
+  OrganicDraftGroupMember,
   StreamEvent,
 } from '@/components/organic/primitives/types';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
@@ -13,8 +15,88 @@ import * as storeRegistry from '@/lib/storage/storeRegistry';
 
 export type CalendarDateRange = { from: string; to: string };
 
+// Drafts are matched by id, not position: a save moves the edited row's updated_at, and the
+// server's order with it, so by position every draft after it on that day looked changed.
+function shareUnchangedDay(prior: OrganicCalendarDay, day: OrganicCalendarDay): OrganicCalendarDay {
+  const priorDrafts = new Map(prior.slots.map((slot) => [slot.id, slot]));
+  const slots = day.slots.map((slot) => {
+    const priorDraft = priorDrafts.get(slot.id);
+    return priorDraft ? replaceEqualDeep(priorDraft, slot) : slot;
+  });
+  const sameSlots =
+    slots.length === prior.slots.length &&
+    slots.every((slot, index) => slot === prior.slots[index]);
+  const sameFields = replaceEqualDeep(prior, { ...day, slots: prior.slots }) === prior;
+  if (sameSlots && sameFields) return prior;
+  return { ...day, slots: sameSlots ? prior.slots : slots };
+}
+
+/**
+ * `next`, with every day and draft that did not change swapped for the object `previous`
+ * already holds. A refetch builds the whole set anew from the server, so each save echo
+ * handed every memoised cell a new day and re-rendered the entire grid for one edited draft.
+ */
+function shareUnchangedDays(
+  previous: OrganicCalendarDay[],
+  next: OrganicCalendarDay[],
+): OrganicCalendarDay[] {
+  const priorById = new Map(previous.map((day) => [day.id, day]));
+  const shared = next.map((day) => {
+    const prior = priorById.get(day.id);
+    return prior ? shareUnchangedDay(prior, day) : day;
+  });
+  const unchanged =
+    shared.length === previous.length && shared.every((day, index) => day === previous[index]);
+  return unchanged ? previous : shared;
+}
+
 /** One of the brand's connected accounts on a platform, as offered by the planner's switcher. */
-export type PlannerAccountOption = { id: string; label: string };
+export type PlannerAccountOption = {
+  id: string;
+  label: string;
+  handle?: string | null;
+  avatarUrl?: string | null;
+  needsReauth?: boolean;
+};
+
+/**
+ * `slot` with `updater` applied to the draft whose id is `draftId` — the card itself or one of
+ * its members' drafts. The same slot object when neither matches.
+ */
+function updateSlotDraft(
+  slot: OrganicCalendarDraft,
+  draftId: string,
+  updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+): OrganicCalendarDraft {
+  // A member entry mirrors its row's account: a pick on a frame must reach it at once.
+  const mirror = (member: OrganicDraftGroupMember, draft: OrganicCalendarDraft) => ({
+    ...member,
+    status: draft.status,
+    accountId: draft.targetAccountId ?? member.accountId ?? null,
+  });
+  if (slot.id === draftId) {
+    const card = updater(slot);
+    if (!card.groupMembers) return card;
+    return {
+      ...card,
+      groupMembers: card.groupMembers.map((member) =>
+        !member.draft && member.backendDraftId === card.backendDraftId
+          ? mirror(member, card)
+          : member,
+      ),
+    };
+  }
+  const members = slot.groupMembers;
+  if (!members?.some((member) => member.draft?.id === draftId)) return slot;
+  return {
+    ...slot,
+    groupMembers: members.map((member) => {
+      if (member.draft?.id !== draftId) return member;
+      const draft = updater(member.draft);
+      return { ...mirror(member, draft), draft };
+    }),
+  };
+}
 
 export type GridSlot = {
   slotId: string;
@@ -125,6 +207,7 @@ export type DraftEditField =
   | 'schedule'
   | 'media'
   | 'platforms'
+  | 'account'
   | 'status'
   | 'publishOptions';
 
@@ -396,7 +479,8 @@ export const useCalendarStore = create<CalendarState>()(
       // Every write that changes WHAT the planner is looking at also un-hides it: a new
       // day set, a new timeframe, or a new view are all fresh things to see, and leaving
       // them hidden would look like the load failed.
-      setDays: (days) => set({ days, isViewCleared: false }),
+      setDays: (days) =>
+        set((state) => ({ days: shareUnchangedDays(state.days, days), isViewCleared: false })),
 
       markDraftEditPending: (draftId, fields) =>
         set((state) => {
@@ -428,13 +512,20 @@ export const useCalendarStore = create<CalendarState>()(
           return { pendingDraftEdits: next };
         }),
 
+      // Only the day holding the draft gets new arrays. Every memoised cell compares its day,
+      // so one caption keystroke used to hand all of them a fresh one; a miss changes nothing.
+      // A group member's draft is reached by its own id, so a frame edits its row unchanged.
       updateDraft: (draftId, updater) =>
-        set((state) => ({
-          days: state.days.map((day) => ({
-            ...day,
-            slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
-          })),
-        })),
+        set((state) => {
+          let matched = false;
+          const days = state.days.map((day) => {
+            const slots = day.slots.map((slot) => updateSlotDraft(slot, draftId, updater));
+            if (slots.every((slot, index) => slot === day.slots[index])) return day;
+            matched = true;
+            return { ...day, slots };
+          });
+          return matched ? { days } : state;
+        }),
 
       moveDraft: (draftId, targetDayId) =>
         set((state) => {
@@ -534,12 +625,18 @@ export const useCalendarStore = create<CalendarState>()(
         set((state) => {
           const draftIdSet = new Set(draftIds);
           // Collect the backend ids of the drafts being removed so the persistence
-          // layer can delete the server rows too (RLS allows any brand member).
+          // layer can delete the server rows too (RLS allows any brand member). A card is
+          // its whole group: every member row goes with it.
           const backendIdsToDelete: string[] = [];
           for (const day of state.days) {
             for (const slot of day.slots) {
-              if (draftIdSet.has(slot.id) && slot.backendDraftId) {
-                backendIdsToDelete.push(slot.backendDraftId);
+              if (!draftIdSet.has(slot.id)) continue;
+              const rowIds = [
+                slot.backendDraftId,
+                ...(slot.groupMembers ?? []).map((member) => member.backendDraftId),
+              ];
+              for (const rowId of rowIds) {
+                if (rowId && !backendIdsToDelete.includes(rowId)) backendIdsToDelete.push(rowId);
               }
             }
           }
@@ -590,7 +687,10 @@ export const useCalendarStore = create<CalendarState>()(
           return { selectedDraftIds: Array.from(next) };
         }),
 
-      clearDraftSelection: () => set({ selectedDraftIds: [] }),
+      // Every single-select click calls this; minting a fresh [] each time re-rendered
+      // every cell that reads the multi-selection.
+      clearDraftSelection: () =>
+        set((state) => (state.selectedDraftIds.length > 0 ? { selectedDraftIds: [] } : state)),
 
       toggleTrend: (trendId, maxSelections = 5) =>
         set((state) => {
@@ -820,6 +920,17 @@ export const useCalendarStore = create<CalendarState>()(
               : sourceDraft.dateLabel,
             seedTrendId: undefined,
             targetAccountId: undefined,
+            // A copy is one new row on the card's own platform; the group's other rows stay theirs.
+            platforms: [
+              sourceDraft.groupMembers?.find(
+                (member) => member.backendDraftId === sourceDraft.backendDraftId,
+              )?.platform ??
+                sourceDraft.platforms[0] ??
+                'instagram',
+            ],
+            groupId: undefined,
+            groupMembers: undefined,
+            planSource: undefined,
             generationError: undefined,
             generationAttempts: undefined,
             instagram_post_id: undefined,

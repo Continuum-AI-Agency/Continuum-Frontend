@@ -13,6 +13,7 @@ mock.module('@/components/ui/dropdown-menu', () => ({
     <>{render ?? children}</>
   ),
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuSeparator: () => <hr />,
   DropdownMenuItem: ({
@@ -44,100 +45,73 @@ import { PostCommandMenu } from './PostCommandMenu';
 describe('PostCommandMenu', () => {
   beforeEach(() => cleanup());
 
+  const base = () => ({
+    onEditCreativeDirection: mock(),
+    onEditHashtags: mock(),
+    onShowDetails: mock(),
+    onDelete: mock(),
+  });
+
   it('fires the editor-open callbacks', () => {
-    const onEditCreativeDirection = mock();
-    const onEditHashtags = mock();
-    render(
-      <PostCommandMenu
-        onEditCreativeDirection={onEditCreativeDirection}
-        onEditHashtags={onEditHashtags}
-        onDelete={mock()}
-      />,
-    );
+    const props = base();
+    const onPlatformOptions = mock();
+    render(<PostCommandMenu {...props} onPlatformOptions={onPlatformOptions} />);
     fireEvent.click(screen.getByText('Creative direction'));
-    expect(onEditCreativeDirection).toHaveBeenCalledTimes(1);
+    expect(props.onEditCreativeDirection).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText('Hashtags'));
-    expect(onEditHashtags).toHaveBeenCalledTimes(1);
+    expect(props.onEditHashtags).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('Platform options'));
+    expect(onPlatformOptions).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('Details'));
+    expect(props.onShowDetails).toHaveBeenCalledTimes(1);
   });
 
   it('fires delete', () => {
-    const onDelete = mock();
-    render(
-      <PostCommandMenu
-        onEditCreativeDirection={mock()}
-        onEditHashtags={mock()}
-        onDelete={onDelete}
-      />,
-    );
+    const props = base();
+    render(<PostCommandMenu {...props} />);
     fireEvent.click(screen.getByText('Delete draft'));
-    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(props.onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it('disables Approve & schedule when not schedulable', () => {
+  // The footer owns Approve and Publish. A second copy in the menu is the duplication the
+  // header redesign removed; this fails if either comes back.
+  it('never offers Approve or Publish', () => {
     render(
       <PostCommandMenu
-        onEditCreativeDirection={mock()}
-        onEditHashtags={mock()}
-        onApproveSchedule={mock()}
-        canSchedule={false}
-        onDelete={mock()}
+        {...base()}
+        onOpenInStudio={{ label: 'Open in AI Studio', onSelect: mock() }}
+        mediaAction={{ label: 'Generate media', onSelect: mock() }}
+        onMoveBackToDraft={mock()}
       />,
     );
-    const approve = screen.getByText('Approve & schedule').closest('button') as HTMLButtonElement;
-    expect(approve.disabled).toBe(true);
+    expect(screen.queryByText(/approve/i)).toBeNull();
+    expect(screen.queryByText(/publish/i)).toBeNull();
   });
 
-  it('hides Publish unless canPublish', () => {
-    const { rerender } = render(
-      <PostCommandMenu
-        onEditCreativeDirection={mock()}
-        onEditHashtags={mock()}
-        onDelete={mock()}
-      />,
-    );
-    expect(screen.queryByText('Publish to Instagram')).toBeNull();
-
-    const onPublish = mock();
-    rerender(
-      <PostCommandMenu
-        onEditCreativeDirection={mock()}
-        onEditHashtags={mock()}
-        onDelete={mock()}
-        canPublish
-        publishPlatformLabel="TikTok"
-        onPublish={onPublish}
-      />,
-    );
-    // The label names the draft's platform; it used to say Instagram for every draft.
-    expect(screen.queryAllByText('Publish to Instagram').length).toBe(0);
-    fireEvent.click(screen.getByText('Publish to TikTok'));
-    expect(onPublish).toHaveBeenCalledTimes(1);
-  });
-
-  // M-16: only the preview footer checked readiness, so this menu offered a publish that
-  // usePublishDraft now refuses. The refusal has to be visible before the click.
-  it('disables Publish with the reason when the draft is not ready', () => {
-    const onPublish = mock();
+  it('shows why a create action is unavailable, as text in the item', () => {
+    const onSelect = mock();
     render(
       <PostCommandMenu
-        onEditCreativeDirection={mock()}
-        onEditHashtags={mock()}
-        onDelete={mock()}
-        canPublish
-        publishPlatformLabel="Instagram"
-        onPublish={onPublish}
-        publishBlockedReason="Add a caption and at least one image or video to schedule this post."
+        {...base()}
+        mediaAction={{
+          label: 'Generate media',
+          onSelect,
+          disabledReason: 'Save the draft first.',
+        }}
       />,
     );
-
-    const item = screen
-      .getByText('Publish to Instagram — needs setup')
-      .closest('button') as HTMLButtonElement;
+    const item = screen.getByText('Generate media').closest('button') as HTMLButtonElement;
     expect(item.disabled).toBe(true);
-    expect(item.title).toContain('Add a caption');
+    expect(item.textContent).toContain('Save the draft first.');
+  });
 
-    fireEvent.click(item);
-    expect(onPublish).not.toHaveBeenCalled();
+  it('offers Move back to draft only when the parent passes it', () => {
+    const { rerender } = render(<PostCommandMenu {...base()} />);
+    expect(screen.queryByText('Move back to draft')).toBeNull();
+    const onMoveBackToDraft = mock();
+    rerender(<PostCommandMenu {...base()} onMoveBackToDraft={onMoveBackToDraft} />);
+    fireEvent.click(screen.getByText('Move back to draft'));
+    expect(onMoveBackToDraft).toHaveBeenCalledTimes(1);
   });
 
   // L-03: Duplicate existed on the calendar card but not here, so an editorial calendar's
@@ -148,6 +122,7 @@ describe('PostCommandMenu', () => {
       <PostCommandMenu
         onEditCreativeDirection={mock()}
         onEditHashtags={mock()}
+        onShowDetails={mock()}
         onDelete={mock()}
         onDuplicate={onDuplicate}
       />,
@@ -179,6 +154,7 @@ describe('PostCommandMenu', () => {
       <PostCommandMenu
         onEditCreativeDirection={mock()}
         onEditHashtags={mock()}
+        onShowDetails={mock()}
         onDelete={mock()}
       />,
     );

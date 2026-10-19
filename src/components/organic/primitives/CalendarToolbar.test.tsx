@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as rtlRender } from '@testing-library/react';
 import * as lucideIcons from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -169,6 +170,14 @@ function defaultProps(overrides?: Partial<CalendarToolbarProps>): CalendarToolba
     ...overrides,
   };
 }
+
+// The toolbar's account switcher reads the brand's accounts through React Query.
+const render = (ui: ReactNode) =>
+  rtlRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+    ),
+  });
 
 afterEach(() => cleanup());
 

@@ -1,7 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
 import { act, renderHook } from '@testing-library/react';
+import { ApiError } from '@/lib/api/errors';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
+
+// The media write goes through the real field-persistence hook; only the HTTP edge is
+// faked, so the CAS token and the body it carries are the ones production would send.
+type RequestOptions = { path: string; method?: string; body?: Record<string, unknown> };
+const requestCalls: RequestOptions[] = [];
+let requestImpl: (opts: RequestOptions) => Promise<unknown> = async () => ({});
+const request = mock((opts: RequestOptions) => {
+  requestCalls.push(opts);
+  return requestImpl(opts);
+});
 
 // Intercept store so tests don't need a full Zustand provider.
 // The shared stub answers unnamed keys with a no-op. mock.module is process-wide, so a
@@ -37,22 +48,30 @@ let useDraftMediaPlacement: (
 ) => ReturnType<typeof import('./useDraftMediaPlacement').useDraftMediaPlacement>;
 let useCalendarStore: ReturnType<typeof mock> & {
   defaultImplementation: (s: (x: unknown) => unknown) => unknown;
+  getState: () => unknown;
 };
+let stubGetState: () => unknown;
+let previousHttp: Record<string, unknown>;
 
 beforeAll(async () => {
   mock.restore();
   mock.module('@/lib/organic/store', () => createCalendarStoreStub());
+  previousHttp = { ...(await import('@/lib/api/http')) };
+  mock.module('@/lib/api/http', () => ({ request, http: { request } }));
   const hookMod = await import('./useDraftMediaPlacement');
   const storeMod = await import('@/lib/organic/store');
   useDraftMediaPlacement = hookMod.useDraftMediaPlacement;
   useCalendarStore = storeMod.useCalendarStore as typeof useCalendarStore;
+  stubGetState = useCalendarStore.getState;
 });
 
 // This file drives the shared stub with mockImplementation. mock.module is process-wide,
 // so leaving that implementation in place hands every later spec a store whose selectors
-// return this file's fixture instead of their own.
+// return this file's fixture instead of their own. Same for getState and the http module.
 afterAll(() => {
   useCalendarStore.mockImplementation(useCalendarStore.defaultImplementation);
+  useCalendarStore.getState = stubGetState;
+  mock.module('@/lib/api/http', () => previousHttp);
 });
 
 function makeImageAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
@@ -98,6 +117,11 @@ describe('useDraftMediaPlacement', () => {
   beforeEach(() => {
     capturedUpdater = null;
     toastCalls.length = 0;
+    requestCalls.length = 0;
+    requestImpl = async () => ({});
+    request.mockClear();
+    // The save reads the draft back from the store at send time, as production does.
+    useCalendarStore.getState = () => ({ days: [{ id: 'day-1', slots: [storedDraft] }] });
     storedDraft = {
       id: 'draft-1',
       mediaSuggestion: { mediaStatus: 'pending' },
@@ -615,5 +639,327 @@ describe('useDraftMediaPlacement', () => {
     });
 
     expect((storedDraft as { format: string }).format).toBe('Reel');
+  });
+  describe('media save ordering', () => {
+    const T0 = '2030-08-01T00:00:00.000Z';
+    const T1 = '2030-08-01T00:00:01.000Z';
+    const T2 = '2030-08-01T00:00:02.000Z';
+
+    beforeEach(() => {
+      storedDraft = {
+        id: 'draft-1',
+        backendDraftId: 'srv-1',
+        updatedAt: T0,
+        mediaStage: 'text_only',
+        mediaSuggestion: { mediaStatus: 'pending' },
+        publishingAssets: [],
+      };
+    });
+
+    function sentMedia(call: RequestOptions) {
+      return call.body?.media as { publishingAssets: Array<{ storagePath: string }> };
+    }
+
+    // Two placements fired back to back used to race: the second PATCH carried the
+    // updatedAt the first one had already consumed, and the CAS token 409'd it.
+    it('serializes saves: the second waits for the first and sends the fresh updatedAt', async () => {
+      let releaseFirst: (value: unknown) => void = () => undefined;
+      requestImpl = () =>
+        requestCalls.length === 1
+          ? new Promise((resolve) => {
+              releaseFirst = resolve;
+            })
+          : Promise.resolve({ updated_at: T2 });
+
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+      await act(async () => {
+        result.current.place([makeImageAsset()], { kind: 'single' });
+      });
+
+      expect(requestCalls).toHaveLength(1);
+      expect(requestCalls[0].body?.expected_updated_at).toBe(T0);
+      expect(result.current.isSavingMedia).toBe(true);
+
+      await act(async () => {
+        result.current.addSlide(makeImageAsset({ id: 'a2', storagePath: 'p2.jpg' }));
+      });
+      // Still one request: the second save is queued behind the first.
+      expect(requestCalls).toHaveLength(1);
+
+      let flushed: boolean | null = null;
+      await act(async () => {
+        const flush = result.current.flushMedia();
+        releaseFirst({ updated_at: T1 });
+        flushed = await flush;
+      });
+
+      expect(flushed).toBe(true);
+      expect(requestCalls).toHaveLength(2);
+      expect(requestCalls[1].body?.expected_updated_at).toBe(T1);
+      expect(sentMedia(requestCalls[1]).publishingAssets.map((a) => a.storagePath)).toEqual([
+        'brands/brand-1/img.jpg',
+        'p2.jpg',
+      ]);
+      expect(result.current.isSavingMedia).toBe(false);
+      expect((storedDraft as { updatedAt: string }).updatedAt).toBe(T2);
+    });
+
+    it('writes the server updatedAt and a refreshed mediaStage into the store', async () => {
+      requestImpl = async () => ({ updated_at: T1 });
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+      await act(async () => {
+        result.current.place([makeImageAsset()], { kind: 'single' });
+        await result.current.flushMedia();
+      });
+
+      const draft = storedDraft as { updatedAt: string; mediaStage: string };
+      expect(draft.updatedAt).toBe(T1);
+      // A stored 'text_only' outranks derivation, so leaving it would keep the
+      // "generate media" affordances up on a draft that now has media.
+      expect(draft.mediaStage).toBe('realized');
+    });
+
+    it('flushMedia resolves false, restores the media and toasts when the save fails', async () => {
+      requestImpl = async () => {
+        throw new ApiError('stale', 409);
+      };
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+      let flushed: boolean | null = null;
+      await act(async () => {
+        result.current.place([makeImageAsset()], { kind: 'single' });
+        flushed = await result.current.flushMedia();
+      });
+
+      expect(flushed).toBe(false);
+      const draft = storedDraft as {
+        publishingAssets: unknown[];
+        mediaStage: string;
+        mediaSuggestion: { mediaStatus: string };
+      };
+      expect(draft.publishingAssets).toEqual([]);
+      expect(draft.mediaSuggestion.mediaStatus).toBe('pending');
+      expect(draft.mediaStage).toBe('text_only');
+      expect(toastCalls).toEqual([expect.objectContaining({ title: 'Media not saved' })]);
+      expect(result.current.isSavingMedia).toBe(false);
+    });
+
+    it('does not send a queued save once an earlier one in the batch failed', async () => {
+      let rejectFirst: (error: unknown) => void = () => undefined;
+      requestImpl = () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject;
+        });
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+      await act(async () => {
+        result.current.place([makeImageAsset()], { kind: 'single' });
+      });
+      await act(async () => {
+        result.current.addSlide(makeImageAsset({ id: 'a2', storagePath: 'p2.jpg' }));
+      });
+
+      let flushed: boolean | null = null;
+      await act(async () => {
+        const flush = result.current.flushMedia();
+        rejectFirst(new ApiError('stale', 409));
+        flushed = await flush;
+      });
+
+      expect(flushed).toBe(false);
+      // The rollback put the server's media back on screen; re-sending would only 409 again.
+      expect(requestCalls).toHaveLength(1);
+      expect((storedDraft as { publishingAssets: unknown[] }).publishingAssets).toEqual([]);
+    });
+
+    it('flushMedia resolves true at once when nothing is pending', async () => {
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+      expect(await result.current.flushMedia()).toBe(true);
+      expect(result.current.isSavingMedia).toBe(false);
+    });
+  });
+
+  // A single-image post carries no slideIndex. Appending used to give the new image
+  // slideIndex 1 while the original stayed unindexed — sorted as 999, i.e. LAST.
+  it('addSlide() grows a one-image post into a carousel with the original first', async () => {
+    for (const slideIndex of [undefined, null, 0]) {
+      storedDraft = {
+        id: 'draft-1',
+        mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
+        publishingAssets: [
+          { role: 'primary', kind: 'image', slideIndex, storagePath: 'first.jpg', storageUrl: 'u' },
+        ],
+      };
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+      await act(async () => {
+        result.current.addSlide(makeImageAsset({ id: 'a2', storagePath: 'second.jpg' }));
+      });
+
+      const draft = storedDraft as {
+        publishingAssets: Array<{ slideIndex: number | null; storagePath: string }>;
+      };
+      expect(draft.publishingAssets.map((a) => [a.storagePath, a.slideIndex])).toEqual([
+        ['first.jpg', 0],
+        ['second.jpg', 1],
+      ]);
+    }
+  });
+
+  // Gating #3: appending to a one-image Post used to leave it a Post, so the plan sent the
+  // first image and dropped the rest.
+  it('addSlide() makes a one-image post a carousel in the same save as its media', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      backendDraftId: 'srv-1',
+      updatedAt: '2030-01-01T00:00:00.000Z',
+      format: 'Post',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
+      publishingAssets: [
+        { role: 'primary', kind: 'image', storagePath: 'first.jpg', storageUrl: 'u' },
+      ],
+    };
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    await act(async () => {
+      result.current.addSlide(makeImageAsset({ id: 'a2', storagePath: 'second.jpg' }));
+      await result.current.flushMedia();
+    });
+
+    expect(storedDraft.format).toBe('Carousel');
+    expect(requestCalls).toHaveLength(1);
+    expect(requestCalls[0]?.body).toMatchObject({
+      format: 'Carousel',
+      media: { publishingAssets: [{ storagePath: 'first.jpg' }, { storagePath: 'second.jpg' }] },
+    });
+  });
+
+  it('addSlide() leaves a carousel format alone and sends no format', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      backendDraftId: 'srv-1',
+      updatedAt: '2030-01-01T00:00:00.000Z',
+      format: 'Carousel',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
+      publishingAssets: [
+        { role: 'primary', kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'u' },
+        { role: 'primary', kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'u' },
+      ],
+    };
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    await act(async () => {
+      result.current.addSlide(makeImageAsset({ id: 'a3', storagePath: 'c.jpg' }));
+      await result.current.flushMedia();
+    });
+
+    expect(storedDraft.format).toBe('Carousel');
+    expect(requestCalls[0]?.body).not.toHaveProperty('format');
+  });
+
+  it('a failed save undoes the carousel switch with the media', async () => {
+    requestImpl = async () => {
+      throw new Error('down');
+    };
+    storedDraft = {
+      id: 'draft-1',
+      backendDraftId: 'srv-1',
+      updatedAt: '2030-01-01T00:00:00.000Z',
+      format: 'Post',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'image' },
+      publishingAssets: [
+        { role: 'primary', kind: 'image', storagePath: 'first.jpg', storageUrl: 'u' },
+      ],
+    };
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    await act(async () => {
+      result.current.addSlide(makeImageAsset({ id: 'a2', storagePath: 'second.jpg' }));
+      await result.current.flushMedia();
+    });
+
+    expect(storedDraft.format).toBe('Post');
+    expect((storedDraft.publishingAssets as unknown[]).length).toBe(1);
+  });
+
+  it('gives unindexed slides explicit indexes after the last indexed slide', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: null, storagePath: 'z.jpg', storageUrl: 'z' },
+        { kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'b' },
+        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: 'a' },
+      ],
+    };
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+    await act(async () => {
+      result.current.addSlide(makeImageAsset({ id: 'n', storagePath: 'n.jpg' }));
+    });
+
+    const draft = storedDraft as {
+      publishingAssets: Array<{ slideIndex: number; storagePath: string }>;
+    };
+    expect(draft.publishingAssets.map((a) => [a.storagePath, a.slideIndex])).toEqual([
+      ['a.jpg', 0],
+      ['b.jpg', 1],
+      ['z.jpg', 2],
+      ['n.jpg', 3],
+    ]);
+  });
+
+  // storagePath/bucket is the durable identity; storageUrl is a transient signature the
+  // backend re-mints. No slide op may treat an empty one as "no slide".
+  it('never drops a slide whose storageUrl is empty', async () => {
+    storedDraft = {
+      id: 'draft-1',
+      mediaSuggestion: { mediaStatus: 'user_supplied', kind: 'carousel' },
+      publishingAssets: [
+        { kind: 'image', slideIndex: 0, storagePath: 'a.jpg', storageUrl: '' },
+        { kind: 'image', slideIndex: 1, storagePath: 'b.jpg', storageUrl: 'b' },
+        { kind: 'image', slideIndex: 2, storagePath: 'c.jpg', storageUrl: 'c' },
+      ],
+    };
+    const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+    const unsigned = { signedUrl: undefined, bucket: 'media-library' };
+    const paths = () =>
+      (
+        storedDraft as { publishingAssets: Array<{ storagePath: string; slideIndex: number }> }
+      ).publishingAssets
+        .slice()
+        .sort((x, y) => x.slideIndex - y.slideIndex)
+        .map((a) => a.storagePath);
+
+    await act(async () => {
+      result.current.reorderSlides(0, 2);
+    });
+    expect(paths()).toEqual(['b.jpg', 'c.jpg', 'a.jpg']);
+
+    await act(async () => {
+      result.current.removeSlide(0);
+    });
+    expect(paths()).toEqual(['c.jpg', 'a.jpg']);
+
+    await act(async () => {
+      result.current.replaceSlide(0, makeImageAsset({ storagePath: 'r.jpg', ...unsigned }));
+    });
+    expect(paths()).toEqual(['r.jpg', 'a.jpg']);
+
+    await act(async () => {
+      result.current.addSlide(makeImageAsset({ id: 'n', storagePath: 'n.jpg', ...unsigned }));
+    });
+    expect(paths()).toEqual(['r.jpg', 'a.jpg', 'n.jpg']);
+
+    const assets = (
+      storedDraft as {
+        publishingAssets: Array<{ storagePath: string; bucket?: string; storageUrl: string }>;
+      }
+    ).publishingAssets;
+    expect(assets.find((a) => a.storagePath === 'n.jpg')).toMatchObject({
+      bucket: 'media-library',
+      storageUrl: '',
+    });
   });
 });

@@ -1,8 +1,21 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, screen } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
-import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicCalendarPostedContent } from './types';
+
+// The cards name their posting account through React Query; no brand is set, so it stays idle.
+const queryClient = new QueryClient();
+function QueryWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+const render = (ui: ReactElement) => renderInDom(ui, { wrapper: QueryWrapper });
+
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
+} from './types';
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
 // @testing-library/dom's querySelectorAll internals.
@@ -23,19 +36,27 @@ mock.module('@dnd-kit/core', () => ({
 }));
 
 // The drag handle is stubbed so the spec can put the chip INTO a drag without a real
-// pointer sequence; `isDragging` is what the click guard reads.
+// pointer sequence; `isDragging` is what the click guard reads. The raw `attributes` carry
+// dnd-kit's role and tabIndex, so a chip that spread them on its wrapper would show it.
 let isDragging = false;
 mock.module('./useDraftDragHandle', () => ({
   useDraftDragHandle: () => ({
     setNodeRef: () => undefined,
     listeners: {},
-    attributes: {},
+    attributes: { role: 'button', tabIndex: 0, 'aria-roledescription': 'draggable' },
+    setActivatorNodeRef: () => undefined,
+    activatorAttributes: {
+      'aria-roledescription': 'draggable',
+      'aria-describedby': 'dnd-instructions',
+    },
     isDragging,
     style: {},
   }),
 }));
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub({}));
+// The month grid imports metricsPostHref from the week cell; the cell's card is not under test.
+mock.module('./DraggableDraftCard', () => ({ DraggableDraftCard: () => null }));
 
 mock.module('./AddPostMenu', () => ({
   AddPostMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -47,9 +68,19 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 mock.module('./PostedContentQuickLook', () => ({
-  PostedContentPreview: ({ onViewMetrics }: { onViewMetrics?: () => void }) => (
-    <div>
-      {onViewMetrics && <button type="button" onClick={onViewMetrics}>View post metrics</button>}
+  PostedContentPreview: ({
+    onViewMetrics,
+    brandName,
+  }: {
+    onViewMetrics?: () => void;
+    brandName?: string;
+  }) => (
+    <div data-testid="posted-preview" data-brand-name={brandName}>
+      {onViewMetrics && (
+        <button type="button" onClick={onViewMetrics}>
+          View post metrics
+        </button>
+      )}
     </div>
   ),
 }));
@@ -114,6 +145,8 @@ function renderMonth(
     onToggleSelection?: (id: string) => void;
     onToday?: () => void;
     postedContent?: OrganicCalendarPostedContent[];
+    brandName?: string;
+    selectedPostId?: string | null;
   } = {},
 ) {
   render(
@@ -122,8 +155,10 @@ function renderMonth(
       monthAnchorDate={ANCHOR}
       platforms={[]}
       postedContent={overrides.postedContent ?? []}
+      brandName={overrides.brandName}
       selectedDraftId={null}
       selectedDraftIds={overrides.selectedDraftIds}
+      selectedPostId={overrides.selectedPostId}
       onSelectDraft={overrides.onSelectDraft ?? NOOP}
       onSelectPost={overrides.onSelectPost ?? NOOP}
       onToggleSelection={overrides.onToggleSelection}
@@ -170,6 +205,19 @@ describe('OrganicMonthlyCalendar drag and drop', () => {
 
     fireEvent.click(chip());
     expect(onSelectDraft).toHaveBeenCalledWith('draft-1');
+  });
+
+  // The wrapper used to take dnd-kit's role="button" + tabIndex=0, so Tab stopped on a
+  // nameless wrapper and then on the chip: two stops per chip.
+  it('is one tab stop: the chip button carries the drag semantics, the wrapper none', () => {
+    renderMonth();
+
+    const wrapper = chip().parentElement;
+    expect(wrapper?.getAttribute('role')).toBeNull();
+    expect(wrapper?.getAttribute('tabindex')).toBeNull();
+    expect(wrapper?.getAttribute('aria-roledescription')).toBeNull();
+    expect(chip().getAttribute('aria-roledescription')).toBe('draggable');
+    expect(chip().getAttribute('aria-describedby')).toBe('dnd-instructions');
   });
 
   it('does NOT select when the click is the tail of a drag', () => {
@@ -277,10 +325,35 @@ describe('OrganicMonthlyCalendar day access', () => {
       onSelectPost,
     });
     fireEvent.click(screen.getByTitle('Published launch'));
-    expect(onSelectPost).toHaveBeenCalledWith(post, '?tab=metrics&platform=instagram&accountId=account-1&postId=media-1');
+    expect(onSelectPost).toHaveBeenCalledWith(
+      post,
+      '?tab=metrics&platform=instagram&accountId=account-1&postId=media-1',
+    );
     expect(routerPush).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'View post metrics' }));
     expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the brand in the published post hover preview', () => {
+    renderMonth({
+      slots: [],
+      brandName: 'Pink Elephant',
+      postedContent: [
+        {
+          id: 'post-1',
+          source: 'published_posts',
+          platform: 'instagram',
+          timestamp: '2026-08-03T15:00:00Z',
+          dayId: DAY_ID,
+          timeLabel: '9:00 AM',
+          title: 'Published launch',
+        },
+      ],
+    });
+
+    expect(screen.getByTestId('posted-preview').getAttribute('data-brand-name')).toBe(
+      'Pink Elephant',
+    );
   });
 
   it('selects a published post for the side preview from the full day detail', () => {
@@ -288,17 +361,19 @@ describe('OrganicMonthlyCalendar day access', () => {
     const onSelectPost = mock();
     renderMonth({
       slots: Array.from({ length: 5 }, (_, i) => draft({ id: `draft-${i}`, title: `Post ${i}` })),
-      postedContent: [{
-        id: 'post-1',
-        source: 'published_posts',
-        platform: 'instagram',
-        integrationAccountId: 'account-1',
-        externalPostId: 'media-1',
-        timestamp: '2026-08-03T15:00:00Z',
-        dayId: DAY_ID,
-        timeLabel: '9:00 AM',
-        title: 'Published launch',
-      }],
+      postedContent: [
+        {
+          id: 'post-1',
+          source: 'published_posts',
+          platform: 'instagram',
+          integrationAccountId: 'account-1',
+          externalPostId: 'media-1',
+          timestamp: '2026-08-03T15:00:00Z',
+          dayId: DAY_ID,
+          timeLabel: '9:00 AM',
+          title: 'Published launch',
+        },
+      ],
       onSelectPost,
     });
     fireEvent.click(screen.getByRole('button', { name: `Show all 6 posts for ${DAY_ID}` }));
@@ -308,5 +383,151 @@ describe('OrganicMonthlyCalendar day access', () => {
       '?tab=metrics&platform=instagram&accountId=account-1&postId=media-1',
     );
     expect(routerPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrganicMonthlyCalendar selection', () => {
+  beforeEach(() => {
+    cleanup();
+    registeredDroppableIds.length = 0;
+    isDragging = false;
+  });
+
+  const OTHER_DAY_ID = '2026-08-10';
+  // Built once: the claim is about a selection change, so the month's data must not move.
+  const MONTH_DAYS: OrganicCalendarDay[] = [
+    { id: DAY_ID, label: 'Mon', dateLabel: 'Aug 3', suggestedTimes: [], slots: [draft()] },
+    {
+      id: OTHER_DAY_ID,
+      label: 'Mon',
+      dateLabel: 'Aug 10',
+      suggestedTimes: [],
+      slots: [draft({ id: 'draft-2', title: 'Second post' })],
+    },
+  ];
+  const NO_POSTS: OrganicCalendarPostedContent[] = [];
+
+  function month(selectedDraftId: string | null) {
+    return (
+      <OrganicMonthlyCalendar
+        days={MONTH_DAYS}
+        monthAnchorDate={ANCHOR}
+        platforms={[]}
+        postedContent={NO_POSTS}
+        selectedDraftId={selectedDraftId}
+        selectedDraftIds={[]}
+        onSelectDraft={NOOP}
+        onSelectPost={NOOP}
+        onCreatePost={NOOP}
+        onPreviousMonth={NOOP}
+        onNextMonth={NOOP}
+        onToday={NOOP}
+      />
+    );
+  }
+
+  // Each cell mounts a context menu and a "+" menu; re-rendering all 35 on every click was
+  // ~1.3k component renders. Every cell render registers its droppable, so that log counts.
+  it('re-renders only the day cells the selection leaves and enters', () => {
+    const { rerender } = render(month(null));
+    registeredDroppableIds.length = 0;
+
+    rerender(month('draft-1'));
+    expect(registeredDroppableIds).toEqual([`planner-cell::${DAY_ID}`]);
+
+    registeredDroppableIds.length = 0;
+    rerender(month('draft-2'));
+    expect(registeredDroppableIds.sort()).toEqual([
+      `planner-cell::${DAY_ID}`,
+      `planner-cell::${OTHER_DAY_ID}`,
+    ]);
+  });
+
+  it('carries the card contract on a grouped chip, with every platform it goes to', () => {
+    cleanup();
+    renderMonth({
+      slots: [
+        draft({ backendDraftId: 'srv-1', groupId: 'group-1', platforms: ['tiktok', 'instagram'] }),
+      ],
+    });
+
+    expect(chip().getAttribute('data-draft-card')).toBe('');
+    expect(chip().getAttribute('data-group-id')).toBe('group-1');
+    expect(chip().getAttribute('data-backend-draft-id')).toBe('srv-1');
+    expect(chip().querySelector('[data-card-platforms]')?.textContent).toBe('Instagram, TikTok');
+  });
+
+  it('marks the chip with its draft id and pressed state, where focus can find it', () => {
+    render(month('draft-1'));
+
+    expect(chip().getAttribute('data-draft-id')).toBe('draft-1');
+    expect(chip().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTitle(/Second post/).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('names the published chip and the overflow button for focus return', () => {
+    renderMonth({
+      slots: Array.from({ length: 5 }, (_, i) => draft({ id: `draft-${i}`, title: `Post ${i}` })),
+      postedContent: [
+        {
+          id: 'post-1',
+          source: 'published_posts',
+          platform: 'instagram',
+          timestamp: '2026-08-03T15:00:00Z',
+          dayId: DAY_ID,
+          timeLabel: '9:00 AM',
+          title: 'Published launch',
+        },
+      ],
+    });
+
+    expect(screen.getByTitle('Published launch').getAttribute('data-post-id')).toBe('post-1');
+    expect(
+      screen
+        .getByRole('button', { name: `Show all 6 posts for ${DAY_ID}` })
+        .getAttribute('data-day-overflow'),
+    ).toBe(DAY_ID);
+  });
+});
+
+describe('OrganicMonthlyCalendar published chips', () => {
+  beforeEach(cleanup);
+
+  const published = (id: string, platform: string): OrganicCalendarPostedContent =>
+    ({
+      id,
+      source: 'published_posts',
+      platform,
+      timestamp: '2026-08-03T15:00:00Z',
+      dayId: DAY_ID,
+      timeLabel: '9:00 AM',
+      title: `${platform} post`,
+    }) as OrganicCalendarPostedContent;
+
+  it('presses the chip of the post open in the preview, and only that one', () => {
+    renderMonth({
+      slots: [],
+      postedContent: [published('post-1', 'instagram'), published('post-2', 'tiktok')],
+      selectedPostId: 'post-1',
+    });
+
+    expect(screen.getByTitle('instagram post').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTitle('tiktok post').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  // globals.css repaints any class containing `text-white` or `bg-slate-900` in the light
+  // theme, which left navy text on a pink chip and a TikTok chip the colour of a card.
+  it('colours chips with classes the light theme does not remap', () => {
+    renderMonth({
+      slots: [],
+      postedContent: ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube'].map((platform) =>
+        published(`post-${platform}`, platform),
+      ),
+    });
+
+    for (const button of document.querySelectorAll('[data-post-id]')) {
+      expect(button.className).not.toMatch(/text-white|bg-slate-|bg-gray-9|bg-black/);
+      expect(button.className).toContain('text-neutral-50');
+    }
   });
 });
