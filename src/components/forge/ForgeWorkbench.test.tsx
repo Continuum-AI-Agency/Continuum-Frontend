@@ -432,11 +432,11 @@ describe('ForgeWorkbench', () => {
       at(`?template=${ASSET}&hfRevision=revision-42&brand=${BRAND}`);
       renderWorkbench();
 
-      expect(await screen.findByTestId('hyperframes-seed-handoff')).toBeTruthy();
+      expect(await screen.findAllByTestId('hyperframes-seed-handoff')).toHaveLength(2);
       expect(screen.getByRole('tab', { name: 'Author' })).toBeTruthy();
       expect(screen.getByText('Source selected · Untitled template')).toBeTruthy();
-      expect(screen.getByText(/privately stage and verify the composition package/i)).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toBeTruthy();
+      expect(screen.getAllByText(/privately stage and verify the composition package/i)).toHaveLength(2);
+      expect(screen.getAllByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toHaveLength(1);
     });
 
     test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {

@@ -15,7 +15,7 @@ describe('layer history', () => {
   test('undoes and redoes edits, order, and exposure together; a new edit drops redo', () => {
     let history = createLayerHistory(empty);
     history = updateLayerHistory(history, {
-      edits: { 1: { layerId: 1, compId: 2, rotation: 45 } },
+      edits: { '2:1': { layerId: 1, compId: 2, rotation: 45 } },
       orders: { 2: [1, 3] },
       exposures: { headline: false },
     });
@@ -23,7 +23,7 @@ describe('layer history', () => {
     history = undoLayerHistory(history);
     expect(history.present).toEqual(empty);
     history = redoLayerHistory(history);
-    expect(history.present.edits[1]?.rotation).toBe(45);
+    expect(history.present.edits['2:1']?.rotation).toBe(45);
     history = undoLayerHistory(history);
     history = updateLayerHistory(history, { ...empty, exposures: { image: false } });
     expect(history.future).toHaveLength(0);
@@ -34,22 +34,23 @@ describe('layer history', () => {
     let history = createLayerHistory(empty);
     history = updateLayerHistory(
       history,
-      { ...empty, edits: { 1: { layerId: 1, compId: 2, position: [1, 0] } } },
+      { ...empty, edits: { '2:1': { layerId: 1, compId: 2, x: 1, y: 0 } } },
       'drag',
     );
     history = updateLayerHistory(
       history,
-      { ...empty, edits: { 1: { layerId: 1, compId: 2, position: [2, 0] } } },
+      { ...empty, edits: { '2:1': { layerId: 1, compId: 2, x: 2, y: 0 } } },
       'drag',
     );
     history = endLayerHistoryGroup(history);
     history = updateLayerHistory(
       history,
-      { ...empty, edits: { 1: { layerId: 1, compId: 2, position: [3, 0] } } },
+      { ...empty, edits: { '2:1': { layerId: 1, compId: 2, x: 3, y: 0 } } },
       'drag',
     );
     expect(history.past).toHaveLength(2);
-    expect(undoLayerHistory(history).present.edits[1]?.position).toEqual([2, 0]);
+    expect(undoLayerHistory(history).present.edits['2:1']?.x).toBe(2);
+    expect(undoLayerHistory(history).present.edits['2:1']?.y).toBe(0);
   });
 
   test('saving marks its snapshot as baseline and keeps later edits dirty and undoable', () => {
@@ -58,7 +59,7 @@ describe('layer history', () => {
     history = updateLayerHistory(history, saved);
     const afterRequestEdit = updateLayerHistory(history, {
       ...saved,
-      edits: { 1: { layerId: 1, compId: 2, rotation: 45 } },
+      edits: { '2:1': { layerId: 1, compId: 2, rotation: 45 } },
     });
     const next = markLayerHistorySaved(afterRequestEdit, saved);
     expect(isLayerHistoryDirty(next)).toBe(true);

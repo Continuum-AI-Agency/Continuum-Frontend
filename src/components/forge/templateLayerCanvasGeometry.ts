@@ -75,10 +75,8 @@ export function moveFrames(
   return frames.map(({ layer, position }) => ({
     compId: layer.compId,
     layerId: layer.layerId,
-    position: [
-      clamp(position[0] + dx, -100_000, 100_000),
-      clamp(position[1] + dy, -100_000, 100_000),
-    ],
+    x: clamp(position[0] + dx, -100_000, 100_000),
+    y: clamp(position[1] + dy, -100_000, 100_000),
   }));
 }
 
@@ -166,10 +164,8 @@ export function resizeFrames(
   return frames.map(({ layer, position, scale }) => ({
     compId: layer.compId,
     layerId: layer.layerId,
-    position: [
-      clamp(originX + (position[0] - originX) * sx, -100_000, 100_000),
-      clamp(originY + (position[1] - originY) * sy, -100_000, 100_000),
-    ],
+    x: clamp(originX + (position[0] - originX) * sx, -100_000, 100_000),
+    y: clamp(originY + (position[1] - originY) * sy, -100_000, 100_000),
     scale: [clamp(scale[0] * sx, -10_000, 10_000), clamp(scale[1] * sy, -10_000, 10_000)],
   }));
 }
@@ -195,10 +191,8 @@ export function rotateFrames(
     return {
       compId: layer.compId,
       layerId: layer.layerId,
-      position: [
-        clamp(pivot.x + x * cos - y * sin, -100_000, 100_000),
-        clamp(pivot.y + x * sin + y * cos, -100_000, 100_000),
-      ],
+      x: clamp(pivot.x + x * cos - y * sin, -100_000, 100_000),
+      y: clamp(pivot.y + x * sin + y * cos, -100_000, 100_000),
       rotation: clamp(rotation + delta, -36_000, 36_000),
     };
   });
@@ -223,10 +217,8 @@ export function alignFrames(
     return {
       compId: layer.compId,
       layerId: layer.layerId,
-      position: [
-        clamp(position[0] + dx, -100_000, 100_000),
-        clamp(position[1] + dy, -100_000, 100_000),
-      ],
+      x: clamp(position[0] + dx, -100_000, 100_000),
+      y: clamp(position[1] + dy, -100_000, 100_000),
     };
   });
 }

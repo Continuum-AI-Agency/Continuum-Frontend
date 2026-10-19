@@ -18,8 +18,10 @@ const {
   useCurrentMoves,
   useOptimizerMutations,
   useOptimizerPortfolios,
+  useOptimizerSuggestions,
   useRevertOptimizerAction,
 } = await import('./useOptimizerData');
+const { isRequestTimeout } = await import('@/lib/api/timeout');
 
 function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -293,6 +295,65 @@ describe('portfolio read critical path (fake timers)', () => {
   });
 });
 
+/** PP-L1-suggest-slower-than-read-timeout-reads-offline. optimizer-suggest reads the account's
+ *  ad sets from Meta live on a cache miss: measured 2026-10-17 against production, 8.1–10.6 s
+ *  cold (paid-media-metrics adset_snapshots alone 9.4 s) and 0.9–2.5 s warm; the deep test saw
+ *  13.0 s. Under the 8 s read bound the cold answer was thrown away and the wizard said the
+ *  service was offline. */
+describe('suggestions read (fake timers)', () => {
+  async function advanceUntil(done: () => boolean, limitMs: number): Promise<number> {
+    let elapsed = 0;
+    while (!done() && elapsed < limitMs) {
+      await act(async () => {
+        jest.advanceTimersByTime(100);
+      });
+      elapsed += 100;
+    }
+    return elapsed;
+  }
+
+  function answerAfter(ms: number, body: unknown) {
+    rpc.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ data: body, error: null }), ms)),
+    );
+  }
+
+  it('keeps waiting for a cold read that answers after the 8 s read bound', async () => {
+    jest.useFakeTimers();
+    try {
+      answerAfter(13_000, { suggestions: [], reason: 'all_cbo', diagnostics: null });
+      const { result } = renderHook(() => useOptimizerSuggestions(BRAND, 'act_1'), {
+        wrapper: createWrapper(),
+      });
+      await advanceUntil(() => !result.current.isLoading, 20_000);
+      expect(result.current.isError).toBe(false);
+      expect(result.current.data?.reason).toBe('all_cbo');
+    } finally {
+      rpc.mockReset();
+      rpc.mockImplementation(async () => ({ data: [], error: null }));
+      jest.useRealTimers();
+    }
+  });
+
+  it('still ends a read that never answers, as a timeout rather than an outage', async () => {
+    jest.useFakeTimers();
+    try {
+      rpc.mockImplementation(() => new Promise(() => {}));
+      const { result } = renderHook(() => useOptimizerSuggestions(BRAND, 'act_1'), {
+        wrapper: createWrapper(),
+      });
+      const elapsed = await advanceUntil(() => result.current.isError, 120_000);
+      expect(result.current.isError).toBe(true);
+      expect(isRequestTimeout(result.current.error)).toBe(true);
+      expect(elapsed).toBeLessThan(60_000);
+    } finally {
+      rpc.mockReset();
+      rpc.mockImplementation(async () => ({ data: [], error: null }));
+      jest.useRealTimers();
+    }
+  });
+});
+
 // The bug these exist to fence:
 //
 // RunCycleResponseSchema declared recommendations/applied/failed as ARRAYS and runId as a
@@ -519,8 +580,9 @@ describe('useCurrentMoves fails closed on the roster read', () => {
     await waitFor(
       () =>
         expect(
-          rpc.mock.calls.filter((call) => (call as unknown[])[0] === 'optimizer_list_portfolio_adsets')
-            .length,
+          rpc.mock.calls.filter(
+            (call) => (call as unknown[])[0] === 'optimizer_list_portfolio_adsets',
+          ).length,
         ).toBe(2),
       { timeout: 5_000 },
     );

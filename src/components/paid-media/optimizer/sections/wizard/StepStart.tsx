@@ -18,10 +18,11 @@ import type {
 } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { ArrowRightIcon, ChevronDownIcon, PencilRulerIcon, SparklesIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SkeletonText } from '@/components/ui/skeleton';
+import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 import { cn } from '@/lib/utils';
 import { deriveEfficiency, formatCpa, formatCurrency, humanize } from '../../format';
 import * as typeScale from '../../typeScale';
@@ -32,6 +33,22 @@ import { questionHeading } from './OptionRow';
 import { suggestionPlatformCounts } from './wizardModel';
 
 export type SuggestionOverride = { objective: OptimizationObjective; mode: OptimizationModeDto };
+
+/** Why the suggestions are missing: the read ran out its bound (a slow cold Meta read — the
+ *  service is alive) or the service did not answer at all. Only the second is "offline". */
+export type SuggestionsFailure = 'timeout' | 'unreachable' | null;
+
+/** True once a load has run past the read bound, so a long cold read is named, not a skeleton. */
+function useRunningPastReadBound(isLoading: boolean): boolean {
+  const [past, setPast] = useState(false);
+  useEffect(() => {
+    setPast(false);
+    if (!isLoading) return;
+    const timer = setTimeout(() => setPast(true), READ_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+  return past;
+}
 
 type CostDot = { id: string; cost: number };
 
@@ -265,7 +282,8 @@ function SuggestionCardSkeleton() {
 type StepStartProps = {
   suggestions: PortfolioSuggestion[];
   isLoading: boolean;
-  isError: boolean;
+  failure: SuggestionsFailure;
+  onRetry: () => void;
   emptyMessage: string;
   snapshots: AdSetSnapshot[];
   currency: string | null;
@@ -280,7 +298,8 @@ type StepStartProps = {
 export function StepStart({
   suggestions,
   isLoading,
-  isError,
+  failure,
+  onRetry,
   emptyMessage,
   snapshots,
   currency,
@@ -291,6 +310,7 @@ export function StepStart({
   extras,
 }: StepStartProps) {
   const [exploring, setExploring] = useState<string | null>(null);
+  const slow = useRunningPastReadBound(isLoading);
   const snapshotById = useMemo(
     () => new Map(snapshots.map((snapshot) => [snapshot.id, snapshot])),
     [snapshots],
@@ -313,6 +333,15 @@ export function StepStart({
             <span className="text-muted-foreground text-xs" data-testid="suggestions-subtitle">
               grouped from this account&rsquo;s active ad sets
             </span>
+          ) : isLoading && slow ? (
+            // The subtitle's own slot, so naming the wait shifts nothing below it.
+            <span
+              className="text-muted-foreground text-xs"
+              data-testid="suggestions-slow"
+              role="status"
+            >
+              Still reading this account&rsquo;s ad sets&hellip;
+            </span>
           ) : isLoading ? (
             <SkeletonText className="text-xs" data-testid="suggestions-subtitle" wrap>
               grouped from this account&rsquo;s active ad sets
@@ -320,60 +349,82 @@ export function StepStart({
           ) : null}
         </div>
 
-        {/* One list for both states, so the rows that land replace their placeholders in place
-            and the scratch row below them stays the same node. */}
-        {isError && !isLoading ? (
-          <p className="py-2 text-warning text-xs">
-            Suggestions are unavailable — the optimizer service is offline. You can still build a
-            portfolio from scratch.
-          </p>
-        ) : (
-          <div
-            className="divide-y divide-border/60 border-border/60 border-b"
-            data-testid="suggestion-list"
-          >
-            {isLoading ? (
-              <>
-                <SuggestionCardSkeleton />
-                <SuggestionCardSkeleton />
-              </>
-            ) : suggestions.length === 0 ? (
-              <p className="py-3 text-muted-foreground text-xs">{emptyMessage}</p>
-            ) : null}
-            {suggestions.map((suggestion) => (
-              <SuggestionCard
-                canExplore={suggestion.adset_ids.some((id) => snapshotById.has(id))}
-                // A suggestion on another platform's account carries its own currency.
-                currency={suggestion.currency ?? currency}
-                exploring={exploring === suggestion.name}
-                key={suggestion.name}
-                onPick={() => onPick(suggestion)}
-                onToggleExplore={() =>
-                  setExploring((prev) => (prev === suggestion.name ? null : suggestion.name))
-                }
-                snapshotById={snapshotById}
-                suggestion={suggestion}
-              />
-            ))}
-            <button
-              className="flex w-full flex-col items-start gap-1.5 py-4 text-left transition-colors hover:text-foreground"
-              onClick={onScratch}
-              type="button"
+        {/* One list for every state, so the rows that land replace their placeholders in place
+            and the scratch row below them stays the same node — and stays offered when the
+            suggestions fail, as their notice promises. */}
+        <div
+          className="divide-y divide-border/60 border-border/60 border-b"
+          data-testid="suggestion-list"
+        >
+          {isLoading ? (
+            <>
+              <SuggestionCardSkeleton />
+              <SuggestionCardSkeleton />
+            </>
+          ) : failure === 'timeout' ? (
+            <div
+              className="flex items-start gap-3 py-3"
+              data-testid="suggestions-failure"
+              role="status"
             >
-              <span className="flex items-center gap-2">
-                <PencilRulerIcon aria-hidden className="size-4 text-muted-foreground" />
-                <span className="font-semibold text-sm tracking-tight">Start from scratch</span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Pick the ad sets or campaigns yourself, on any connected platform, then set the
-                goal, the plan and who applies the moves.
-              </span>
-              <span className="inline-flex items-center gap-1 text-primary-ink text-xs">
-                Build it <ArrowRightIcon aria-hidden className="size-3.5" />
-              </span>
-            </button>
-          </div>
-        )}
+              <p className="min-w-0 flex-1 text-warning text-xs">
+                Suggestions are taking longer than usual. Try again, or build a portfolio from
+                scratch.
+              </p>
+              <Button
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={onRetry}
+                size="sm"
+                variant="outline"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : failure === 'unreachable' ? (
+            <p
+              className="py-3 text-warning text-xs"
+              data-testid="suggestions-failure"
+              role="status"
+            >
+              Suggestions are unavailable — the optimizer service is offline. You can still build a
+              portfolio from scratch.
+            </p>
+          ) : suggestions.length === 0 ? (
+            <p className="py-3 text-muted-foreground text-xs">{emptyMessage}</p>
+          ) : null}
+          {suggestions.map((suggestion) => (
+            <SuggestionCard
+              canExplore={suggestion.adset_ids.some((id) => snapshotById.has(id))}
+              // A suggestion on another platform's account carries its own currency.
+              currency={suggestion.currency ?? currency}
+              exploring={exploring === suggestion.name}
+              key={suggestion.name}
+              onPick={() => onPick(suggestion)}
+              onToggleExplore={() =>
+                setExploring((prev) => (prev === suggestion.name ? null : suggestion.name))
+              }
+              snapshotById={snapshotById}
+              suggestion={suggestion}
+            />
+          ))}
+          <button
+            className="flex w-full flex-col items-start gap-1.5 py-4 text-left transition-colors hover:text-foreground"
+            onClick={onScratch}
+            type="button"
+          >
+            <span className="flex items-center gap-2">
+              <PencilRulerIcon aria-hidden className="size-4 text-muted-foreground" />
+              <span className="font-semibold text-sm tracking-tight">Start from scratch</span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Pick the ad sets or campaigns yourself, on any connected platform, then set the goal,
+              the plan and who applies the moves.
+            </span>
+            <span className="inline-flex items-center gap-1 text-primary-ink text-xs">
+              Build it <ArrowRightIcon aria-hidden className="size-3.5" />
+            </span>
+          </button>
+        </div>
 
         {active ? (
           <SuggestionExplorer
