@@ -4,7 +4,7 @@
 // and what happens when only some of them can be re-signed.
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { CANVAS_MEDIA_SIGN_ROUTE } from '@continuum/contracts';
+import { CANVAS_MEDIA_SIGN_ROUTE, type MotionMediaOutput } from '@continuum/contracts';
 import { clearSignedUrlCache } from './signedUrlCache';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b1';
@@ -96,6 +96,26 @@ const versionRef = (id: string, assetId: string, assetVersionId: string, type = 
   }) as never;
 
 describe('resignCanvasNodes — asset + exact version references', () => {
+  test('signs each validated motion profile by its exact pin and binds URLs to those versions', async () => {
+    const output = (profile: MotionMediaOutput['profile'], assetId: string, versionId: string): MotionMediaOutput => ({ profile, assetId, versionId, checksum: 'a'.repeat(64), sourceRevisionId: 'source', candidateDigest: 'b'.repeat(64), dependencyDigest: 'c'.repeat(64), evidenceId: 'evidence', alpha: 'pass', consumer: 'pass' });
+    const [node] = await resignCanvasNodes([{
+      id: 'motion', type: 'hyperframesAgent', position: { x: 0, y: 0 },
+      data: { motionMediaOutputs: { 'editor-overlay': output('editor-overlay', ASSET_A, VERSION_A), 'forge-overlay': output('forge-overlay', ASSET_B, VERSION_B) } },
+    } as never], BRAND_ID);
+    expect(signCalls).toEqual([{ brandId: BRAND_ID, assetId: ASSET_A, versionId: VERSION_A }, { brandId: BRAND_ID, assetId: ASSET_B, versionId: VERSION_B }]);
+    expect(node.data).toMatchObject({ motionMediaUrls: { 'editor-overlay': { assetId: ASSET_A, versionId: VERSION_A, url: versionUrl(VERSION_A) }, 'forge-overlay': { assetId: ASSET_B, versionId: VERSION_B, url: versionUrl(VERSION_B) } }, generatedVideoUrl: versionUrl(VERSION_A) });
+  });
+
+  test('a refused motion version clears old profile URLs without signing an opaque fallback', async () => {
+    refusedVersions = [VERSION_A];
+    const [node] = await resignCanvasNodes([{
+      id: 'motion', type: 'hyperframesAgent', position: { x: 0, y: 0 },
+      data: { renderOutputAssetId: ASSET_B, renderOutputAssetVersionId: VERSION_B, motionMediaUrls: { 'editor-overlay': { assetId: ASSET_A, versionId: 'previous', url: 'https://old/wrong.webm' } }, motionMediaOutputs: { 'editor-overlay': { profile: 'editor-overlay', assetId: ASSET_A, versionId: VERSION_A, checksum: 'a'.repeat(64), sourceRevisionId: 'source', candidateDigest: 'b'.repeat(64), dependencyDigest: 'c'.repeat(64), evidenceId: 'evidence', alpha: 'pass', consumer: 'pass' } } },
+    } as never], BRAND_ID);
+    expect(signCalls).toEqual([{ brandId: BRAND_ID, assetId: ASSET_A, versionId: VERSION_A }]);
+    expect((node.data as Record<string, unknown>).motionMediaUrls).toEqual({});
+  });
+
   test('re-signs an api-render reference from its exact version and leaves the markup baseline alone', async () => {
     const [node] = await resignCanvasNodes([versionRef('ref-a', ASSET_A, VERSION_A)], BRAND_ID);
 

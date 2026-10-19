@@ -3313,6 +3313,8 @@ export type Database = {
           revision_number: number
           run_id: string
           session_id: string
+          source_dependencies: Json
+          motion_evidence: Json | null
           source_asset_ids: string[]
           visual_warnings: Json
           width: number
@@ -3338,6 +3340,8 @@ export type Database = {
           revision_number: number
           run_id: string
           session_id: string
+          source_dependencies?: Json
+          motion_evidence?: Json | null
           source_asset_ids?: string[]
           visual_warnings?: Json
           width: number
@@ -3363,6 +3367,8 @@ export type Database = {
           revision_number?: number
           run_id?: string
           session_id?: string
+          source_dependencies?: Json
+          motion_evidence?: Json | null
           source_asset_ids?: string[]
           visual_warnings?: Json
           width?: number
@@ -11865,6 +11871,11 @@ export type Database = {
       }
     }
     Functions: {
+      publish_hyperframe_revision: {
+        Args: { p_run_id: string; p_expected_parent_revision_id: string | null; p_expected_parent_fingerprint: string | null; p_revision: Json }
+        Returns: Database["brand_profiles"]["Tables"]["ai_studio_hyperframe_revisions"]["Row"]
+      }
+
       advance_automation_next_run: {
         Args: { p_automation_id: string; p_expected: string; p_next: string }
         Returns: boolean
@@ -22294,6 +22305,17 @@ export type Database = {
       }
     }
     Functions: {
+      promote_internal_motion_media_batch: {
+        Args: {
+          p_brand_id: string
+          p_actor: string
+          p_batch_key: string
+          p_request_digest: string
+          p_source_binding: Json
+          p_outputs: Json
+        }
+        Returns: Json
+      }
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
       activate_template_source_bundle: {

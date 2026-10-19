@@ -109,21 +109,31 @@ export function canvasPublishingAssets(args: {
     );
     const source = edge && args.nodes.find((candidate) => candidate.id === edge.source);
     if (!source) return [];
+    const hasMotionProfiles = 'motionMediaOutputs' in (source.data ?? {});
     const rendered =
-      source.type === 'apiRender' ? renderOutputForHandle(source, edge?.sourceHandle) : null;
-    const pin = source.type === 'apiRender' ? rendered : pinFromNode(source, edge?.sourceHandle);
+      !hasMotionProfiles && source.type === 'apiRender'
+        ? renderOutputForHandle(source, edge?.sourceHandle)
+        : null;
+    const pin = pinFromNode(
+      source,
+      edge?.sourceHandle,
+      handle === 'video-in' ? 'opaque-video' : 'transparent-still',
+    );
     const modality =
       source.type === 'action' ? actionOutputModality(source.data?.actionId) : undefined;
-    const kind =
-      rendered?.kind ??
-      (source.type === 'image' || isImageOutputNodeType(source.type) || modality === 'image'
-        ? 'image'
-        : source.type === 'video' ||
-            source.type === 'hyperframesAgent' ||
-            isVideoOutputNodeType(source.type) ||
-            modality === 'video'
-          ? 'video'
-          : null);
+    const kind = hasMotionProfiles
+      ? handle === 'video-in'
+        ? 'video'
+        : 'image'
+      : (rendered?.kind ??
+        (source.type === 'image' || isImageOutputNodeType(source.type) || modality === 'image'
+          ? 'image'
+          : source.type === 'video' ||
+              source.type === 'hyperframesAgent' ||
+              isVideoOutputNodeType(source.type) ||
+              modality === 'video'
+            ? 'video'
+            : null));
     return pin && kind
       ? [
           {

@@ -107,8 +107,7 @@ fn lightLeaks(sourceUv: vec2f, color: vec4f) -> vec4f {
   return vec4f(color.rgb + (vec3f(1.0) - color.rgb) * exposure * vec3f(1.0, 0.32, 0.09), color.a);
 }
 
-@fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
-  let color = textureSampleLevel(src, srcSampler, uv, 0.0);
+fn applyEffect(uv: vec2f, color: vec4f) -> vec4f {
   if params.kind < 1.5 { return chromaKey(color); }
   if params.kind < 2.5 { return tint(color); }
   if params.kind < 3.5 { return vignette(uv, color); }
@@ -118,5 +117,15 @@ fn lightLeaks(sourceUv: vec2f, color: vec4f) -> vec4f {
   if params.kind < 7.5 { return vhs(uv, color); }
   if params.kind < 8.5 { return dust(uv, color); }
   if params.kind < 9.5 { return lightLeaks(uv, color); }
+  return color;
+}
+
+
+@fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let color = applyEffect(uv, textureSampleLevel(src, srcSampler, uv, 0.0));
+  // Effects and intermediate textures use straight RGB; only the canvas surface is premultiplied.
+  if params.secondary.w > 0.5 {
+    return vec4f(clamp(color.rgb, vec3f(0.0), vec3f(1.0)) * color.a, color.a);
+  }
   return color;
 }

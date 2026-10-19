@@ -50,6 +50,7 @@ export const DEFAULT_PLACED_CLIP_SEC = 3;
 // durable references, but only the pinned one can reach the final render — the render
 // job builder refuses anything else, by name (video-projects/store.ts).
 export function editorSourceRef(source: TimelineInputSource): EditorMediaSourceRef {
+  if (source.unavailableReason) throw new Error(source.unavailableReason);
   return source.sourceAssetId && source.sourceVersionId
     ? {
         sourceType: 'library_asset',

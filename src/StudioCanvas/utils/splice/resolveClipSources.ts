@@ -1,6 +1,7 @@
 import {
   actionDef,
   type GraphNodeLike,
+  motionMediaOutputForProfile,
   type ShaderStackV1,
   STUDIO_NODE_REGISTRY,
   shaderStackV1Schema,
@@ -115,7 +116,14 @@ function sourceVersionId(node: StudioNode): string | undefined {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 }
 
-type ResolvedMedia = { kind: TimelineMediaKind; url?: string; shaderStack?: ShaderStackV1 };
+type ResolvedMedia = {
+  kind: TimelineMediaKind;
+  url?: string;
+  shaderStack?: ShaderStackV1;
+  assetId?: string;
+  versionId?: string;
+  unavailableReason?: string;
+};
 
 // What a node handed downstream while the run is still in memory. Preferred over the
 // node's stamped data: it is the fresher of the two.
@@ -144,6 +152,31 @@ function readSourceKindAndUrl(
   resolvedOutputs?: Map<string, NodeOutput>,
 ): ResolvedMedia {
   if (!node) return { kind: 'video' };
+  const data = node.data as Record<string, unknown>;
+  if ('motionMediaOutputs' in data) {
+    const kind = timelineMediaKind(asGraphNode(node), sourceHandle) ?? 'video';
+    if (kind === 'audio') return { kind, unavailableReason: 'Motion graphics cannot supply an audio-only input.' };
+    const profile = kind === 'image' ? 'transparent-still' : 'editor-overlay';
+    const output = motionMediaOutputForProfile(data, profile);
+    if (!output) return { kind, unavailableReason: kind === 'image' ? 'Motion graphic unavailable for image overlays.' : 'Motion graphic unavailable for video overlays.' };
+    const urls = data.motionMediaUrls;
+    const signed =
+      urls && typeof urls === 'object' && profile in urls
+        ? (urls as Record<string, unknown>)[profile]
+        : undefined;
+    const url =
+      signed &&
+      typeof signed === 'object' &&
+      'assetId' in signed &&
+      'versionId' in signed &&
+      'url' in signed &&
+      signed.assetId === output.assetId &&
+      signed.versionId === output.versionId &&
+      typeof signed.url === 'string'
+        ? signed.url
+        : undefined;
+    return { kind, url, assetId: output.assetId, versionId: output.versionId };
+  }
   const fromOutput = readMediaFromOutput(resolvedOutputs?.get(node.id));
   if (fromOutput) return fromOutput;
   const kind = timelineMediaKind(asGraphNode(node), sourceHandle) ?? 'video';
@@ -190,13 +223,20 @@ export function resolveTimelineInputPool(
   for (const [sourceId, sourceHandle] of mediaInSourceHandles(edges, targetNodeId)) {
     const node = nodeById.get(sourceId);
     if (!node) continue;
-    const { kind, url, shaderStack } = readSourceKindAndUrl(node, sourceHandle, resolvedOutputs);
+    const { kind, url, shaderStack, assetId, versionId, unavailableReason } = readSourceKindAndUrl(
+      node,
+      sourceHandle,
+      resolvedOutputs,
+    );
+    const selectedAsset = unavailableReason ? undefined : assetId ?? sourceAssetId(node);
+    const selectedVersion = unavailableReason ? undefined : versionId ?? sourceVersionId(node);
     pool.push({
       nodeId: sourceId,
       kind,
       label: deriveSourceLabel(node),
-      ...(sourceAssetId(node) ? { sourceAssetId: sourceAssetId(node) } : {}),
-      ...(sourceVersionId(node) ? { sourceVersionId: sourceVersionId(node) } : {}),
+      ...(selectedAsset ? { sourceAssetId: selectedAsset } : {}),
+      ...(selectedVersion ? { sourceVersionId: selectedVersion } : {}),
+      ...(unavailableReason ? { unavailableReason } : {}),
       previewUrl: isUsableUrl(url) ? url : undefined,
       shaderStack,
     });
@@ -223,11 +263,12 @@ function createTimelineSourceResolver(
     const cached = cache.get(sourceId);
     if (cached) return cached;
     const promise = (async () => {
-      const { kind, url, shaderStack } = readSourceKindAndUrl(
+      const { kind, url, shaderStack, unavailableReason } = readSourceKindAndUrl(
         nodeById.get(sourceId),
         handleBySource.get(sourceId),
         resolvedOutputs,
       );
+      if (unavailableReason) throw new Error(unavailableReason);
       if (!url) {
         throw new Error(`Timeline source ${sourceId}: upstream produced no media`);
       }

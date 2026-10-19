@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { motionAepTrackEditSchema } from '../ai-studio/motion-aep-track';
 import { templateRevisionRefSchema } from './template-revision-pin';
 
 export * from './template-revision-pin';
@@ -93,6 +94,7 @@ export type TemplateRevisionRecolor = z.infer<typeof templateRevisionRecolorSche
 export const templateRevisionEditsSchema = z
   .object({
     arrangement: revisionArrangementSchema.optional(),
+    motionTracks: z.array(motionAepTrackEditSchema).max(100).optional(),
     layers: z.array(templateRevisionLayerEditSchema).max(64).default([]),
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
     orders: z.array(templateLayerOrderSchema).max(16).default([]),
@@ -100,6 +102,11 @@ export const templateRevisionEditsSchema = z
   })
   .strict()
   .superRefine((edits, ctx) => {
+    const motionKeys = (edits.motionTracks ?? []).map(
+      (track) => `${track.compId}:${track.layerId}:${track.property}`,
+    );
+    if (new Set(motionKeys).size !== motionKeys.length)
+      ctx.addIssue({ code: 'custom', message: 'Duplicate motion property edit' });
     const keys = edits.layers.map((layer) => `${layer.compId}:${layer.layerId}`);
     if (new Set(keys).size !== keys.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate layer edit' });

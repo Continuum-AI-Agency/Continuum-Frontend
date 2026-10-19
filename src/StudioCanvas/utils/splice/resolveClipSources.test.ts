@@ -3,6 +3,7 @@ import {
   isValidConnection,
   STUDIO_NODE_TYPES,
   TIMELINE_MEDIA_INPUT_HANDLE,
+  type MotionMediaOutput,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import type { StudioNode, TimelineItem } from '../../types';
@@ -15,6 +16,41 @@ import {
 
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+describe('motion graphics profile selection', () => {
+  const derivative: MotionMediaOutput = {
+    profile: 'editor-overlay', assetId: 'alpha-asset', versionId: 'alpha-version',
+    checksum: 'a'.repeat(64), sourceRevisionId: 'revision', candidateDigest: 'b'.repeat(64),
+    dependencyDigest: 'c'.repeat(64), evidenceId: 'evidence', alpha: 'pass', consumer: 'pass',
+  };
+  const edge: Edge = { id: 'motion-edge', source: 'motion', target: 'editor', targetHandle: TIMELINE_MEDIA_INPUT_HANDLE };
+  const url = `data:video/webm;base64,${TINY_PNG_BASE64}`;
+  const node = (data: Record<string, unknown>) => ({ id: 'motion', type: 'hyperframesAgent', position: { x: 0, y: 0 }, data }) as unknown as StudioNode;
+
+  it('selects the WebM pin and its bound URL ahead of an old opaque run output', async () => {
+    const source = node({ renderOutputAssetId: 'opaque', renderOutputAssetVersionId: 'old', generatedVideoUrl: 'https://old/opaque.mp4', motionMediaOutputs: { 'editor-overlay': derivative }, motionMediaUrls: { 'editor-overlay': { assetId: derivative.assetId, versionId: derivative.versionId, url } } });
+    const stale = new Map<string, NodeOutput>([['motion', { type: 'video', url: 'https://old/opaque.mp4' }]]);
+    expect(resolveTimelineInputPool('editor', [edge], [source], stale)).toEqual([
+      expect.objectContaining({ sourceAssetId: 'alpha-asset', sourceVersionId: 'alpha-version', previewUrl: url }),
+    ]);
+    const result = await resolveTimelineSources([{ id: 'item', order: 0, sourceNodeId: 'motion' }] as TimelineItem[], [edge], [source], stale, 'editor');
+    expect(result[0].blob.type).toBe('video/webm');
+  });
+
+  it('keeps a refused Forge-only derivative visible and refuses rendering without fetching an opaque preview', async () => {
+    const source = node({ renderOutputAssetId: 'opaque', renderOutputAssetVersionId: 'old', generatedVideoUrl: 'https://old/opaque.mp4', motionMediaOutputs: { 'forge-overlay': { ...derivative, profile: 'forge-overlay' } } });
+    const [entry] = resolveTimelineInputPool('editor', [edge], [source]);
+    expect(entry.unavailableReason).toBe('Motion graphic unavailable for video overlays.');
+    expect(entry.sourceAssetId).toBeUndefined();
+    expect(entry.previewUrl).toBeUndefined();
+    await expect(resolveTimelineSources([{ id: 'item', order: 0, sourceNodeId: 'motion' }] as TimelineItem[], [edge], [source], new Map(), 'editor')).rejects.toThrow('unavailable for video overlays');
+  });
+
+  it('does not reuse a URL minted for another asset version', () => {
+    const source = node({ motionMediaOutputs: { 'editor-overlay': derivative }, motionMediaUrls: { 'editor-overlay': { assetId: derivative.assetId, versionId: 'old-version', url } } });
+    expect(resolveTimelineInputPool('editor', [edge], [source])[0].previewUrl).toBeUndefined();
+  });
+});
 
 describe('resolveTimelineSources — Video Editor (timelineEditor) as a source', () => {
   const targetId = 'timeline-1';

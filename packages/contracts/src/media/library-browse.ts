@@ -567,7 +567,12 @@ export type LibraryTrashPage = z.infer<typeof libraryTrashPageSchema>;
 // sites (backend libraryManage + metadataSearch, frontend filters + carousel), which is
 // four chances for them to disagree about what "default browse" means. Search and the
 // agent-facing tools still reach these assets — hidden is not deleted.
-export const HIDDEN_LIBRARY_TAGS: readonly string[] = [CAROUSEL_SLIDE_TAG, ELEMENT_REFERENCE_TAG];
+export const INTERNAL_MOTION_STAGE_TAG = 'internal-motion-stage';
+export const HIDDEN_LIBRARY_TAGS: readonly string[] = [
+  CAROUSEL_SLIDE_TAG,
+  ELEMENT_REFERENCE_TAG,
+  INTERNAL_MOTION_STAGE_TAG,
+];
 
 /** PostgREST array literal for a `not('tags','ov',…)` overlap exclusion. */
 export const HIDDEN_LIBRARY_TAGS_FILTER = `{${HIDDEN_LIBRARY_TAGS.join(',')}}`;
