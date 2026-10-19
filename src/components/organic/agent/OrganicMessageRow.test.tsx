@@ -1,5 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, renderHook } from '@testing-library/react';
+import type { HeadlessBatchStatus } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, renderHook } from '@testing-library/react';
 import { type ComponentType, useMemo } from 'react';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
 
@@ -23,6 +25,12 @@ mock.module('@/components/chat/ChatMessage', () => ({
   },
 }));
 
+// Rows open drafts through the canonical planner opener, which needs an app router.
+const realNavigation = await import('next/navigation');
+const router = { push: () => {} };
+mock.module('next/navigation', () => ({ ...realNavigation, useRouter: () => router }));
+
+const { OpenPlannerDraftProvider } = await import('../openPlannerDraft');
 const { NO_ACTIVE_STAGES, OrganicMessageRow, rowRunState, useStableRowActions } = await import(
   './OrganicMessageRow'
 );
@@ -172,5 +180,112 @@ describe('OrganicMessageRow render cost', () => {
       expect(item.className).toContain('[content-visibility:auto]');
       expect(item.className).toContain('[contain-intrinsic-size:auto_10rem]');
     }
+  });
+});
+
+describe('OrganicMessageRow headless batch card', () => {
+  afterEach(() => cleanup());
+
+  it('renders the batch card and opens a piece through the planner opener', () => {
+    const draftId = '33333333-3333-4333-8333-333333333333';
+    const status: HeadlessBatchStatus = {
+      batchId: '22222222-2222-4222-8222-222222222222',
+      brandId: '11111111-1111-4111-8111-111111111111',
+      createdAt: '2026-10-18T10:00:00.000Z',
+      capUsd: 9,
+      expectedUsd: 3.5,
+      maxUsd: 15,
+      holdUsd: 9,
+      items: [
+        {
+          index: 0,
+          format: 'reel',
+          draftId,
+          jobId: null,
+          state: 'failed',
+          reason: 'nothing_planned',
+          holdUsd: 9,
+          redirected: true,
+          cover: null,
+          outputCount: 0,
+        },
+      ],
+      counts: { queued: 0, running: 0, needs_cast_approval: 0, ready: 0, failed: 1 },
+      cast: { needed: false, drafts: [], approved: true },
+      done: true,
+    };
+    const openPlannerDraft = mock((_draftId: string) => {});
+    const { container, getByRole } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OpenPlannerDraftProvider value={openPlannerDraft}>
+          <ChatTranscript anchors={[]}>
+            <OrganicMessageRow
+              msg={{
+                id: 'a1',
+                role: 'assistant',
+                content: 'Started the batch.',
+                uiCards: [{ type: 'headless_batch', data: status }],
+              }}
+              brandId="brand-1"
+              isStreamingRow={false}
+              activeStages={NO_ACTIVE_STAGES}
+              autoRetryPending={false}
+              isStreaming={false}
+              inputDisabled={false}
+              pipeline={{}}
+              pipelineCardsByToolCallId={new Map()}
+              planItemStatus={{}}
+              bulkRuns={{}}
+              jobs={{}}
+              actions={ACTIONS}
+            />
+          </ChatTranscript>
+        </OpenPlannerDraftProvider>
+      </QueryClientProvider>,
+    );
+    expect(container.querySelector('[data-slot="headless-batch-card"]')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Open draft for Reel 1' }));
+    expect(openPlannerDraft).toHaveBeenCalledWith(draftId);
+  });
+});
+
+describe('OrganicMessageRow approval reply', () => {
+  afterEach(() => cleanup());
+
+  // Both would re-send the prompt before the approval, which nobody asked for again.
+  it('offers neither Retry nor Regenerate on a reply to an approval', () => {
+    const row = (msg: RowProps['msg']) => (
+      <ChatTranscript anchors={[]}>
+        <OrganicMessageRow
+          msg={msg}
+          brandId="brand-1"
+          isStreamingRow={false}
+          activeStages={NO_ACTIVE_STAGES}
+          autoRetryPending={false}
+          isStreaming={false}
+          inputDisabled={false}
+          pipeline={{}}
+          pipelineCardsByToolCallId={new Map()}
+          planItemStatus={{}}
+          bulkRuns={{}}
+          jobs={{}}
+          actions={ACTIONS}
+        />
+      </ChatTranscript>
+    );
+    const failed = { id: 'r1', role: 'assistant' as const, content: '', error: 'Upstream hiccup' };
+    const answered = { id: 'r2', role: 'assistant' as const, content: 'Published.' };
+
+    const view = render(row(failed));
+    expect(view.queryByRole('button', { name: 'Retry' })).toBeTruthy();
+    view.rerender(row({ ...failed, approvalReply: true }));
+    expect(view.getByText('Upstream hiccup')).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+    view.rerender(row(answered));
+    expect(view.queryByRole('button', { name: 'Regenerate response' })).toBeTruthy();
+    view.rerender(row({ ...answered, approvalReply: true }));
+    expect(view.queryByRole('button', { name: 'Copy message' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
   });
 });

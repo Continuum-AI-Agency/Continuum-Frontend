@@ -13,6 +13,7 @@ import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import { useOpenPlannerDraft } from '../openPlannerDraft';
 import { ActiveStagesPanel } from './ActiveStagesPanel';
 import { AeoSnapshotCard } from './AeoSnapshotCard';
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
@@ -20,6 +21,7 @@ import { BulkPlanCard } from './BulkPlanCard';
 import { BulkRunPanel } from './BulkRunPanel';
 import { ConceptPlan } from './ConceptPlan';
 import { milestonesForMessage } from './deriveOrganicAnchors';
+import { HeadlessBatchCard } from './HeadlessBatchCard';
 import { MediaLibrarySearchResults } from './MediaLibrarySearchResults';
 import { MessageActions } from './MessageActions';
 import { OrganicThinkingPanel } from './OrganicThinkingPanel';
@@ -119,6 +121,8 @@ function cardKey(card: UiCard, index: number): string {
       return `aeo_snapshot:${card.data.snapshotId}`;
     case 'agent_delegated':
       return `agent_delegated:${card.data.callId}`;
+    case 'headless_batch':
+      return `headless_batch:${card.data.batchId}`;
     default:
       return String(index);
   }
@@ -216,6 +220,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
     () => mediaFromPersistedAttachments(msg.id, msg.metadata?.attachments).map(resolve),
     [msg.id, msg.metadata?.attachments, resolve],
   );
+  const openPlannerDraft = useOpenPlannerDraft();
 
   return (
     <>
@@ -350,7 +355,13 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                           }
                         />
                         {run && (
-                          <BulkRunPanel runId={run.runId} total={run.total} brandId={brandId} />
+                          <BulkRunPanel
+                            runId={run.runId}
+                            total={run.total}
+                            brandId={brandId}
+                            expectsBatch={card.data.placements.some((spec) => spec.headless)}
+                            onOpenDraft={openPlannerDraft}
+                          />
                         )}
                       </motion.div>
                     );
@@ -366,6 +377,18 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                         total={card.data.total}
                         label={MEDIA_STRIP_LABELS[card.data.toolName]}
                         stripId={card.data.toolCallId}
+                      />
+                    );
+                  }
+                  if (card.type === 'headless_batch') {
+                    // No entrance animation, like the media strip: the fixed rows are the reveal.
+                    return (
+                      <HeadlessBatchCard
+                        key={cardKey(card, i)}
+                        brandId={brandId}
+                        status={card.data}
+                        live={isStreamingRow}
+                        onOpenDraft={openPlannerDraft}
                       />
                     );
                   }
@@ -424,20 +447,23 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
           {msg.role === 'assistant' && msg.error && !autoRetryPending ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
               <span className="min-w-0 text-sm text-destructive">{msg.error}</span>
-              <AgentButton
-                variant="ghost"
-                disabled={isStreaming}
-                onClick={() => actions.onRetryTurn(msg.id)}
-              >
-                <RefreshCw className="size-3.5" />
-                Retry
-              </AgentButton>
+              {/* A reply to an approval has no prompt of its own: a retry would re-send the one before. */}
+              {msg.approvalReply ? null : (
+                <AgentButton
+                  variant="ghost"
+                  disabled={isStreaming}
+                  onClick={() => actions.onRetryTurn(msg.id)}
+                >
+                  <RefreshCw className="size-3.5" />
+                  Retry
+                </AgentButton>
+              )}
             </div>
           ) : null}
           {msg.role === 'assistant' && !msg.error && msg.content && !isStreamingRow ? (
             <MessageActions
               content={msg.content}
-              onRegenerate={() => actions.onRetryTurn(msg.id)}
+              onRegenerate={msg.approvalReply ? undefined : () => actions.onRetryTurn(msg.id)}
               disabled={isStreaming}
             />
           ) : null}

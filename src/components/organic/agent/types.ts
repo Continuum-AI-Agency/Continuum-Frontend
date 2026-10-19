@@ -5,6 +5,7 @@ import type {
   AgentDocumentAttachment,
   BulkContentPlan,
   ChatMediaStripData,
+  HeadlessBatchQuote,
   MediaSearchResultsFrame,
   OrganicPostCardData,
   OrganicTrendChartData,
@@ -16,6 +17,7 @@ import type {
 import { pipelineStageEnum } from '@continuum/contracts';
 import type { AgentMentionMetadata, AgentMentionReference } from '@/lib/agent-references';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
+import type { ReadHeadlessBatchStatus } from '@/lib/organic-agent/headlessBatch';
 
 // Canonical agent plan types live in @continuum/contracts; re-export so existing
 // `from "./types"` import sites (PlanCard, ConceptPlan, ...) stay unchanged and
@@ -84,7 +86,8 @@ export type UiCard =
   | { type: 'media_strip'; data: ChatMediaStripData }
   | { type: 'skill_proposal'; data: SkillProposalCardData }
   | { type: 'aeo_snapshot'; data: UiAeoSnapshotCard }
-  | { type: 'agent_delegated'; data: AgentDelegatedFrameData };
+  | { type: 'agent_delegated'; data: AgentDelegatedFrameData }
+  | { type: 'headless_batch'; data: ReadHeadlessBatchStatus };
 
 export type BulkRunStatus = 'running' | 'completed' | 'failed';
 
@@ -103,6 +106,8 @@ export type BulkRunState = {
   byPlatform: Record<string, number>;
   byFormat: Record<string, number>;
   status: BulkRunStatus;
+  /** When the run's run_completed event was written (database time). */
+  completedAt?: string;
 };
 
 export type AgentJobState = {
@@ -202,6 +207,8 @@ export type ToolApproval = {
   toolCallId: string;
   toolName: string;
   input: unknown;
+  /** headlessBatchCreate only: the bound, cost and cast step its one card shows. */
+  batchPreview?: HeadlessBatchQuote;
 };
 
 export type ConversationMessage = {
@@ -215,6 +222,8 @@ export type ConversationMessage = {
   // Set when a turn failed; the partial `content` (if any) is preserved so the
   // user keeps what streamed, and a styled error row + Retry can render below it.
   error?: string;
+  /** The agent's reply to an approval: it has no user turn of its own to retry or regenerate. */
+  approvalReply?: boolean;
 };
 
 export type AgentChatInput = {

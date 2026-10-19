@@ -947,7 +947,13 @@ export function OrganicAgentPanel({
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!currentSessionId || isStreaming) return;
 
+      const runBefore = selectRunForSession(currentSessionId)(useAgentRunStore.getState())?.run
+        .runId;
+      const replyMessageId = crypto.randomUUID();
       dispatch({ type: 'TOOL_APPROVAL_RESOLVE', approvalId: approval.approvalId });
+      // The agent's reply is a new turn. Without its own row every frame it streams is
+      // dropped, because the previous turn's STREAM_COMPLETE left no row open.
+      dispatch({ type: 'BEGIN_STREAMING', messageId: replyMessageId });
 
       start({
         brandId,
@@ -957,20 +963,32 @@ export function OrganicAgentPanel({
         weekStart: currentWeekStartIso(),
         timezone: resolveTimezone(),
         platformAccountIds: scopedPlatformAccountIds,
-      })
-        .then(() => debouncedRefreshSessions())
-        .catch(() => {
-          // The card was removed optimistically. Swallowing this left the user believing they had
-          // approved (or denied) a publish that the agent never heard about — the worst possible
-          // silence on a gate. Put it back so the decision can actually be made.
-          dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
-          show({
-            title: approved ? 'Approval not delivered' : 'Denial not delivered',
-            description:
-              'The agent did not receive your decision. Nothing was published — please answer again.',
-            variant: 'error',
-          });
+      }).then(({ error }) => {
+        // `start` resolves with the error rather than rejecting. Every turn names a fresh
+        // run, so a failed turn that never named one never reached the agent; one that did
+        // was delivered and its own error row stands. A reader aborted because the user
+        // left the session cannot tell, so it is left alone.
+        const runStore = useAgentRunStore.getState();
+        const undelivered =
+          error !== undefined &&
+          selectRunForSession(currentSessionId)(runStore)?.run.runId === runBefore &&
+          runStore.viewingSessionId === currentSessionId;
+        if (!undelivered) {
+          debouncedRefreshSessions();
+          return;
+        }
+        // The card was removed optimistically. Swallowing this left the user believing they had
+        // approved (or denied) a publish that the agent never heard about — the worst possible
+        // silence on a gate. Put it back so the decision can actually be made.
+        dispatch({ type: 'DISCARD_MESSAGE', messageId: replyMessageId });
+        dispatch({ type: 'TOOL_APPROVAL_ADD', approval });
+        show({
+          title: approved ? 'Approval not delivered' : 'Denial not delivered',
+          description:
+            'The agent did not receive your decision. Nothing was published — please answer again.',
+          variant: 'error',
         });
+      });
     },
     [
       state.sessionId,
@@ -1797,6 +1815,7 @@ export function OrganicAgentPanel({
                     <ToolApprovalCard
                       key={approval.approvalId}
                       approval={approval}
+                      brandId={brandId}
                       disabled={composerBusy}
                       onApproveAction={() => handleToolApproval(approval, true)}
                       onDenyAction={() => handleToolApproval(approval, false)}

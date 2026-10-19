@@ -4,6 +4,7 @@ import {
   type BulkContentPlan,
   bulkContentPlanSchema,
   chatMediaStripDataSchema,
+  headlessBatchQuoteSchema,
   type MediaSearchResultsFrame,
   mediaSearchResultsFrameSchema,
   type OrganicStreamFrame,
@@ -13,8 +14,10 @@ import {
   organicTrendChartDataSchema,
   proposedPlanSchema,
 } from '@continuum/contracts';
+import { z } from 'zod';
 import type { CalendarPlacement } from '@/lib/organic/calendar-generation';
 import { friendlyStreamError } from '@/lib/organic/streamErrorMessage';
+import { headlessBatchStatusReader } from '@/lib/organic-agent/headlessBatch';
 import type {
   AgentJobState,
   CheckpointState,
@@ -500,13 +503,24 @@ function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | nul
   return { planId: planId ?? null, itemId, status, jobId, draftId };
 }
 
+// The contract's quote is strict; read here, an additive Backend field must not drop the quote
+// (and with it the only card that may approve the batch's money).
+const lenientBatchQuoteSchema = z.object(headlessBatchQuoteSchema.shape);
+
 function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
   const payload = getEventPayload(event);
   const approvalId = readNonEmptyString(payload.approvalId);
   const toolCallId = readNonEmptyString(payload.toolCallId);
   const toolName = readNonEmptyString(payload.toolName);
   if (!approvalId || !toolCallId || !toolName) return null;
-  return { approvalId, toolCallId, toolName, input: payload.input };
+  const batchPreview = lenientBatchQuoteSchema.safeParse(payload.batchPreview);
+  return {
+    approvalId,
+    toolCallId,
+    toolName,
+    input: payload.input,
+    ...(batchPreview.success ? { batchPreview: batchPreview.data } : {}),
+  };
 }
 
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
@@ -624,6 +638,13 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       const strip = chatMediaStripDataSchema.safeParse(getEventPayload(frame));
       return strip.success
         ? { kind: 'uiCard', card: { type: 'media_strip', data: strip.data } }
+        : { kind: 'invalid', type };
+    }
+    // Latest wins per batchId (upsertUiCard); the card polls the batch route from here on.
+    case 'ui.headless_batch': {
+      const batch = headlessBatchStatusReader.safeParse(getEventPayload(frame));
+      return batch.success
+        ? { kind: 'uiCard', card: { type: 'headless_batch', data: batch.data } }
         : { kind: 'invalid', type };
     }
     case 'ui.skill_proposal': {

@@ -19,9 +19,12 @@ const KIND_ASPECT: Record<ChatMediaKind, number> = { image: 1, carousel: 4 / 5, 
 const MIN_ASPECT = 9 / 16;
 const MAX_ASPECT = 16 / 9;
 
-export function mediaStripTileWidth(item: Pick<ChatMediaItem, 'kind' | 'w' | 'h'>): number {
+export function mediaStripTileWidth(
+  item: Pick<ChatMediaItem, 'kind' | 'w' | 'h'>,
+  tileHeight = MEDIA_STRIP_TILE_HEIGHT,
+): number {
   const aspect = item.w && item.h ? item.w / item.h : KIND_ASPECT[item.kind];
-  return Math.round(MEDIA_STRIP_TILE_HEIGHT * Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, aspect)));
+  return Math.round(tileHeight * Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, aspect)));
 }
 
 const KIND_LABEL: Record<ChatMediaKind, string> = {
@@ -136,13 +139,23 @@ type MediaStripProps = {
   className?: string;
   /** Identifies the strip in the DOM (the tool call it belongs to). */
   stripId?: string;
+  /** Tiles shorter than the chat's (a batch card's rows); widths follow from it. */
+  tileHeight?: number;
 };
 
 /**
  * One renderer for every media strip: a tool result in the Organic chat, and headless outputs.
  * Items are refs; the strip signs them in one call on view and re-signs a tile that fails.
  */
-export function MediaStrip({ brandId, items, total, label, className, stripId }: MediaStripProps) {
+export function MediaStrip({
+  brandId,
+  items,
+  total,
+  label,
+  className,
+  stripId,
+  tileHeight = MEDIA_STRIP_TILE_HEIGHT,
+}: MediaStripProps) {
   const refs = useMemo(() => items.map((item) => item.ref), [items]);
   const [observe, near] = useNearViewport();
   const { tiles, settled, recover } = useChatMediaTiles(brandId, refs, { enabled: near });
@@ -179,7 +192,7 @@ export function MediaStrip({ brandId, items, total, label, className, stripId }:
               data-media-key={key}
               data-tile-state={state}
               className="shrink-0"
-              style={{ width: mediaStripTileWidth(item), height: MEDIA_STRIP_TILE_HEIGHT }}
+              style={{ width: mediaStripTileWidth(item, tileHeight), height: tileHeight }}
             >
               <MediaStripTile
                 item={item}
@@ -194,7 +207,7 @@ export function MediaStrip({ brandId, items, total, label, className, stripId }:
         {more > 0 ? (
           <li
             className="flex shrink-0 items-center justify-center rounded-md border border-border/60 px-3 text-xs tabular-nums text-muted-foreground"
-            style={{ height: MEDIA_STRIP_TILE_HEIGHT }}
+            style={{ height: tileHeight }}
           >
             +{more} more
           </li>

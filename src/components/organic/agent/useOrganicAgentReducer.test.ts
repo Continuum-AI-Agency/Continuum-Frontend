@@ -1277,3 +1277,58 @@ describe('media strips', () => {
     expect(state.messages[0]?.uiCards).toEqual([strip('replayed'), strip('second', 'call_2')]);
   });
 });
+
+describe('the reply to an approval', () => {
+  const approval = {
+    approvalId: 'approval-1',
+    toolCallId: 'call_publish',
+    toolName: 'publishDraft',
+    input: {},
+  };
+
+  // The turn that asked for approval has finished: no row is open.
+  function awaitingApproval() {
+    let state = panelReducer(initialPanelState(), {
+      type: 'SUBMIT_USER_MESSAGE',
+      content: 'Publish it',
+      messageId: 'user-1',
+    });
+    state = panelReducer(state, { type: 'TOOL_APPROVAL_ADD', approval });
+    state = panelReducer(state, { type: 'STREAM_COMPLETE' });
+    state = panelReducer(state, { type: 'TOOL_APPROVAL_RESOLVE', approvalId: 'approval-1' });
+    return panelReducer(state, { type: 'BEGIN_STREAMING', messageId: 'reply-1' });
+  }
+
+  it('streams into a new assistant row', () => {
+    let state = awaitingApproval();
+    applyOrganicFrame(
+      { type: 'response.output_text.delta', data: { delta: 'Published.' } },
+      (action) => {
+        state = panelReducer(state, action);
+      },
+      'chat',
+    );
+
+    expect(state.messages.map((m) => m.id)).toEqual(['user-1', expect.any(String), 'reply-1']);
+    expect(state.messages[2]?.content).toBe('Published.');
+  });
+
+  it('paints a transient error instead of silently re-sending the previous message', () => {
+    const state = panelReducer(awaitingApproval(), {
+      type: 'STREAM_ERROR',
+      error: 'Upstream hiccup',
+      transient: true,
+    });
+
+    expect(state.pendingAutoRetry).toBeNull();
+    expect(state.messages.find((m) => m.id === 'reply-1')?.error).toBe('Upstream hiccup');
+  });
+
+  it('leaves no row behind when the decision was never delivered', () => {
+    let state = panelReducer(awaitingApproval(), { type: 'STREAM_ERROR', error: 'offline' });
+    state = panelReducer(state, { type: 'STREAM_COMPLETE' });
+    state = panelReducer(state, { type: 'DISCARD_MESSAGE', messageId: 'reply-1' });
+
+    expect(state.messages.map((m) => m.id)).not.toContain('reply-1');
+  });
+});

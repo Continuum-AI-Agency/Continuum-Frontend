@@ -246,16 +246,20 @@ export type HeadlessCastApproveResponse = z.infer<typeof headlessCastApproveResp
 /** GET: the same status the tool and the frame carry. */
 export const HEADLESS_BATCH_STATUS_ROUTE = '/api/headless/batch';
 
-/** ?brandId&batchId, or ?brandId&sessionId for the session's newest batch (a bulk plan's). */
+/**
+ * ?brandId&batchId; or ?brandId&sessionId for the session's newest batch; or ?brandId&planId for a
+ * bulk plan's batch (made after its run ends, so no chat turn carries its frame).
+ */
 export const headlessBatchStatusQuerySchema = z
   .object({
     brandId: z.string().uuid(),
     batchId: z.string().uuid().optional(),
     sessionId: z.string().min(1).max(200).optional(),
+    planId: z.string().min(1).max(200).optional(),
   })
   .strict()
-  .refine((query) => Boolean(query.batchId || query.sessionId), {
-    message: 'a batchId or a sessionId',
+  .refine((query) => Boolean(query.batchId || query.sessionId || query.planId), {
+    message: 'a batchId, a sessionId or a planId',
   });
 export type HeadlessBatchStatusQuery = z.infer<typeof headlessBatchStatusQuerySchema>;
 
