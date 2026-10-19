@@ -47,7 +47,7 @@ import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview'
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
@@ -639,7 +639,7 @@ export function TemplateDetail({
             slots: edits.map((edit) => templateSourceSlotEditSchema.parse(edit)),
           },
         });
-        await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+        await invalidateForgeBrand(queryClient, brandId);
         await onChanged();
         await onOpenVariant?.(saved.sourceAssetId, 'variables');
         toast.success('Saved template revision');
@@ -1840,12 +1840,11 @@ export function TemplateDetail({
             <TemplateLayerEditor
               brandId={brandId}
               assetId={assetId}
-              active={tab === 'layers'}
               versionId={source.versionId}
               name={source.displayName ?? source.parse?.filename ?? 'Template'}
               parse={source.parse}
               onSaved={async () => {
-                await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+                await invalidateForgeBrand(queryClient, brandId);
                 await Promise.all([onChanged(), loadVariables()]);
               }}
               onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}

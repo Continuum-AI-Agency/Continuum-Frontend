@@ -8,12 +8,15 @@ import {
   type ApiRenderDeliveryTarget,
   type ApiRenderEncodeOverride,
   type ApiRenderJob,
+  type ApiRenderReadinessFinding,
   type ApiRenderTemplateContract,
   describeEncodeSettings,
   encodeContainerOf,
+  leavesCheckIncomplete,
   mergeEncodeSettings,
   outputFormatsOfParse,
   type Renderer,
+  readinessOf,
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +46,7 @@ import {
 } from '@/components/forge/DeliveryTargetPicker';
 import { approvalDestinationsKey } from '@/components/forge/DestinationApproversPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { explainFinding, readinessLine, readinessReasons } from '@/components/forge/readinessCopy';
 import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
   PREFLIGHT_DEBOUNCE_MS,
@@ -60,6 +64,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ApiError } from '@/lib/api/errors';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
@@ -105,6 +110,8 @@ export type RenderReviewTrayProps = {
   templateKey: string;
   contractHash: string;
   templateRef?: string | null;
+  /** The set's pinned template revision: a re-pin changes every row's check, nothing else here does. */
+  templateRevisionId?: string | null;
   contract: ApiRenderTemplateContract;
   rows: RenderPreflightRow[];
   records: ApiRenderBatchRecord[];
@@ -135,7 +142,7 @@ const STEPS: { id: Step; label: string }[] = [
 ];
 
 type Review =
-  | { state: 'loading' }
+  | { state: 'loading'; checking: number }
   | { state: 'ready'; readiness: ApiRenderBatchReadiness }
   | { state: 'refused'; message: string; details: string[] }
   | { state: 'failed'; message: string };
@@ -209,6 +216,7 @@ export function RenderReviewTray({
   templateKey,
   contractHash,
   templateRef,
+  templateRevisionId,
   contract,
   rows,
   records,
@@ -226,7 +234,7 @@ export function RenderReviewTray({
 }: RenderReviewTrayProps) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('review');
-  const [review, setReview] = useState<Review>({ state: 'loading' });
+  const [review, setReview] = useState<Review>({ state: 'loading', checking: rows.length });
   const [destinations, setDestinations] = useState<Destinations>('loading');
   const [slackDestination, setSlackDestination] = useState<ApiRenderDeliveryDestination | null>(
     null,
@@ -295,10 +303,44 @@ export function RenderReviewTray({
   };
   const fileCount = rows.reduce((total, row) => total + rowFileCount(contract, row), 0);
 
+  // Each record's findings, by everything its check reads. The set's revision is left out: every
+  // save bumps it, and it changes no row's verdict — so an edit re-checks only the rows it changed.
+  const verdicts = useRef(new Map<string, ApiRenderReadinessFinding[]>());
+  // Only the newest review lands: a slow answer about older rows must not replace a newer one.
+  const latestReview = useRef(0);
+
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
-    async (acceptFonts = acceptMissingFonts) => {
-      setReview({ state: 'loading' });
+    async (acceptFonts = acceptMissingFonts, { fresh = false } = {}) => {
+      const mine = ++latestReview.current;
+      if (fresh) verdicts.current.clear();
+      const keys = records.map((record) =>
+        JSON.stringify([
+          brandId,
+          bindingId,
+          templateKey,
+          contractHash,
+          templateRef ?? null,
+          templateRevisionId ?? null,
+          acceptFonts,
+          approvalDestinationIds,
+          renderer,
+          record.renderSetRowId ?? null,
+          record.variables ?? null,
+          record.outputIds ?? null,
+          record.encode ?? null,
+        ]),
+      );
+      const settle = () =>
+        setReview({
+          state: 'ready',
+          readiness: readinessOf(keys.map((key) => verdicts.current.get(key) ?? [])),
+        });
+      const todo = records.flatMap((record, index) =>
+        verdicts.current.has(keys[index]!) ? [] : [{ record, key: keys[index]! }],
+      );
+      if (!todo.length) return settle();
+      setReview({ state: 'loading', checking: todo.length });
       try {
         const response = await apiRendersApi.batchPreflight({
           brandId,
@@ -306,13 +348,20 @@ export function RenderReviewTray({
           templateKey,
           contractHash,
           ...(templateRef ? { templateRef } : {}),
-          records: records.map(({ delivery: _delivery, ...record }) => record),
+          records: todo.map(({ record: { delivery: _delivery, ...record } }) => record),
           ...(acceptFonts ? { acceptMissingFonts: true } : {}),
           ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
           ...(renderer === 'experimental' ? { renderer } : {}),
         });
-        setReview({ state: 'ready', readiness: response.readiness });
+        if (mine !== latestReview.current) return;
+        // A row that passed has no findings, and is as settled as one that has some.
+        const checked = todo.map((): ApiRenderReadinessFinding[] => []);
+        for (const { rowIndexes, ...finding } of response.readiness.findings)
+          for (const at of rowIndexes) checked[at]?.push(finding);
+        todo.forEach(({ key }, at) => verdicts.current.set(key, checked[at] ?? []));
+        settle();
       } catch (error) {
+        if (mine !== latestReview.current) return;
         const { message, details } = describeFailure(error);
         setReview(
           error instanceof ApiError && error.status === 422
@@ -328,6 +377,7 @@ export function RenderReviewTray({
       templateKey,
       contractHash,
       templateRef,
+      templateRevisionId,
       records,
       approvalDestinationIds,
       renderer,
@@ -785,7 +835,7 @@ export function RenderReviewTray({
                       type="button"
                       size="xs"
                       variant="outline"
-                      onClick={() => void runReview()}
+                      onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
                     >
                       Retry
                     </Button>
@@ -826,22 +876,27 @@ export function RenderReviewTray({
                             <p
                               key={`${finding.code}:${finding.variableKey ?? ''}`}
                               className={cn(
-                                'truncate',
-                                finding.severity === 'unknown'
+                                'text-pretty',
+                                finding.severity === 'unknown' && !leavesCheckIncomplete(finding)
                                   ? 'text-muted-foreground'
                                   : 'text-warning',
                               )}
                             >
-                              {finding.variableKey ? `${variableLabel(finding.variableKey)}: ` : ''}
-                              {finding.message}
+                              {explainFinding(finding, variableLabel)}
                             </p>
                           ))}
                         </div>
                         <span className="text-right font-mono tabular-nums text-muted-foreground">
                           {plural(rowFileCount(contract, row), 'file')}
                         </span>
-                        {findings.some((finding) => finding.severity !== 'unknown') ? (
-                          <AlertTriangle className="size-3.5 text-warning" aria-label="Warning" />
+                        {findings.some(
+                          (finding) =>
+                            finding.severity !== 'unknown' || leavesCheckIncomplete(finding),
+                        ) ? (
+                          <AlertTriangle
+                            className="size-3.5 text-warning"
+                            aria-label="Not fully checked"
+                          />
                         ) : review.state === 'ready' ? (
                           <CheckCircle2 className="size-3.5 text-success" aria-label="Ready" />
                         ) : (
@@ -953,17 +1008,12 @@ export function RenderReviewTray({
                 review.state === 'loading' ? (
                   <>
                     <Loader2 className="size-3 animate-spin" aria-hidden /> Checking{' '}
-                    {plural(rows.length, 'row')} against the workspace…
+                    {review.checking < rows.length
+                      ? `${plural(review.checking, 'changed row')}…`
+                      : `${plural(rows.length, 'row')} against the workspace…`}
                   </>
                 ) : review.state === 'ready' ? (
-                  <span
-                    className={cn(
-                      'font-medium',
-                      review.readiness.state === 'READY' ? 'text-foreground' : 'text-warning',
-                    )}
-                  >
-                    {readinessLine(review.readiness)}
-                  </span>
+                  <ReadinessLine readiness={review.readiness} labelOf={variableLabel} />
                 ) : (
                   <span className="text-destructive">Can’t render as they are</span>
                 )
@@ -1134,12 +1184,36 @@ function RunningStep({
   );
 }
 
-function readinessLine(readiness: ApiRenderBatchReadiness): string {
-  if (readiness.state === 'READY') {
-    return `Ready · ${readiness.readyRows} of ${plural(readiness.totalRows, 'row')} checked`;
-  }
-  if (readiness.state === 'BLOCKED') {
-    return `Blocked · ${plural(readiness.blockedRows, 'row')} can’t render as they are`;
-  }
-  return `Check incomplete · ${plural(readiness.unknownRows, 'row')} couldn’t be fully checked — they can still render`;
+/** The verdict, and on hover every reason a row was not fully checked or is checked after render. */
+function ReadinessLine({
+  readiness,
+  labelOf,
+}: {
+  readiness: ApiRenderBatchReadiness;
+  labelOf: (key: string | undefined) => string | undefined;
+}) {
+  const line = (
+    <span
+      className={cn(
+        'truncate font-medium',
+        readiness.state === 'READY' ? 'text-foreground' : 'text-warning',
+      )}
+    >
+      {readinessLine(readiness, labelOf)}
+    </span>
+  );
+  const reasons = readinessReasons(readiness, labelOf);
+  if (!reasons.length) return line;
+  return (
+    <Tooltip>
+      <TooltipTrigger className="min-w-0 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden">
+        {line}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-md flex-col items-start">
+        {reasons.map((reason) => (
+          <p key={reason}>{reason}</p>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
 }

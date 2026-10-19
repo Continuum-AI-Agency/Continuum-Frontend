@@ -21,7 +21,7 @@ import {
   fetchTemplateLayerInventory,
   saveTemplateRevision,
 } from '@/lib/library/templateSources';
-import { forgeQueryKeys } from './queryKeys';
+import { invalidateForgeBrand } from './queryKeys';
 
 export const BRAND_ALIGNED_VARIANT_NAME = 'Brand-aligned';
 
@@ -106,7 +106,7 @@ export function ApplyDesignSystemButton({
         edits,
       });
       intent.current = null;
-      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.brand(brandId) });
+      await invalidateForgeBrand(queryClient, brandId);
       show({
         title: 'Brand-aligned variant created',
         description: describe(report),

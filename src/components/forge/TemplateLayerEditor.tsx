@@ -297,7 +297,6 @@ export function TemplateLayerEditor({
   versionId,
   name,
   parse,
-  active,
   onSaved,
   onOpenVariant,
   onDraftChange,
@@ -312,7 +311,6 @@ export function TemplateLayerEditor({
   name: string;
   /** The parse the page already holds: the shell paints from it before any layer data arrives. */
   parse?: TemplatePreview | null;
-  active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void | Promise<void>;
   initialComp?: string;
@@ -568,6 +566,7 @@ export function TemplateLayerEditor({
     queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const baseScene = useQuery({
@@ -575,6 +574,7 @@ export function TemplateLayerEditor({
     queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
     placeholderData: keepPreviousData,
     retry: false,
   });
