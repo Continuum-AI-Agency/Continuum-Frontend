@@ -3,7 +3,8 @@ import { z } from 'zod';
 /** Static source facts from the Rust parser. Script-evaluated layout belongs to the browser. */
 export const hyperframesStructureSchema = z.object({
   schemaVersion: z.literal(1),
-  parser: z.literal('hyperframes-rust@0.1.0'),
+  // Read old immutable sources while new ingestion identifies the mixed-run mapper.
+  parser: z.enum(['hyperframes-rust@0.1.0', 'hyperframes-rust@0.2.0']),
   sourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
   documentSha256: z.string().regex(/^[a-f0-9]{64}$/),
   parentSourceSha256: z
@@ -47,6 +48,8 @@ export const hyperframesStructureSchema = z.object({
       value: z.string(),
       attribute: z.string().optional(),
       copyKind: z.string().nullable().optional(),
+      /** Direct text-node ordinal for mixed content; stable while inline structure is unchanged. */
+      runIndex: z.number().int().nonnegative().optional(),
     }),
   ),
   dependencies: z.array(
