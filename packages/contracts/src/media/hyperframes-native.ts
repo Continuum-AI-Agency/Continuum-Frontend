@@ -238,6 +238,40 @@ export const hyperframesNativeEditsSchema = z
   .strict();
 export type HyperframesNativeEdits = z.infer<typeof hyperframesNativeEditsSchema>;
 
+/** Authored reveal checkpoints use the pinned GSAP clock, independently of delivery FPS. */
+export const hyperframesTextRevealSchema = z
+  .object({
+    adapter: z.literal('gsap-prefix/1'),
+    ticksPerSecond: z.literal(10_000_000),
+    checkpoints: z
+      .array(
+        z
+          .object({
+            tick: z.number().int().min(0).max(6_000_000_000),
+            graphemes: z.number().int().min(0).max(10_000),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(1000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.checkpoints[0]!.tick !== 0 ||
+      value.checkpoints.some(
+        (point, index) =>
+          index > 0 &&
+          (point.tick <= value.checkpoints[index - 1]!.tick ||
+            point.graphemes < value.checkpoints[index - 1]!.graphemes),
+      )
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Reveal checkpoints require increasing times and monotone prefixes',
+      });
+  });
+export type HyperframesTextReveal = z.infer<typeof hyperframesTextRevealSchema>;
 export const hyperframesCapabilitySchema = z
   .object({
     nodeId: id,
@@ -254,8 +288,20 @@ export const hyperframesCapabilitySchema = z
     ]),
     state: z.enum(['editable', 'runtime-controlled', 'unsupported']),
     reason: z.string().max(4096).optional(),
+    /** Complete resolved copy, rather than only the first revealed prefix in the source DOM. */
+    text: z
+      .object({ value: z.string().max(65_536), reveal: hyperframesTextRevealSchema })
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.text && (value.operation !== 'text' || value.state !== 'editable' || !value.fieldId))
+      context.addIssue({
+        code: 'custom',
+        message: 'Qualified reveal metadata requires an editable text field',
+      });
+  });
 export const hyperframesCompilerBuildSchema = z
   .object({
     compiler: z.string().min(1),
