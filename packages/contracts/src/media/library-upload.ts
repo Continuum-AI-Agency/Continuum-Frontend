@@ -63,6 +63,8 @@ export const registerMediaResponseSchema = z
     status: z.enum(['ready', 'exists']),
     assetId: z.string(),
     versionId: z.string().uuid(),
+    /** Native source ingestion is independently tracked until parse and compile finish. */
+    ingestJobId: z.string().uuid().optional(),
     storagePath: z.string(),
     signedUrl: z.string().min(1),
   })
@@ -73,6 +75,7 @@ export const registerMediaErrorSchema = z
     ok: z.literal(false),
     status: z.literal('error'),
     message: z.string(),
+    code: z.string().min(1).max(120).optional(),
   })
   .strict();
 

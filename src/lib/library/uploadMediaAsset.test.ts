@@ -130,6 +130,19 @@ describe('uploadMediaAsset', () => {
     });
   });
 
+  it('retains the native ingestion job identity independently of upload completion', async () => {
+    const ingestJobId = '22222222-2222-4222-8222-222222222222';
+    const client = makeClient({ calls: [], register: { data: { ...VALID_REGISTER, ingestJobId } } });
+    const result = await uploadMediaAsset(
+      { file: new File(['<main>Native</main>'], 'source.html', { type: 'text/html' }), brandId: 'b1' },
+      { createClient: () => client, supabaseUrl: 'https://fixture.invalid',
+        resumableUpload: async () => ({ uploadUrl: 'https://fixture.invalid/upload/id' }),
+        attachPreview: async () => 'ready' },
+    );
+    expect(result.ingestJobId).toBe(ingestJobId);
+    expect(result.versionId).toBe(VALID_REGISTER.versionId);
+  });
+
   // analyze_media only sees bytes, so it cannot work out a duration for itself. The
   // browser has the decoded file already, and register is the call that enqueues
   // analysis — so the duration has to ride along with it or the long-form skip is

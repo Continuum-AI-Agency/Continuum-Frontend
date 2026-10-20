@@ -96,6 +96,7 @@ export async function computeChecksum(file: File): Promise<string | null> {
 
 export interface UploadMediaAssetResult {
   assetId: string;
+  ingestJobId?: string;
   storagePath: string;
   signedUrl: string;
   /** Storage path of the generated poster; null for images and for videos whose poster failed. */
@@ -427,6 +428,7 @@ export async function uploadMediaAsset(
     return {
       assetId: ok.data.assetId,
       versionId: ok.data.versionId,
+      ...(ok.data.ingestJobId ? { ingestJobId: ok.data.ingestJobId } : {}),
       storagePath: ok.data.storagePath,
       signedUrl: ok.data.signedUrl,
       thumbnailPath,
