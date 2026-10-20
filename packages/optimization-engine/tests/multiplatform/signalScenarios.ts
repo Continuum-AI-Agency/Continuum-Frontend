@@ -36,7 +36,7 @@ type TikTok = NonNullable<PlatformSignals['tiktok']>;
 
 /** Every evaluation, whatever it found: cards and actions pass their contracts, every
  *  finding waits for a person, no reason prints a "$" without its ISO code, and (rule, entity, subject) is unique. */
-function wellFormed(r: PlatformSignalsEvaluation): string[] {
+export function wellFormed(r: PlatformSignalsEvaluation): string[] {
   const problems: string[] = [];
   const keys = new Set<string>();
   for (const x of r.recommendations) {

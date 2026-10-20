@@ -340,6 +340,99 @@ export const TikTokDeliveryIssueCardSchema = z.object({
   ),
 });
 
+/** A priced figure the G7 cards compare against: what a person recognises it by and its cost
+ *  per result over the card's window. */
+const PricedSubjectSchema = z.object({
+  label: z.string().min(1),
+  cost_per_result: z.number().positive(),
+});
+
+/** An ad that drags its ad group (G09, inherits C1): it holds most of the group's spend at a
+ *  cost well above the group's best ad, or it spent past the target without one result. The
+ *  pause leaves the group at least one enabled ad. */
+export const GoogleAdDragCardSchema = z.object({
+  variant: z.literal('google_ad_drag'),
+  campaign_name: z.string().min(1),
+  ad_group_name: z.string().min(1),
+  ad_label: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  window_days: z.number().int().positive(),
+  spend: money,
+  /** The ad's share of its ad group's spend over the window, 0..1. */
+  spend_share: share,
+  conversions: z.number().nonnegative(),
+  /** Null when the ad bought nothing: there is no price to print. */
+  cost_per_result: z.number().positive().nullable(),
+  /** The group's cheapest ad, when one is priced. */
+  winner: PricedSubjectSchema.nullable(),
+  /** Enabled ads the group keeps once this one is paused. */
+  ads_remaining: z.number().int().positive(),
+});
+
+/** A winning ad worth varying (G10, inherits C2): the cheapest ad of its group, the priced
+ *  sibling it beats, and the texts Google rates BEST in it — what the new ad starts from. */
+export const GoogleAdWinnerCardSchema = z
+  .object({
+    variant: z.literal('google_ad_winner'),
+    campaign_name: z.string().min(1),
+    ad_group_name: z.string().min(1),
+    currency: CurrencyCodeSchema.nullable(),
+    window_days: z.number().int().positive(),
+    winner: PricedSubjectSchema.extend({ conversions: z.number().positive() }),
+    comparator: PricedSubjectSchema,
+    best_assets: z.array(z.string().min(1)),
+  })
+  .refine((card) => card.comparator.cost_per_result > card.winner.cost_per_result, {
+    message: 'the comparator costs more per result than the winner',
+    path: ['comparator'],
+  });
+
+/** The same people seeing a campaign too often while each result gets dearer (G23, inherits
+ *  F2): the 7-day frequency against its cap, and the cost per result before and now. */
+export const GoogleAudienceSaturationCardSchema = z
+  .object({
+    variant: z.literal('google_audience_saturation'),
+    campaign_name: z.string().min(1),
+    /** campaign.advertising_channel_type: DISPLAY, VIDEO, DEMAND_GEN. */
+    channel_type: z.string().min(1),
+    frequency: z.number().positive(),
+    frequency_cap: z.number().positive(),
+    unique_users: z.number().int().nonnegative().nullable(),
+    currency: CurrencyCodeSchema.nullable(),
+    /** Cost per result over the last 3 days and over the last 14. */
+    cost_per_result_now: z.number().positive(),
+    cost_per_result_before: z.number().positive(),
+  })
+  .refine((card) => card.cost_per_result_now > card.cost_per_result_before, {
+    message: 'saturation is a cost per result that rose',
+    path: ['cost_per_result_now'],
+  });
+
+/** Performance Max assets that drag their asset group (G18_pmax_assets): each one is measured
+ *  against the best asset of its own field type in the same group, from Google's per-asset
+ *  metrics. No write: a replacement is made first and reviewed before the old one goes. */
+export const GooglePmaxAssetsCardSchema = z.object({
+  variant: z.literal('google_pmax_assets'),
+  campaign_name: z.string().min(1),
+  asset_group_name: z.string().min(1),
+  currency: CurrencyCodeSchema.nullable(),
+  window_days: z.number().int().positive(),
+  assets: z
+    .array(
+      z.object({
+        /** HEADLINE, DESCRIPTION, MARKETING_IMAGE, YOUTUBE_VIDEO, … */
+        field_type: z.string().min(1),
+        label: z.string().min(1),
+        spend: money,
+        conversions: z.number().nonnegative(),
+        /** Null when the asset bought nothing. */
+        cost_per_result: z.number().positive().nullable(),
+        best_of_kind: PricedSubjectSchema,
+      }),
+    )
+    .min(1),
+});
+
 export const PlatformCardSchema = z.union([
   GoogleBudgetLimitedCardSchema,
   GooglePmaxAssetGroupCardSchema,
@@ -358,6 +451,10 @@ export const PlatformCardSchema = z.union([
   TikTokAttributionWindowCardSchema,
   GoogleDeliveryIssueCardSchema,
   TikTokDeliveryIssueCardSchema,
+  GoogleAdDragCardSchema,
+  GoogleAdWinnerCardSchema,
+  GoogleAudienceSaturationCardSchema,
+  GooglePmaxAssetsCardSchema,
 ]);
 export type PlatformCard = z.infer<typeof PlatformCardSchema>;
 export type PlatformCardVariant = PlatformCard['variant'];

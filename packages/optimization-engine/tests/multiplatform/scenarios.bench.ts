@@ -34,6 +34,7 @@ import type {
 } from '../../src';
 import * as engine from '../../src';
 import { runDeliveryScenarios } from './deliveryScenarios';
+import { runG7Scenarios } from './g7Scenarios';
 import {
   AS_OF,
   daysBetween,
@@ -84,7 +85,7 @@ const unreadable = files.filter((file) => {
 });
 rec.check(
   'catalog: scenarios.json and every fixture it names load',
-  index.scenarios.length === 44 && unreadable.length === 0,
+  index.scenarios.length === 49 && unreadable.length === 0,
   `${index.scenarios.length} scenarios, ${files.length} fixtures${unreadable.length ? `, unreadable: ${unreadable.join(', ')}` : ''}`,
 );
 
@@ -1169,6 +1170,12 @@ runSignalScenarios(rec);
 // Vivo 47 reads and the DOC_SHAPED TikTok reads, then evaluatePlatformSignals
 // ---------------------------------------------------------------------------
 runDeliveryScenarios(rec);
+
+// ---------------------------------------------------------------------------
+// 45–49 — G7: Google's creative and fatigue rules (G09/G10, G18_pmax_assets, G23) on the REAL
+// ads, assets and frequency reads through the scope's mappers, and G5's follow-ups on b9cebbcf
+// ---------------------------------------------------------------------------
+runG7Scenarios(rec);
 
 // ---------------------------------------------------------------------------
 // What this bench does not assert, by name

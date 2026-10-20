@@ -1,0 +1,53 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.bidding_strategy_system_status, campaign.start_date_time, campaign_budget.id, campaign_budget.amount_micros, campaign_budget.period, campaign_budget.explicitly_shared FROM campaign WHERE campaign.status = 'ENABLED'",
+    "rows": 2
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "status": "ENABLED",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "Search | Octubre | Easy Fit",
+        "id": "24321097869",
+        "biddingStrategySystemStatus": "PAUSED",
+        "startDateTime": "2026-10-06 14:35:11"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15922101965",
+        "period": "DAILY",
+        "id": "15922101965",
+        "amountMicros": "350000000",
+        "explicitlyShared": false
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "status": "ENABLED",
+        "advertisingChannelType": "PERFORMANCE_MAX",
+        "biddingStrategyType": "MAXIMIZE_CONVERSIONS",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "24321868026",
+        "biddingStrategySystemStatus": "PAUSED",
+        "startDateTime": "2026-10-06 22:05:52"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/5251780631/campaignBudgets/15922610858",
+        "period": "DAILY",
+        "id": "15922610858",
+        "amountMicros": "320000000",
+        "explicitlyShared": false
+      }
+    }
+  ]
+}

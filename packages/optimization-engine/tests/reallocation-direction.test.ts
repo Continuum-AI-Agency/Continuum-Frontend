@@ -9,7 +9,7 @@
 // its 14-day event counts (d7 ≈ half, d3 ≈ 3/14).
 import { expect, test } from 'bun:test';
 import type { AdSetSnapshot, WindowMetrics } from '../src/index';
-import { classifyStatus, getObjectiveProfile, reallocate, resolveConfig, scoreAdSet } from '../src/index';
+import { classifyPortfolio, classifyStatus, getObjectiveProfile, reallocate, resolveConfig, scoreAdSet } from '../src/index';
 
 const win = (spend: number, conversations: number): WindowMetrics => ({
   spend,
@@ -99,4 +99,165 @@ test('Meta: the learning stage the read carries decides, the conversion proxy on
   expect(classifyStatus(limited, cfg)).toBe('active');
   const noRead = { ...base, delivery: undefined };
   expect(classifyStatus(noRead, cfg)).toBe('learning');
+});
+
+// G5: the same rule on Google. b9cebbcf ("Leads // Google Ads only", Easy Fit, 670 MXN/day) on
+// its 2026-10-16 cycle, rebuilt day by day from optimizer.entity_daily (latest as_of, counted
+// leads): Search Octubre spent 2,329.92 MXN for 3 leads (776.64 each), PMax 2,158.74 for 22.97
+// (93.98). Both started 2026-10-08, so on that day they were 8 days old — past the 3-day lock,
+// and PMax inside its 14 days of protection.
+const leadProfile = getObjectiveProfile('lead');
+const leadCfg = { kpiField: leadProfile.kpiField, upperFunnelField: leadProfile.upperFunnelField };
+const leadWin = (spend: number, leads: number): WindowMetrics => ({
+  spend,
+  purchases: 0,
+  addToCarts: 0,
+  clicks: Math.round(spend / 8),
+  impressions: Math.round(spend * 30),
+  leads,
+});
+const googleB9 = (over: Partial<AdSetSnapshot> = {}): AdSetSnapshot[] => [
+  {
+    id: '24321097869',
+    name: 'Search | Octubre | Easy Fit',
+    status: 'active',
+    currentBudget: 350,
+    ageDays: 8,
+    platform: 'google_ads',
+    level: 'campaign',
+    automation: 'manual',
+    windows: { d3: leadWin(0.11, 0), d7: leadWin(1630.15, 3), d14: leadWin(2329.92, 3) },
+    ...over,
+  },
+  {
+    id: '24321868026',
+    name: 'PMax | Octubre | Easy Fit | Leads',
+    status: 'active',
+    currentBudget: 320,
+    ageDays: 8,
+    platform: 'google_ads',
+    level: 'campaign',
+    automation: 'pmax',
+    windows: { d3: leadWin(9.12, 0), d7: leadWin(1558.5, 18.97), d14: leadWin(2158.74, 22.97) },
+  },
+];
+
+test('Google: PMax inside its 14 days is protected — scored at the cohort average, never cut; with the other campaign active, nothing moves (b9cebbcf, 2026-10-16)', () => {
+  const classified = classifyPortfolio(googleB9(), resolveConfig(leadCfg));
+  expect(classified.map((s) => s.status)).toEqual(['active', 'grace']);
+  const result = reallocate(classified, 670, leadCfg);
+  expect(result.conserved).toBe(true);
+  for (const item of result.items) expect(Math.abs(item.changeAbs)).toBeLessThan(0.01);
+});
+
+test('Google: past the protection the cheaper campaign gains and the dearer loses — the same days, PMax 15 days old', () => {
+  const older = googleB9().map((s) => ({ ...s, ageDays: 15 }));
+  const classified = classifyPortfolio(older, resolveConfig(leadCfg));
+  expect(classified.map((s) => s.status)).toEqual(['active', 'active']);
+  const result = reallocate(classified, 670, leadCfg);
+  expect(result.conserved).toBe(true);
+  const [search, pmax] = result.items;
+  expect(search!.changeAbs).toBeLessThan(0);
+  expect(pmax!.changeAbs).toBeGreaterThan(0);
+});
+
+test('Google: a bid strategy Google reports LEARNING caps the cut, as Meta learning does', () => {
+  const learningCfg = resolveConfig(leadCfg);
+  const classified = classifyPortfolio(
+    googleB9({ bidding: { strategyType: 'MAXIMIZE_CONVERSIONS', systemStatus: 'LEARNING_NEW' } }),
+    learningCfg,
+  );
+  expect(classified[0]!.status).toBe('learning');
+  const [search] = reallocate(classified, 670, leadCfg).items;
+  expect(search!.changeAbs).toBeLessThan(0);
+  expect(search!.changeAbs).toBeGreaterThanOrEqual(-350 * learningCfg.learningReductionCapPct - 1e-6);
+});
+
+test('Google: PMax inside its 14 days is never cut, even beside a winner holding most of the money (gate-g5 1)', () => {
+  // Grace only averages the score; the solver kept PMax's normal down-cap, so an 8-day PMax
+  // beside a dominant winner went 300 → 210 (−30 %). PMax's protection is the whole point of
+  // its 14 days: it may receive, it may not lose.
+  const campaign = (id: string, current: number, spend: number, leads: number, over: Partial<AdSetSnapshot> = {}): AdSetSnapshot => ({
+    id,
+    name: id,
+    status: 'active',
+    currentBudget: current,
+    ageDays: 60,
+    platform: 'google_ads',
+    level: 'campaign',
+    automation: 'manual',
+    windows: { d3: leadWin(spend * 0.2, leads * 0.2), d7: leadWin(spend / 2, leads / 2), d14: leadWin(spend, leads) },
+    ...over,
+  });
+  const roster = [
+    campaign('winner', 1000, 7000, 140),
+    campaign('search-b', 300, 2100, 14),
+    campaign('pmax-young', 300, 2100, 20, { ageDays: 8, automation: 'pmax' }),
+  ];
+  const classified = classifyPortfolio(roster, resolveConfig(leadCfg));
+  expect(classified.map((s) => s.status)).toEqual(['active', 'active', 'grace']);
+  const pmax = reallocate(classified, 1600, leadCfg).items.find((i) => i.id === 'pmax-young')!;
+  expect(pmax.finalBudget).toBeGreaterThanOrEqual(300 - 1e-6);
+  expect(pmax.lowerBound).toBeGreaterThanOrEqual(300 - 1e-6);
+});
+
+test("Meta's grace is unchanged: a 3-day ad set keeps its normal down-cap", () => {
+  const young = { ...snapshots('active')[6]!, status: 'grace' as const, ageDays: 3, platform: 'meta' as const };
+  const roster = [...snapshots('active').slice(0, 6), young];
+  const item = reallocate(roster, 1200, { kpiField: profile.kpiField, upperFunnelField: profile.upperFunnelField, cpaTarget: 30 }).items[6]!;
+  expect(item.lowerBound).toBeLessThan(young.currentBudget);
+});
+
+// G5 follow-ups (gate-g5, "not blocking", picked up by G7).
+const googleCampaign = (id: string, current: number, spend: number, leads: number, over: Partial<AdSetSnapshot> = {}): AdSetSnapshot => ({
+  id,
+  name: id,
+  status: 'active',
+  currentBudget: current,
+  ageDays: 60,
+  platform: 'google_ads',
+  level: 'campaign',
+  automation: 'manual',
+  windows: { d3: leadWin(spend * 0.2, leads * 0.2), d7: leadWin(spend / 2, leads / 2), d14: leadWin(spend, leads) },
+  ...over,
+});
+
+test('Google: a graced campaign with no active peer holds its budget — a borrowed score is no efficiency basis (G5 follow-up)', () => {
+  // b9cebbcf with Search still learning its bid strategy: nothing is active, so grace had only
+  // Search's own composite to borrow, and the slack was split between them as if PMax had earned it.
+  const classified = classifyPortfolio(
+    googleB9({ bidding: { strategyType: 'MAXIMIZE_CONVERSIONS', systemStatus: 'LEARNING_NEW' } }),
+    resolveConfig(leadCfg),
+  );
+  expect(classified.map((s) => s.status)).toEqual(['learning', 'grace']);
+  const result = reallocate(classified, 790, leadCfg);
+  const pmax = result.items.find((i) => i.id === '24321868026')!;
+  expect(pmax.finalBudget).toBeCloseTo(320, 6);
+  expect(result.items.find((i) => i.id === '24321097869')!.finalBudget).toBeCloseTo(470, 6);
+  expect(result.notes.some((n) => n.includes('no active'))).toBe(true);
+});
+
+test('Google: lowering the total never cuts a graced PMax — the underflow relaxation keeps its protection (G5 follow-up)', () => {
+  const roster = [
+    googleCampaign('winner', 1000, 7000, 140),
+    googleCampaign('search-b', 300, 2100, 14),
+    googleCampaign('pmax-young', 300, 2100, 20, { ageDays: 8, automation: 'pmax' }),
+  ];
+  const classified = classifyPortfolio(roster, resolveConfig(leadCfg));
+  expect(classified.map((s) => s.status)).toEqual(['active', 'active', 'grace']);
+  const result = reallocate(classified, 1000, leadCfg);
+  expect(result.feasibility.underflow).toBe(true);
+  expect(result.conserved).toBe(true);
+  expect(result.items.find((i) => i.id === 'pmax-young')!.finalBudget).toBeGreaterThanOrEqual(300 - 1e-6);
+});
+
+test('Google: a total under what the graced PMax alone holds is refused by name — every budget holds', () => {
+  const roster = [
+    googleCampaign('winner', 1000, 7000, 140),
+    googleCampaign('pmax-young', 300, 2100, 20, { ageDays: 8, automation: 'pmax' }),
+  ];
+  const classified = classifyPortfolio(roster, resolveConfig(leadCfg));
+  const result = reallocate(classified, 250, leadCfg);
+  expect(result.refusal).toEqual({ reason: 'protected_above_total', protectedBudget: 300, totalBudget: 250 });
+  for (const item of result.items) expect(item.finalBudget).toBe(item.currentBudget);
 });

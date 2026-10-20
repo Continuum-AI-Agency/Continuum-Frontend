@@ -1423,6 +1423,14 @@ describe('a cross-platform budget move in the queue', () => {
     expect(screen.queryByTestId('budget-move-writes-off')).toBeNull();
   });
 
+  it('both rows switched on, as the G6 live bench sets them: Approve is offered and enabled', () => {
+    activeReport = withMove();
+    renderGroup({ platform_writes: { google_ads: true, meta: true } });
+    const approve = screen.getByRole('button', { name: 'Approve the move' });
+    expect(approve.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByTestId('budget-move-writes-off')).toBeNull();
+  });
+
   it('a portfolio whose only work is a move still shows its queue', () => {
     activeReport = { ...report, latest_items: [], recommendations: [moveRec({ id: MOVE_REC_ID })] };
     renderGroup();

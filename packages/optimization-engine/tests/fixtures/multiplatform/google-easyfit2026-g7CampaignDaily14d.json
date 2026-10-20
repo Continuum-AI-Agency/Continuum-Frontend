@@ -1,0 +1,210 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT segments.date, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM campaign WHERE segments.date BETWEEN '2026-10-06' AND '2026-10-19' AND campaign.status = 'ENABLED'",
+    "rows": 13
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "118",
+        "conversions": 0,
+        "costMicros": "699771519",
+        "impressions": "1813"
+      },
+      "segments": {
+        "date": "2026-10-08"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "134",
+        "conversions": 1,
+        "costMicros": "665763335",
+        "impressions": "1888"
+      },
+      "segments": {
+        "date": "2026-10-09"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "99",
+        "conversions": 0,
+        "costMicros": "507369367",
+        "impressions": "1261"
+      },
+      "segments": {
+        "date": "2026-10-10"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "81",
+        "conversions": 2,
+        "costMicros": "353963333",
+        "impressions": "718"
+      },
+      "segments": {
+        "date": "2026-10-11"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "52",
+        "conversions": 0,
+        "costMicros": "102953561",
+        "impressions": "469"
+      },
+      "segments": {
+        "date": "2026-10-12"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321097869",
+        "id": "24321097869"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "110000",
+        "impressions": "21"
+      },
+      "segments": {
+        "date": "2026-10-13"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "177",
+        "conversions": 4,
+        "costMicros": "600242689",
+        "impressions": "9051"
+      },
+      "segments": {
+        "date": "2026-10-08"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "302",
+        "conversions": 5.035187,
+        "costMicros": "631447744",
+        "impressions": "16652"
+      },
+      "segments": {
+        "date": "2026-10-09"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "284",
+        "conversions": 4.934871,
+        "costMicros": "437386916",
+        "impressions": "10866"
+      },
+      "segments": {
+        "date": "2026-10-10"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "217",
+        "conversions": 8,
+        "costMicros": "339481885",
+        "impressions": "7891"
+      },
+      "segments": {
+        "date": "2026-10-11"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "123",
+        "conversions": 2,
+        "costMicros": "141058201",
+        "impressions": "2424"
+      },
+      "segments": {
+        "date": "2026-10-12"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "9122560",
+        "impressions": "111"
+      },
+      "segments": {
+        "date": "2026-10-13"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "4"
+      },
+      "segments": {
+        "date": "2026-10-14"
+      }
+    }
+  ]
+}

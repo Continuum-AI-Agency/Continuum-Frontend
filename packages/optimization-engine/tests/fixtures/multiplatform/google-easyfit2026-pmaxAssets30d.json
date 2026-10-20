@@ -1,0 +1,1364 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT campaign.id, asset_group.id, asset_group.name, asset_group_asset.field_type, asset_group_asset.primary_status, asset.id, asset.text_asset.text, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM asset_group_asset WHERE segments.date BETWEEN '2026-09-20' AND '2026-10-19' AND campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED' AND asset_group_asset.status = 'ENABLED'",
+    "rows": 49
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "51",
+        "conversions": 2,
+        "costMicros": "52083780",
+        "impressions": "1059"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/106946819825",
+        "id": "106946819825"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~106946819825~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "78",
+        "conversions": 2.035187,
+        "costMicros": "330681631",
+        "impressions": "2670"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/423660057998",
+        "textAsset": {
+          "text": "Promociones Easy Fit"
+        },
+        "id": "423660057998"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~423660057998~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "206",
+        "conversions": 7,
+        "costMicros": "476590705",
+        "impressions": "3453"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/423660058046",
+        "textAsset": {
+          "text": "Agenda una visita guiada a una de nuestras sucursales."
+        },
+        "id": "423660058046"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~423660058046~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "1"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/425226790907",
+        "id": "425226790907"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~425226790907~AD_IMAGE",
+        "fieldType": "AD_IMAGE",
+        "primaryStatus": "PENDING"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "493",
+        "conversions": 17.934871,
+        "costMicros": "807680104",
+        "impressions": "8976"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/425318784941",
+        "id": "425318784941"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~425318784941~CALL_TO_ACTION_SELECTION",
+        "fieldType": "CALL_TO_ACTION_SELECTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "163",
+        "conversions": 4,
+        "costMicros": "303016492",
+        "impressions": "4097"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/425419651861",
+        "textAsset": {
+          "text": "Easy Fit: Tu Gimnasio"
+        },
+        "id": "425419651861"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~425419651861~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "175",
+        "conversions": 0,
+        "costMicros": "229749668",
+        "impressions": "18595"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/425419662604",
+        "textAsset": {
+          "text": "Clases de fitness"
+        },
+        "id": "425419662604"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~425419662604~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "81"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428140931432",
+        "id": "428140931432"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428140931432~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "50",
+        "conversions": 0,
+        "costMicros": "45961729",
+        "impressions": "566"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428140931477",
+        "id": "428140931477"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428140931477~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "14",
+        "conversions": 0,
+        "costMicros": "15640318",
+        "impressions": "177"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428141182019",
+        "id": "428141182019"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428141182019~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "1",
+        "conversions": 0,
+        "costMicros": "1252587",
+        "impressions": "43"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428141185349",
+        "id": "428141185349"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428141185349~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "248",
+        "conversions": 7.934871,
+        "costMicros": "759499404",
+        "impressions": "3860"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428141233661",
+        "id": "428141233661"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428141233661~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "20",
+        "conversions": 0,
+        "costMicros": "16482700",
+        "impressions": "191"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428141275664",
+        "id": "428141275664"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428141275664~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "110",
+        "conversions": 5.934871,
+        "costMicros": "142677597",
+        "impressions": "2425"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428141339972",
+        "id": "428141339972"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428141339972~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "26",
+        "conversions": 2,
+        "costMicros": "61017255",
+        "impressions": "295"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428181957560",
+        "id": "428181957560"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428181957560~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "30",
+        "conversions": 1,
+        "costMicros": "45248921",
+        "impressions": "1004"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428183517047",
+        "textAsset": {
+          "text": "Gimnasio familiar con múltiples sucursales en Easy Fit."
+        },
+        "id": "428183517047"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428183517047~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "55",
+        "conversions": 0,
+        "costMicros": "81821102",
+        "impressions": "1069"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428183517047",
+        "textAsset": {
+          "text": "Gimnasio familiar con múltiples sucursales en Easy Fit."
+        },
+        "id": "428183517047"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428183517047~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "54",
+        "conversions": 0.035187,
+        "costMicros": "84151557",
+        "impressions": "2804"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428183548619",
+        "textAsset": {
+          "text": "TRX, pilates, yoga y más"
+        },
+        "id": "428183548619"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428183548619~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "543",
+        "conversions": 1,
+        "costMicros": "894239051",
+        "impressions": "37452"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428183548631",
+        "textAsset": {
+          "text": "Promociones mensuales para que aproveches al máximo tu entrenamiento."
+        },
+        "id": "428183548631"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428183548631~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "21",
+        "conversions": 2,
+        "costMicros": "17048322",
+        "impressions": "345"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428183548637",
+        "textAsset": {
+          "text": "Gimnasio económico para toda la familia | Easy Fit"
+        },
+        "id": "428183548637"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428183548637~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "36",
+        "conversions": 2,
+        "costMicros": "44772111",
+        "impressions": "532"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240206951",
+        "id": "428240206951"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240206951~TALL_PORTRAIT_MARKETING_IMAGE",
+        "fieldType": "TALL_PORTRAIT_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "9",
+        "conversions": 2,
+        "costMicros": "15794599",
+        "impressions": "195"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240369296",
+        "id": "428240369296"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240369296~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "17",
+        "conversions": 1,
+        "costMicros": "42753718",
+        "impressions": "398"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240370073",
+        "id": "428240370073"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240370073~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "18440866",
+        "impressions": "162"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240442658",
+        "id": "428240442658"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240442658~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "6",
+        "conversions": 0,
+        "costMicros": "4668999",
+        "impressions": "89"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240442895",
+        "id": "428240442895"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240442895~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "19",
+        "conversions": 0,
+        "costMicros": "37556649",
+        "impressions": "463"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240442907",
+        "id": "428240442907"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240442907~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "9",
+        "conversions": 0,
+        "costMicros": "8532459",
+        "impressions": "169"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428240501755",
+        "id": "428240501755"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428240501755~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "53",
+        "conversions": 2,
+        "costMicros": "113943543",
+        "impressions": "879"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282764651",
+        "textAsset": {
+          "text": "Easy Fit: Seguridad Infantil"
+        },
+        "id": "428282764651"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282764651~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "10",
+        "conversions": 0,
+        "costMicros": "11375419",
+        "impressions": "299"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282764657",
+        "textAsset": {
+          "text": "Gimnasio con las mejores instalaciones | Easy Fit"
+        },
+        "id": "428282764657"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282764657~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "233",
+        "conversions": 1,
+        "costMicros": "396162916",
+        "impressions": "16406"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282780698",
+        "textAsset": {
+          "text": "Gimnasio y Fitness"
+        },
+        "id": "428282780698"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282780698~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "130",
+        "conversions": 2,
+        "costMicros": "262358015",
+        "impressions": "4963"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282780704",
+        "textAsset": {
+          "text": "Área de Peso Libre"
+        },
+        "id": "428282780704"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282780704~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "36",
+        "conversions": 3,
+        "costMicros": "281556753",
+        "impressions": "2803"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282799301",
+        "textAsset": {
+          "text": "Visitas Guiadas Easy Fit"
+        },
+        "id": "428282799301"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282799301~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "157",
+        "conversions": 1,
+        "costMicros": "174320202",
+        "impressions": "12350"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282799307",
+        "textAsset": {
+          "text": "Gimnasio para toda la familia"
+        },
+        "id": "428282799307"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282799307~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "93",
+        "conversions": 3,
+        "costMicros": "174185697",
+        "impressions": "2203"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810263",
+        "textAsset": {
+          "text": "Easy Fit: Comodidad Familiar"
+        },
+        "id": "428282810263"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810263~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "132",
+        "conversions": 4,
+        "costMicros": "296629661",
+        "impressions": "2794"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810266",
+        "textAsset": {
+          "text": "Easy Fit: Instalaciones"
+        },
+        "id": "428282810266"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810266~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "39",
+        "conversions": 0,
+        "costMicros": "157345001",
+        "impressions": "1851"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810269",
+        "textAsset": {
+          "text": "Área de Kids"
+        },
+        "id": "428282810269"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810269~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "54",
+        "conversions": 0.934871,
+        "costMicros": "100266655",
+        "impressions": "2426"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810272",
+        "textAsset": {
+          "text": "Cardio, pesas y más"
+        },
+        "id": "428282810272"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810272~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "101",
+        "conversions": 1,
+        "costMicros": "167368019",
+        "impressions": "5379"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810293",
+        "textAsset": {
+          "text": "Ritmos Latinos"
+        },
+        "id": "428282810293"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810293~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "132",
+        "conversions": 9,
+        "costMicros": "431737538",
+        "impressions": "2098"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810302",
+        "textAsset": {
+          "text": "Easy Fit: la manera de hacer ejercicio de manera cómoda y familiar."
+        },
+        "id": "428282810302"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810302~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "159",
+        "conversions": 1.035187,
+        "costMicros": "291460748",
+        "impressions": "2292"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810305",
+        "textAsset": {
+          "text": "Planes de membresía flexibles para que empieces hoy mismo."
+        },
+        "id": "428282810305"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810305~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "9",
+        "conversions": 0,
+        "costMicros": "9213851",
+        "impressions": "268"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428282810317",
+        "textAsset": {
+          "text": "Gimnasio y Clases Fitness para Toda la Familia"
+        },
+        "id": "428282810317"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428282810317~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "31",
+        "conversions": 1,
+        "costMicros": "55968574",
+        "impressions": "570"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428328891912",
+        "id": "428328891912"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428328891912~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "29",
+        "conversions": 0,
+        "costMicros": "61448450",
+        "impressions": "336"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428329064256",
+        "id": "428329064256"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428329064256~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "12",
+        "conversions": 1,
+        "costMicros": "22794996",
+        "impressions": "231"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428329138305",
+        "id": "428329138305"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428329138305~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "29",
+        "conversions": 0,
+        "costMicros": "45352049",
+        "impressions": "310"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428329138317",
+        "id": "428329138317"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428329138317~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "3",
+        "conversions": 0,
+        "costMicros": "1127850",
+        "impressions": "105"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428329180593",
+        "id": "428329180593"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428329180593~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "3078960",
+        "impressions": "19"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428369711775",
+        "id": "428369711775"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428369711775~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "71",
+        "conversions": 2,
+        "costMicros": "240574152",
+        "impressions": "2206"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428371267437",
+        "textAsset": {
+          "text": "Planes de Membresía Easy Fit"
+        },
+        "id": "428371267437"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428371267437~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/5251780631/campaigns/24321868026",
+        "id": "24321868026"
+      },
+      "metrics": {
+        "clicks": "14",
+        "conversions": 0,
+        "costMicros": "14612415",
+        "impressions": "286"
+      },
+      "asset": {
+        "resourceName": "customers/5251780631/assets/428371267455",
+        "textAsset": {
+          "text": "Gimnasios e inscripción en gimnasio en Easy Fit."
+        },
+        "id": "428371267455"
+      },
+      "assetGroup": {
+        "resourceName": "customers/5251780631/assetGroups/6756486895",
+        "name": "PMax | Octubre | Easy Fit | Leads",
+        "id": "6756486895"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/5251780631/assetGroupAssets/6756486895~428371267455~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    }
+  ]
+}

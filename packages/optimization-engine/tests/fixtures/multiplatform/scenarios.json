@@ -795,6 +795,10 @@
         {
           "file": "google-easyfit2026-adApprovals.json",
           "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-signals-dark.json",
+          "kind": "REAL"
         }
       ],
       "anchor": "docs/optimizer-multiplatform/escenarios.html#e41"
@@ -860,6 +864,108 @@
         }
       ],
       "anchor": "docs/optimizer-multiplatform/escenarios.html#e44"
+    },
+    {
+      "id": 45,
+      "title": "Anuncio que arrastra a su grupo: hoy cada grupo tiene un solo anuncio, y G09/G10 callan",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-adCatalog.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-vivo47-adMetrics30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-adCatalog.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-adMetrics30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e45"
+    },
+    {
+      "id": 46,
+      "title": "PMax: recursos que cuestan de más dentro del grupo de recursos de Easy Fit",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-pmaxAssets30d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-g7Campaigns.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-tangassi-pmaxAssets30d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e46"
+    },
+    {
+      "id": 47,
+      "title": "Audiencia saturada: ninguna campaña Display, Video ni Demand Gen sirve, y G23 calla",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-vivo47-audience7d.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-audience7d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e47"
+    },
+    {
+      "id": 48,
+      "title": "PMax en gracia sin una campaña activa de la cual tomar puntaje: su presupuesto se queda",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-g7Campaigns.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-g7CampaignDaily14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e48"
+    },
+    {
+      "id": 49,
+      "title": "Bajar el total nunca recorta la PMax en gracia; un total debajo de lo protegido se rechaza",
+      "platforms": [
+        "google"
+      ],
+      "fixtures": [
+        {
+          "file": "google-easyfit2026-g7Campaigns.json",
+          "kind": "REAL"
+        },
+        {
+          "file": "google-easyfit2026-g7CampaignDaily14d.json",
+          "kind": "REAL"
+        }
+      ],
+      "anchor": "docs/optimizer-multiplatform/escenarios.html#e49"
     }
   ]
 }
