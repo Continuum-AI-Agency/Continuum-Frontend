@@ -27,12 +27,14 @@ const rec = new Recorder('forge:web-components:browser');
 const [brandId] = process.argv.slice(2);
 assert(brandId, 'Usage: <brandId>');
 const app = 'http://localhost:3002'; // Allowed by the deployed Backend CORS policy.
-const api = 'https://api.trycontinuum.ai';
+// A Backend change is benched before it deploys: FORGE_WEB_BENCH_API_URL=http://localhost:4000.
+const api = process.env.FORGE_WEB_BENCH_API_URL ?? 'https://api.trycontinuum.ai';
 const { url, serviceRoleKey } = loadProdSupabaseEnv();
 process.env.PLAYWRIGHT_BASE_URL = app;
 const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 const media = admin.schema('media');
-const suffix = randomUUID().slice(0, 8);
+// Six characters: the gallery's display name drops a hex run of eight or more as an id.
+const suffix = randomUUID().slice(0, 6);
 const tag = `Web-bench-${suffix}`;
 const output = path.resolve(import.meta.dir, '../../artifacts/forge-web-components-browser', tag);
 mkdirSync(output, { recursive: true });
@@ -131,7 +133,19 @@ try {
   assert.equal(await page.getByRole('button', { name: /web components/i }).count(), 0);
   rec.record('No Web components tab or button: import is the only way in', 'PASS');
 
-  await page.getByLabel('Project files', { exact: true }).setInputFiles(zipPath);
+  // The user's gesture, not a raw setInputFiles: a file set before the gallery's drop hydrates (or
+  // just before it remounts as the sources load) lands on an input with no React handler and
+  // nothing happens. The chooser only opens once the drop is live.
+  for (const deadline = Date.now() + 90_000; ; ) {
+    const chooser = page.waitForEvent('filechooser', { timeout: 5_000 }).catch(() => null);
+    await page.getByRole('button', { name: /^New template/ }).click();
+    const opened = await chooser;
+    if (opened) {
+      await opened.setFiles(zipPath);
+      break;
+    }
+    assert(Date.now() < deadline, 'The New template file chooser never opened');
+  }
   let assetId: string | undefined;
   for (const deadline = Date.now() + 180_000; !assetId; ) {
     const result = await media
@@ -260,7 +274,7 @@ try {
   const ledgerRow = page
     .getByRole('tabpanel', { name: 'Render ledger' })
     .getByRole('row')
-    .filter({ hasText: tag });
+    .filter({ hasText: named });
   await ledgerRow.getByText('finished', { exact: true }).waitFor({ timeout: 180_000 });
   await ledgerRow.getByTitle(WEB_PILL, { exact: true }).waitFor();
   await page.screenshot({ path: path.join(output, 'ledger.png'), fullPage: true });
@@ -288,12 +302,20 @@ try {
     }
   }
   const jobIds = jobs.map((job) => job.id);
-  const outputIds = jobs.flatMap((job) => job.outputs.flatMap((file) => file.assetId ?? []));
-  const requestIds = jobs.flatMap((job) => job.renderRequestId ?? []);
+  // Read from the Library, not the last job snapshot: an output can register after that read.
+  const registered = jobIds.length
+    ? await media
+        .from('assets')
+        .select('id')
+        .eq('brand_id', brandId)
+        .in('origin_ref->>renderJobId', jobIds)
+    : { data: [], error: null };
+  assert.ifError(registered.error);
+  const outputIds = (registered.data ?? []).map((asset) => asset.id);
+  // Render requests stay: the table is an append-only ledger (the service role holds INSERT,
+  // SELECT), so the import below is soft-deleted rather than removed.
   if (jobIds.length)
     assert.ifError((await media.from('ad_render_jobs').delete().in('id', jobIds)).error);
-  if (requestIds.length)
-    assert.ifError((await media.from('render_requests').delete().in('id', requestIds)).error);
   if (templateKey)
     assert.ifError(
       (

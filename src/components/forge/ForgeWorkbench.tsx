@@ -233,6 +233,20 @@ export function ForgeWorkbench({
     return () => window.clearInterval(timer);
   }, [pendingKey, sourceQuery.refetch]);
 
+  // A source that turns renderable (a web component's parse, a package's promotion) belongs in the
+  // Render picker now, not when the picker's cached list goes stale. Compared on whole lists only.
+  const renderableKey = sources
+    .flatMap((source) => (source.templateKey ? [source.templateKey] : []))
+    .sort()
+    .join('|');
+  const seenRenderable = useRef<string | null>(null);
+  useEffect(() => {
+    if (!firstReadDone.current || sourceQuery.isFetching) return;
+    if (seenRenderable.current !== null && seenRenderable.current !== renderableKey)
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) });
+    seenRenderable.current = renderableKey;
+  }, [brandId, queryClient, renderableKey, sourceQuery.isFetching]);
+
   const setDisplayName = (assetId: string, displayName: string | null) =>
     queryClient.setQueryData<TemplateSourceSummary[]>(sourceKey, (current = []) =>
       current.map((source) => (source.assetId === assetId ? { ...source, displayName } : source)),

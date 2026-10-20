@@ -578,6 +578,7 @@ export function RenderJobsGrid({
                 {status.label}
               </Badge>
               <RenderModePill test={batch.preview.test} />
+              <RenderEnginePill job={batch.preview} />
             </span>
           );
         },
