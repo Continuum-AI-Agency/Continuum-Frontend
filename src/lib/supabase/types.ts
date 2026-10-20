@@ -19762,6 +19762,47 @@ export type Database = {
           },
         ]
       }
+      native_scene_render_attempts: {
+        Row: {
+          brand_id: string
+          cleanup_fenced_at: string | null
+          job_id: string
+          lease_token: string
+          next_sweep_at: string | null
+          publication_xid: number | null
+          registered_at: string
+          worker_id: string
+        }
+        Insert: {
+          brand_id: string
+          cleanup_fenced_at?: string | null
+          job_id: string
+          lease_token: string
+          next_sweep_at?: string | null
+          publication_xid?: number | null
+          registered_at?: string
+          worker_id: string
+        }
+        Update: {
+          brand_id?: string
+          cleanup_fenced_at?: string | null
+          job_id?: string
+          lease_token?: string
+          next_sweep_at?: string | null
+          publication_xid?: number | null
+          registered_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_scene_render_attempts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       native_scene_render_results: {
         Row: {
           asset_refs: Json
@@ -23152,6 +23193,15 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_native_scene_render_job_registered: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_render_result: Json
+          p_worker_id: string
+        }
+        Returns: Json
+      }
       complete_presentation_export: {
         Args: {
           p_asset_id: string
@@ -24111,6 +24161,15 @@ export type Database = {
         Returns: number
       }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      reclaim_native_scene_render_attempts: {
+        Args: never
+        Returns: {
+          brand_id: string
+          job_id: string
+          lease_token: string
+          paths: string[]
+        }[]
+      }
       reconcile_template_authoring_artifact_settings: {
         Args: {
           p_asset_id: string
@@ -24235,6 +24294,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      register_native_scene_render_attempt: {
+        Args: { p_job_id: string; p_lease_token: string; p_worker_id: string }
+        Returns: boolean
       }
       register_native_template_revision: {
         Args: { p_payload: Json }
