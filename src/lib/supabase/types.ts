@@ -21376,6 +21376,41 @@ export type Database = {
           },
         ]
       }
+      template_revision_native: {
+        Row: {
+          brand_id: string
+          edits: Json
+          edits_sha256: string
+          intent: Json
+          revision_id: string
+          scene: Json
+        }
+        Insert: {
+          brand_id: string
+          edits: Json
+          edits_sha256: string
+          intent: Json
+          revision_id: string
+          scene: Json
+        }
+        Update: {
+          brand_id?: string
+          edits?: Json
+          edits_sha256?: string
+          intent?: Json
+          revision_id?: string
+          scene?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_native_revision_id_brand_id_fkey"
+            columns: ["revision_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       template_revision_publications: {
         Row: {
           binding_id: string
@@ -21489,6 +21524,7 @@ export type Database = {
           edits: Json
           id: string
           idempotency_key: string
+          native_family: string | null
           parent_revision_id: string | null
           revision_number: number
           source_asset_id: string
@@ -21506,6 +21542,7 @@ export type Database = {
           edits?: Json
           id?: string
           idempotency_key: string
+          native_family?: string | null
           parent_revision_id?: string | null
           revision_number: number
           source_asset_id: string
@@ -21523,6 +21560,7 @@ export type Database = {
           edits?: Json
           id?: string
           idempotency_key?: string
+          native_family?: string | null
           parent_revision_id?: string | null
           revision_number?: number
           source_asset_id?: string
@@ -23319,6 +23357,15 @@ export type Database = {
         Args: { p_brand_id: string }
         Returns: number
       }
+      ensure_native_template_original: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_scene_sha256: string
+          p_version_id: string
+        }
+        Returns: string
+      }
       expire_client_render_targets: { Args: never; Returns: number }
       fail_forge_micro_render_job: {
         Args: {
@@ -24134,6 +24181,10 @@ export type Database = {
         }
         Returns: Json
       }
+      register_native_template_revision: {
+        Args: { p_payload: Json }
+        Returns: string
+      }
       register_psd_static_export: {
         Args: {
           p_payload: Json
@@ -24439,6 +24490,15 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      }
+      validate_native_revision_scene: {
+        Args: {
+          p_brand_id: string
+          p_entry_sha256: string
+          p_scene: Json
+          p_source_sha256: string
+        }
+        Returns: boolean
       }
       visible_asset_ids_as: {
         Args: { p_assets: string[]; p_brand: string; p_user: string }
