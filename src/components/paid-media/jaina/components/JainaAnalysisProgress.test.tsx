@@ -39,7 +39,28 @@ describe('Jaina analysis progress', () => {
     );
     expect(screen.getByRole('status').textContent).toContain('Checking the affected ads');
     expect(screen.getByRole('status').textContent).toContain('Round 1 of 3');
-    expect(screen.queryByText('Campaign evidence checked')).toBeNull();
+  });
+
+  // Phase 3 (PRD §5.6): live progress per layer — every layer and hypothesis with its state,
+  // not only the latest line, so a five-minute answer shows what it has already checked.
+  it('lists every layer and hypothesis with its state, the notice first', () => {
+    render(
+      <JainaAnalysisProgress
+        message={message([
+          part({ kind: 'notice', id: 'budget', status: 'running', label: 'This can take a few minutes.' }),
+          part({ kind: 'layer', id: 'campaign', status: 'completed', label: 'Campaign evidence checked' }),
+          part({ kind: 'layer', id: 'creative', status: 'running', label: 'Reading the creative tier' }),
+          part({ kind: 'hypothesis', id: 'cpm', status: 'completed', label: 'CPM closed' }),
+        ])}
+      />,
+    );
+    const rows = Array.from(document.querySelectorAll('[data-testid="jaina-analysis-progress"] li'));
+    expect(rows.map((row) => [row.textContent, row.getAttribute('data-status')])).toEqual([
+      ['Campaign evidence checked', 'completed'],
+      ['Reading the creative tier', 'running'],
+      ['CPM closed', 'completed'],
+    ]);
+    expect(screen.getByRole('status').textContent?.startsWith('This can take a few minutes.')).toBe(true);
   });
 
   it('replaces the same progress identity and shows partial disclosure without duplicated entries', () => {

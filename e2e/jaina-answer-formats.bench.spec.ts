@@ -2,7 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type BrowserContext, expect, type Page, type Response, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
+import {
+  mintSessionBundleForEmail,
+  type PlaywrightStorageState,
+  revokeBenchSession,
+} from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
@@ -749,6 +753,19 @@ test.describe('Jaina — the asked-for answer format renders under the sentence'
       notes.push(`cleanup failed: ${String(error)}`),
     );
     if (originalBrand && originalBrand !== EASYFIT_BRAND_ID) await selectBrand(originalBrand);
+    // The client session the bench minted ends with it (sign out what a bench creates).
+    if (memberToken) {
+      const revoked = await revokeBenchSession(storageState, memberToken).catch(
+        (error: unknown) => ({
+          sessionId: '?',
+          revoked: false,
+          detail: String(error),
+        }),
+      );
+      notes.push(
+        `cleanup: session ${revoked.sessionId} ${revoked.revoked ? 'signed out' : `NOT signed out — ${revoked.detail}`}`,
+      );
+    }
     printEnvelopeOnce();
   });
 

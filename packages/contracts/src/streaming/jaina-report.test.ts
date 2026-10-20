@@ -14,7 +14,7 @@ import {
   hasProseMarks,
   headersOfBlocks,
   insightListItemSchema,
-  J2_BLOCK_ORDER,
+  PRISM_BLOCK_ORDER,
   metricPolarityOf,
   metricReadOf,
   metricReadViolationsOf,
@@ -29,7 +29,7 @@ import {
   WHAT_TO_WATCH_BLOCK_ID,
   watchItemSchema,
   whatToWatchSchema,
-  withJ2BlockOrder,
+  withPrismBlockOrder,
 } from './jaina-report';
 
 describe('checkpointBlockV2LenientSchema', () => {
@@ -1279,11 +1279,18 @@ describe('validateReport — the J2 card', () => {
   });
 });
 
-describe('withJ2BlockOrder', () => {
-  const block = (category: string, id: string) => ({ category, block_id: id });
+// Phase 3 (PRD §3.7): the Prism order replaces the J2 card. The answer and the requested format
+// open, then the scope, the tables and figures, the findings, best and worst, the actions and a
+// survey — "tables before prose, context before verdict".
+describe('withPrismBlockOrder', () => {
+  const block = (category: string, id: string, extra: Record<string, unknown> = {}) => ({
+    category,
+    block_id: id,
+    ...extra,
+  });
 
-  it('sorts by the J2 card top to bottom and keeps siblings in their order', () => {
-    const ordered = withJ2BlockOrder([
+  it('sorts in the Prism order and keeps siblings in their order', () => {
+    const ordered = withPrismBlockOrder([
       block('narrative', 'prose'),
       block('data_scope', 'scope'),
       block('insight_list', 'insights'),
@@ -1291,26 +1298,42 @@ describe('withJ2BlockOrder', () => {
       block('chart', 'c1'),
       block('metric_grid', 'grid'),
       block('data_table', 't1'),
+      block('comparison', 'best_worst'),
       block('chart', 'c2'),
       block('survey', 'survey'),
+      block('answer_template', 'template'),
     ]);
     expect(ordered.map((b) => b.block_id)).toEqual([
+      'template',
       'scope',
       'grid',
-      'prose',
-      'insights',
-      'actions',
+      't1',
       'c1',
       'c2',
-      't1',
+      'insights',
+      'prose',
+      'best_worst',
+      'actions',
       'survey',
     ]);
   });
 
   it('returns the same array when nothing moves, and ranks every category', () => {
-    const blocks = J2_BLOCK_ORDER.map((category, i) => block(category, String(i)));
-    expect(withJ2BlockOrder(blocks)).toBe(blocks);
-    expect(new Set(J2_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
+    const blocks = PRISM_BLOCK_ORDER.map((category, i) => block(category, String(i)));
+    expect(withPrismBlockOrder(blocks)).toBe(blocks);
+    expect(new Set(PRISM_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
+  });
+
+  it('lets only the answer and the requested format stand above the scope', () => {
+    const codes = (blocks: Array<Record<string, unknown>>) =>
+      validateReport(blocks as never).map((violation) => violation.code);
+    const scope = block('data_scope', 'scope', { dates: '2026-10-12 → 2026-10-18', timezone: 'UTC', source: 'api', notes: [], scope: 'account', title: 'Data scope' });
+    expect(
+      codes([block('answer_template', 'template'), block('data_table', 'asked', { answer_format: true, columns: [], rows: [] }), scope]),
+    ).not.toContain('data_scope_not_first');
+    expect(codes([block('metric_grid', 'grid', { metrics: [] }), scope])).toContain(
+      'data_scope_not_first',
+    );
   });
 });
 
