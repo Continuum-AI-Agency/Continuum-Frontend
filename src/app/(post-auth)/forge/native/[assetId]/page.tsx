@@ -14,6 +14,7 @@ const pins = z.object({
   brandId: uuid.optional(),
   revisionId: uuid.optional(),
   jobId: uuid.optional(),
+  uploadJobId: uuid.optional(),
 });
 
 export default async function NativeHyperframesEditorPage({
@@ -46,6 +47,7 @@ export default async function NativeHyperframesEditorPage({
         assetId={asset.data}
         initialRevisionId={query.data.revisionId}
         initialJobId={query.data.jobId}
+        initialUploadJobId={query.data.uploadJobId}
       />
     </div>
   );

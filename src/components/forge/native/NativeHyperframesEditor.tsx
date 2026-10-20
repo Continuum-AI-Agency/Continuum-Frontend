@@ -35,6 +35,7 @@ import {
   saveNativeHyperframesRevision,
 } from '@/lib/library/hyperframesNative';
 import { NativeHyperframesJobs } from './NativeHyperframesJobs';
+import { NativeUploadedVariants } from './NativeUploadedVariants';
 import {
   type NativeEditorForm,
   nativeEditorDefaults,
@@ -50,6 +51,7 @@ type Props = {
   name?: string;
   initialRevisionId?: string;
   initialJobId?: string;
+  initialUploadJobId?: string;
   onBack?: () => void;
   onDraftChange?: LayerDraftChange;
 };
@@ -70,7 +72,7 @@ export function NativeHyperframesPage(props: Omit<Props, 'onDraftChange' | 'onBa
 export function NativeHyperframesEditor(props: Props) {
   return (
     <NativeHyperframesSession
-      key={`${props.brandId}:${props.assetId}:${props.initialRevisionId ?? 'original'}:${props.initialJobId ?? ''}`}
+      key={`${props.brandId}:${props.assetId}:${props.initialRevisionId ?? 'original'}:${props.initialJobId ?? ''}:${props.initialUploadJobId ?? ''}`}
       {...props}
     />
   );
@@ -82,21 +84,14 @@ function NativeHyperframesSession({
   name = 'Hyperframes template',
   initialRevisionId,
   initialJobId,
+  initialUploadJobId,
   onBack,
   onDraftChange,
 }: Props) {
   const [revisionId, setRevisionId] = useState(initialRevisionId);
-  const original = useQuery({
-    queryKey: forgeQueryKeys.nativeScene(brandId, assetId),
-    queryFn: ({ signal }) => fetchNativeHyperframesScene(brandId, assetId, undefined, signal),
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-  const selected = useQuery({
+  const view = useQuery({
     queryKey: forgeQueryKeys.nativeScene(brandId, assetId, revisionId),
     queryFn: ({ signal }) => fetchNativeHyperframesScene(brandId, assetId, revisionId, signal),
-    enabled: !!revisionId,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     retry: false,
@@ -106,19 +101,17 @@ function NativeHyperframesSession({
     queryFn: ({ signal }) => fetchNativeHyperframesVariants(brandId, assetId, signal),
     retry: false,
   });
-  const view = revisionId ? selected : original;
-  if (view.isError || original.isError)
+  if (view.isError)
     return (
       <Alert variant="destructive">
         <AlertTitle>Native scene is unavailable</AlertTitle>
         <AlertDescription>
-          {problem(view.error ?? original.error)}
+          {problem(view.error)}
           <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={() => {
                 void view.refetch();
-                if (revisionId) void original.refetch();
               }}
             >
               Retry native scene
@@ -132,7 +125,7 @@ function NativeHyperframesSession({
         </AlertDescription>
       </Alert>
     );
-  if (!view.data || !original.data)
+  if (!view.data)
     return (
       <div
         role="status"
@@ -147,12 +140,12 @@ function NativeHyperframesSession({
     <NativeEditorBody
       key={`${brandId}:${assetId}:${view.data.revision.revisionId}`}
       view={view.data}
-      original={original.data}
       variants={variants.data ?? []}
       historyError={variants.error}
       reloadHistory={() => void variants.refetch()}
       name={name}
       initialJobId={initialJobId}
+      initialUploadJobId={initialUploadJobId}
       onBack={onBack}
       onDraftChange={onDraftChange}
       onSelectRevision={setRevisionId}
@@ -162,23 +155,23 @@ function NativeHyperframesSession({
 
 function NativeEditorBody({
   view,
-  original,
   variants,
   historyError,
   reloadHistory,
   name,
   initialJobId,
+  initialUploadJobId,
   onBack,
   onDraftChange,
   onSelectRevision,
 }: {
   view: HyperframesSceneView;
-  original: HyperframesSceneView;
   variants: TemplateRevisionVariant[];
   historyError: unknown;
   reloadHistory: () => void;
   name: string;
   initialJobId?: string;
+  initialUploadJobId?: string;
   onBack?: () => void;
   onDraftChange?: LayerDraftChange;
   onSelectRevision: (revisionId: string) => void;
@@ -196,15 +189,21 @@ function NativeEditorBody({
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const busy = useRef(false);
+  const uploadBusy = useCallback((value: boolean) => {
+    busy.current = value;
+    setUploading(value);
+  }, []);
   const replay = useRef<{ fingerprint: string; body: SaveHyperframesRevisionRequest } | null>(null);
   const dirty = form.formState.isDirty;
+  const canEdit = view.sourceSceneSha256 !== null;
   const canUpdate =
     !!variant && !variant.original && variant.draftHeadRevisionId === view.revision.revisionId;
   const target = form.watch('target');
 
   const save = useCallback(async () => {
-    if (busy.current) return false;
+    if (busy.current || !canEdit) return false;
     busy.current = true;
     setSaving(true);
     setError(null);
@@ -217,13 +216,7 @@ function NativeEditorBody({
         setError('Check the highlighted fields before saving.');
         return false;
       }
-      const candidate = nativeSaveRequest(
-        view,
-        original,
-        variant,
-        form.getValues(),
-        'pending-intent',
-      );
+      const candidate = nativeSaveRequest(view, variant, form.getValues(), 'pending-intent');
       const fingerprint = JSON.stringify(candidate);
       if (replay.current?.fingerprint !== fingerprint)
         replay.current = {
@@ -245,14 +238,20 @@ function NativeEditorBody({
       busy.current = false;
       setSaving(false);
     }
-  }, [client, fields, form, onSelectRevision, original, variant, view]);
+  }, [canEdit, client, fields, form, onSelectRevision, variant, view]);
   const discard = useCallback(() => {
     form.reset(defaults);
     setError(null);
   }, [defaults, form]);
   useEffect(() => {
-    onDraftChange?.({ dirty, busy: saving, saveLabel: 'Save native variant', save, discard });
-  }, [dirty, discard, onDraftChange, save, saving]);
+    onDraftChange?.({
+      dirty,
+      busy: saving || uploading,
+      saveLabel: 'Save native variant',
+      save,
+      discard,
+    });
+  }, [dirty, discard, onDraftChange, save, saving, uploading]);
   useEffect(() => () => onDraftChange?.(null), [onDraftChange]);
 
   const blocked = view.capabilities.filter(
@@ -286,6 +285,12 @@ function NativeEditorBody({
       />
       <div className="grid min-h-0 flex-1 divide-y divide-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
         <Panel title="Edit saved source" bodyClassName="flex flex-col gap-3 overflow-y-auto">
+          {!canEdit ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              This revision uses an older upload and is read-only. Its saved preview and render
+              remain available.
+            </p>
+          ) : null}
           <form
             noValidate
             onSubmit={(event) => {
@@ -293,7 +298,7 @@ function NativeEditorBody({
               void save();
             }}
           >
-            <fieldset disabled={saving}>
+            <fieldset disabled={saving || uploading || !canEdit}>
               <FieldGroup>
                 <Controller
                   control={form.control}
@@ -475,8 +480,22 @@ function NativeEditorBody({
                 ))}
             </ul>
           </Panel>
+          <NativeUploadedVariants
+            view={view}
+            variant={variant}
+            parent={variant?.revisions.find((item) => item.id === view.revision.revisionId)}
+            dirty={dirty}
+            saving={saving}
+            initialJobId={initialUploadJobId}
+            onBusyChange={uploadBusy}
+            onSaved={onSelectRevision}
+          />
         </Panel>
-        <NativeHyperframesJobs view={view} dirty={dirty || saving} initialJobId={initialJobId} />
+        <NativeHyperframesJobs
+          view={view}
+          dirty={dirty || saving || uploading}
+          initialJobId={initialJobId}
+        />
       </div>
     </div>
   );

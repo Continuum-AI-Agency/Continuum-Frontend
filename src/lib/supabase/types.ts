@@ -21385,6 +21385,58 @@ export type Database = {
           },
         ]
       }
+      template_ingest_variant_intents: {
+        Row: {
+          actor_id: string
+          brand_id: string
+          created_at: string
+          intent: Json
+          job_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Insert: {
+          actor_id: string
+          brand_id: string
+          created_at?: string
+          intent: Json
+          job_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Update: {
+          actor_id?: string
+          brand_id?: string
+          created_at?: string
+          intent?: Json
+          job_id?: string
+          source_asset_id?: string
+          source_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_ingest_variant_inten_source_version_id_source_ass_fkey"
+            columns: ["source_version_id", "source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_ingest_variant_intents_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_ingest_variant_intents_source_asset_id_brand_id_fkey"
+            columns: ["source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       template_layer_views: {
         Row: {
           asset_id: string

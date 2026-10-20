@@ -37,6 +37,7 @@ const view = {
   brandId: BRAND,
   assetId: ASSET,
   sourceVersionId: VERSION,
+  sourceSceneSha256: 'c'.repeat(64),
   revision,
   sceneSha256: 'c'.repeat(64),
   viewport: { width: 32, height: 24 },
@@ -103,6 +104,24 @@ test('native scene reads keep the selected revision and authenticated family rou
     (error) => error,
   );
   expect(mismatch?.message).toContain('identity differs');
+});
+
+test('native upload history uses durable cursor/job routes and refuses mismatched response pins', async () => {
+  const history = { family: 'hyperframes', brandId: BRAND, templateId: ASSET,
+    enabled: false, items: [], nextCursor: null };
+  const cursor = { createdAt: '2026-10-20T00:00:00.123456+00:00', jobId: JOB };
+  answer(history);
+  expect(await native.fetchNativeHyperframesUploads(BRAND, ASSET, { cursor })).toEqual(history);
+  const url = new URL(sent[0]!.url);
+  expect(url.pathname).toBe(`/api/ai-studio/templates/${ASSET}/scene/uploads`);
+  expect(url.searchParams.get('before')).toBe(cursor.createdAt);
+  expect(url.searchParams.get('beforeJob')).toBe(JOB);
+  expect(sent[0]!.auth).toBe('Bearer native-token');
+  answer({ ...history, brandId: VERSION });
+  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET)).rejects.toThrow('requested identity');
+  answer(history);
+  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET, { jobId: JOB })).rejects.toThrow('requested identity');
+  expect(new URL(sent.at(-1)!.url).pathname).toEndWith(`/scene/uploads/${JOB}`);
 });
 
 test('native preview/render transport preserves immutable intent and caller replay identity', async () => {

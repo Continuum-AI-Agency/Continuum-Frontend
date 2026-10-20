@@ -7,6 +7,9 @@ import {
   hyperframesSceneRenderRequestSchema,
   hyperframesSceneRenderStatusSchema,
   hyperframesSceneViewSchema,
+  type NativeTemplateUploadCursor,
+  type NativeTemplateUploadHistory,
+  nativeTemplateUploadHistorySchema,
   type SaveHyperframesRevisionRequest,
   saveHyperframesRevisionRequestSchema,
   type TemplateRevision,
@@ -23,6 +26,35 @@ const query = (brandId: string, revisionId?: string) =>
     family: 'hyperframes',
     ...(revisionId ? { revisionId } : {}),
   }).toString();
+
+export function fetchNativeHyperframesUploads(
+  brandId: string,
+  assetId: string,
+  options: {
+    cursor?: NativeTemplateUploadCursor;
+    jobId?: string;
+    signal?: AbortSignal;
+  } = {},
+) {
+  const params = new URLSearchParams({
+    brandId,
+    ...(!options.jobId && options.cursor
+      ? { before: options.cursor.createdAt, beforeJob: options.cursor.jobId }
+      : {}),
+  });
+  return request<NativeTemplateUploadHistory>({
+    path: `${path(assetId)}/scene/uploads${options.jobId ? `/${encodeURIComponent(options.jobId)}` : ''}?${params}`,
+    schema: nativeTemplateUploadHistorySchema.refine(
+      (history) =>
+        history.brandId === brandId &&
+        history.templateId === assetId &&
+        (!options.jobId ||
+          (history.items.length === 1 && history.items[0]?.jobId === options.jobId)),
+      'Native upload status differs from its requested identity',
+    ),
+    signal: options.signal,
+  });
+}
 
 /** Exact saved revision or compiled Original; no AE bindings, draft head or renderer fallback. */
 export function fetchNativeHyperframesScene(

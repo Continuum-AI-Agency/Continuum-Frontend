@@ -16,6 +16,7 @@ const view: HyperframesSceneView = {
   brandId: id('1'),
   assetId: id('2'),
   sourceVersionId: id('3'),
+  sourceSceneSha256: 'd'.repeat(64),
   revision: {
     templateId: id('2'),
     variantId: id('4'),
@@ -124,10 +125,8 @@ test('copy and resize preserve unexposed operations and support saved A/B/A valu
 });
 
 test('native save binds source and parent, requires a live head for updates, and branches old revisions', () => {
-  const original = { ...view, sceneSha256: 'd'.repeat(64) };
   const request = nativeSaveRequest(
     view,
-    original,
     variant,
     nativeEditorDefaults(view, variant),
     'retry-identity',
@@ -135,7 +134,7 @@ test('native save binds source and parent, requires a live head for updates, and
   expect(request).toMatchObject({
     parentRevisionId: view.revision.revisionId,
     expectedParentSceneSha256: view.sceneSha256,
-    expectedSourceSceneSha256: original.sceneSha256,
+    expectedSourceSceneSha256: view.sourceSceneSha256,
     expectedHeadRevisionId: view.revision.revisionId,
     variantId: variant.variantId,
     idempotencyKey: 'retry-identity',
@@ -143,7 +142,6 @@ test('native save binds source and parent, requires a live head for updates, and
   expect(() =>
     nativeSaveRequest(
       view,
-      original,
       { ...variant, draftHeadRevisionId: id('7') },
       nativeEditorDefaults(view, variant),
       'retry',
@@ -151,8 +149,7 @@ test('native save binds source and parent, requires a live head for updates, and
   ).toThrow('no longer');
   expect(() =>
     nativeSaveRequest(
-      view,
-      { ...original, sourceVersionId: id('8') },
+      { ...view, sourceSceneSha256: null },
       variant,
       nativeEditorDefaults(view),
       'retry',
@@ -160,7 +157,6 @@ test('native save binds source and parent, requires a live head for updates, and
   ).toThrow('older upload');
   const branch = nativeSaveRequest(
     view,
-    original,
     { ...variant, draftHeadRevisionId: id('7') },
     nativeEditorDefaults(view),
     'branch',
@@ -168,6 +164,24 @@ test('native save binds source and parent, requires a live head for updates, and
   expect(branch.variantId).toBeUndefined();
   expect(branch.expectedHeadRevisionId).toBeNull();
   expect(branch.parentRevisionId).toBe(view.revision.revisionId);
+});
+
+test('an uploaded child uses its own source baseline rather than the family Original', () => {
+  const child = {
+    ...view,
+    sourceVersionId: id('8'),
+    sourceSceneSha256: 'e'.repeat(64),
+    edits: { ...view.edits, sourceSha256: 'f'.repeat(64) },
+  };
+  const request = nativeSaveRequest(
+    child,
+    variant,
+    nativeEditorDefaults(child, variant),
+    'uploaded-child-edit',
+  );
+  expect(request.expectedSourceSceneSha256).toBe(child.sourceSceneSha256);
+  expect(request.edits.sourceSha256).toBe(child.edits.sourceSha256);
+  expect(request.parentRevisionId).toBe(child.revision.revisionId);
 });
 
 test('changed field inventories, excessive geometry and malformed copy fail before save; links carry durable pins', () => {

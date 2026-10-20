@@ -127,6 +127,8 @@ export const hyperframesSceneViewSchema = z
     brandId: z.uuid(),
     assetId: z.uuid(),
     sourceVersionId: z.uuid(),
+    /** Current baseline for this revision's own uploaded source; null when superseded. */
+    sourceSceneSha256: hash.nullable(),
     revision: hyperframesNativeRenderRequestSchema.shape.revision,
     sceneSha256: hash,
     viewport: hyperframesNativeRenderRequestSchema.shape.viewport,
@@ -189,7 +191,7 @@ export const hyperframesSceneRenderStatusSchema = z
         code: 'custom',
         message: 'Native job revision belongs to another template',
       });
-    if ((job.state === 'completed') !== (job.outputs.length > 0))
+    if ((job.state === 'completed') !== job.outputs.length > 0)
       context.addIssue({
         code: 'custom',
         message: 'Only completed native jobs carry published outputs',

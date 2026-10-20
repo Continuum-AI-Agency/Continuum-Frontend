@@ -25,6 +25,7 @@ const base: HyperframesSceneView = {
   brandId: BRAND,
   assetId: ASSET,
   sourceVersionId: VERSION,
+  sourceSceneSha256: 'b'.repeat(64),
   revision: {
     templateId: ASSET,
     variantId: ORIGINAL,
@@ -113,7 +114,15 @@ const originalVariant = templateRevisionVariantSchema.parse({
   publishedHeadRevisionId: null,
   archivedAt: null,
   sourceKind: 'hyperframes',
-  revisions: [{ ...saved, id: ORIGINAL, variantId: ORIGINAL, parentRevisionId: null }],
+  revisions: [
+    {
+      ...saved,
+      id: ORIGINAL,
+      variantId: ORIGINAL,
+      parentRevisionId: null,
+      native: { ...saved.native!, sceneSha256: base.sceneSha256 },
+    },
+  ],
 });
 const childVariant = templateRevisionVariantSchema.parse({
   ...originalVariant,
@@ -199,6 +208,15 @@ beforeEach(() => {
     }
     if (url.pathname.endsWith('/revision-variants'))
       return respond({ items: acceptedSave ? [originalVariant, childVariant] : [originalVariant] });
+    if (url.pathname.endsWith('/scene/uploads'))
+      return respond({
+        family: 'hyperframes',
+        brandId: BRAND,
+        templateId: ASSET,
+        enabled: false,
+        items: [],
+        nextCursor: null,
+      });
     if (url.pathname.endsWith('/scene')) {
       if (sceneFailure)
         return respond(
@@ -324,6 +342,19 @@ test('pending native ingestion shows its diagnosis and never mounts an AE editor
   expect(posts).toHaveLength(0);
 });
 
+test('a superseded source is read-only while its immutable saved revision can still be rendered', async () => {
+  sceneOverride = { ...base, sourceSceneSha256: null };
+  mount();
+  const copy = await screen.findByLabelText('Text 1');
+  await screen.findByText(/This revision uses an older upload and is read-only/);
+  expect(copy.closest('fieldset')?.disabled).toBe(true);
+  expect((screen.getByLabelText('Upload native variant') as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Preview frame' }));
+  await screen.findByText('Job: rendering');
+  expect(posts).toHaveLength(1);
+  expect(posts[0]!.body.revisionId).toBe(ORIGINAL);
+});
+
 test('client navigation to another saved revision and job remounts on the full link pin', async () => {
   const mounted = mount({ initialJobId: JOB });
   await screen.findByText('Job: rendering');
@@ -431,7 +462,9 @@ test('text pagination bounds mounted controls and preserves changes across pages
   };
   mount();
   fireEvent.change(await screen.findByLabelText('Text 1'), { target: { value: 'First edit' } });
-  expect(screen.getAllByRole('textbox')).toHaveLength(21);
+  expect(
+    screen.getAllByRole('textbox').filter((control) => control.tagName === 'TEXTAREA'),
+  ).toHaveLength(20);
   fireEvent.click(screen.getByRole('button', { name: 'Next text fields' }));
   const last = screen.getByLabelText('Text 21');
   expect(screen.queryByLabelText('Text 1')).toBeNull();

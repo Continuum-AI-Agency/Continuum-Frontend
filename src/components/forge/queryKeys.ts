@@ -129,6 +129,10 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'hyperframes-renders', assetId] as const,
   nativeRender: (brandId: string, assetId: string, jobId: string) =>
     ['forge', brandId, 'hyperframes-render', assetId, jobId] as const,
+  nativeUploads: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'hyperframes-uploads', assetId] as const,
+  nativeUpload: (brandId: string, assetId: string, jobId: string) =>
+    ['forge', brandId, 'hyperframes-upload', assetId, jobId] as const,
 } as const;
 
 /** Everything this brand may render, from every binding, as one list. The Forge page reads it on

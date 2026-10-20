@@ -94,17 +94,11 @@ export function nativeEditorEdits(
 
 export function nativeSaveRequest(
   view: HyperframesSceneView,
-  original: HyperframesSceneView,
   variant: TemplateRevisionVariant | undefined,
   input: NativeEditorForm,
   idempotencyKey: string,
 ): SaveHyperframesRevisionRequest {
-  if (
-    view.brandId !== original.brandId ||
-    view.assetId !== original.assetId ||
-    view.sourceVersionId !== original.sourceVersionId ||
-    view.edits.sourceSha256 !== original.edits.sourceSha256
-  )
+  if (!view.sourceSceneSha256)
     throw Error('This revision uses an older upload. Reopen its source before saving.');
   const form = nativeEditorFormSchema.parse(input);
   if (
@@ -121,7 +115,7 @@ export function nativeSaveRequest(
     brandId: view.brandId,
     parentRevisionId: view.revision.revisionId,
     expectedParentSceneSha256: view.sceneSha256,
-    expectedSourceSceneSha256: original.sceneSha256,
+    expectedSourceSceneSha256: view.sourceSceneSha256,
     ...(form.target === 'current' ? { variantId: view.revision.variantId } : { name: form.name }),
     expectedHeadRevisionId: form.target === 'current' ? view.revision.revisionId : null,
     idempotencyKey,
