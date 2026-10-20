@@ -1,7 +1,14 @@
-import { FORGE_PROJECT_FILE_MAX_BYTES, readZipDirectory } from '@continuum/contracts';
+import {
+  FORGE_PROJECT_FILE_MAX_BYTES,
+  readZipDirectory,
+  webComponentManifestPath,
+} from '@continuum/contracts';
 import { unzip } from 'fflate';
 
-/** Design-only ZIPs follow the same upload/import path as loose designs. AE packages stay intact. */
+/**
+ * Design-only ZIPs follow the same upload/import path as loose designs. AE packages and web
+ * component projects (a `forge-component.json`, which may bundle a .psd asset) stay intact.
+ */
 export async function expandDesignArchives(files: readonly File[]): Promise<File[]> {
   const result: File[] = [];
   for (const file of files) {
@@ -22,6 +29,7 @@ export async function expandDesignArchives(files: readonly File[]): Promise<File
     );
     if (
       entries.some((entry) => /\.(aep|aepx|aet)$/i.test(entry.name)) ||
+      webComponentManifestPath(entries.map((entry) => entry.name)) ||
       !entries.some((entry) => /\.(psd|ai)$/i.test(entry.name))
     ) {
       result.push(file);

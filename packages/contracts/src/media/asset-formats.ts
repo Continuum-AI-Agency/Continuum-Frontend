@@ -17,6 +17,8 @@ export type LibraryFormatFamily =
   | 'blender'
   | 'html_bundle'
   | 'hyperframes'
+  /** A web component project (`forge-component.json` in a zip): a Forge template source. */
+  | 'web_component'
   /** Anything no other family claims: stored, versioned, shared and downloaded, never drawn. */
   | 'generic';
 
@@ -497,13 +499,26 @@ export function isPlayableSidecarPreview(input: {
  * What a ZIP holds decides what it is: every ZIP used to be treated as an After Effects
  * package and sent to template parse.
  * - `aep_package`: a Collect Files export (an .aep/.aepx anywhere inside).
+ * - `web_component`: a `forge-component.json` at the root, or under one wrapping folder.
  * - `html_bundle`: an `index.html` at the root, or under one wrapping folder.
  * - `archive`: anything else — stored as a generic file.
  */
-export type ZipContentKind = 'aep_package' | 'html_bundle' | 'archive' | 'ambiguous';
+export type ZipContentKind =
+  | 'aep_package'
+  | 'web_component'
+  | 'html_bundle'
+  | 'archive'
+  | 'ambiguous';
 
 export const LIBRARY_ZIP_FORMATS: Readonly<Record<ZipContentKind, LibraryFormatDefinition>> = {
   aep_package: AFTER_EFFECTS_PACKAGE_FORMAT,
+  web_component: {
+    family: 'web_component',
+    extensions: ['zip'],
+    mimeTypes: ['application/zip', 'application/x-zip-compressed'],
+    originalKind: 'file',
+    previewStrategy: 'companion',
+  },
   html_bundle: {
     family: 'html_bundle',
     extensions: ['zip'],
@@ -522,6 +537,19 @@ function isZipNoise(name: string): boolean {
     name.split('/').pop()?.startsWith('._') ||
     name.split('/').pop() === '.DS_Store'
   );
+}
+
+/** The web component manifest — `forge-component.json` at the root or under one wrapping folder — or null. */
+export function webComponentManifestPath(entryNames: readonly string[]): string | null {
+  const names = entryNames
+    .map((name) => name.replaceAll('\\', '/'))
+    .filter((name) => !isZipNoise(name));
+  if (names.includes('forge-component.json')) return 'forge-component.json';
+  const [first] = names;
+  const wrapper = first?.includes('/') ? first.slice(0, first.indexOf('/') + 1) : null;
+  if (!wrapper || !names.every((name) => name.startsWith(wrapper))) return null;
+  const wrapped = `${wrapper}forge-component.json`;
+  return names.includes(wrapped) ? wrapped : null;
 }
 
 /** The bundle's entry page — `index.html` at the root or under one wrapping folder — or null. */
@@ -612,6 +640,8 @@ export function classifyZipEntries(entryNames: readonly string[]): ZipContentKin
   const ae = names.some(
     (name) => /\.(aep|aepx|aet)$/i.test(name) && !/adobe after effects auto-save/i.test(name),
   );
+  // Before the html test: a web component's source may ship its own index.html.
+  if (webComponentManifestPath(names)) return ae ? 'ambiguous' : 'web_component';
   const html = htmlBundleEntryPoint(names);
   if (ae && html) return 'ambiguous';
   if (ae) return 'aep_package';

@@ -15,6 +15,7 @@ import {
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
+  isWebTemplateKey,
   leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
@@ -439,6 +440,8 @@ export function RenderRequestsGrid({
   const [templateRef, setTemplateRef] = useState<string | null>(null);
   const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
   const { templateKey } = selection;
+  // A web component has no workspace: no live kit, checkpoint or revision pin applies to it.
+  const web = isWebTemplateKey(templateKey);
   /**
    * The binding is READ OFF THE CHOSEN TEMPLATE, never chosen separately.
    *
@@ -456,7 +459,7 @@ export function RenderRequestsGrid({
   const lineage = useQuery({
     queryKey: forgeQueryKeys.lineage(brandId, sourceAssetId ?? ''),
     queryFn: () => fetchTemplateLineage(brandId, sourceAssetId as string),
-    enabled: sourceAssetId !== null,
+    enabled: sourceAssetId !== null && !web,
     staleTime: FORGE_STALE_MS.lists,
   });
   const checkpoints = useMemo(
@@ -1402,7 +1405,7 @@ export function RenderRequestsGrid({
       'history',
     ],
     queryFn: () => fetchTemplateRevisionVariants(brandId, contract!.template.sourceAssetId!, true),
-    enabled: !!contract?.template.sourceAssetId,
+    enabled: !!contract?.template.sourceAssetId && !web,
     staleTime: FORGE_STALE_MS.active,
   });
   const [pickedRevision, setPickedRevision] = useState('');
@@ -2320,7 +2323,7 @@ export function RenderRequestsGrid({
     environment: contract?.template.environment ?? null,
     templateKey: templateKey || null,
     formats: fitFormats,
-    enabled: Boolean(contract),
+    enabled: Boolean(contract) && !web,
   });
   const liveFit = useMemo(
     () =>

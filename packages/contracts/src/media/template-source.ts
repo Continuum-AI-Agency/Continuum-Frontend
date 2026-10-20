@@ -231,6 +231,7 @@ export const templateSourceFamilySchema = z.enum([
   'blender',
   'hyperframes',
   'presentation',
+  'web_component',
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
 
@@ -243,6 +244,7 @@ export const templateSourceKindSchema = z.enum([
   'hyperframes',
   'blender',
   'presentation',
+  'web_component',
   'other',
 ]);
 export type TemplateSourceKind = z.infer<typeof templateSourceKindSchema>;
@@ -256,6 +258,7 @@ export const TEMPLATE_SOURCE_KIND_LABELS: Record<TemplateSourceKind, string> = {
   hyperframes: 'HyperFrames',
   blender: 'Blender',
   presentation: 'Presentation',
+  web_component: 'Web component',
   other: 'Other',
 };
 
@@ -1042,6 +1045,7 @@ export const TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT: Record<string, Templa
   blender: 'blender',
   hyperframes: 'hyperframes',
   html_bundle: 'hyperframes',
+  web_component: 'web_component',
 };
 
 /**

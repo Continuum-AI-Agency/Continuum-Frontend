@@ -1,5 +1,5 @@
 import { expect, it } from 'bun:test';
-import { FORGE_PROJECT_FILE_MAX_BYTES } from '@continuum/contracts';
+import { FORGE_PROJECT_FILE_MAX_BYTES, webComponentManifestPath } from '@continuum/contracts';
 import { strFromU8, unzipSync } from 'fflate';
 import { packageProjectFolder } from './projectFolder';
 
@@ -42,4 +42,18 @@ it('rejects invalid folders and oversize packages before reading their contents'
   await expect(packageProjectFolder([{ file, folders: ['Package'] }])).rejects.toThrow(
     'upload limit',
   );
+});
+
+it('packages a web component project under its folder, where the manifest is found', async () => {
+  const entries = [
+    { file: new File(['{}'], 'forge-component.json'), folders: ['hello'] },
+    { file: new File(['export default {}'], 'main.js'), folders: ['hello', 'src'] },
+  ];
+  const archive = await packageProjectFolder(entries);
+  expect(archive.name).toBe('hello.zip');
+  const unpacked = unzipSync(new Uint8Array(await archive.arrayBuffer()));
+  expect(webComponentManifestPath(Object.keys(unpacked))).toBe('hello/forge-component.json');
+  await expect(
+    packageProjectFolder([{ file: new File(['x'], 'main.js'), folders: ['hello'] }]),
+  ).rejects.toThrow('web component project');
 });

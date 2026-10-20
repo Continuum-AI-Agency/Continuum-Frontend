@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test';
-import { webComponentPathSchema, webComponentProjectSchema } from './forge-web-component';
+import { classifyZipEntries, webComponentManifestPath } from './asset-formats';
+import {
+  isWebTemplateKey,
+  webComponentPathSchema,
+  webComponentProjectSchema,
+  webTemplateKey,
+} from './forge-web-component';
 
 const project = {
   schemaVersion: 1,
@@ -37,4 +43,27 @@ test('rejects duplicate overrides and nonfinite values', () => {
       overrides: [{ ...override, value: Number.NaN }],
     }).success,
   ).toBe(false);
+});
+test('a forge-component.json makes a zip a web component, ahead of its index.html', () => {
+  expect(classifyZipEntries(['forge-component.json', 'src/scene.ts', 'index.html'])).toBe(
+    'web_component',
+  );
+  expect(classifyZipEntries(['card/forge-component.json', 'card/src/scene.ts'])).toBe(
+    'web_component',
+  );
+  expect(webComponentManifestPath(['card/forge-component.json', 'card/a.ts'])).toBe(
+    'card/forge-component.json',
+  );
+  expect(classifyZipEntries(['forge-component.json', 'comp.aep'])).toBe('ambiguous');
+  expect(classifyZipEntries(['a/b/forge-component.json', 'a/b/scene.ts', 'c/x.ts'])).toBe(
+    'archive',
+  );
+});
+test('stillSec must fall inside the duration', () => {
+  expect(webComponentProjectSchema.safeParse({ ...project, stillSec: 3 }).success).toBe(false);
+  expect(webComponentProjectSchema.parse({ ...project, stillSec: 1 }).stillSec).toBe(1);
+});
+test('web template keys round-trip', () => {
+  expect(isWebTemplateKey(webTemplateKey('a1'))).toBe(true);
+  expect(isWebTemplateKey('1234')).toBe(false);
 });

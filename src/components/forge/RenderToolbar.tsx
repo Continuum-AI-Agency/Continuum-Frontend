@@ -4,6 +4,7 @@ import {
   type ApiRenderInputSet,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
+  isWebTemplateKey,
   motionLabel,
   readableLayerName,
   TEMPLATE_SOURCE_KIND_LABELS,
@@ -106,16 +107,21 @@ export function TemplatePicker({
   const current = byRef.get(currentRef);
   // Grouped by what each was authored in, in the Templates filter's order. A template with no
   // upload here came from the shared render workspace, which is a fact; one the registry does not
-  // know is Other, never After Effects by default.
+  // know is Other, never After Effects by default. A `web:` key says what it is by itself.
   const groups = useMemo(() => {
     if (!sourceKinds) return [{ heading: null, templates }];
     const order = [...Object.values(TEMPLATE_SOURCE_KIND_LABELS), 'Shared workspace'];
     const byHeading = new Map<string, ApiRenderTemplateSummary[]>();
     for (const template of templates) {
-      const kind = template.sourceAssetId ? sourceKinds.get(template.sourceAssetId) : undefined;
-      const heading = template.sourceAssetId
-        ? TEMPLATE_SOURCE_KIND_LABELS[kind ?? 'other']
-        : 'Shared workspace';
+      const kind = isWebTemplateKey(template.key)
+        ? 'web_component'
+        : template.sourceAssetId
+          ? sourceKinds.get(template.sourceAssetId)
+          : undefined;
+      const heading =
+        template.sourceAssetId || kind
+          ? TEMPLATE_SOURCE_KIND_LABELS[kind ?? 'other']
+          : 'Shared workspace';
       byHeading.set(heading, [...(byHeading.get(heading) ?? []), template]);
     }
     return [...byHeading]

@@ -550,6 +550,26 @@ test('Figma and HyperFrames are source types of their own', async () => {
   expect(within(screen.getByRole('table', { name: 'Templates' })).getByText('Figma')).toBeTruthy();
 });
 
+test('an imported web component is a source type of its own, and Ready once parsed', async () => {
+  const base = source({ displayName: 'Hello card', filename: 'hello.zip' });
+  const card: TemplateSource = {
+    ...base,
+    family: 'web_component',
+    templateKey: `web:${base.assetId}`,
+    parse: { ...base.parse!, sourceFamily: 'web_component' },
+  };
+  const ae = source({ displayName: 'Summer promo', templateKey: '133' });
+  renderGallery(undefined, { sources: [card, ae], shared: [] });
+  fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
+  const option = await screen.findByRole('option', { name: 'Web component', exact: true });
+  fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
+  fireEvent.click(option);
+  await waitFor(() => expect(cardNames()).toEqual(['Hello card']));
+  const row = screen.getByRole('button', { name: 'Open Hello card' }).closest('tr') as HTMLElement;
+  expect(within(row).getByText('Web component')).toBeTruthy();
+  expect(within(row).getByText('Ready')).toBeTruthy();
+});
+
 describe('template families', () => {
   const original = source({ displayName: 'Summer promo', updatedAt: '2026-09-10T00:00:00Z' });
   const secondRevision = source({ displayName: 'Summer promo v2' });

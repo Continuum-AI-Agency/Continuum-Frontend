@@ -14,6 +14,7 @@ import {
   encodeContainerOf,
   leavesCheckIncomplete,
   mergeEncodeSettings,
+  isWebTemplateKey,
   outputFormatsOfParse,
   type Renderer,
   readinessOf,
@@ -302,6 +303,9 @@ export function RenderReviewTray({
     return format ? [format.ratio ?? format.label] : [];
   };
   const fileCount = rows.reduce((total, row) => total + rowFileCount(contract, row), 0);
+  // A web component renders in Continuum's render browser and lands in the Library only: no
+  // renderer to pick, and Slack, Meta and approval rooms are refused for it.
+  const web = isWebTemplateKey(templateKey);
 
   // Each record's findings, by everything its check reads. The set's revision is left out: every
   // save bumps it, and it changes no row's verdict — so an edit re-checks only the rows it changed.
@@ -591,36 +595,38 @@ export function RenderReviewTray({
           </div>
         </RadioGroup>
       </section>
-      <section aria-label="Renderer" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
-        <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-          Renderer
-        </h3>
-        <RadioGroup
-          aria-label="Renderer"
-          value={renderer}
-          onValueChange={(value) =>
-            setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
-          }
-          className="flex flex-wrap gap-x-6 gap-y-1.5"
-        >
-          <div className="flex flex-col gap-0.5">
-            <Label className="text-xs">
-              <RadioGroupItem value="after_effects" />
-              After Effects
-            </Label>
-            <span className="pl-6 text-muted-foreground">The render farm.</span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <Label className="text-xs">
-              <RadioGroupItem value="experimental" />
-              Continuum&apos;s New Renderer
-            </Label>
-            <span className="pl-6 text-muted-foreground">
-              Anything it can&apos;t render goes to After Effects automatically.
-            </span>
-          </div>
-        </RadioGroup>
-      </section>
+      {web ? null : (
+        <section aria-label="Renderer" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
+          <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            Renderer
+          </h3>
+          <RadioGroup
+            aria-label="Renderer"
+            value={renderer}
+            onValueChange={(value) =>
+              setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
+            }
+            className="flex flex-wrap gap-x-6 gap-y-1.5"
+          >
+            <div className="flex flex-col gap-0.5">
+              <Label className="text-xs">
+                <RadioGroupItem value="after_effects" />
+                After Effects
+              </Label>
+              <span className="pl-6 text-muted-foreground">The render farm.</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <Label className="text-xs">
+                <RadioGroupItem value="experimental" />
+                Continuum&apos;s New Renderer
+              </Label>
+              <span className="pl-6 text-muted-foreground">
+                Anything it can&apos;t render goes to After Effects automatically.
+              </span>
+            </div>
+          </RadioGroup>
+        </section>
+      )}
       <ul aria-label="Output per row" className="divide-y divide-border border-y border-border">
         {rows.map((row, index) => (
           <li key={row.rowId} className={cn(ROW, 'grid-cols-[minmax(0,16rem)_minmax(0,1fr)]')}>
@@ -944,34 +950,38 @@ export function RenderReviewTray({
                       to this brand’s Library.
                     </p>
                   </DeliverSection>
-                  <DeliverSection title="Slack">
-                    <SlackDestinationPicker
-                      brandId={brandId}
-                      slack={slack}
-                      value={slackDestination}
-                      onChange={setSlackDestination}
-                    />
-                  </DeliverSection>
-                  <DeliverSection title="Meta ads">
-                    <DeliveryTargetPicker
-                      brandId={brandId}
-                      meta={meta}
-                      rows={rows}
-                      outputs={replaceFormats}
-                      formatByRow={formatByRow}
-                      onDeliveryChange={onDeliveryChange}
-                      onFormatChange={(rowId, outputId) =>
-                        setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
-                      }
-                    />
-                  </DeliverSection>
-                  <DeliverSection title="Approval">
-                    <ApprovalDestinationsField
-                      brandId={brandId}
-                      value={approvalDestinationIds}
-                      onChange={setApprovalDestinationIds}
-                    />
-                  </DeliverSection>
+                  {web ? null : (
+                    <>
+                      <DeliverSection title="Slack">
+                        <SlackDestinationPicker
+                          brandId={brandId}
+                          slack={slack}
+                          value={slackDestination}
+                          onChange={setSlackDestination}
+                        />
+                      </DeliverSection>
+                      <DeliverSection title="Meta ads">
+                        <DeliveryTargetPicker
+                          brandId={brandId}
+                          meta={meta}
+                          rows={rows}
+                          outputs={replaceFormats}
+                          formatByRow={formatByRow}
+                          onDeliveryChange={onDeliveryChange}
+                          onFormatChange={(rowId, outputId) =>
+                            setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
+                          }
+                        />
+                      </DeliverSection>
+                      <DeliverSection title="Approval">
+                        <ApprovalDestinationsField
+                          brandId={brandId}
+                          value={approvalDestinationIds}
+                          onChange={setApprovalDestinationIds}
+                        />
+                      </DeliverSection>
+                    </>
+                  )}
                 </section>
                 {goesToMeta ? null : confirmation}
               </>
