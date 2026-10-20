@@ -295,7 +295,6 @@ function ActionTimeline({
           {day.items.map((item) =>
             item.kind === 'move' ? (
               <MoveDecisionCard
-                brandId={brandId}
                 className="space-y-2 rounded-none border-0 bg-transparent py-2 pr-0 pl-[4.75rem]"
                 currency={currency}
                 key={item.move.moveId}

@@ -149,6 +149,8 @@ let recentActions: Record<string, unknown>[] = [];
 const requestApplyItemsMutate = mock(() => {});
 const setStatusesMutate = mock(() => {});
 const setStatusMutate = mock(() => {});
+// A move's own approval (and a platform card's) asks the service through this.
+const applyActionsMutate = mock(async (_request: unknown) => null);
 
 // The two Meta-write drains. Stable module-level spies (not fresh per render) so a click can be
 // asserted against them. A per-test handler lets a test drive the mutation's onSuccess/onError
@@ -184,8 +186,12 @@ let activeEnrollments: AccountEnrollment[] = [];
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
   // The real split, over the roster this test installs (the real hook reads two queries).
-  useCurrentMoves: (p: PortfolioListItem, _brand: string, _account: string, items: CycleItemRow[]) =>
-    currentMoves(items, p, activeRoster, activeEnrollments),
+  useCurrentMoves: (
+    p: PortfolioListItem,
+    _brand: string,
+    _account: string,
+    items: CycleItemRow[],
+  ) => currentMoves(items, p, activeRoster, activeEnrollments),
   useOptimizerPerformance: () => ({ data: activeReport, isLoading: false }),
   useOptimizerActions: () => ({ data: recentActions }),
   useOptimizerEnrolledAdsets: () => ({ data: [] }),
@@ -224,7 +230,7 @@ mock.module('../useOptimizerData', () => ({
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
   useRevertApply: () => ({ mutateAsync: async () => ({ ok: true }), isPending: false }),
   // A platform card's own control asks the service through these; nothing here confirms one.
-  useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
+  useApplyOptimizerActions: () => ({ mutateAsync: applyActionsMutate }),
   useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
@@ -324,13 +330,16 @@ const {
   recRowLine,
   selectionLabel,
 } = await import('./OptimizerActionsPortfolioGroup');
-const { moveRec, feedRow, MOVE_ID } = await import('./crossPlatformMove/moveFixtures');
+const { moveRec, feedRow, META_TO_GOOGLE, MOVE_ID } = await import(
+  './crossPlatformMove/moveFixtures'
+);
 
 afterEach(() => {
   cleanup();
   requestApplyItemsMutate.mockClear();
   setStatusesMutate.mockClear();
   setStatusMutate.mockClear();
+  applyActionsMutate.mockClear();
   applyApprovedMutate.mockClear();
   applyAdsetStatusMutate.mockClear();
   applyApprovedHandler = () => {};
@@ -1336,17 +1345,30 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
 // and a person decides it with one of three buttons.
 describe('a cross-platform budget move in the queue', () => {
   const MOVE_REC_ID = '99999999-9999-4999-8999-999999999999';
+  // The row as the daily cycle records it (G6): the move under seed.action, no action column.
   const withMove = (status = 'pending') => ({
     ...report,
-    recommendations: [...report.recommendations, moveRec({ id: MOVE_REC_ID, status })],
+    recommendations: [
+      ...report.recommendations,
+      moveRec({
+        id: MOVE_REC_ID,
+        status,
+        action: undefined,
+        trigger: 'rule:G27_cross_platform_move',
+        adset_id: 'move:meta>google_ads',
+        platform: 'meta',
+        seed: { action: META_TO_GOOGLE },
+      }),
+    ],
   });
+  const GOOGLE_WRITES_ON = { platform_writes: { google_ads: true } };
 
   it('renders as ONE row, never as a fatigue row, with every leg and the three buttons', () => {
     activeReport = withMove();
-    renderGroup();
+    renderGroup(GOOGLE_WRITES_ON);
     const rows = screen.getAllByTestId('budget-move-row');
     expect(rows).toHaveLength(1);
-    expect(screen.getAllByTestId('budget-move-leg')).toHaveLength(4);
+    expect(screen.getAllByTestId('budget-move-leg')).toHaveLength(2);
     expect(
       screen.getByText('We recommend a person approves moves between platforms.'),
     ).toBeTruthy();
@@ -1358,23 +1380,47 @@ describe('a cross-platform budget move in the queue', () => {
     ).toBe(false);
   });
 
-  it('Approve the move records the approval, and holds the row while it is in flight', () => {
+  it('Approve the move asks the service for a dry run of the move, never a status write', async () => {
     activeReport = withMove();
-    renderGroup();
+    renderGroup(GOOGLE_WRITES_ON);
     fireEvent.click(screen.getByRole('button', { name: 'Approve the move' }));
-    expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
-      { recommendation_id: MOVE_REC_ID, status: 'approved' },
+    await screen.findByTestId('budget-move-action-preview');
+    expect(applyActionsMutate.mock.calls.map((call) => call[0])).toEqual([
+      {
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        actions: [META_TO_GOOGLE],
+        dryRun: true,
+        recommendation_id: MOVE_REC_ID,
+      },
     ]);
-    expect(screen.getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true);
+    expect(setStatusMutate).not.toHaveBeenCalled();
   });
 
-  it('Dismiss rejects it', () => {
+  it('Dismiss rejects it, and holds the row while it is in flight', () => {
     activeReport = withMove();
-    renderGroup();
+    renderGroup(GOOGLE_WRITES_ON);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(setStatusMutate.mock.calls.map((call) => (call as unknown[])[0])).toEqual([
       { recommendation_id: MOVE_REC_ID, status: 'rejected' },
     ]);
+    expect(screen.getByRole('button', { name: 'Dismiss' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('writes to Google Ads switched off: no Approve, and the one line that says why', () => {
+    activeReport = withMove();
+    renderGroup({ platform_writes: { google_ads: false } });
+    expect(screen.queryByRole('button', { name: 'Approve the move' })).toBeNull();
+    expect(screen.getByTestId('budget-move-writes-off').textContent).toBe(
+      'This move is a proposal only — writes to Google Ads are switched off for this portfolio.',
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+  });
+
+  it('every leg writable (Meta by default, Google switched on): Approve is offered', () => {
+    activeReport = withMove();
+    renderGroup(GOOGLE_WRITES_ON);
+    expect(screen.getByRole('button', { name: 'Approve the move' })).toBeTruthy();
+    expect(screen.queryByTestId('budget-move-writes-off')).toBeNull();
   });
 
   it('a portfolio whose only work is a move still shows its queue', () => {
@@ -1385,7 +1431,7 @@ describe('a cross-platform budget move in the queue', () => {
 
   it('observe mode blocks the move as it blocks every write', () => {
     activeReport = withMove();
-    renderGroup({ apply_mode: 'observe' });
+    renderGroup({ apply_mode: 'observe', ...GOOGLE_WRITES_ON });
     expect(screen.getByRole('button', { name: 'Approve the move' }).hasAttribute('disabled')).toBe(
       true,
     );
@@ -1428,7 +1474,7 @@ describe('a cross-platform budget move in the queue', () => {
     renderGroup();
     expect(screen.getAllByTestId('move-decision')).toHaveLength(1);
     expect(screen.getAllByTestId('move-decision-leg')).toHaveLength(2);
-    // Undo both itself is covered by MoveDecisionCard.render.test (this suite mocks the dialog).
+    // Each leg's undo flow is covered by MoveDecisionCard.render.test (this suite mocks the dialog).
     expect(screen.getByTestId('move-state').textContent).toBe('applied');
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });

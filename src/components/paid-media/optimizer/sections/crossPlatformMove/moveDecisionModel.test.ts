@@ -52,7 +52,7 @@ describe('groupActionFeed', () => {
 });
 
 describe('readMoveDecision', () => {
-  test('applied: legs in order with their platform receipts, and Undo both', () => {
+  test('applied: legs in order with their platform receipts; the increase undoes first', () => {
     const move = decisionOf([googleUp(), tiktokDown()]);
     expect(move.state).toBe('applied');
     expect(move.from).toEqual(['tiktok_ads']);
@@ -62,27 +62,36 @@ describe('readMoveDecision', () => {
       ['tiktok_ads', 'tt-req-1', 'applied'],
       ['google_ads', 'g-req-1', 'applied'],
     ]);
-    expect(move.undo).toEqual({
-      kind: 'available',
-      label: 'Undo both',
-      // The increase comes off first, so an undo that stops halfway leaves the client
-      // spending less, never more.
-      steps: [
-        { auditId: 'leg-1', portfolioId: 'p-1' },
-        { auditId: 'leg-0', portfolioId: 'p-1' },
-      ],
-    });
+    expect(move.legs.map((l) => l.direction)).toEqual(['decrease', 'increase']);
+    // Reverse leg order: the increase comes off first, so an undo that stops halfway leaves
+    // the client spending less, never more. The decrease waits for it.
+    expect(move.legs.map((l) => l.undo)).toEqual(['after_increases', 'available']);
   });
 
-  test('more than two legs undo as "Undo all N"', () => {
-    const third = googleUp({ id: 'leg-2', leg: 2, entity_id: 'other' });
-    const move = decisionOf([tiktokDown(), googleUp(), third]);
-    expect(move.undo.kind === 'available' ? move.undo.label : null).toBe('Undo all 3');
+  test('the decrease is offered only once every increase of the move is undone', () => {
+    const second = (over: Record<string, unknown> = {}) =>
+      googleUp({ id: 'leg-2', leg: 2, entity_id: 'other', ...over });
+    const undos = (rows: ReturnType<typeof feedRow>[]) => decisionOf(rows).legs.map((l) => l.undo);
+    expect(undos([tiktokDown(), googleUp(), second()])).toEqual([
+      'after_increases',
+      'available',
+      'available',
+    ]);
+    expect(undos([tiktokDown(), googleUp({ reverted_by: 'u-1' }), second()])).toEqual([
+      'after_increases',
+      'none',
+      'available',
+    ]);
+    expect(
+      undos([tiktokDown(), googleUp({ reverted_by: 'u-1' }), second({ reverted_by: 'u-2' })]),
+    ).toEqual(['available', 'none', 'none']);
   });
 
-  test('no undo when any applied leg is not reversible on the server', () => {
+  test('a leg the server does not mark reversible offers no undo of its own', () => {
     const move = decisionOf([tiktokDown({ reversible: false }), googleUp()]);
-    expect(move.undo.kind).toBe('none');
+    expect(move.legs.map((l) => l.undo)).toEqual(['none', 'available']);
+    const noPortfolio = decisionOf([tiktokDown(), googleUp({ portfolio_id: null })]);
+    expect(noPortfolio.legs.map((l) => l.undo)).toEqual(['after_increases', 'none']);
   });
 
   test('compensated: the failed leg says why, the first leg reads applied then reverted', () => {
@@ -108,7 +117,7 @@ describe('readMoveDecision', () => {
     expect(move.legs.map((l) => l.state)).toEqual(['reverted', 'refused']);
     expect(move.legs[0]?.revert).toEqual({ beforeMinor: 90_000, afterMinor: 100_000, ok: true });
     expect(move.legs[1]?.error).toBe('BUDGET_BELOW_PER_DAY_MINIMUM');
-    expect(move.undo.kind).toBe('none');
+    expect(move.legs.map((l) => l.undo)).toEqual(['none', 'none']);
   });
 
   test('stranded: the second leg and its compensation both failed', () => {
@@ -137,7 +146,7 @@ describe('readMoveDecision', () => {
     expect(move.state).toBe('stranded');
     expect(move.legs.map((l) => l.state)).toEqual(['revert_refused', 'refused']);
     expect(move.legs[0]?.revert?.error).toBe('40001 No permission');
-    expect(move.undo.kind).toBe('none');
+    expect(move.legs.map((l) => l.undo)).toEqual(['none', 'none']);
   });
 
   test('the server’s own move_status wins over what the rows imply', () => {
@@ -154,7 +163,27 @@ describe('readMoveDecision', () => {
   test('every applied leg already undone reads as undone', () => {
     const move = decisionOf([tiktokDown({ reverted_by: 'u-0' }), googleUp({ reverted_by: 'u-1' })]);
     expect(move.state).toBe('undone');
-    expect(move.undo.kind).toBe('reverted');
+    expect(move.legs.map((l) => l.undo)).toEqual(['none', 'none']);
+  });
+
+  test('undone too when each leg’s undo arrives as its own row of the move', () => {
+    const undoOf = (forward: string, leg: number, platform: string) =>
+      feedRow({
+        id: `${forward}-undo`,
+        move_id: MOVE_ID,
+        leg,
+        platform,
+        revert_of: forward,
+        outcome: 'applied',
+      });
+    const move = decisionOf([
+      undoOf('leg-0', 0, 'tiktok_ads'),
+      undoOf('leg-1', 1, 'google_ads'),
+      tiktokDown({ reverted_by: 'leg-0-undo' }),
+      googleUp({ reverted_by: 'leg-1-undo' }),
+    ]);
+    expect(move.legs.map((l) => l.state)).toEqual(['reverted', 'reverted']);
+    expect(move.state).toBe('undone');
   });
 
   test('readMoveDecision is null for rows without a move', () => {
