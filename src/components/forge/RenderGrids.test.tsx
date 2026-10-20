@@ -594,6 +594,47 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Other set');
   });
 
+  test('shows the font refusal beside Render and clears it after the row passes', async () => {
+    const reason = 'Card A requires Brand Sans. Upload it in Library → Typography.';
+    preflightMock.mockImplementation(async () => {
+      throw new ApiError('render_fonts_missing', 422, undefined, { detail: reason });
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByText('Rejected');
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    const button = within(toolbar).getByRole<HTMLButtonElement>('button', { name: /Render 1/ });
+    expect(button.disabled).toBe(true);
+    expect(within(toolbar).getByText(reason)).toBeTruthy();
+    expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(
+      reason,
+    );
+    preflightMock.mockImplementation(async () => READY_RESPONSE);
+    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'New copy' } });
+    await waitFor(() => expect(button.disabled).toBe(false));
+    expect(within(toolbar).queryByText(reason)).toBeNull();
+    expect(button.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  test('a rejected font row can open override review without accepting it or starting a render', async () => {
+    preflightMock.mockImplementation(async () => {
+      throw new ApiError('Missing fonts.', 422, 'render_fonts_missing', {
+        detail: 'Upload the missing font.',
+      });
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByText('Rejected');
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Review font override' }));
+    expect(await screen.findByRole('list', { name: 'Rows to render' })).toBeTruthy();
+    expect(
+      batchPreflightMock.mock.calls.every(
+        (call) => !(call[0] as { acceptMissingFonts?: boolean }).acceptMissingFonts,
+      ),
+    ).toBe(true);
+  });
+
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
     preflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
@@ -618,6 +659,7 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Review font override' })).toBeNull();
     // A value the server refuses is wrong, not missing.
     expect(screen.getByText('Invalid')).toBeTruthy();
   });

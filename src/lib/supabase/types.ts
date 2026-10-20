@@ -16774,6 +16774,7 @@ export type Database = {
     Tables: {
       ad_render_jobs: {
         Row: {
+          accept_missing_fonts: boolean
           approval_package_id: string | null
           batch_id: string
           binding_id: string | null
@@ -16824,6 +16825,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accept_missing_fonts?: boolean
           approval_package_id?: string | null
           batch_id?: string
           binding_id?: string | null
@@ -16874,6 +16876,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accept_missing_fonts?: boolean
           approval_package_id?: string | null
           batch_id?: string
           binding_id?: string | null
@@ -20117,6 +20120,7 @@ export type Database = {
       }
       render_requests: {
         Row: {
+          accept_missing_fonts: boolean
           binding_id: string | null
           brand_id: string
           contract_hash: string
@@ -20145,6 +20149,7 @@ export type Database = {
           template_source_version_id: string | null
         }
         Insert: {
+          accept_missing_fonts?: boolean
           binding_id?: string | null
           brand_id: string
           contract_hash: string
@@ -20173,6 +20178,7 @@ export type Database = {
           template_source_version_id?: string | null
         }
         Update: {
+          accept_missing_fonts?: boolean
           binding_id?: string | null
           brand_id?: string
           contract_hash?: string

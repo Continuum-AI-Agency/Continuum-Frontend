@@ -1557,6 +1557,8 @@ export const apiRenderJobSchema = z
      * Null for a job whose input was not recorded.
      */
     renderInput: apiRenderVariableMapSchema.nullable().default(null),
+    /** Explicit per-render consent to let the worker substitute missing fonts. */
+    acceptMissingFonts: z.boolean().optional(),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),
