@@ -147,6 +147,8 @@ let failSave = true;
 let failRender = false;
 let acceptedSave = false;
 let sceneFailure = false;
+let orderBarrier: Promise<void> | undefined;
+let orderFailure = false;
 let sceneOverride: HyperframesSceneView | undefined;
 let draft: LayerDraftState | null = null;
 let status: HyperframesSceneRenderStatus;
@@ -158,6 +160,8 @@ beforeEach(() => {
   failRender = false;
   acceptedSave = false;
   sceneFailure = false;
+  orderBarrier = undefined;
+  orderFailure = false;
   sceneOverride = undefined;
   draft = null;
   status = {
@@ -217,6 +221,31 @@ beforeEach(() => {
         items: [],
         nextCursor: null,
       });
+    if (url.pathname.endsWith('/scene/order')) {
+      await orderBarrier;
+      if (orderFailure) return respond({ message: 'Order metadata unavailable' }, 404);
+      const view = sceneOverride ?? (acceptedSave ? childView : base);
+      return respond({
+        schema: 'hyperframes.order-view/1',
+        brandId: BRAND,
+        assetId: ASSET,
+        revisionId: view.revision.revisionId,
+        sceneSha256: view.sceneSha256,
+        sourceVersionId: VERSION,
+        sourceSceneSha256: view.sourceSceneSha256,
+        sourceSha256: view.edits.sourceSha256,
+        groups: [
+          {
+            parentId: 'parent',
+            parentTag: 'div',
+            children: [
+              { nodeId: 'left', tag: 'div' },
+              { nodeId: 'right', tag: 'div' },
+            ],
+          },
+        ],
+      });
+    }
     if (url.pathname.endsWith('/scene')) {
       if (sceneFailure)
         return respond(
@@ -444,7 +473,7 @@ test('the native editor protects dirty copy through the existing Forge exit guar
   fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
   expect((screen.getByLabelText('Text 1') as HTMLTextAreaElement).value).toBe('Keep this draft');
   fireEvent.click(screen.getByRole('button', { name: 'Back to templates' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Discard', exact: true }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
   await screen.findByText('Template gallery');
   expect(posts).toHaveLength(0);
 });
@@ -479,4 +508,66 @@ test('text pagination bounds mounted controls and preserves changes across pages
       { op: 'text', fieldId: 'run-20:text', value: 'Last edit' },
     ],
   });
+});
+
+test('mounted source ordering changes the real save payload and supports discard', async () => {
+  mount();
+  const earlier = await screen.findByRole('button', { name: 'Move right earlier' });
+  fireEvent.click(earlier);
+  fireEvent.change(screen.getByLabelText('Variant name'), { target: { value: 'Reordered' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+  expect(
+    (screen.getByRole('button', { name: 'Move left earlier' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Move right earlier' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
+  await screen.findByText('Variant was not saved');
+  const body = posts.find((post) => post.path.endsWith('/revisions'))!.body;
+  expect((body.edits as { operations: unknown[] }).operations).toContainEqual({
+    op: 'order',
+    parentId: 'parent',
+    nodeIds: ['right', 'left'],
+  });
+});
+
+test('late source-order metadata preserves unsaved copy and dirty state', async () => {
+  let release: () => void = () => {};
+  orderBarrier = new Promise((resolve) => {
+    release = resolve;
+  });
+  mount();
+  const copy = await screen.findByLabelText('Text 1');
+  fireEvent.change(copy, { target: { value: 'Edited while loading' } });
+  await waitFor(() => expect(draft?.dirty).toBe(true));
+  release();
+  await screen.findByRole('button', { name: 'Move right earlier' });
+  expect((copy as HTMLTextAreaElement).value).toBe('Edited while loading');
+  expect(draft?.dirty).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
+  await screen.findByText('Variant was not saved');
+  expect(
+    (
+      posts.find((post) => post.path.endsWith('/revisions'))!.body.edits as {
+        operations: unknown[];
+      }
+    ).operations,
+  ).toContainEqual({ op: 'text', fieldId: 'copy:text', value: 'Edited while loading' });
+});
+
+test('an unavailable companion order endpoint leaves existing copy editing usable', async () => {
+  orderFailure = true;
+  mount();
+  await screen.findByText(
+    'Element order is unavailable for this source. Copy and size edits remain available.',
+  );
+  fireEvent.change(screen.getByLabelText('Text 1'), { target: { value: 'Compatible copy' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
+  await screen.findByText('Variant was not saved');
+  expect(
+    (
+      posts.find((post) => post.path.endsWith('/revisions'))!.body.edits as {
+        operations: unknown[];
+      }
+    ).operations,
+  ).toEqual([{ op: 'text', fieldId: 'copy:text', value: 'Compatible copy' }]);
 });

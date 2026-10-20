@@ -1,5 +1,6 @@
 import {
   type HyperframesNativeEdits,
+  type HyperframesOrderView,
   type HyperframesSceneView,
   type SaveHyperframesRevisionRequest,
   saveHyperframesRevisionRequestSchema,
@@ -13,6 +14,14 @@ export const nativeEditorFormSchema = z
     name: z.string().trim().max(120),
     width: z.number().int().min(1).max(8192),
     height: z.number().int().min(1).max(8192),
+    orders: z
+      .array(
+        z.object({
+          parentId: z.string().min(1).max(200),
+          nodeIds: z.array(z.string().min(1).max(200)).min(2).max(20_000),
+        }),
+      )
+      .max(20_000),
     texts: z
       .array(z.object({ fieldId: z.string().min(1), value: z.string().max(65_536) }))
       .max(160_000),
@@ -58,14 +67,25 @@ export function nativeEditorDefaults(
         : 'new',
     name: `${variant?.name ?? 'Native'} copy`.slice(0, 120),
     ...view.viewport,
+    orders: [],
     texts: nativeTextFields(view).map(({ fieldId, value }) => ({ fieldId, value })),
   };
+}
+
+export function nativeOrderDefaults(order?: HyperframesOrderView) {
+  return (
+    order?.groups.map((group) => ({
+      parentId: group.parentId,
+      nodeIds: group.children.map((child) => child.nodeId),
+    })) ?? []
+  );
 }
 
 /** Edits are complete snapshots. Preserve operations this inspector does not expose. */
 export function nativeEditorEdits(
   view: HyperframesSceneView,
   input: NativeEditorForm,
+  orderView?: HyperframesOrderView,
 ): HyperframesNativeEdits {
   const form = nativeEditorFormSchema.parse(input);
   const fields = new Map(nativeTextFields(view).map((field) => [field.fieldId, field.value]));
@@ -80,12 +100,49 @@ export function nativeEditorEdits(
       .filter((field) => field.value !== fields.get(field.fieldId))
       .map((field) => [field.fieldId, field.value]),
   );
+  const orders = new Map(
+    orderView?.groups.map((group) => [
+      group.parentId,
+      group.children.map((child) => child.nodeId),
+    ]) ?? [],
+  );
+  if (
+    (orderView &&
+      (orderView.revisionId !== view.revision.revisionId ||
+        orderView.sceneSha256 !== view.sceneSha256 ||
+        orderView.brandId !== view.brandId ||
+        orderView.assetId !== view.assetId ||
+        orderView.sourceVersionId !== view.sourceVersionId ||
+        orderView.sourceSceneSha256 !== view.sourceSceneSha256 ||
+        orderView.sourceSha256 !== view.edits.sourceSha256)) ||
+    form.orders.length !== orders.size ||
+    new Set(form.orders.map((group) => group.parentId)).size !== orders.size
+  )
+    throw Error('The source element order changed. Reopen this saved revision.');
+  const changedOrders = new Map<string, string[]>();
+  for (const group of form.orders) {
+    const saved = orders.get(group.parentId);
+    const members = new Set(saved);
+    if (
+      !saved ||
+      group.nodeIds.length !== saved.length ||
+      new Set(group.nodeIds).size !== saved.length ||
+      group.nodeIds.some((id) => !members.has(id))
+    )
+      throw Error('Order must name every direct child exactly once.');
+    if (group.nodeIds.some((id, index) => id !== saved[index]))
+      changedOrders.set(group.parentId, group.nodeIds);
+  }
   const resized = form.width !== view.viewport.width || form.height !== view.viewport.height;
   const operations = structuredClone(view.edits.operations).filter(
     (op) =>
-      !(op.op === 'text' && replacements.has(op.fieldId)) && !(op.op === 'viewport' && resized),
+      !(op.op === 'text' && replacements.has(op.fieldId)) &&
+      !(op.op === 'viewport' && resized) &&
+      !(op.op === 'order' && changedOrders.has(op.parentId)),
   );
   for (const [fieldId, value] of replacements) operations.push({ op: 'text', fieldId, value });
+  for (const [parentId, nodeIds] of changedOrders)
+    operations.push({ op: 'order', parentId, nodeIds: [...nodeIds] });
   if (resized) operations.push({ op: 'viewport', width: form.width, height: form.height });
   if (operations.length > 1000)
     throw Error('A saved revision supports at most 1,000 combined edit operations.');
@@ -97,6 +154,7 @@ export function nativeSaveRequest(
   variant: TemplateRevisionVariant | undefined,
   input: NativeEditorForm,
   idempotencyKey: string,
+  orderView?: HyperframesOrderView,
 ): SaveHyperframesRevisionRequest {
   if (!view.sourceSceneSha256)
     throw Error('This revision uses an older upload. Reopen its source before saving.');
@@ -119,7 +177,7 @@ export function nativeSaveRequest(
     ...(form.target === 'current' ? { variantId: view.revision.variantId } : { name: form.name }),
     expectedHeadRevisionId: form.target === 'current' ? view.revision.revisionId : null,
     idempotencyKey,
-    edits: nativeEditorEdits(view, form),
+    edits: nativeEditorEdits(view, form, orderView),
   });
 }
 

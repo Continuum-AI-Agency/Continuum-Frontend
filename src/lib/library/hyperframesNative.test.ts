@@ -33,7 +33,7 @@ const edits = {
   operations: [],
 };
 const view = {
-  family: 'hyperframes',
+  family: 'hyperframes' as const,
   brandId: BRAND,
   assetId: ASSET,
   sourceVersionId: VERSION,
@@ -47,7 +47,7 @@ const view = {
   renderer: null,
 };
 const intent: HyperframesSceneRenderRequest = {
-  family: 'hyperframes',
+  family: 'hyperframes' as const,
   brandId: BRAND,
   revisionId: REVISION,
   sceneSha256: view.sceneSha256,
@@ -57,7 +57,7 @@ const intent: HyperframesSceneRenderRequest = {
   outputs: [{ file: 'png', frame: 2 }],
 };
 const job: HyperframesSceneRenderStatus = {
-  family: 'hyperframes',
+  family: 'hyperframes' as const,
   brandId: BRAND,
   assetId: ASSET,
   jobId: JOB,
@@ -107,8 +107,14 @@ test('native scene reads keep the selected revision and authenticated family rou
 });
 
 test('native upload history uses durable cursor/job routes and refuses mismatched response pins', async () => {
-  const history = { family: 'hyperframes', brandId: BRAND, templateId: ASSET,
-    enabled: false, items: [], nextCursor: null };
+  const history = {
+    family: 'hyperframes' as const,
+    brandId: BRAND,
+    templateId: ASSET,
+    enabled: false,
+    items: [],
+    nextCursor: null,
+  };
   const cursor = { createdAt: '2026-10-20T00:00:00.123456+00:00', jobId: JOB };
   answer(history);
   expect(await native.fetchNativeHyperframesUploads(BRAND, ASSET, { cursor })).toEqual(history);
@@ -118,9 +124,13 @@ test('native upload history uses durable cursor/job routes and refuses mismatche
   expect(url.searchParams.get('beforeJob')).toBe(JOB);
   expect(sent[0]!.auth).toBe('Bearer native-token');
   answer({ ...history, brandId: VERSION });
-  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET)).rejects.toThrow('requested identity');
+  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET)).rejects.toThrow(
+    'requested identity',
+  );
   answer(history);
-  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET, { jobId: JOB })).rejects.toThrow('requested identity');
+  await expect(native.fetchNativeHyperframesUploads(BRAND, ASSET, { jobId: JOB })).rejects.toThrow(
+    'requested identity',
+  );
   expect(new URL(sent.at(-1)!.url).pathname).toEndWith(`/scene/uploads/${JOB}`);
 });
 
@@ -174,14 +184,14 @@ test('native failures remain native without another request or fallback', async 
 });
 
 test('native history, polling and cancellation reject unrelated jobs and private fields', async () => {
-  answer({ family: 'hyperframes', jobs: [job] });
+  answer({ family: 'hyperframes' as const, jobs: [job] });
   expect((await native.listNativeHyperframesRenders(BRAND, ASSET)).jobs).toEqual([job]);
   answer(job);
   expect(await native.fetchNativeHyperframesRender(BRAND, ASSET, JOB)).toEqual(job);
   answer({ ...job, state: 'cancelled' });
   expect((await native.cancelNativeHyperframesRender(BRAND, ASSET, JOB)).state).toBe('cancelled');
   expect(sent.at(-1)).toMatchObject({ method: 'POST', body: { brandId: BRAND } });
-  answer({ family: 'hyperframes', jobs: [{ ...job, assetId: VERSION }] });
+  answer({ family: 'hyperframes' as const, jobs: [{ ...job, assetId: VERSION }] });
   expect(
     (
       await native.listNativeHyperframesRenders(BRAND, ASSET).then(
@@ -218,12 +228,12 @@ test('native saves preserve parent pins and idempotency, and refuse an AE revisi
       assetId: ASSET,
       brandId: BRAND,
       versionId: VERSION,
-      family: 'hyperframes',
+      family: 'hyperframes' as const,
       parseState: 'parsed',
       createdAt: '2026-10-20T00:00:00Z',
     },
     native: {
-      family: 'hyperframes',
+      family: 'hyperframes' as const,
       schemaVersion: 'hyperframes.revision/1',
       sceneSha256: 'd'.repeat(64),
       entrySha256: edits.sourceSha256,
@@ -268,7 +278,7 @@ test('native saves preserve parent pins and idempotency, and refuse an AE revisi
     publishedHeadRevisionId: null,
     archivedAt: null,
     tags: [],
-    sourceKind: 'hyperframes',
+    sourceKind: 'hyperframes' as const,
     revisions: [saved],
   };
   answer({ items: [variant] });
@@ -277,4 +287,44 @@ test('native saves preserve parent pins and idempotency, and refuse an AE revisi
   expect(
     (await native.fetchNativeHyperframesVariants(BRAND, ASSET).catch((error) => error)).message,
   ).toContain('Expected native revisions');
+});
+
+test('source order uses authenticated exact revision pins and rejects mismatched authoring metadata', async () => {
+  const order = {
+    schema: 'hyperframes.order-view/1' as const,
+    brandId: BRAND,
+    assetId: ASSET,
+    revisionId: REVISION,
+    sceneSha256: view.sceneSha256,
+    sourceVersionId: VERSION,
+    sourceSceneSha256: view.sourceSceneSha256,
+    sourceSha256: view.edits.sourceSha256,
+    groups: [],
+  };
+  answer(order);
+  expect(
+    await native.fetchNativeHyperframesOrder(
+      view as Parameters<typeof native.fetchNativeHyperframesOrder>[0],
+    ),
+  ).toEqual(order);
+  expect(sent[0]).toMatchObject({
+    url: `${API}/api/ai-studio/templates/${ASSET}/scene/order?brandId=${BRAND}&family=hyperframes&revisionId=${REVISION}`,
+    auth: 'Bearer native-token',
+  });
+  for (const key of [
+    'brandId',
+    'assetId',
+    'revisionId',
+    'sceneSha256',
+    'sourceVersionId',
+    'sourceSceneSha256',
+    'sourceSha256',
+  ] as const) {
+    answer({ ...order, [key]: key.endsWith('Id') ? nextRevision : 'f'.repeat(64) });
+    await expect(
+      native.fetchNativeHyperframesOrder(
+        view as Parameters<typeof native.fetchNativeHyperframesOrder>[0],
+      ),
+    ).rejects.toThrow();
+  }
 });

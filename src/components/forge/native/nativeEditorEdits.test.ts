@@ -1,10 +1,15 @@
 import { expect, test } from 'bun:test';
-import type { HyperframesSceneView, TemplateRevisionVariant } from '@continuum/contracts';
+import type {
+  HyperframesOrderView,
+  HyperframesSceneView,
+  TemplateRevisionVariant,
+} from '@continuum/contracts';
 import {
   nativeEditorDefaults,
   nativeEditorEdits,
   nativeEditorFormSchema,
   nativeEditorHref,
+  nativeOrderDefaults,
   nativeSaveRequest,
   nativeTextFields,
 } from './nativeEditorEdits';
@@ -208,4 +213,93 @@ test('changed field inventories, excessive geometry and malformed copy fail befo
     revisionId: view.revision.revisionId,
     jobId: id('9'),
   });
+});
+
+const order: HyperframesOrderView = {
+  schema: 'hyperframes.order-view/1',
+  brandId: view.brandId,
+  assetId: view.assetId,
+  revisionId: view.revision.revisionId,
+  sceneSha256: view.sceneSha256,
+  sourceVersionId: view.sourceVersionId,
+  sourceSceneSha256: view.sourceSceneSha256!,
+  sourceSha256: view.edits.sourceSha256,
+  groups: [
+    {
+      parentId: 'root',
+      parentTag: 'div',
+      children: [
+        { nodeId: 'first', tag: 'div' },
+        { nodeId: 'second', tag: 'div' },
+      ],
+    },
+  ],
+};
+
+test('source order snapshots preserve unexposed edits, combine copy/size, and restore A/B/A without duplicates', () => {
+  const original = {
+    ...view,
+    edits: {
+      ...view.edits,
+      operations: [
+        ...view.edits.operations,
+        { op: 'order' as const, parentId: 'root', nodeIds: ['first', 'second'] },
+      ],
+    },
+  };
+  const defaults = { ...nativeEditorDefaults(original), orders: nativeOrderDefaults(order) };
+  expect(nativeEditorEdits(original, defaults, order)).toEqual(original.edits);
+  const changed = structuredClone(defaults);
+  changed.orders[0]!.nodeIds.reverse();
+  changed.texts[0]!.value = 'New copy';
+  changed.width = 1600;
+  const edits = nativeEditorEdits(original, changed, order);
+  expect(edits.operations.filter((op) => op.op === 'order')).toEqual([
+    ...view.edits.operations.filter((op) => op.op === 'order'),
+    { op: 'order', parentId: 'root', nodeIds: ['second', 'first'] },
+  ]);
+  expect(edits.operations.some((op) => op.op === 'text' && op.value === 'New copy')).toBe(true);
+  expect(edits.operations.some((op) => op.op === 'viewport' && op.width === 1600)).toBe(true);
+  const b = { ...original, edits };
+  const bOrder = {
+    ...order,
+    groups: [{ ...order.groups[0]!, children: [...order.groups[0]!.children].reverse() }],
+  };
+  const restore = nativeEditorEdits(
+    b,
+    { ...nativeEditorDefaults(b), orders: defaults.orders },
+    bOrder,
+  );
+  expect(restore.operations.filter((op) => op.op === 'order')).toEqual([
+    ...view.edits.operations.filter((op) => op.op === 'order'),
+    { op: 'order', parentId: 'root', nodeIds: ['first', 'second'] },
+  ]);
+  expect(original.edits.operations.at(-1)).toEqual({
+    op: 'order',
+    parentId: 'root',
+    nodeIds: ['first', 'second'],
+  });
+});
+
+test('order metadata and form inventories must name every pinned child exactly once', () => {
+  const defaults = { ...nativeEditorDefaults(view), orders: nativeOrderDefaults(order) };
+  for (const nodeIds of [['first'], ['first', 'first'], ['first', 'foreign']]) {
+    expect(() =>
+      nativeEditorEdits(view, { ...defaults, orders: [{ parentId: 'root', nodeIds }] }, order),
+    ).toThrow();
+  }
+  expect(() => nativeEditorEdits(view, { ...defaults, orders: [] }, order)).toThrow(
+    'order changed',
+  );
+  expect(() =>
+    nativeEditorEdits(
+      view,
+      { ...defaults, orders: [...defaults.orders, ...defaults.orders] },
+      order,
+    ),
+  ).toThrow('order changed');
+  expect(() => nativeEditorEdits(view, defaults)).toThrow('order changed');
+  expect(() =>
+    nativeEditorEdits(view, defaults, { ...order, sceneSha256: '0'.repeat(64) }),
+  ).toThrow('order changed');
 });

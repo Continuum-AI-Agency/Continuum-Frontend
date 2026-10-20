@@ -120,6 +120,60 @@ export type HyperframesSceneRenderExecutionSpec = z.infer<
   typeof hyperframesSceneRenderExecutionSpecSchema
 >;
 
+/** Source DOM order is authoring metadata, separate from immutable painter wire formats. */
+export const hyperframesOrderViewSchema = z
+  .object({
+    schema: z.literal('hyperframes.order-view/1'),
+    brandId: z.uuid(),
+    assetId: z.uuid(),
+    revisionId: z.uuid(),
+    sceneSha256: hash,
+    sourceVersionId: z.uuid(),
+    sourceSceneSha256: hash,
+    sourceSha256: hash,
+    groups: z
+      .array(
+        z
+          .object({
+            parentId: z.string().min(1).max(200),
+            parentTag: z.string().min(1).max(100),
+            children: z
+              .array(
+                z
+                  .object({
+                    nodeId: z.string().min(1).max(200),
+                    tag: z.string().min(1).max(100),
+                  })
+                  .strict(),
+              )
+              .min(2)
+              .max(20_000),
+          })
+          .strict(),
+      )
+      .max(20_000),
+  })
+  .strict()
+  .superRefine((view, context) => {
+    const parents = new Set<string>(),
+      children = new Set<string>();
+    let count = 0;
+    for (const group of view.groups) {
+      if (parents.has(group.parentId))
+        context.addIssue({ code: 'custom', message: 'Duplicate order parent' });
+      parents.add(group.parentId);
+      for (const child of group.children) {
+        count++;
+        if (children.has(child.nodeId) || child.nodeId === group.parentId)
+          context.addIssue({ code: 'custom', message: 'Invalid direct-child membership' });
+        children.add(child.nodeId);
+      }
+    }
+    if (count > 20_000)
+      context.addIssue({ code: 'custom', message: 'Order metadata exceeds its node budget' });
+  });
+export type HyperframesOrderView = z.infer<typeof hyperframesOrderViewSchema>;
+
 /** Public metadata omits private artifact locations, leases and signed renderer URLs. */
 export const hyperframesSceneViewSchema = z
   .object({

@@ -30,17 +30,20 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  fetchNativeHyperframesOrder,
   fetchNativeHyperframesScene,
   fetchNativeHyperframesVariants,
   saveNativeHyperframesRevision,
 } from '@/lib/library/hyperframesNative';
 import { NativeHyperframesJobs } from './NativeHyperframesJobs';
+import { NativeHyperframesOrder } from './NativeHyperframesOrder';
 import { NativeUploadedVariants } from './NativeUploadedVariants';
 import {
   type NativeEditorForm,
   nativeEditorDefaults,
   nativeEditorFormSchema,
   nativeEditorHref,
+  nativeOrderDefaults,
   nativeSaveRequest,
   nativeTextFields,
 } from './nativeEditorEdits';
@@ -187,6 +190,21 @@ function NativeEditorBody({
     resolver: zodResolver(nativeEditorFormSchema),
     defaultValues: defaults,
   });
+  const order = useQuery({
+    queryKey: [
+      ...forgeQueryKeys.nativeScene(view.brandId, view.assetId, view.revision.revisionId),
+      'order',
+      view.sceneSha256,
+    ],
+    queryFn: ({ signal }) => fetchNativeHyperframesOrder(view, signal),
+    enabled: view.sourceSceneSha256 !== null,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  useEffect(() => {
+    if (order.data) form.resetField('orders', { defaultValue: nativeOrderDefaults(order.data) });
+  }, [form, order.data]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -216,7 +234,13 @@ function NativeEditorBody({
         setError('Check the highlighted fields before saving.');
         return false;
       }
-      const candidate = nativeSaveRequest(view, variant, form.getValues(), 'pending-intent');
+      const candidate = nativeSaveRequest(
+        view,
+        variant,
+        form.getValues(),
+        'pending-intent',
+        order.data,
+      );
       const fingerprint = JSON.stringify(candidate);
       if (replay.current?.fingerprint !== fingerprint)
         replay.current = {
@@ -238,11 +262,11 @@ function NativeEditorBody({
       busy.current = false;
       setSaving(false);
     }
-  }, [canEdit, client, fields, form, onSelectRevision, variant, view]);
+  }, [canEdit, client, fields, form, onSelectRevision, order.data, variant, view]);
   const discard = useCallback(() => {
-    form.reset(defaults);
+    form.reset({ ...defaults, orders: nativeOrderDefaults(order.data) });
     setError(null);
-  }, [defaults, form]);
+  }, [defaults, form, order.data]);
   useEffect(() => {
     onDraftChange?.({
       dirty,
@@ -402,6 +426,40 @@ function NativeEditorBody({
                     </Field>
                   ))}
                 </div>
+                <Controller
+                  control={form.control}
+                  name="orders"
+                  render={({ field }) => (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Source element order</p>
+                      {order.isPending && view.sourceSceneSha256 ? (
+                        <p role="status" className="text-xs text-muted-foreground">
+                          Loading saved element order…
+                        </p>
+                      ) : null}
+                      {order.isError ? (
+                        <p role="status" className="text-xs text-muted-foreground">
+                          Element order is unavailable for this source. Copy and size edits remain
+                          available.
+                        </p>
+                      ) : null}
+                      {order.data ? (
+                        <NativeHyperframesOrder
+                          view={order.data}
+                          value={field.value}
+                          onChange={field.onChange}
+                        />
+                      ) : null}
+                      {order.data?.groups.length ? (
+                        <FieldDescription>
+                          Earlier elements come first in the source. Layout, CSS stacking, and
+                          scripts can affect the visible result. Saving recompiles and verifies the
+                          order across the delivery timeline.
+                        </FieldDescription>
+                      ) : null}
+                    </div>
+                  )}
+                />
                 <FieldDescription>
                   Saving compiles the original source with these edits. A source script that
                   overwrites an edit must be resolved before it can be saved.
@@ -438,8 +496,8 @@ function NativeEditorBody({
             </details>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            This inspector currently exposes copy and viewport edits. Typography, palette, media,
-            ordering, and motion controls are still being qualified.
+            This inspector exposes copy, viewport, and source element order edits. Typography,
+            palette, media, and motion controls are still being qualified.
           </p>
           <Panel title="Variants and revisions" bodyClassName="p-0">
             {historyError ? (

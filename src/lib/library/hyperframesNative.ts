@@ -1,8 +1,10 @@
 import {
+  type HyperframesOrderView,
   type HyperframesSceneRenderHistory,
   type HyperframesSceneRenderRequest,
   type HyperframesSceneRenderStatus,
   type HyperframesSceneView,
+  hyperframesOrderViewSchema,
   hyperframesSceneRenderHistorySchema,
   hyperframesSceneRenderRequestSchema,
   hyperframesSceneRenderStatusSchema,
@@ -71,6 +73,24 @@ export function fetchNativeHyperframesScene(
         scene.assetId === assetId &&
         (!revisionId || scene.revision.revisionId === revisionId),
       'The saved native scene identity differs from the requested pin',
+    ),
+    signal,
+  });
+}
+
+export function fetchNativeHyperframesOrder(view: HyperframesSceneView, signal?: AbortSignal) {
+  return request<HyperframesOrderView>({
+    path: `${path(view.assetId)}/scene/order?${query(view.brandId, view.revision.revisionId)}`,
+    schema: hyperframesOrderViewSchema.refine(
+      (order) =>
+        order.brandId === view.brandId &&
+        order.assetId === view.assetId &&
+        order.revisionId === view.revision.revisionId &&
+        order.sceneSha256 === view.sceneSha256 &&
+        order.sourceVersionId === view.sourceVersionId &&
+        order.sourceSceneSha256 === view.sourceSceneSha256 &&
+        order.sourceSha256 === view.edits.sourceSha256,
+      'The source element order differs from the saved revision',
     ),
     signal,
   });
