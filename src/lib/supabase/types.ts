@@ -21838,6 +21838,7 @@ export type Database = {
           aep_sha256: string | null
           asset_id: string
           brand_id: string
+          compile_duration_ms: number | null
           content_hash: string | null
           contract_version: string | null
           created_at: string
@@ -21847,7 +21848,11 @@ export type Database = {
           forge_run_id: string | null
           forge_state: string | null
           house: boolean
+          native_compile_error: string | null
+          native_compile_state: string
+          native_scene: Json | null
           parse: Json
+          parse_duration_ms: number | null
           parse_error: string | null
           parse_state: string
           parsed_at: string | null
@@ -21867,6 +21872,7 @@ export type Database = {
           aep_sha256?: string | null
           asset_id: string
           brand_id: string
+          compile_duration_ms?: number | null
           content_hash?: string | null
           contract_version?: string | null
           created_at?: string
@@ -21876,7 +21882,11 @@ export type Database = {
           forge_run_id?: string | null
           forge_state?: string | null
           house?: boolean
+          native_compile_error?: string | null
+          native_compile_state?: string
+          native_scene?: Json | null
           parse?: Json
+          parse_duration_ms?: number | null
           parse_error?: string | null
           parse_state?: string
           parsed_at?: string | null
@@ -21896,6 +21906,7 @@ export type Database = {
           aep_sha256?: string | null
           asset_id?: string
           brand_id?: string
+          compile_duration_ms?: number | null
           content_hash?: string | null
           contract_version?: string | null
           created_at?: string
@@ -21905,7 +21916,11 @@ export type Database = {
           forge_run_id?: string | null
           forge_state?: string | null
           house?: boolean
+          native_compile_error?: string | null
+          native_compile_state?: string
+          native_scene?: Json | null
           parse?: Json
+          parse_duration_ms?: number | null
           parse_error?: string | null
           parse_state?: string
           parsed_at?: string | null
@@ -22402,6 +22417,16 @@ export type Database = {
         Args: { p_asset_id: string; p_commands: Json }
         Returns: Json
       }
+      checkpoint_service_template_ingest_parse: {
+        Args: {
+          p_duration_ms: number
+          p_job_id: string
+          p_lease_token: string
+          p_parse: Json
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
       claim_client_render_job: {
         Args: {
           p_brand_id: string
@@ -22648,6 +22673,49 @@ export type Database = {
         }[]
       }
       claim_service_render_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_service_template_ingest_job: {
         Args: {
           p_job_id?: string
           p_lease_seconds?: number
@@ -22973,6 +23041,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      complete_service_template_ingest_job: {
+        Args: {
+          p_duration_ms: number
+          p_job_id: string
+          p_lease_token: string
+          p_scene: Json
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
       complete_service_url_ingest_job: {
         Args: {
           p_job_id: string
@@ -23272,6 +23350,18 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fail_service_template_ingest_job: {
+        Args: {
+          p_disposition: string
+          p_error_code: string
+          p_error_message: string
+          p_job_id: string
+          p_lease_token: string
+          p_stage: string
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
       fail_service_url_ingest_job: {
         Args: {
           p_error_code: string
@@ -23318,6 +23408,15 @@ export type Database = {
         }
       }
       head_version_number: { Args: { p_asset_id: string }; Returns: number }
+      heartbeat_service_template_ingest_job: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_lease_token: string
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
       heartbeat_service_url_ingest_job: {
         Args: {
           p_job_id: string
@@ -23607,6 +23706,45 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      lock_service_template_ingest_job: {
+        Args: { p_job_id: string; p_lease_token: string; p_worker_id: string }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_asset_seen: {
         Args: { p_asset_id: string }
         Returns: {
@@ -23793,6 +23931,10 @@ export type Database = {
       reap_expired_forge_micro_render_jobs: { Args: never; Returns: number }
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
+      reap_expired_service_template_ingest_jobs: {
+        Args: never
+        Returns: number
+      }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
       reconcile_template_authoring_artifact_settings: {
         Args: {
@@ -23984,6 +24126,10 @@ export type Database = {
           p_variant_id: string
         }
         Returns: string
+      }
+      register_uploaded_native_template: {
+        Args: { p_payload: Json }
+        Returns: Json
       }
       register_uploaded_template_variant: {
         Args: { p_parent_asset_id: string; p_payload: Json }

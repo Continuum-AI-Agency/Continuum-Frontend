@@ -2,6 +2,61 @@ import { z } from 'zod';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().min(1).max(200);
+/** Canonical finite JSON used for native source, edit, scene and cache identities. */
+export function hyperframesCanonicalJson(value: unknown): string {
+  const ancestors = new Set<object>();
+  const compareKeys = (a: string, b: string) => {
+    let i = 0,
+      j = 0;
+    while (i < a.length && j < b.length) {
+      const x = a.codePointAt(i)!,
+        y = b.codePointAt(j)!;
+      if (x !== y) return x - y;
+      i += x > 0xffff ? 2 : 1;
+      j += y > 0xffff ? 2 : 1;
+    }
+    return (i < a.length ? 1 : 0) - (j < b.length ? 1 : 0);
+  };
+  const visit = (item: unknown, depth: number): string => {
+    if (depth > 128) throw Error('Native identity exceeds the JSON depth budget');
+    if (
+      item === null ||
+      typeof item === 'string' ||
+      typeof item === 'boolean' ||
+      (typeof item === 'number' && Number.isFinite(item))
+    )
+      return JSON.stringify(item);
+    if (typeof item !== 'object' || ancestors.has(item))
+      throw Error('Native identities require finite acyclic JSON');
+    if (
+      !Array.isArray(item) &&
+      Object.getPrototypeOf(item) !== Object.prototype &&
+      Object.getPrototypeOf(item) !== null
+    )
+      throw Error('Native identities require plain JSON objects');
+    ancestors.add(item);
+    try {
+      if (Array.isArray(item)) {
+        const parts: string[] = [];
+        for (let index = 0; index < item.length; index++) {
+          if (!Object.hasOwn(item, index)) throw Error('Native identities reject sparse arrays');
+          parts.push(visit(item[index], depth + 1));
+        }
+        return `[${parts.join(',')}]`;
+      }
+      return `{${Object.keys(item)
+        .sort(compareKeys)
+        .map(
+          (key) =>
+            `${JSON.stringify(key)}:${visit((item as Record<string, unknown>)[key], depth + 1)}`,
+        )
+        .join(',')}}`;
+    } finally {
+      ancestors.delete(item);
+    }
+  };
+  return visit(value, 0);
+}
 export const hyperframesClockSchema = z
   .object({
     numerator: z.number().int().positive().max(120_000),
@@ -132,6 +187,14 @@ export const hyperframesCapabilitySchema = z
     reason: z.string().max(4096).optional(),
   })
   .strict();
+export const hyperframesCompilerBuildSchema = z
+  .object({
+    compiler: z.string().min(1),
+    browser: z.string().min(1),
+    runtimeSha256: hash,
+  })
+  .strict();
+export type HyperframesCompilerBuild = z.infer<typeof hyperframesCompilerBuildSchema>;
 export const hyperframesSceneSchema = z
   .object({
     schema: z.literal('hyperframes.scene/1'),
@@ -182,3 +245,88 @@ export const hyperframesSceneSchema = z
       context.addIssue({ code: 'custom', message: 'Font has no pinned dependency' });
   });
 export type HyperframesScene = z.infer<typeof hyperframesSceneSchema>;
+
+/** Service compiler boundary; dependency bytes come from immutable ingestion storage. */
+export const hyperframesCompileRequestSchema = z
+  .object({
+    html: z
+      .string()
+      .min(1)
+      .max(32 << 20),
+    sourceSha256: hash,
+    entrypoint: z.string().min(1).max(4096).default('index.html'),
+    viewport: z
+      .object({
+        width: z.number().int().positive().max(8192),
+        height: z.number().int().positive().max(8192),
+      })
+      .strict(),
+    clock: hyperframesClockSchema,
+    dependencies: z
+      .array(hyperframesDependencySchema.extend({ bytesBase64: z.string().max(24 << 20) }).strict())
+      .max(1000)
+      .default([]),
+    fonts: z
+      .array(z.object({ family: z.string().min(1).max(200), sha256: hash }).strict())
+      .max(256)
+      .default([]),
+    edits: hyperframesNativeEditsSchema.optional(),
+  })
+  .strict();
+export type HyperframesCompileRequest = z.infer<typeof hyperframesCompileRequestSchema>;
+export const hyperframesCompileResponseSchema = z
+  .object({
+    scene: hyperframesSceneSchema,
+    sha256: hash,
+    timings: z
+      .object({ parseMs: z.number().nonnegative(), compileMs: z.number().nonnegative() })
+      .strict(),
+  })
+  .strict();
+export type HyperframesCompileResponse = z.infer<typeof hyperframesCompileResponseSchema>;
+
+/** Original uploaded HTML/ZIP pin. Its SHA differs from the entry SHA for archives. */
+export const hyperframesSourcePinSchema = z
+  .object({
+    assetId: z.uuid(),
+    versionId: z.uuid(),
+    sha256: hash,
+    bucket: z.string().min(1).max(200),
+    storagePath: z.string().min(1).max(4096),
+    fileName: z.string().min(1).max(4096),
+    mimeType: z.string().min(1).max(200),
+    byteLength: z
+      .number()
+      .int()
+      .positive()
+      .max(512 << 20),
+  })
+  .strict();
+export const hyperframesIngestExecutionSpecSchema = z
+  .object({
+    schemaVersion: z.literal('template_ingest/1'),
+    family: z.literal('hyperframes'),
+    parser: z.literal('hyperframes-rust@0.2.0'),
+    source: hyperframesSourcePinSchema,
+  })
+  .strict();
+export type HyperframesIngestExecutionSpec = z.infer<typeof hyperframesIngestExecutionSpecSchema>;
+
+export const hyperframesSceneRefSchema = z
+  .object({
+    schemaVersion: z.literal('hyperframes.scene-ref/1'),
+    /** SHA of the original upload, including the archive container when applicable. */
+    sourceSha256: hash,
+    entrySha256: hash,
+    sha256: hash,
+    compiler: z.string().min(1).max(200),
+    bucket: z.literal('media-library'),
+    storagePath: z.string().min(1).max(4096),
+    byteLength: z
+      .number()
+      .int()
+      .positive()
+      .max(32 << 20),
+  })
+  .strict();
+export type HyperframesSceneRef = z.infer<typeof hyperframesSceneRefSchema>;
