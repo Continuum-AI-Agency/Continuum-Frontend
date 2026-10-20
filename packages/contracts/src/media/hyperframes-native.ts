@@ -416,9 +416,25 @@ export const hyperframesIngestExecutionSpecSchema = z
   .strict();
 export type HyperframesIngestExecutionSpec = z.infer<typeof hyperframesIngestExecutionSpecSchema>;
 
+export const hyperframesSceneResourcesRefSchema = z
+  .object({
+    sha256: hash,
+    bucket: z.literal('media-library'),
+    storagePath: z.string().min(1).max(4096),
+    byteLength: z
+      .number()
+      .int()
+      .positive()
+      .max(8 << 20),
+  })
+  .strict();
+export type HyperframesSceneResourcesRef = z.infer<typeof hyperframesSceneResourcesRefSchema>;
+
 export const hyperframesSceneRefSchema = z
   .object({
     schemaVersion: z.literal('hyperframes.scene-ref/1'),
+    /** Historical local refs lack this; new jobs and variant recompiles require it. */
+    resources: hyperframesSceneResourcesRefSchema.optional(),
     /** SHA of the original upload, including the archive container when applicable. */
     sourceSha256: hash,
     entrySha256: hash,

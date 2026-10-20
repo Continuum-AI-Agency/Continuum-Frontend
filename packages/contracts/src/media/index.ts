@@ -101,3 +101,5 @@ export * from './workspace-template';
 export * from './zip-directory';
 
 export * from './hyperframes-native-revisions';
+
+export * from './hyperframes-scene-resources';
