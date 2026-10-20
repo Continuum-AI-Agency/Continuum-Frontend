@@ -103,3 +103,4 @@ export * from './zip-directory';
 export * from './hyperframes-native-revisions';
 
 export * from './hyperframes-scene-resources';
+export * from './hyperframes-native-jobs';

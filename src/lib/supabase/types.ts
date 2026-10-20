@@ -19762,6 +19762,44 @@ export type Database = {
           },
         ]
       }
+      native_scene_render_results: {
+        Row: {
+          asset_refs: Json
+          brand_id: string
+          created_at: string
+          job_id: string
+          lease_token: string
+          render_result: Json
+          worker_id: string
+        }
+        Insert: {
+          asset_refs: Json
+          brand_id: string
+          created_at?: string
+          job_id: string
+          lease_token: string
+          render_result: Json
+          worker_id: string
+        }
+        Update: {
+          asset_refs?: Json
+          brand_id?: string
+          created_at?: string
+          job_id?: string
+          lease_token?: string
+          render_result?: Json
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_scene_render_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preview_jobs: {
         Row: {
           adapter: string
@@ -22477,6 +22515,10 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id: string }
         Returns: boolean
       }
+      can_read_native_render_output: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
       can_see_asset: {
         Args: { p_asset: string; p_brand: string }
         Returns: boolean
@@ -22489,6 +22531,10 @@ export type Database = {
       can_see_collection_as: {
         Args: { p_collection: string; p_user: string }
         Returns: boolean
+      }
+      cancel_native_scene_render_job: {
+        Args: { p_actor: string; p_brand_id: string; p_job_id: string }
+        Returns: Json
       }
       canvas_library_context: {
         Args: {
@@ -23096,6 +23142,15 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      complete_native_scene_render_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_render_result: Json
+          p_worker_id: string
+        }
+        Returns: Json
       }
       complete_presentation_export: {
         Args: {
