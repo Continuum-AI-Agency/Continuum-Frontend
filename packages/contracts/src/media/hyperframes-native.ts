@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hyperframesFontFaceSchema } from './hyperframes-fonts';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().min(1).max(200);
@@ -306,7 +307,18 @@ export const hyperframesSceneSchema = z
       .strict(),
     clock: hyperframesClockSchema,
     dependencies: z.array(hyperframesDependencySchema).max(10_000),
-    fonts: z.array(z.object({ family: z.string().min(1), sha256: hash }).strict()).max(256),
+    fonts: z
+      .array(
+        hyperframesFontFaceSchema
+          .partial({ weight: true, style: true, stretch: true })
+          .refine(
+            (face) =>
+              [face.weight, face.style, face.stretch].every((value) => value === undefined) ||
+              [face.weight, face.style, face.stretch].every((value) => value !== undefined),
+            'A font descriptor must be complete',
+          ),
+      )
+      .max(256),
     /** Deduplicated complete paint states; tracks index them at exact delivery frame times. */
     states: z
       .array(z.object({ sha256: hash, root: hyperframesPrimitiveSchema }).strict())
@@ -361,10 +373,7 @@ export const hyperframesCompileRequestSchema = z
       )
       .max(1000)
       .default([]),
-    fonts: z
-      .array(z.object({ family: z.string().min(1).max(200), sha256: hash }).strict())
-      .max(256)
-      .default([]),
+    fonts: z.array(hyperframesFontFaceSchema).max(256).default([]),
     edits: hyperframesNativeEditsSchema.optional(),
   })
   .strict();
