@@ -10,11 +10,12 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type {
-  ApiRenderFileSpecs,
-  ApiRenderJob,
-  ApiRenderTemplateSummary,
-  ForgeOutputLibraryState,
+import {
+  type ApiRenderFileSpecs,
+  type ApiRenderJob,
+  type ApiRenderTemplateSummary,
+  type ForgeOutputLibraryState,
+  WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -188,6 +189,12 @@ const getJob = mock(async (_brandId: string, id: string) =>
   jobsFixture.find((job) => job.id === id),
 );
 const listEnvironments = mock(async () => ({ items: environmentsFixture }));
+// No contract unless a test answers one: the detail then names formats from the job alone.
+const getContract = mock(
+  async (_brandId: string, _templateKey: string, _bindingId?: string | null): Promise<unknown> => {
+    throw new Error('contract_unavailable');
+  },
+);
 let libraryStateFixture: ForgeOutputLibraryState[] = [];
 const libraryState = mock(async (_brandId: string, assetIds: string[]) => ({
   items: libraryStateFixture.filter((item) => assetIds.includes(item.assetId)),
@@ -203,6 +210,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     getJob,
     listRenderSets: async () => ({ items: [], nextCursor: null }),
     listEnvironments,
+    getContract,
     listTemplates,
     libraryState,
     prepareMasterDownload,
@@ -292,6 +300,7 @@ beforeEach(() => {
   listJobs.mockClear();
   getJob.mockClear();
   listEnvironments.mockClear();
+  getContract.mockClear();
   listTemplates.mockClear();
   prepareMasterDownload.mockClear();
   masterDownloadStatus.mockClear();
@@ -981,6 +990,25 @@ describe('RenderJobsGrid', () => {
     expect(await screen.findByRole('heading', { name: 'Handed over' })).toBeTruthy();
     expect(screen.getByText('Renderer')).toBeTruthy();
     expect(screen.getByText(`· handed over by Continuum's New Renderer: ${reason}`)).toBeTruthy();
+  }, 30_000);
+
+  test('a web component render wears a Web pill, and its detail reads no render workspace', async () => {
+    const webKey = 'web:88888888-8888-4888-8888-888888888888';
+    const web: ApiRenderJob = { ...MADRID, label: 'Web hello', engine: 'web', templateKey: webKey };
+    await renderLedger([web], [TEMPLATE]);
+    const pill = within(screen.getByText('Web hello').closest('tr') as HTMLElement).getByText(
+      'Web',
+    );
+    expect(pill.getAttribute('title')).toBe(
+      "Rendered from the web component in Continuum's render browser.",
+    );
+
+    fireEvent.click(screen.getByText('Web hello'));
+    expect(await screen.findByRole('heading', { name: 'Web hello' })).toBeTruthy();
+    await waitFor(() =>
+      expect(getContract).toHaveBeenCalledWith(BRAND, webKey, WEB_COMPONENT_BINDING_ID),
+    );
+    expect(listEnvironments).not.toHaveBeenCalled();
   }, 30_000);
 
   test('a comp delivered as MP4, MOV and MXF lists every file, previews the playable one, and downloads each', async () => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { clientRenderJobStateSchema } from './client-render';
+import { templateParseSchema } from './template-source';
 
 export const webComponentFrameworkSchema = z.enum(['three', 'r3f', 'pixi', 'dom']);
 export const webComponentBase64Schema = z
@@ -61,22 +61,37 @@ export const webComponentAssetSchema = z
     contentType: z.string().regex(/^[a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+$/),
   })
   .strict();
-export const webComponentProjectSchema = z
+/**
+ * `forge-component.json`: what makes a zip or folder a web component project. It sits at the
+ * root or under one wrapping folder (`webComponentManifestPath`), beside the source it names.
+ * `stillSec` is when the PNG output is captured.
+ */
+export const webComponentManifestSchema = z
   .object({
     schemaVersion: z.literal(1),
     framework: webComponentFrameworkSchema,
     name: z.string().trim().min(1).max(160),
     entry: webComponentPathSchema,
-    files: z.record(webComponentPathSchema, z.string().max(2 << 20)),
-    assets: z.array(webComponentAssetSchema).max(100).default([]),
     width: z.number().int().min(16).max(3840),
     height: z.number().int().min(16).max(3840),
     durationSec: z.number().positive().max(60),
     fps: z.number().int().min(1).max(60),
+    stillSec: z.number().min(0).max(60).default(0),
+  })
+  .strict();
+export const webComponentProjectSchema = webComponentManifestSchema
+  .extend({
+    files: z.record(webComponentPathSchema, z.string().max(2 << 20)),
+    assets: z.array(webComponentAssetSchema).max(100).default([]),
     overrides: z.array(webComponentOverrideSchema).max(1000).default([]),
   })
-  .strict()
   .superRefine((project, ctx) => {
+    if (project.stillSec > project.durationSec)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stillSec'],
+        message: 'stillSec must fall inside the duration',
+      });
     if (!Object.hasOwn(project.files, project.entry))
       ctx.addIssue({ code: 'custom', path: ['entry'], message: 'Entry must name a source file' });
     if (Object.keys(project.files).length > 100)
@@ -102,86 +117,6 @@ export const webComponentProjectSchema = z
         message: 'Override properties must be unique per node',
       });
   });
-const id = z.uuid();
-const hash = z.string().regex(/^[a-f0-9]{64}$/);
-export const webComponentDraftSchema = z
-  .object({
-    id,
-    brandId: id,
-    ownerId: id,
-    revision: z.number().int().nonnegative(),
-    project: webComponentProjectSchema,
-    updatedAt: z.string(),
-  })
-  .strict();
-export const webComponentBuildSchema = z
-  .object({
-    id,
-    draftId: id,
-    draftRevision: z.number().int().nonnegative(),
-    projectHash: hash,
-    checksum: hash,
-    entry: webComponentPathSchema,
-    files: z.record(webComponentPathSchema, webComponentBase64Schema),
-    inspected: z.boolean().default(false),
-    nodes: z.array(webComponentNodeSchema).max(2000),
-    unresolvedOverrides: z.array(webComponentOverrideSchema).max(1000),
-    createdAt: z.string(),
-  })
-  .strict();
-export const webComponentRevisionSchema = z
-  .object({
-    id,
-    draftId: id,
-    draftRevision: z.number().int().nonnegative(),
-    project: webComponentProjectSchema,
-    build: webComponentBuildSchema,
-    assetId: id.nullable(),
-    versionId: id.nullable(),
-    reviewedBy: id,
-    reviewedAt: z.string(),
-    createdAt: z.string(),
-  })
-  .strict();
-export const webComponentCreateDraftRequestSchema = z
-  .object({ brandId: id, project: webComponentProjectSchema })
-  .strict();
-export const webComponentSaveDraftRequestSchema = z
-  .object({ expectedRevision: z.number().int().nonnegative(), project: webComponentProjectSchema })
-  .strict();
-export const webComponentBuildRequestSchema = z
-  .object({ expectedRevision: z.number().int().nonnegative() })
-  .strict();
-export const webComponentCommitRequestSchema = z
-  .object({
-    expectedRevision: z.number().int().nonnegative(),
-    buildId: id,
-    reviewed: z.literal(true),
-  })
-  .strict();
-export const webComponentBuildResponseSchema = z
-  .object({
-    build: webComponentBuildSchema,
-    previewHtml: z.string(),
-    browser: z.string().optional(),
-    renderer: z.string().nullable().optional(),
-  })
-  .strict();
-export const webComponentDraftSummarySchema = z
-  .object({
-    id,
-    revision: z.number().int().nonnegative(),
-    updatedAt: z.string(),
-    name: z.string(),
-    framework: webComponentFrameworkSchema,
-  })
-  .strict();
-export const webComponentDraftListResponseSchema = z
-  .object({ drafts: z.array(webComponentDraftSummarySchema) })
-  .strict();
-export const webComponentRenderRequestSchema = z
-  .object({ format: z.enum(['png', 'mp4']).default('mp4'), timeSec: z.number().min(0).optional() })
-  .strict();
 export const webComponentRenderServiceRequestSchema = z
   .object({
     files: z.record(webComponentPathSchema, webComponentBase64Schema),
@@ -218,28 +153,49 @@ export type WebComponentOverride = z.infer<typeof webComponentOverrideSchema>;
 export type WebComponentProperty = z.infer<typeof webComponentPropertySchema>;
 export type WebComponentNode = z.infer<typeof webComponentNodeSchema>;
 export type WebComponentProject = z.infer<typeof webComponentProjectSchema>;
-export type WebComponentDraft = z.infer<typeof webComponentDraftSchema>;
-export type WebComponentBuild = z.infer<typeof webComponentBuildSchema>;
-export type WebComponentRevision = z.infer<typeof webComponentRevisionSchema>;
-export type WebComponentBuildResponse = z.infer<typeof webComponentBuildResponseSchema>;
 export type WebComponentRenderServiceRequest = z.infer<
   typeof webComponentRenderServiceRequestSchema
 >;
 
-export type WebComponentDraftSummary = z.infer<typeof webComponentDraftSummarySchema>;
+/**
+ * A web component in the Render log is template `web:<assetId>`. It has no fleet workspace, so
+ * on the wire it carries this nil binding; the database stores null (`binding_id is not null or
+ * engine = 'web'`).
+ */
+export const WEB_COMPONENT_BINDING_ID = '00000000-0000-0000-0000-000000000000';
+export const webTemplateKey = (assetId: string): string => `web:${assetId}`;
+export const isWebTemplateKey = (key: string): boolean => key.startsWith('web:');
 
-/** Durable service-lane export, always addressed to a pinned immutable revision. */
-export const webComponentRenderJobSchema = z
+/** One render column: a contract-safe key for one node property the component exposes. */
+export const webComponentVariableSchema = z
   .object({
-    id: z.uuid(),
-    state: clientRenderJobStateSchema,
-    progress: z.number().min(0).max(1).default(0),
-    phase: z.string().nullable().default(null),
-    error: z.string().nullable(),
-    url: z.url().nullable(),
+    key: z.string().regex(/^[a-z][a-z0-9_]*$/),
+    nodeId: z.string().min(1).max(200),
+    property: z.string().min(1).max(100),
   })
   .strict();
-export const webComponentRenderJobResponseSchema = z
-  .object({ job: webComponentRenderJobSchema })
-  .strict();
-export type WebComponentRenderJob = z.infer<typeof webComponentRenderJobSchema>;
+export const webComponentOutputSchema = z.enum(['png', 'mp4']);
+
+/** The parse of an imported web component, stored in `media.template_sources.parse`. */
+export const webComponentParseSchema = templateParseSchema.extend({
+  sourceFamily: z.literal('web_component'),
+  web: z
+    .object({
+      manifest: webComponentManifestSchema,
+      bundle: z
+        .object({
+          bucket: z.string().min(1),
+          path: z.string().min(1),
+          previewPath: z.string().min(1),
+          sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        })
+        .strict(),
+      nodes: z.array(webComponentNodeSchema).max(2000),
+      variables: z.array(webComponentVariableSchema).max(1000),
+      outputs: z.array(webComponentOutputSchema).min(1).max(2),
+    })
+    .strict(),
+});
+export type WebComponentManifest = z.infer<typeof webComponentManifestSchema>;
+export type WebComponentVariable = z.infer<typeof webComponentVariableSchema>;
+export type WebComponentParse = z.infer<typeof webComponentParseSchema>;

@@ -10,6 +10,7 @@ import {
   type ForgeMotionProof,
   type ForgeRenderPreview,
   isMotion,
+  isWebTemplateKey,
   motionLabel,
   paintLive,
   readableLayerName,
@@ -26,6 +27,7 @@ import {
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
+import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Video } from '@/components/ui/video';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -422,14 +424,7 @@ const sameSubject = (a: readonly unknown[], b: readonly unknown[]) =>
 
 const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured boxes.';
 
-export function RenderPreviewPanel({
-  brandId,
-  contract,
-  rows,
-  rowId,
-  renderSetId,
-  onRowChange,
-}: {
+type RenderPreviewPanelProps = {
   brandId: string;
   contract: ApiRenderTemplateContract;
   rows: RequestRow[];
@@ -437,7 +432,36 @@ export function RenderPreviewPanel({
   renderSetId: string | null;
   /** Previews another row: what a thumbnail in the strip does. No strip without it. */
   onRowChange?: (rowId: string) => void;
-}): JSX.Element {
+};
+
+/**
+ * A web component previews itself: its own page in the browser at the row's values, with none of
+ * the After Effects kit, compose or motion-proof reads, which are all workspace-scoped.
+ */
+export function RenderPreviewPanel(props: RenderPreviewPanelProps): JSX.Element {
+  const { contract, rows, rowId } = props;
+  if (!isWebTemplateKey(contract.template.key) || !contract.web)
+    return <TemplatePreviewPanel {...props} />;
+  const row = rowId ? rows.find((candidate) => candidate.id === rowId) : undefined;
+  return row ? (
+    <div className="h-full overflow-y-auto p-2">
+      <WebComponentPreview web={contract.web} values={effectiveValues(rows, row.id)} />
+    </div>
+  ) : (
+    <div className="flex h-full items-center justify-center p-2 text-xs text-muted-foreground">
+      Select a row to preview it
+    </div>
+  );
+}
+
+function TemplatePreviewPanel({
+  brandId,
+  contract,
+  rows,
+  rowId,
+  renderSetId,
+  onRowChange,
+}: RenderPreviewPanelProps): JSX.Element {
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
   const isInyogoJerseys =

@@ -29,7 +29,7 @@ import { templateFrameQuery, useLatestRenderFrame } from './TemplateWireframe';
 // nothing of its build to edit — only what it asks for (its contract), the shapes it renders, and
 // what it has rendered for this brand.
 
-const KIND_LABEL: Record<ApiRenderVariable['kind'], string> = {
+export const KIND_LABEL: Record<ApiRenderVariable['kind'], string> = {
   text: 'Text',
   number: 'Number',
   boolean: 'On / off',

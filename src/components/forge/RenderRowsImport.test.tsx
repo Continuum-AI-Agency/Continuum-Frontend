@@ -513,6 +513,24 @@ describe('RenderRowsImport: the Caliente workbook', () => {
     expect((onImport.mock.calls[0]?.[0] as RequestRow[])[0]?.values.template_field_1).toBe('1.90');
   });
 
+  test('a web component neither reads nor saves a column mapping', async () => {
+    savedMapping = CARD_B_MAPPING;
+    const web = {
+      ...CARD_B,
+      template: { ...CARD_B.template, key: 'web:99999999-9999-4999-8999-999999999999' },
+    };
+    const { onImport } = renderImport({ contract: web } as never);
+    chooseFile(csv('Match\nAlianza vs Cienciano\n'));
+    await waitFor(() => expect(importButton().hasAttribute('disabled')).toBe(false));
+    fireEvent.click(importButton());
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));
+    expect((onImport.mock.calls[0]?.[0] as RequestRow[])[0]?.values.template_field_7).toBe(
+      'Alianza vs Cienciano',
+    );
+    expect(getImportMapping).not.toHaveBeenCalled();
+    expect(saveImportMapping).not.toHaveBeenCalled();
+  });
+
   test('pictures by name: each team finds its jersey in the Library; the ones that do not are listed', async () => {
     const jersey = (id: string, title: string) => ({
       ...heroImage,

@@ -16776,7 +16776,7 @@ export type Database = {
         Row: {
           approval_package_id: string | null
           batch_id: string
-          binding_id: string
+          binding_id: string | null
           brand_id: string
           contract_hash: string
           created_at: string
@@ -16826,7 +16826,7 @@ export type Database = {
         Insert: {
           approval_package_id?: string | null
           batch_id?: string
-          binding_id: string
+          binding_id?: string | null
           brand_id: string
           contract_hash: string
           created_at?: string
@@ -16876,7 +16876,7 @@ export type Database = {
         Update: {
           approval_package_id?: string | null
           batch_id?: string
-          binding_id?: string
+          binding_id?: string | null
           brand_id?: string
           contract_hash?: string
           created_at?: string
@@ -19374,6 +19374,33 @@ export type Database = {
         }
         Relationships: []
       }
+      headless_guided_requests: {
+        Row: {
+          brand_id: string
+          created_at: string
+          idempotency_key: string
+          result: Json | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          idempotency_key: string
+          result?: Json | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          idempotency_key?: string
+          result?: Json | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       headless_output_reviews: {
         Row: {
           asset_id: string
@@ -19516,6 +19543,8 @@ export type Database = {
         Row: {
           brand_id: string
           budget_cap_usd: number
+          cancel_reason: string | null
+          claimed_at: string | null
           concurrency: number
           content_id: string
           content_revision: number
@@ -19523,17 +19552,23 @@ export type Database = {
           created_by: string | null
           id: string
           idempotency_key: string
+          kind: string
           lease_expires_at: string | null
           lease_token: string | null
           plan: Json
           request_hash: string
+          started_at: string | null
           state: string
+          stills_input: Json | null
+          surface: string | null
           updated_at: string
           worker_id: string | null
         }
         Insert: {
           brand_id: string
           budget_cap_usd: number
+          cancel_reason?: string | null
+          claimed_at?: string | null
           concurrency?: number
           content_id: string
           content_revision: number
@@ -19541,17 +19576,23 @@ export type Database = {
           created_by?: string | null
           id?: string
           idempotency_key: string
+          kind?: string
           lease_expires_at?: string | null
           lease_token?: string | null
           plan: Json
           request_hash: string
+          started_at?: string | null
           state?: string
+          stills_input?: Json | null
+          surface?: string | null
           updated_at?: string
           worker_id?: string | null
         }
         Update: {
           brand_id?: string
           budget_cap_usd?: number
+          cancel_reason?: string | null
+          claimed_at?: string | null
           concurrency?: number
           content_id?: string
           content_revision?: number
@@ -19559,11 +19600,15 @@ export type Database = {
           created_by?: string | null
           id?: string
           idempotency_key?: string
+          kind?: string
           lease_expires_at?: string | null
           lease_token?: string | null
           plan?: Json
           request_hash?: string
+          started_at?: string | null
           state?: string
+          stills_input?: Json | null
+          surface?: string | null
           updated_at?: string
           worker_id?: string | null
         }
@@ -20072,7 +20117,7 @@ export type Database = {
       }
       render_requests: {
         Row: {
-          binding_id: string
+          binding_id: string | null
           brand_id: string
           contract_hash: string
           created_at: string
@@ -20100,7 +20145,7 @@ export type Database = {
           template_source_version_id: string | null
         }
         Insert: {
-          binding_id: string
+          binding_id?: string | null
           brand_id: string
           contract_hash: string
           created_at?: string
@@ -20128,7 +20173,7 @@ export type Database = {
           template_source_version_id?: string | null
         }
         Update: {
-          binding_id?: string
+          binding_id?: string | null
           brand_id?: string
           contract_hash?: string
           created_at?: string
@@ -20233,7 +20278,7 @@ export type Database = {
       }
       render_sets: {
         Row: {
-          binding_id: string
+          binding_id: string | null
           brand_id: string
           collection_id: string | null
           contract_hash: string
@@ -20249,7 +20294,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          binding_id: string
+          binding_id?: string | null
           brand_id: string
           collection_id?: string | null
           contract_hash: string
@@ -20265,7 +20310,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          binding_id?: string
+          binding_id?: string | null
           brand_id?: string
           collection_id?: string | null
           contract_hash?: string
@@ -22562,6 +22607,8 @@ export type Database = {
         Returns: {
           brand_id: string
           budget_cap_usd: number
+          cancel_reason: string | null
+          claimed_at: string | null
           concurrency: number
           content_id: string
           content_revision: number
@@ -22569,11 +22616,15 @@ export type Database = {
           created_by: string | null
           id: string
           idempotency_key: string
+          kind: string
           lease_expires_at: string | null
           lease_token: string | null
           plan: Json
           request_hash: string
+          started_at: string | null
           state: string
+          stills_input: Json | null
+          surface: string | null
           updated_at: string
           worker_id: string | null
         }[]
@@ -22594,6 +22645,8 @@ export type Database = {
         Returns: {
           brand_id: string
           budget_cap_usd: number
+          cancel_reason: string | null
+          claimed_at: string | null
           concurrency: number
           content_id: string
           content_revision: number
@@ -22601,11 +22654,53 @@ export type Database = {
           created_by: string | null
           id: string
           idempotency_key: string
+          kind: string
           lease_expires_at: string | null
           lease_token: string | null
           plan: Json
           request_hash: string
+          started_at: string | null
           state: string
+          stills_input: Json | null
+          surface: string | null
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_headless_run_fair: {
+        Args: {
+          p_brand_ids?: string[]
+          p_lease_seconds?: number
+          p_max_per_brand?: number
+          p_worker_id: string
+        }
+        Returns: {
+          brand_id: string
+          budget_cap_usd: number
+          cancel_reason: string | null
+          claimed_at: string | null
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          started_at: string | null
+          state: string
+          stills_input: Json | null
+          surface: string | null
           updated_at: string
           worker_id: string | null
         }[]
@@ -23318,6 +23413,14 @@ export type Database = {
         }
       }
       head_version_number: { Args: { p_asset_id: string }; Returns: number }
+      headless_organic_spend_window: {
+        Args: { p_brand_id: string }
+        Returns: {
+          limit_usd: number
+          remaining_usd: number
+          used_usd: number
+        }[]
+      }
       heartbeat_service_url_ingest_job: {
         Args: {
           p_job_id: string
@@ -24268,6 +24371,69 @@ export type Database = {
           run_id?: string
           window_end?: string
           window_start?: string
+        }
+        Relationships: []
+      }
+      headless_batches: {
+        Row: {
+          brand_id: string
+          cap_usd: number
+          cast_needed: boolean
+          cast_pack_at: string | null
+          cast_pack_usd: number
+          cast_pins: Json | null
+          created_at: string
+          expected_usd: number
+          id: string
+          idempotency_key: string
+          items: Json
+          language: string | null
+          max_usd: number
+          plan_id: string | null
+          session_id: string
+          settled_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          cap_usd: number
+          cast_needed?: boolean
+          cast_pack_at?: string | null
+          cast_pack_usd?: number
+          cast_pins?: Json | null
+          created_at?: string
+          expected_usd: number
+          id: string
+          idempotency_key: string
+          items: Json
+          language?: string | null
+          max_usd: number
+          plan_id?: string | null
+          session_id: string
+          settled_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          cap_usd?: number
+          cast_needed?: boolean
+          cast_pack_at?: string | null
+          cast_pack_usd?: number
+          cast_pins?: Json | null
+          created_at?: string
+          expected_usd?: number
+          id?: string
+          idempotency_key?: string
+          items?: Json
+          language?: string | null
+          max_usd?: number
+          plan_id?: string | null
+          session_id?: string
+          settled_at?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -25812,6 +25978,14 @@ export type Database = {
               isSetofReturn: true
             }
           }
+      remove_draft_group_member: {
+        Args: {
+          p_member_id: string
+          p_promote_client_key?: string
+          p_promote_id?: string
+        }
+        Returns: boolean
+      }
       requeue_post_generation_job: {
         Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
         Returns: boolean
@@ -30646,6 +30820,19 @@ export type Database = {
           account_id: string
           brand_id: string
           pending: number
+        }[]
+      }
+      creative_elements_pending_competitor_ads: {
+        Args: { p_brand_id?: string; p_limit?: number }
+        Returns: {
+          brand_id: string
+          competitor_id: string
+          creative_media_bucket: string
+          creative_media_path: string
+          creative_media_status: string
+          first_seen_at: string
+          id: string
+          payload: Json
         }[]
       }
       creative_elements_pending_competitor_posts: {

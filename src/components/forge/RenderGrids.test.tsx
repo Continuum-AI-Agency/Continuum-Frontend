@@ -9,6 +9,7 @@
  */
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { WEB_COMPONENT_BINDING_ID } from '@continuum/contracts';
 import { useEffect } from 'react';
 
 const TEMPLATE = {
@@ -1139,6 +1140,64 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
     expect(onFired).toHaveBeenCalledWith([JOB.id]);
     await waitFor(() => expect(screen.getByDisplayValue('Base')).toBeTruthy());
+  });
+
+  test('a web component saves and reviews its set on the nil binding, Library only, no renderer to pick', async () => {
+    const webKey = 'web:99999999-9999-4999-8999-999999999999';
+    extraTemplates = [
+      { ...TEMPLATE, key: webKey, bindingId: WEB_COMPONENT_BINDING_ID, displayName: 'Hello card' },
+    ];
+    contractOverrides = {
+      web: {
+        width: 1080,
+        height: 1080,
+        durationSec: 4,
+        fps: 30,
+        previewUrl: 'https://api.test/preview',
+        variables: [{ key: 'headline', nodeId: 'title', property: 'text' }],
+      },
+    };
+    // The row's preview page never arrives; the set and the review are what is under test.
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch,
+    );
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} intent={{ templateKey: webKey }} />);
+      await screen.findByDisplayValue('Hola mundo');
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain(
+          'Hello card',
+        ),
+      );
+      fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+      await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
+      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+        name: 'Untitled set',
+        templateKey: webKey,
+        bindingId: WEB_COMPONENT_BINDING_ID,
+      });
+      await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
+      expect(batchPreflightMock.mock.calls[0]?.[0]).toMatchObject({
+        templateKey: webKey,
+        bindingId: WEB_COMPONENT_BINDING_ID,
+      });
+      // The row previews from the component's own page, not the After Effects kit.
+      expect(fetchSpy.mock.calls.map(([url]) => url)).toContain('https://api.test/preview');
+
+      await press('Next: delivery');
+      fireEvent.click(within(tray).getByRole('button', { name: 'Change delivery' }));
+      const options = within(tray).getByRole('region', { name: 'Delivery options' });
+      expect(within(options).getByText('Library')).toBeTruthy();
+      expect(within(options).queryByText('Slack')).toBeNull();
+      expect(within(options).queryByText('Meta ads')).toBeNull();
+      expect(within(options).queryByText('Approval')).toBeNull();
+      expect(within(tray).queryByRole('radiogroup', { name: 'Renderer' })).toBeNull();
+      expect(within(tray).getByRole('radiogroup', { name: 'Render as' })).toBeTruthy();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   test('Render saves only a set with edits, and silently; Save is what says “Saved”, once', async () => {
