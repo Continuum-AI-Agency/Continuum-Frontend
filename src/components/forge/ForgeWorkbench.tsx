@@ -1,12 +1,12 @@
 'use client';
 
 import {
+  isWebTemplateKey,
   type TemplateSourceSummary,
   templateDisplayName,
   type WorkspaceTemplate,
 } from '@continuum/contracts';
 import { experimental_streamedQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Code2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -27,6 +27,7 @@ import {
 } from '@/components/forge/TemplateCard';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
+import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UploadStrip } from '@/components/library/UploadStrip';
@@ -104,7 +105,6 @@ export function ForgeWorkbench({
   onOpenRender,
   templateIntent,
   onTemplateIntentConsumed,
-  onOpenWebComponents,
 }: {
   brandId: string;
   brandName?: string;
@@ -114,7 +114,6 @@ export function ForgeWorkbench({
   templateIntent?: ForgeTemplateIntent;
   /** The workbench has taken `templateIntent`; the shell drops it so a remount never replays it. */
   onTemplateIntentConsumed?: () => void;
-  onOpenWebComponents?: () => void;
 }) {
   const exitGuard = useForgeExitGuard();
   const [selected, setSelected] = useState<string | null>(null);
@@ -288,13 +287,19 @@ export function ForgeWorkbench({
     setRemoveBusy(true);
     let accessDisabled = false;
     try {
+      // A web component renders from its own bundle: no workspace holds it, so none is switched off.
+      const inWorkspace = !isWebTemplateKey(source.templateKey ?? '');
       const published =
-        source.templateKey || source.forgeRunId
+        inWorkspace && (source.templateKey || source.forgeRunId)
           ? (await discoverWorkspaceTemplates(brandId)).items.filter(
               (item) => item.sourceAssetId === source.assetId && item.granted,
             )
           : [];
-      if (source.templateKey && !published.some((item) => item.templateKey === source.templateKey))
+      if (
+        inWorkspace &&
+        source.templateKey &&
+        !published.some((item) => item.templateKey === source.templateKey)
+      )
         throw new Error('Could not find this template’s render workspace. Refresh and try again.');
       for (const item of published) {
         const disabled = await setTemplateAdoption({
@@ -435,13 +440,6 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {onOpenWebComponents ? (
-        <div className="flex justify-end">
-          <Button type="button" size="sm" variant="outline" onClick={onOpenWebComponents}>
-            <Code2 className="mr-1.5 size-3.5" /> Web components
-          </Button>
-        </div>
-      ) : null}
       {sourceQuery.isError ? (
         <Alert variant={sourceQuery.data !== undefined ? 'default' : 'destructive'}>
           <AlertTitle>
@@ -579,6 +577,16 @@ export function ForgeWorkbench({
           onBack={() => open(null)}
           onRename={(title) => void rename(current.assetId, title)}
           onRemove={() => setRemoving(current)}
+        />
+      ) : current?.family === 'web_component' ? (
+        <WebComponentTemplateDetail
+          key={current.assetId}
+          brandId={brandId}
+          source={current}
+          onBack={() => open(null)}
+          onRename={(title) => void rename(current.assetId, title)}
+          onRemove={() => setRemoving(current)}
+          onOpenRender={onOpenRender}
         />
       ) : current ? (
         <TemplateDetail

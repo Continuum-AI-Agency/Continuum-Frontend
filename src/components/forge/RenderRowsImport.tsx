@@ -7,6 +7,7 @@ import {
   type ForgeImportMapping,
   foldName,
   IMPORT_SKIP_TARGET,
+  isWebTemplateKey,
   kitColumns,
   type MediaAsset,
   matchAssetByName,
@@ -287,8 +288,10 @@ export function RenderRowsImport({
   // The mapping saved for this template, read once the dialog opens. A sheet chosen before the
   // answer arrives waits for it: read without it, last week's mapping is silently mapped again.
   const savedRead = useRef<Promise<ForgeImportMapping | null>>(Promise.resolve(null));
+  // ponytail: web templates don't remember a column mapping (the route is workspace-scoped); add when asked.
+  const remembersMapping = Boolean(template && !isWebTemplateKey(template.key));
   useEffect(() => {
-    if (!open || !template) return;
+    if (!open || !template || !remembersMapping) return;
     let live = true;
     const read = apiRendersApi
       .getImportMapping({ brandId, bindingId: template.bindingId, templateKey: template.key })
@@ -298,7 +301,7 @@ export function RenderRowsImport({
     return () => {
       live = false;
     };
-  }, [open, brandId, template?.bindingId, template?.key, template]);
+  }, [open, brandId, template?.bindingId, template?.key, template, remembersMapping]);
 
   const tables = useMemo(
     () =>
@@ -753,7 +756,7 @@ export function RenderRowsImport({
       });
     onImport(rows);
     onOpenChange(false);
-    if (template)
+    if (template && remembersMapping)
       void apiRendersApi
         .saveImportMapping({
           brandId,

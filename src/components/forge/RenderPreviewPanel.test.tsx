@@ -7,7 +7,7 @@
  * made, the row is drawn into the picked format's slot boxes and overflow is flagged live.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type {
   ApiRenderJob,
   ApiRenderTemplateContract,
@@ -1198,5 +1198,124 @@ describe('RenderPreviewPanel · Live', () => {
     expect(thumbs[0]?.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(thumbs[1] as HTMLButtonElement);
     expect(onRowChange).toHaveBeenCalledWith(OTHER_ROW);
+  });
+});
+
+/**
+ * The component's page, played by the test: whatever the bridge posts into the frame is recorded
+ * and answered `ok`, and readiness is announced with the nonce the bridge wrote into the page.
+ */
+function playComponentPage(frame: HTMLIFrameElement) {
+  const nonce = /__FORGE_NONCE__="([^"]+)"/.exec(frame.srcdoc)?.[1] ?? '';
+  const page = frame.contentWindow as Window;
+  const sent: Array<{ method: string; params: unknown }> = [];
+  const reply = (data: Record<string, unknown>) => {
+    // Happy DOM only accepts MessagePort values in MessageEventInit.source.
+    const event = new Event('message') as MessageEvent;
+    Object.defineProperties(event, {
+      source: { value: page },
+      data: { value: { channel: 'forge-web-component', nonce, ...data } },
+    });
+    window.dispatchEvent(event);
+  };
+  page.postMessage = ((message: { id: string; method: string; params: unknown }) => {
+    sent.push({ method: message.method, params: message.params });
+    queueMicrotask(() =>
+      reply({ id: message.id, ok: true, result: message.method === 'applyOverrides' ? [] : null }),
+    );
+  }) as Window['postMessage'];
+  reply({ event: 'ready', nodes: [] });
+  return sent;
+}
+
+describe('RenderPreviewPanel for a web component', () => {
+  const PREVIEW_URL = 'https://api.test/api/media/web-component-preview/token';
+  const WEB_CONTRACT = {
+    ...CONTRACT,
+    template: { ...CONTRACT.template, key: 'web:99999999-9999-4999-8999-999999999999' },
+    web: {
+      width: 1080,
+      height: 1080,
+      durationSec: 4,
+      fps: 30,
+      previewUrl: PREVIEW_URL,
+      variables: [
+        { key: 'headline', nodeId: 'title', property: 'text' },
+        { key: 'bg', nodeId: 'backdrop', property: 'color' },
+        { key: 'hero', nodeId: 'photo', property: 'src' },
+      ],
+    },
+  } as ApiRenderTemplateContract;
+
+  test('runs in a scripts-only sandbox at the row’s values, and the scrub renders that time', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      (async () =>
+        new Response('<!doctype html><html><head></head><body>Hello</body></html>')) as unknown as typeof fetch,
+    );
+    try {
+      const { container } = render(
+        <RenderPreviewPanel
+          brandId={BRAND}
+          contract={WEB_CONTRACT}
+          rows={rowWith('Hola bench')}
+          rowId={ROW}
+          renderSetId={SET}
+        />,
+      );
+      const frame = await waitFor(() => {
+        const found = container.querySelector('iframe');
+        if (!found?.srcdoc) throw new Error('the preview page has not loaded yet');
+        return found;
+      });
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe(PREVIEW_URL);
+      expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
+      expect(frame.srcdoc).toContain('Hello');
+
+      const sent = playComponentPage(frame);
+      // Each scalar through its node property; the picked picture is no property value.
+      await waitFor(() => expect(sent.map((message) => message.method)).toContain('renderAt'));
+      expect(sent.find((message) => message.method === 'applyOverrides')?.params).toEqual({
+        overrides: [
+          { nodeId: 'title', property: 'text', value: 'Hola bench' },
+          { nodeId: 'backdrop', property: 'color', value: 'ff3366' },
+        ],
+      });
+      expect(sent.find((message) => message.method === 'renderAt')?.params).toEqual({ timeSec: 0 });
+
+      fireEvent.change(screen.getByLabelText('Preview time'), { target: { value: '1.5' } });
+      await waitFor(() =>
+        expect(sent.at(-1)).toEqual({ method: 'renderAt', params: { timeSec: 1.5 } }),
+      );
+      expect(screen.getByText('1.50 / 4.00 s')).toBeTruthy();
+      // None of the After Effects reads: they are workspace-scoped and mean nothing here.
+      expect(listJobsMock).not.toHaveBeenCalled();
+      expect(composePreviewMock).not.toHaveBeenCalled();
+      expect(livePreviewMock).not.toHaveBeenCalled();
+      expect(listMotionProofFormatsMock).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test('a preview that cannot be fetched says so', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      (async () => new Response('gone', { status: 403 })) as unknown as typeof fetch,
+    );
+    try {
+      render(
+        <RenderPreviewPanel
+          brandId={BRAND}
+          contract={WEB_CONTRACT}
+          rows={rowWith('Hola bench')}
+          rowId={ROW}
+          renderSetId={null}
+        />,
+      );
+      expect((await screen.findByRole('alert')).textContent).toContain(
+        'The preview could not be loaded (403).',
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
