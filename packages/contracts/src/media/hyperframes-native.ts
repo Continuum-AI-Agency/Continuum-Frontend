@@ -119,12 +119,80 @@ export const hyperframesDependencySchema = z
       .int()
       .nonnegative()
       .max(512 << 20),
-    kind: z.enum(['script', 'stylesheet', 'font', 'image', 'video', 'audio']),
+    kind: z.enum(['script', 'stylesheet', 'font', 'image', 'video', 'audio', 'data']),
     mediaType: z.string().min(1).max(100),
     /** Original request path/URL, for diagnostics. Never fetched by the painter. */
     source: z.string().min(1).max(4096),
+    /** Replay the captured redirect so relative CSS/module URLs retain their response base. */
+    redirect: z
+      .object({
+        to: z.string().min(1).max(4096),
+        status: z.union([
+          z.literal(301),
+          z.literal(302),
+          z.literal(303),
+          z.literal(307),
+          z.literal(308),
+        ]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
+
+export type HyperframesDependency = z.infer<typeof hyperframesDependencySchema>;
+/** URL bindings are retained even when their content hashes match. CAS bytes remain shared. */
+export function hyperframesDependencyOrder(
+  a: Pick<HyperframesDependency, 'sha256' | 'source'>,
+  b: Pick<HyperframesDependency, 'sha256' | 'source'>,
+): number {
+  return a.sha256 < b.sha256
+    ? -1
+    : a.sha256 > b.sha256
+      ? 1
+      : a.source < b.source
+        ? -1
+        : a.source > b.source
+          ? 1
+          : 0;
+}
+/** Canonical mount URLs bind relative package paths and redirect targets to the entry. */
+export function hyperframesDependencyBinding(
+  record: HyperframesDependency,
+  entrypoint: string,
+): HyperframesDependency {
+  const base = new URL(entrypoint, 'https://hf-compile.invalid/');
+  const canonical = (value: string, parent: URL) => {
+    const url = new URL(value, parent);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+      throw Error('Native dependencies require HTTP(S) URLs without credentials');
+    url.hash = '';
+    if (url.href.length > 4096) throw Error('Native dependency URL exceeds its budget');
+    return url;
+  };
+  const source = canonical(record.source, base);
+  return {
+    ...record,
+    source: source.href,
+    ...(record.redirect
+      ? { redirect: { ...record.redirect, to: canonical(record.redirect.to, source).href } }
+      : {}),
+  };
+}
+export const hyperframesMissingRequestsSchema = z
+  .array(
+    z
+      .object({
+        url: z.string().url().max(4096),
+        resourceType: z.enum(['script', 'stylesheet', 'font', 'image', 'media', 'fetch', 'xhr']),
+      })
+      .strict(),
+  )
+  .max(64)
+  .refine((requests) => requests.reduce((sum, item) => sum + item.url.length, 0) <= 16384, {
+    message: 'Missing dependency report exceeds its URL budget',
+  });
+export type HyperframesMissingRequests = z.infer<typeof hyperframesMissingRequestsSchema>;
 
 export const hyperframesNativeEditSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('text'), fieldId: id, value: z.string().max(1 << 20) }).strict(),
@@ -263,7 +331,17 @@ export const hyperframesCompileRequestSchema = z
       .strict(),
     clock: hyperframesClockSchema,
     dependencies: z
-      .array(hyperframesDependencySchema.extend({ bytesBase64: z.string().max(24 << 20) }).strict())
+      .array(
+        hyperframesDependencySchema
+          .extend({
+            /** At least one payload per hash; URL aliases reference the same immutable bytes. */
+            bytesBase64: z
+              .string()
+              .max(24 << 20)
+              .optional(),
+          })
+          .strict(),
+      )
       .max(1000)
       .default([]),
     fonts: z

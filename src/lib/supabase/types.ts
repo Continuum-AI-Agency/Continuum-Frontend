@@ -21259,6 +21259,53 @@ export type Database = {
           },
         ]
       }
+      template_ingest_dependencies: {
+        Row: {
+          byte_length: number
+          created_at: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status: number | null
+          redirect_to: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }
+        Insert: {
+          byte_length: number
+          created_at?: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status?: number | null
+          redirect_to?: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }
+        Update: {
+          byte_length?: number
+          created_at?: string
+          job_id?: string
+          kind?: string
+          media_type?: string
+          redirect_status?: number | null
+          redirect_to?: string | null
+          sha256?: string
+          source_url?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_ingest_dependencies_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_layer_views: {
         Row: {
           asset_id: string
@@ -22416,6 +22463,32 @@ export type Database = {
       capture_template_authoring_settings_plan: {
         Args: { p_asset_id: string; p_commands: Json }
         Returns: Json
+      }
+      checkpoint_service_template_ingest_dependencies: {
+        Args: {
+          p_dependencies?: Json
+          p_job_id: string
+          p_lease_token: string
+          p_worker_id: string
+        }
+        Returns: {
+          byte_length: number
+          created_at: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status: number | null
+          redirect_to: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "template_ingest_dependencies"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       checkpoint_service_template_ingest_parse: {
         Args: {
