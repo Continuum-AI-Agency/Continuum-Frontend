@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import {
+  hyperframesCapabilitySchema,
   hyperframesClockSchema,
   hyperframesCompilerBuildSchema,
+  hyperframesNativeEditsSchema,
   hyperframesSceneRefSchema,
   hyperframesUploadPinSchema,
-  hyperframesNativeEditsSchema,
-  hyperframesCapabilitySchema,
 } from './hyperframes-native';
 import { hyperframesNativeRenderRequestSchema } from './hyperframes-native-render';
 
@@ -121,31 +121,91 @@ export type HyperframesSceneRenderExecutionSpec = z.infer<
 >;
 
 /** Public metadata omits private artifact locations, leases and signed renderer URLs. */
-export const hyperframesSceneViewSchema = z.object({
-  family: z.literal('hyperframes'),
-  brandId: z.uuid(), assetId: z.uuid(), sourceVersionId: z.uuid(),
-  revision: hyperframesNativeRenderRequestSchema.shape.revision,
-  sceneSha256: hash,
-  viewport: hyperframesNativeRenderRequestSchema.shape.viewport,
-  clock: hyperframesClockSchema,
-  edits: hyperframesNativeEditsSchema,
-  capabilities: z.array(hyperframesCapabilitySchema).max(160_000),
-  renderer: z.object({
-    engine: hyperframesNativeRenderRequestSchema.shape.engine,
-    tools: hyperframesNativeRenderRequestSchema.shape.tools,
-  }).strict().nullable(),
-}).strict();
+export const hyperframesSceneViewSchema = z
+  .object({
+    family: z.literal('hyperframes'),
+    brandId: z.uuid(),
+    assetId: z.uuid(),
+    sourceVersionId: z.uuid(),
+    revision: hyperframesNativeRenderRequestSchema.shape.revision,
+    sceneSha256: hash,
+    viewport: hyperframesNativeRenderRequestSchema.shape.viewport,
+    clock: hyperframesClockSchema,
+    edits: hyperframesNativeEditsSchema,
+    capabilities: z.array(hyperframesCapabilitySchema).max(160_000),
+    renderer: z
+      .object({
+        engine: hyperframesNativeRenderRequestSchema.shape.engine,
+        tools: hyperframesNativeRenderRequestSchema.shape.tools,
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict()
+  .superRefine((view, context) => {
+    if (view.revision.templateId !== view.assetId)
+      context.addIssue({
+        code: 'custom',
+        message: 'Native scene revision belongs to another template',
+      });
+  });
 export type HyperframesSceneView = z.infer<typeof hyperframesSceneViewSchema>;
 
-export const hyperframesSceneRenderStatusSchema = z.object({
-  family: z.literal('hyperframes'), jobId: z.uuid(), brandId: z.uuid(), assetId: z.uuid(),
-  revision: hyperframesNativeRenderRequestSchema.shape.revision,
-  state: z.enum(['ready', 'claimed', 'rendering', 'saving', 'completed', 'failed', 'cancelled']),
-  error: z.object({ code: z.string().max(200), message: z.string().max(2000) }).strict().nullable(),
-  outputs: z.array(z.object({
-    file: z.enum(['png', 'mp4']), assetId: z.uuid(), versionId: z.uuid(),
-    sha256: hash, bytes: z.number().int().positive().max(128 << 20),
-    mimeType: z.enum(['image/png', 'video/mp4']),
-  }).strict()).max(2),
-}).strict();
+export const hyperframesSceneRenderStatusSchema = z
+  .object({
+    family: z.literal('hyperframes'),
+    jobId: z.uuid(),
+    brandId: z.uuid(),
+    assetId: z.uuid(),
+    revision: hyperframesNativeRenderRequestSchema.shape.revision,
+    state: z.enum(['ready', 'claimed', 'rendering', 'saving', 'completed', 'failed', 'cancelled']),
+    error: z
+      .object({ code: z.string().max(200), message: z.string().max(2000) })
+      .strict()
+      .nullable(),
+    outputs: z
+      .array(
+        z
+          .object({
+            file: z.enum(['png', 'mp4']),
+            assetId: z.uuid(),
+            versionId: z.uuid(),
+            sha256: hash,
+            bytes: z
+              .number()
+              .int()
+              .positive()
+              .max(128 << 20),
+            mimeType: z.enum(['image/png', 'video/mp4']),
+          })
+          .strict(),
+      )
+      .max(2),
+  })
+  .strict()
+  .superRefine((job, context) => {
+    if (job.revision.templateId !== job.assetId)
+      context.addIssue({
+        code: 'custom',
+        message: 'Native job revision belongs to another template',
+      });
+    if ((job.state === 'completed') !== (job.outputs.length > 0))
+      context.addIssue({
+        code: 'custom',
+        message: 'Only completed native jobs carry published outputs',
+      });
+    if (new Set(job.outputs.map((output) => output.file)).size !== job.outputs.length)
+      context.addIssue({ code: 'custom', message: 'Native output formats must be unique' });
+    for (const output of job.outputs)
+      if (output.mimeType !== (output.file === 'png' ? 'image/png' : 'video/mp4'))
+        context.addIssue({ code: 'custom', message: 'Native output file and media type differ' });
+  });
 export type HyperframesSceneRenderStatus = z.infer<typeof hyperframesSceneRenderStatusSchema>;
+
+export const hyperframesSceneRenderHistorySchema = z
+  .object({
+    family: z.literal('hyperframes'),
+    jobs: z.array(hyperframesSceneRenderStatusSchema).max(50),
+  })
+  .strict();
+export type HyperframesSceneRenderHistory = z.infer<typeof hyperframesSceneRenderHistorySchema>;

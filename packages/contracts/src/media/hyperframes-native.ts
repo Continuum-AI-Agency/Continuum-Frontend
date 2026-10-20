@@ -290,7 +290,7 @@ export const hyperframesCapabilitySchema = z
     reason: z.string().max(4096).optional(),
     /** Complete resolved copy, rather than only the first revealed prefix in the source DOM. */
     text: z
-      .object({ value: z.string().max(65_536), reveal: hyperframesTextRevealSchema })
+      .object({ value: z.string().max(65_536), reveal: hyperframesTextRevealSchema.optional() })
       .strict()
       .optional(),
   })
@@ -299,7 +299,7 @@ export const hyperframesCapabilitySchema = z
     if (value.text && (value.operation !== 'text' || value.state !== 'editable' || !value.fieldId))
       context.addIssue({
         code: 'custom',
-        message: 'Qualified reveal metadata requires an editable text field',
+        message: 'Editable text metadata requires an editable text field',
       });
   });
 export const hyperframesCompilerBuildSchema = z
