@@ -263,6 +263,20 @@ export const hyperframesCompilerBuildSchema = z
   })
   .strict();
 export type HyperframesCompilerBuild = z.infer<typeof hyperframesCompilerBuildSchema>;
+/** Verified untouched upload provenance, independent of an HTML entry inside a ZIP. */
+export const hyperframesUploadPinSchema = z
+  .object({
+    sha256: hash,
+    byteLength: z
+      .number()
+      .int()
+      .positive()
+      .max(250 << 20),
+    mediaType: z.enum(['text/html', 'application/zip']),
+  })
+  .strict();
+export type HyperframesUploadPin = z.infer<typeof hyperframesUploadPinSchema>;
+
 export const hyperframesSceneSchema = z
   .object({
     schema: z.literal('hyperframes.scene/1'),
@@ -272,6 +286,8 @@ export const hyperframesSceneSchema = z
         documentSha256: hash,
         entrypoint: z.string().min(1),
         parser: z.string().min(1),
+        /** Absent only on earlier local scenes; native render jobs require this pin. */
+        upload: hyperframesUploadPinSchema.optional(),
       })
       .strict(),
     identity: z
@@ -322,6 +338,7 @@ export const hyperframesCompileRequestSchema = z
       .min(1)
       .max(32 << 20),
     sourceSha256: hash,
+    upload: hyperframesUploadPinSchema.optional(),
     entrypoint: z.string().min(1).max(4096).default('index.html'),
     viewport: z
       .object({

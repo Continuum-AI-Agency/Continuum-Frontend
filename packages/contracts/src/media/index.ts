@@ -101,3 +101,4 @@ export * from './forge-web-component';
 
 export * from './presentation';
 export * from './hyperframes-native';
+export * from './hyperframes-native-render';
