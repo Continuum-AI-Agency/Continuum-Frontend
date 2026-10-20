@@ -5,6 +5,7 @@ import {
   API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
+  API_RENDER_FONT_OVERRIDE_PROFILE,
   API_RENDER_IMPORT_MAPPING_ROUTE,
   API_RENDER_IMPORT_MEDIA_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
@@ -261,6 +262,7 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderJobSchema,
+      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
     });
   },
   listJobs(
@@ -289,12 +291,14 @@ export const apiRendersApi = {
         ...(options?.variantId ? { variantId: options.variantId } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
+      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
     });
   },
   getJob(brandId: string, jobId: string) {
     return http.request<ApiRenderJob>({
       path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
       schema: apiRenderJobSchema,
+      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
     });
   },
   prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
@@ -510,6 +514,7 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderBatchSchema,
+      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
     });
   },
 };

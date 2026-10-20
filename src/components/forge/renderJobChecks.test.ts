@@ -137,6 +137,18 @@ const row = (checks: JobCheck[], name: string) => {
 const checksOf = (job: Partial<ApiRenderJob>) => renderJobChecks({ ...JOB, ...job }, LABELS, NOW);
 
 describe('renderJobChecks', () => {
+  test('the ledger discloses explicit font consent and the actor', () => {
+    const checks = checksOf({ acceptMissingFonts: true, createdByEmail: 'artist@example.test' });
+    expect(row(checks, 'Font override')).toMatchObject({
+      state: 'warn',
+      result: 'Missing-font check bypassed',
+      lines: [
+        'Explicitly accepted by artist@example.test; the worker may substitute missing fonts.',
+      ],
+    });
+    expect(checksOf({}).some((check) => check.name === 'Font override')).toBe(false);
+  });
+
   test('rows in the order a render passes through them, each saying what it checks', () => {
     const checks = checksOf({});
     expect(checks.map((check) => check.name)).toEqual([

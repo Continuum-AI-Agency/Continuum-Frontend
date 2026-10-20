@@ -456,6 +456,19 @@ export function renderJobChecks(
   now: number = Date.now(),
 ): JobCheck[] {
   return [
+    ...(job.acceptMissingFonts
+      ? [
+          {
+            name: 'Font override',
+            what: 'Whether the missing-font check was bypassed for this render.',
+            state: 'warn' as const,
+            result: 'Missing-font check bypassed',
+            lines: [
+              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; the worker may substitute missing fonts.`,
+            ],
+          },
+        ]
+      : []),
     {
       name: 'Inputs',
       what: 'Confirms every required variable is filled and every picked asset belongs to this brand.',

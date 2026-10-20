@@ -77,7 +77,6 @@ import {
 import { NameDialog } from '@/components/forge/RenderSetMenu';
 import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
-import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { explainFinding } from '@/components/forge/readinessCopy';
 import {
   addSibling,
@@ -96,6 +95,7 @@ import {
   emptyHistory,
   forkLabel,
   fromRenderSetRows,
+  isFontPreflightRefusal,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -141,6 +141,7 @@ import {
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
 import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
+import { checkpointGraph } from '@/components/forge/templateCheckpoints';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -158,9 +159,9 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import {
+  fetchTemplateLineage,
   fetchTemplateRevisionVariants,
   fetchTemplateVariants,
-  fetchTemplateLineage,
   saveTemplateVariables,
 } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
@@ -249,7 +250,11 @@ const signatureOf = (rows: RequestRow[], contract: ApiRenderTemplateContract | n
 
 /** Inputs, not a render, so the snapshot is everything the dry-run is asked about. */
 const preflightSnapshot = (rows: RequestRow[], id: string) =>
-  JSON.stringify([effectiveValues(rows, id), effectiveEncode(rows, id) ?? null]);
+  JSON.stringify([
+    effectiveValues(rows, id),
+    effectiveEncode(rows, id) ?? null,
+    effectiveOutputIds(rows, id),
+  ]);
 
 const rowStepCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
   if (event.code === 'ArrowDown')
@@ -1204,6 +1209,7 @@ export function RenderRequestsGrid({
               : null;
           check = {
             state: 'error',
+            code: error instanceof ApiError ? (error.code ?? error.message) : undefined,
             message:
               detail ?? describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
             guardrails: guardrails.success ? guardrails.data : [],
@@ -2412,6 +2418,24 @@ export function RenderRequestsGrid({
       (row) =>
         row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
     );
+  const canReviewMissingFonts =
+    !updateRequired &&
+    !renderingProposed &&
+    selected.length > 0 &&
+    selected.length <= MAX_BATCH_ROWS &&
+    selected.some((row) => row.check.state === 'error') &&
+    selected.every(
+      (row) =>
+        Object.keys(clientErrors.get(row.id) ?? {}).length === 0 &&
+        (row.check.state === 'ready' ||
+          (row.check.state === 'error' &&
+            isFontPreflightRefusal(row.check.code, row.check.guardrails))),
+    );
+  const selectedProblem = selected.flatMap((row) =>
+    row.check.state === 'error'
+      ? [row.check.message]
+      : Object.values(clientErrors.get(row.id) ?? {}),
+  )[0];
   const fireHint = updateRequired
     ? 'Update this set to the current template first'
     : renderingProposed
@@ -2421,7 +2445,7 @@ export function RenderRequestsGrid({
         : selected.length > MAX_BATCH_ROWS
           ? `At most ${MAX_BATCH_ROWS} renders per batch`
           : !readyToFire
-            ? 'Every selected row has to be Ready'
+            ? (selectedProblem ?? 'Every selected row has to be Ready')
             : null;
   // A selected row still being dry-run is a wait, not a block: the tray re-checks once it lands.
   const stillChecking = selected.some(
@@ -2498,8 +2522,8 @@ export function RenderRequestsGrid({
   // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async () => {
-    if (!contract || !readyToFire) return;
+  const openReview = async (reviewMissingFonts = false) => {
+    if (!contract || (!readyToFire && !(reviewMissingFonts && canReviewMissingFonts))) return;
     setBusy('firing');
     try {
       const submittedSet =
@@ -2817,7 +2841,8 @@ export function RenderRequestsGrid({
         readyToFire={readyToFire}
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
-        onRender={openReview}
+        onRender={() => void openReview()}
+        onReviewMissingFonts={canReviewMissingFonts ? () => void openReview(true) : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3205,10 +3230,10 @@ export function RenderRequestsGrid({
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={stillChecking ? null : fireHint}
+                  recheckBlocked={stillChecking || canReviewMissingFonts ? null : fireHint}
                   rechecking={busy === 'firing' || stillChecking}
                   finalBlocked={finalBlocked}
-                  onRecheck={openReview}
+                  onRecheck={() => void openReview(canReviewMissingFonts)}
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.

@@ -13,6 +13,8 @@ import { forgeImportMappingSchema } from './forge-render-imports';
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
+/** Opt-in for audit fields that older strict job clients cannot read. */
+export const API_RENDER_FONT_OVERRIDE_PROFILE = 'render-font-override-v1';
 export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
 export const apiRenderMasterDownloadRequestSchema = z
   .object({
@@ -1557,6 +1559,8 @@ export const apiRenderJobSchema = z
      * Null for a job whose input was not recorded.
      */
     renderInput: apiRenderVariableMapSchema.nullable().default(null),
+    /** Explicit per-render consent to let the worker substitute missing fonts. */
+    acceptMissingFonts: z.boolean().optional(),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),

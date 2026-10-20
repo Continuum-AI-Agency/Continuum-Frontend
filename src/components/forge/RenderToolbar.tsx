@@ -29,7 +29,7 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { Fragment, type ReactNode, type Ref, useMemo, useState } from 'react';
+import { Fragment, type ReactNode, type Ref, useId, useMemo, useState } from 'react';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -247,6 +247,7 @@ export function RenderToolbar({
   fireHint,
   busy,
   onRender,
+  onReviewMissingFonts,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -300,6 +301,7 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
+  onReviewMissingFonts?: () => void;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -556,6 +558,7 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
+              onReviewMissingFonts={onReviewMissingFonts}
             />
           </Control>
         </>
@@ -623,7 +626,8 @@ function CheckpointPicker({
               {others.map((row) => (
                 <DropdownMenuItem key={row.id} disabled>
                   <span className="truncate">
-                    {row.kind}{row.branch ? ` · ${row.branch}` : ''}
+                    {row.kind}
+                    {row.branch ? ` · ${row.branch}` : ''}
                   </span>
                   <span className="ml-auto font-mono text-2xs text-muted-foreground">
                     {shortSha(row.id)}
@@ -642,7 +646,7 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
 
 /**
  * `Render 4 rows · 12 files`, with the files per ratio on hover. A disabled button takes no
- * pointer, so while it waits it says why in its title instead.
+ * pointer, so while it waits the reason remains visible beside it.
  */
 function RenderButton({
   selectedCount,
@@ -651,6 +655,7 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
+  onReviewMissingFonts,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -658,7 +663,10 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
+  onReviewMissingFonts?: () => void;
 }) {
+  const hintId = useId();
+  const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
   const button = (
     <Button
       type="button"
@@ -666,6 +674,7 @@ function RenderButton({
       className="gap-1.5"
       disabled={disabled}
       title={disabled ? (fireHint ?? undefined) : undefined}
+      aria-describedby={showHint ? hintId : undefined}
       onClick={onRender}
     >
       {firing ? (
@@ -678,8 +687,9 @@ function RenderButton({
         : 'Render'}
     </Button>
   );
-  if (!selectedCount) return button;
-  return (
+  const content = !selectedCount ? (
+    button
+  ) : (
     <Tooltip>
       <TooltipTrigger render={button} />
       <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
@@ -698,5 +708,20 @@ function RenderButton({
         ) : null}
       </TooltipContent>
     </Tooltip>
+  );
+  return (
+    <div className="flex max-w-md flex-col items-start gap-1">
+      {content}
+      {onReviewMissingFonts ? (
+        <Button type="button" size="xs" variant="outline" onClick={onReviewMissingFonts}>
+          Review font override
+        </Button>
+      ) : null}
+      {showHint ? (
+        <p id={hintId} role="status" className="text-xs text-muted-foreground">
+          {fireHint}
+        </p>
+      ) : null}
+    </div>
   );
 }

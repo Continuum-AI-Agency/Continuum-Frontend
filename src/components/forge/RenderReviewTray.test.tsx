@@ -405,6 +405,37 @@ afterEach(() => {
 installPickerDomGlobals();
 
 describe('RenderReviewTray · Review', () => {
+  test('font override is explicit, carries into confirmation, and resets for a new snapshot', async () => {
+    batchPreflightMock.mockImplementation(async (input) => {
+      if (!(input as { acceptMissingFonts?: boolean }).acceptMissingFonts)
+        throw new ApiError('Fonts unavailable.', 422, 'render_fonts_missing');
+      return { confirmationToken: 'batch-token', readiness: READY };
+    });
+    try {
+      const view = renderTray();
+      await press('Render anyway');
+      await press('Next: delivery');
+      await press('Render 3 files');
+      expect(
+        (batchPreflightMock.mock.calls.at(-1)?.[0] as { acceptMissingFonts?: boolean })
+          .acceptMissingFonts,
+      ).toBe(true);
+      await screen.findByText('2 renders queued');
+      expect(createBatchMock).toHaveBeenCalledTimes(1);
+      view.snapshot({ reviewKey: 2, stale: false });
+      await screen.findByRole('button', { name: 'Render anyway' });
+      expect(
+        (batchPreflightMock.mock.calls.at(-1)?.[0] as { acceptMissingFonts?: boolean })
+          .acceptMissingFonts,
+      ).toBeUndefined();
+    } finally {
+      batchPreflightMock.mockImplementation(async () => ({
+        confirmationToken: 'batch-token',
+        readiness: READY,
+      }));
+    }
+  });
+
   test('reviews exactly the rows × formats it was handed, with readiness per row', async () => {
     renderTray();
     expect(await screen.findByText('Render 2 rows')).toBeTruthy();
