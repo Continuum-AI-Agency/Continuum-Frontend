@@ -346,4 +346,20 @@ describe('RenderRowsImport', () => {
     );
     expect(importButton().hasAttribute('disabled')).toBe(true);
   });
+
+  test('takes a dropped CSV exactly as a chosen one', async () => {
+    renderImport();
+    const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
+    fireEvent.dragOver(zone);
+    fireEvent.drop(zone, { dataTransfer: { files: [csv('Headline\nDropped\n')] } });
+    // The auto-mapped preview means the drop reached the same review path as the picker.
+    await waitFor(() => expect(screen.getByText('Dropped')).toBeTruthy());
+  });
+
+  test('offers a blank template download inside the dialog', async () => {
+    spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:template');
+    spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    renderImport();
+    expect(screen.getByRole('button', { name: 'Download blank template' })).toBeTruthy();
+  });
 });

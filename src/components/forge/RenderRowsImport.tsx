@@ -164,6 +164,7 @@ export function RenderRowsImport({
   const fileRef = useRef<HTMLInputElement>(null);
   const scopeRef = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<ForgeRenderImportPreview | null>(null);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   // Keyed by brand + id so remapping a column never refetches, and a brand switch never reuses.
@@ -432,6 +433,7 @@ export function RenderRowsImport({
             <FieldLabel>Spreadsheet</FieldLabel>
             <input
               ref={fileRef}
+              id="render-rows-import-file"
               type="file"
               accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
@@ -442,19 +444,60 @@ export function RenderRowsImport({
                 event.target.value = '';
               }}
             />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              {busy ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" />
-              ) : (
-                <FileSpreadsheet data-icon="inline-start" />
+            {/* One target for both ways in: the button opens the picker, the same area takes a drop. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : (
+                  <FileSpreadsheet data-icon="inline-start" />
+                )}
+                Choose CSV or XLSX
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={contract.variables.length === 0}
+                onClick={() => downloadTemplateCsv(contract, 'render-rows-template.csv')}
+              >
+                Download blank template
+              </Button>
+            </div>
+            {/* A label takes the drop and clicks through to the hidden input, the same shape the
+                template rebind panel uses. Buttons stay outside it: a label cannot hold buttons. */}
+            <label
+              htmlFor="render-rows-import-file"
+              data-dragover={dragOver || undefined}
+              className={cn(
+                'flex cursor-pointer flex-col items-start gap-1 rounded-lg border border-dashed border-border/70 p-3 text-xs transition-colors',
+                dragOver && 'border-primary bg-primary/5',
               )}
-              Choose CSV or XLSX
-            </Button>
+              onDragOver={(event) => {
+                if (busy) return;
+                event.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(event) => {
+                if (busy) return;
+                event.preventDefault();
+                setDragOver(false);
+                const file = event.dataTransfer.files?.[0];
+                if (file) void loadFile(file);
+              }}
+            >
+              <span className="font-medium text-foreground">
+                Drop a file here or choose one
+              </span>
+              <span className="text-muted-foreground">
+                A CSV never leaves the browser. XLSX is read on the server.
+              </span>
+            </label>
             <FieldDescription>
               Name, Parent, Formats, Replace ad ID and variable columns map by key or label. Media
               columns take Library asset ids or public HTTPS media links, which are imported into
