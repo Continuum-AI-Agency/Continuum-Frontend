@@ -35,6 +35,7 @@ import {
   fetchNativeHyperframesVariants,
   saveNativeHyperframesRevision,
 } from '@/lib/library/hyperframesNative';
+import { HyperframesFilmPanel } from './HyperframesFilmPanel';
 import { NativeHyperframesJobs } from './NativeHyperframesJobs';
 import { NativeHyperframesOrder } from './NativeHyperframesOrder';
 import { NativeUploadedVariants } from './NativeUploadedVariants';
@@ -104,29 +105,16 @@ function NativeHyperframesSession({
     queryFn: ({ signal }) => fetchNativeHyperframesVariants(brandId, assetId, signal),
     retry: false,
   });
+  // No native scene (ingest off or still compiling): the upload still renders, on the Chrome lane.
   if (view.isError)
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Native scene is unavailable</AlertTitle>
-        <AlertDescription>
-          {problem(view.error)}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                void view.refetch();
-              }}
-            >
-              Retry native scene
-            </Button>
-            {onBack ? (
-              <Button variant="ghost" onClick={onBack}>
-                Back to templates
-              </Button>
-            ) : null}
-          </div>
-        </AlertDescription>
-      </Alert>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <Alert>
+          <AlertTitle>Native editor unavailable</AlertTitle>
+          <AlertDescription>{problem(view.error)}</AlertDescription>
+        </Alert>
+        <HyperframesFilmPanel brandId={brandId} assetId={assetId} name={name} onBack={onBack} />
+      </div>
     );
   if (!view.data)
     return (

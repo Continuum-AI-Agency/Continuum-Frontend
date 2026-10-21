@@ -135,3 +135,23 @@ export const hyperframesStructureSchema = z.object({
   timings: z.object({ domMs: z.number().nonnegative(), totalMs: z.number().nonnegative() }),
 });
 export type HyperframesStructure = z.infer<typeof hyperframesStructureSchema>;
+
+/** One film of an uploaded HyperFrames template: its text fields edited, rendered as uploaded otherwise. */
+export const hyperframesFilmRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    edits: z
+      .array(
+        z.object({ fieldId: z.string().min(1).max(200), value: z.string().max(10_000) }).strict(),
+      )
+      .max(500)
+      .default([]),
+  })
+  .strict();
+export type HyperframesFilmRequest = z.infer<typeof hyperframesFilmRequestSchema>;
+
+/** The Library video a film became, and a signed URL that plays it now. */
+export const hyperframesFilmSchema = z
+  .object({ assetId: z.string().uuid(), versionId: z.string().uuid(), url: z.string().url() })
+  .strict();
+export type HyperframesFilm = z.infer<typeof hyperframesFilmSchema>;

@@ -123,6 +123,8 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'scene-renders', assetId] as const,
   sceneRender: (brandId: string, assetId: string, jobId: string) =>
     ['forge', brandId, 'scene-renders', assetId, jobId] as const,
+  hyperframesFilmFields: (brandId: string, assetId: string) =>
+    ['forge', brandId, 'hyperframes-film-fields', assetId] as const,
   nativeScene: (brandId: string, assetId: string, revisionId?: string) =>
     ['forge', brandId, 'hyperframes-scene', assetId, revisionId ?? 'original'] as const,
   nativeRenders: (brandId: string, assetId: string) =>
