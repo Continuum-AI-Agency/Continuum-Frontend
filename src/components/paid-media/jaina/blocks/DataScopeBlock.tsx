@@ -6,23 +6,21 @@
 
 import type { DataScopeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { SCOPE_SOURCE_LABEL, SECTION_LABELS } from '../answerLanguage';
+import { useAnswerLanguage } from '../answerLanguageContext';
 import { JAINA_TYPE } from '../reading';
 
 type DataScopeBlockProps = { block: DataScopeBlockV2; isStreaming: boolean };
 
-const SOURCE_LABEL: Record<DataScopeBlockV2['source'], string> = {
-  db: 'synced data',
-  api: 'live platform read',
-  sheet: 'client sheet',
-  mixed: 'synced data + client sheet',
-};
-
 export default function DataScopeBlock({ block }: DataScopeBlockProps) {
+  const language = useAnswerLanguage();
   return (
     <div className={cn('text-muted-foreground', JAINA_TYPE.table)} data-testid="data-scope-block">
       <p>
-        <span className="font-medium text-foreground">Scope:</span> {block.dates}
-        {block.timezone ? ` · ${block.timezone}` : ''} · {SOURCE_LABEL[block.source]}
+        <span className="font-medium text-foreground">{SECTION_LABELS[language].scope}:</span>{' '}
+        {block.dates}
+        {block.timezone ? ` · ${block.timezone}` : ''} ·{' '}
+        {SCOPE_SOURCE_LABEL[language][block.source]}
       </p>
       {block.notes.length > 0 ? (
         <ul className="mt-1 space-y-0.5 text-muted-foreground">
