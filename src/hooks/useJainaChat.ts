@@ -26,6 +26,7 @@ import { useChat } from '@ai-sdk/react';
 import type { JainaUIMessage } from '@continuum/contracts';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useMemo, useRef } from 'react';
+import type { AgentMentionMetadata } from '@/lib/agent-references';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
@@ -41,6 +42,11 @@ export type JainaTurnInput = Omit<JainaChatInput, 'onDispatchError'> & {
   displayText?: string;
   /** An approval or plan verdict: sent because the schema needs a query, never rendered. */
   silent?: boolean;
+  /**
+   * What the reader attached to this turn (references, images, documents). Carried on the
+   * UIMessage so the live transcript renders it; the Backend persists the same shape for reload.
+   */
+  mentions?: AgentMentionMetadata;
   /**
    * Called when the turn fails to reach the Backend. A caller holding optimistic UI has no other
    * way to learn it was dropped — without this an approval that never arrived still reads
@@ -126,14 +132,21 @@ export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaC
 
   const sendTurn = useCallback(
     (input: JainaTurnInput) => {
-      const { displayText, silent, onDispatchError, ...request } = input;
+      const { displayText, silent, mentions, onDispatchError, ...request } = input;
       dispatchErrorRef.current = onDispatchError ?? null;
 
       return sendMessage(
         {
           role: 'user',
           parts: [{ type: 'text', text: displayText ?? request.query }],
-          ...(silent ? { metadata: { silent: true } } : {}),
+          ...(silent || mentions
+            ? {
+                metadata: {
+                  ...(silent ? { silent: true } : {}),
+                  ...(mentions ? { mentions } : {}),
+                },
+              }
+            : {}),
         },
         { body: { jainaInput: request } },
       );

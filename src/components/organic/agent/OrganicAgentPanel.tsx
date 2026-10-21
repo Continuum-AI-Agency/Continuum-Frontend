@@ -18,7 +18,7 @@ import {
   buildInlineTextContextBlock,
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
-import type { Attachment } from '@/components/chat/attachments';
+import { type Attachment, SentDocumentAttachments } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
@@ -1811,6 +1811,7 @@ export function OrganicAgentPanel({
                             items={mediaFromPersistedAttachments(msg.id, msg.metadata?.attachments)}
                             lightboxTitle="Attachment"
                           />
+                          <SentDocumentAttachments documents={msg.metadata?.documents} />
                         </>
                       )}
                       <OrganicThinkingPanel

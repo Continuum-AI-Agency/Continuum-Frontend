@@ -922,3 +922,33 @@ describe('a scaffold card for a turn that never proposed', () => {
     expect(projected.scaffold).toBeUndefined();
   });
 });
+
+describe('a user turn keeps what the reader attached', () => {
+  const mentions = {
+    references: [],
+    attachments: [{ url: 'https://cdn.example.com/a.png', name: 'a.png', mediaType: 'image/png' }],
+    documents: [
+      {
+        documentId: '0b3e8c1a-5d2f-4e7a-9c10-123456789abc',
+        name: 'Q3 brief.pdf',
+        retention: 'ephemeral' as const,
+      },
+    ],
+  };
+
+  it('carries the mentions onto the projected message metadata', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([text('Use this brief')], { role: 'user', metadata: { mentions } }),
+      { isStreaming: false },
+    );
+    expect(projected.content).toBe('Use this brief');
+    expect(projected.metadata).toEqual(mentions);
+  });
+
+  it('leaves a bare user turn without metadata', () => {
+    const projected = toJainaChatMessage(uiMessage([text('Hi')], { role: 'user' }), {
+      isStreaming: false,
+    });
+    expect(projected.metadata).toBeUndefined();
+  });
+});

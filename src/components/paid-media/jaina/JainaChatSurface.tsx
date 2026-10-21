@@ -2022,6 +2022,7 @@ export function JainaChatSurface({
 
       const hasReferences = Boolean(input.references?.length);
       const hasAttachments = Boolean(input.images?.length);
+      const hasDocuments = Boolean(input.documents?.length);
 
       // Fired here rather than in the Next proxy that used to carry it: the proxy exists only to
       // forward the stream, and the browser talks to the Backend directly now. Imported lazily —
@@ -2040,11 +2041,12 @@ export function JainaChatSurface({
         // it — and nothing at all for a decision the schema forced us to phrase as a query.
         displayText: query,
         silent: input.silentUserMessage,
-        ...(hasReferences || hasAttachments
+        ...(hasReferences || hasAttachments || hasDocuments
           ? {
               mentions: {
                 references: input.references ?? [],
                 ...(hasAttachments ? { attachments: input.images } : {}),
+                ...(hasDocuments ? { documents: input.documents } : {}),
               },
             }
           : {}),

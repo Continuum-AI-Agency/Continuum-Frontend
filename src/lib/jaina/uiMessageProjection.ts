@@ -20,10 +20,10 @@ import {
   type AgentDelegatedFrameData,
   agentDelegatedFrameDataSchema,
   JAINA_UI_DATA_PART,
+  type JainaOptimizerCard,
   type JainaPaidCreativeRenderPayload,
   type JainaToolApprovalRequiredPayload,
   type JainaToolApprovalResolvedPayload,
-  type JainaOptimizerCard,
   type JainaToolOutputDeniedPayload,
   type JainaUIMessage,
   jainaOptimizerCardSchema,
@@ -369,7 +369,10 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
       const receipt = paidScaffoldReceiptPayloadSchema.safeParse(data);
       if (!receipt.success) continue;
       if (scaffold && scaffold.scaffoldId !== receipt.data.scaffoldId) continue;
-      scaffold = { ...(scaffold ?? seededScaffoldState(receipt.data.scaffoldId)), receipt: receipt.data };
+      scaffold = {
+        ...(scaffold ?? seededScaffoldState(receipt.data.scaffoldId)),
+        receipt: receipt.data,
+      };
       continue;
     }
 
@@ -735,9 +738,11 @@ export const toJainaChatMessage = (
     ...(message.metadata?.runId ? { runId: message.metadata.runId } : {}),
   };
 
-  // A user message carries text and nothing else; running the whole projection over it would
-  // invent assistant furniture for a turn that has none.
-  if (role === 'user') return base;
+  // A user message carries its text and what the reader attached to it; running the whole
+  // projection over it would invent assistant furniture for a turn that has none.
+  if (role === 'user') {
+    return message.metadata?.mentions ? { ...base, metadata: message.metadata.mentions } : base;
+  }
 
   const interpreted = interpretCheckpointReportPayload(reportOf(message));
   const assembly = reportAssemblyOf(message);
