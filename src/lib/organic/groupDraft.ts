@@ -49,3 +49,31 @@ export function findDraftInDays(
   }
   return undefined;
 }
+
+/**
+ * The other rows of `draftId`'s group that take a value just saved on it: a row with nothing of
+ * its own in that field (`valueOf` answers ''), or one still holding exactly what an earlier fill
+ * gave it (`filled`, by row id). A platform ticked before the caption was typed or the media
+ * placed copies an empty row, and that empty row's readiness then blocks the whole group's
+ * publish. A row with a value of its own is never overwritten.
+ */
+export function groupRowsToFill(
+  days: readonly OrganicCalendarDay[],
+  draftId: string,
+  valueOf: (draft: OrganicCalendarDraft) => string,
+  filled: ReadonlyMap<string, string>,
+): OrganicCalendarDraft[] {
+  for (const day of days) {
+    for (const card of day.slots) {
+      if (!isGroup(card)) continue;
+      const members = groupMemberDrafts(card);
+      if (!members.some((member) => member.id === draftId)) continue;
+      return members.filter((member) => {
+        if (member.id === draftId || member.status === 'published') return false;
+        const value = valueOf(member);
+        return value === '' || filled.get(member.id) === value;
+      });
+    }
+  }
+  return [];
+}

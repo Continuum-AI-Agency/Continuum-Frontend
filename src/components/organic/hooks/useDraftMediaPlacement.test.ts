@@ -773,6 +773,70 @@ describe('useDraftMediaPlacement', () => {
       expect((storedDraft as { publishingAssets: unknown[] }).publishingAssets).toEqual([]);
     });
 
+    // A platform ticked before the media was placed copied an empty row; it blocked the group's
+    // publish. A row with media of its own keeps it.
+    it('gives an empty group row the media and leaves a row with its own alone', async () => {
+      const member = (platform: string, publishingAssets: unknown[]) => ({
+        backendDraftId: `srv-${platform}`,
+        platform,
+        status: 'draft',
+        accountId: null,
+        draft: {
+          id: `draft-1::${platform}`,
+          backendDraftId: `srv-${platform}`,
+          updatedAt: `T-${platform}`,
+          status: 'draft',
+          mediaSuggestion: { mediaStatus: 'pending' },
+          publishingAssets,
+        },
+      });
+      storedDraft = {
+        ...storedDraft,
+        groupMembers: [
+          { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+          member('facebook', []),
+          member('linkedin', [{ kind: 'image', role: 'primary', storagePath: 'own.jpg' }]),
+        ],
+      };
+      // The real store reaches a member row through its card.
+      useCalendarStore.mockImplementation((selector: (state: unknown) => unknown) =>
+        selector({
+          updateDraft: (draftId: string, updater: (draft: unknown) => unknown) => {
+            const card = storedDraft as { id: string; groupMembers: Array<{ draft?: { id: string } }> };
+            storedDraft =
+              card.id === draftId
+                ? (updater(card) as Record<string, unknown>)
+                : {
+                    ...card,
+                    groupMembers: card.groupMembers.map((entry) =>
+                      entry.draft?.id === draftId ? { ...entry, draft: updater(entry.draft) } : entry,
+                    ),
+                  };
+          },
+        }),
+      );
+      requestImpl = async () => ({ updated_at: T1 });
+      const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
+
+      await act(async () => {
+        result.current.place([makeImageAsset()], { kind: 'single' });
+        await result.current.flushMedia();
+      });
+
+      expect(requestCalls.map((call) => call.path)).toEqual([
+        '/api/organic/calendar/drafts/srv-1/fields',
+        '/api/organic/calendar/drafts/srv-facebook/fields',
+      ]);
+      expect(requestCalls[1].body?.expected_updated_at).toBe('T-facebook');
+      expect(sentMedia(requestCalls[1]).publishingAssets.map((a) => a.storagePath)).toEqual([
+        'brands/brand-1/img.jpg',
+      ]);
+      const facebook = (
+        storedDraft as { groupMembers: Array<{ platform: string; draft?: Record<string, unknown> }> }
+      ).groupMembers.find((entry) => entry.platform === 'facebook')?.draft;
+      expect(facebook?.mediaStage).toBe('realized');
+    });
+
     it('flushMedia resolves true at once when nothing is pending', async () => {
       const { result } = renderHook(() => useDraftMediaPlacement('draft-1'));
       expect(await result.current.flushMedia()).toBe(true);

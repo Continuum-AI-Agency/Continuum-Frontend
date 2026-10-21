@@ -1075,11 +1075,11 @@ export function OrganicDraftPreview({
       const next = checked
         ? [...selectedPlatforms, platform]
         : selectedPlatforms.filter((value) => value !== platform);
-      // A new row copies the card's row, so the typing goes to the server first.
-      if (!(await fieldEditor.flush())) return;
+      // A new row copies the card's row, so the typing and the media go to the server first.
+      if (!(await fieldEditor.flush()) || !(await placement.flushMedia())) return;
       await membership.setPlatforms(storedDraft, next);
     },
-    [fieldEditor, membership, selectedPlatforms, storedDraft],
+    [fieldEditor, membership, placement, selectedPlatforms, storedDraft],
   );
 
   const handleFormatChange = React.useCallback(
@@ -1164,7 +1164,7 @@ export function OrganicDraftPreview({
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft();
 
   // The frame's caption on every other row, each saved against its own row's token. Explicit:
-  // nothing else ever copies a caption between platforms.
+  // otherwise a caption only reaches a row that has none of its own (`groupRowsToFill`).
   const { persistDraftFields } = useDraftFieldPersistence();
   const { show } = useToast();
   const [groupCaptionBusy, setGroupCaptionBusy] = React.useState<'apply' | 'adapt' | null>(null);
