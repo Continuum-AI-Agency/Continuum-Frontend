@@ -16,13 +16,16 @@ import {
   buildInlineTextContextBlock,
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
+import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Trace } from '@/components/ui/trace';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import {
   ELEMENT_CATEGORY_LABEL,
@@ -422,7 +425,7 @@ function TurnMessages({
   onResolveProposal: (outcome: ProposalOutcome) => void;
 }) {
   const { state } = turn;
-  const latestStep = state.steps.at(-1);
+  const graphChanged = state.status === 'done' && state.graph && state.changed !== false;
 
   return (
     <>
@@ -440,10 +443,11 @@ function TurnMessages({
       {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the Message component's author prop (house ai-elements API), not an ARIA role */}
       <Message role="assistant">
         <div className="flex flex-col gap-1.5 text-sm">
-          {state.status === 'running' ? (
-            <span className="flex items-center gap-2 text-muted-foreground">
-              <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
-              {latestStep ?? 'Thinking…'}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <ComposerSteps state={state} />
+            </div>
+            {state.status === 'running' ? (
               <Button
                 size="sm"
                 variant="ghost"
@@ -452,8 +456,8 @@ function TurnMessages({
               >
                 Stop
               </Button>
-            </span>
-          ) : null}
+            ) : null}
+          </div>
 
           {state.status === 'error' ? (
             <span className="flex items-start gap-2 text-destructive">
@@ -484,33 +488,85 @@ function TurnMessages({
             </div>
           ) : null}
 
-          {state.graph && state.changed !== false ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {state.graph.nodeCount} node{state.graph.nodeCount === 1 ? '' : 's'} ·{' '}
-                {state.graph.edgeCount} connection{state.graph.edgeCount === 1 ? '' : 's'} on the
-                canvas
-              </span>
-              {isLast && state.status === 'done' ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  onClick={onRun}
-                  data-testid="composer-turn-run"
-                  className="h-6 px-2 text-xs"
-                >
-                  <Play data-icon="inline-start" />
-                  Run
-                </Button>
-              ) : null}
-            </div>
+          {graphChanged && isLast ? (
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={onRun}
+              data-testid="composer-turn-run"
+              className="h-6 w-fit px-2 text-xs"
+            >
+              <Play data-icon="inline-start" />
+              Run
+            </Button>
           ) : null}
 
           <ProposalSlot proposal={state.pipelineProposal} onResolve={onResolveProposal} />
         </div>
       </Message>
+      {graphChanged && state.graph ? (
+        <ChatMarker
+          kind="milestone"
+          icon={<Workflow />}
+          label={`Canvas updated · ${graphCountLabel(state.graph)}`}
+        />
+      ) : null}
+      {state.pipelineProposal?.outcome === 'published' ? (
+        <ChatMarker kind="milestone" label="Pipeline published" />
+      ) : null}
     </>
+  );
+}
+
+function graphCountLabel(graph: { nodeCount: number; edgeCount: number }): string {
+  return `${graph.nodeCount} node${graph.nodeCount === 1 ? '' : 's'} · ${graph.edgeCount} connection${graph.edgeCount === 1 ? '' : 's'}`;
+}
+
+/**
+ * Every step the composer reported, not just the latest. Earlier steps are done; the last one is
+ * running, failed, or done with the turn. Open while running, folded once the turn settles.
+ */
+function ComposerSteps({ state }: { state: CanvasComposerState }) {
+  const [open, setOpen] = useState<boolean>();
+  const running = state.status === 'running';
+  const { steps } = state;
+
+  if (steps.length === 0) {
+    return running ? (
+      <Trace>
+        <TraceStep status="running" title="Thinking…" />
+      </Trace>
+    ) : null;
+  }
+
+  const lastStatus: TraceStepStatus | undefined = running
+    ? 'running'
+    : state.status === 'error'
+      ? 'error'
+      : undefined;
+
+  return (
+    <Trace>
+      <TraceStep
+        status={lastStatus}
+        icon={<Wand2 />}
+        title={`${steps.length} step${steps.length === 1 ? '' : 's'}`}
+        open={open ?? running}
+        onOpenChange={setOpen}
+      >
+        <Trace>
+          {steps.map((step, index) => (
+            <TraceStep
+              // biome-ignore lint/suspicious/noArrayIndexKey: steps only ever append, so position is identity
+              key={index}
+              status={index === steps.length - 1 ? lastStatus : undefined}
+              title={step}
+            />
+          ))}
+        </Trace>
+      </TraceStep>
+    </Trace>
   );
 }
 
@@ -583,10 +639,9 @@ function ComposerProgress({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {state.status === 'running' ? (
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <span className="size-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
-              {latestStep ?? 'Thinking…'}
-            </p>
+            <Trace>
+              <TraceStep status="running" title={latestStep ?? 'Thinking…'} />
+            </Trace>
           ) : null}
 
           {state.status === 'error' ? (
@@ -606,9 +661,7 @@ function ComposerProgress({
 
           {state.graph && state.changed !== false ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {state.graph.nodeCount} node{state.graph.nodeCount === 1 ? '' : 's'} ·{' '}
-              {state.graph.edgeCount} connection{state.graph.edgeCount === 1 ? '' : 's'} on the
-              canvas
+              {graphCountLabel(state.graph)} on the canvas
             </p>
           ) : null}
 

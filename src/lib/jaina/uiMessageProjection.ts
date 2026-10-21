@@ -741,9 +741,11 @@ export const toJainaChatMessage = (
     ...(message.metadata?.runId ? { runId: message.metadata.runId } : {}),
   };
 
-  // A user message carries text and nothing else; running the whole projection over it would
-  // invent assistant furniture for a turn that has none.
-  if (role === 'user') return base;
+  // A user message carries its text and what the reader attached to it; running the whole
+  // projection over it would invent assistant furniture for a turn that has none.
+  if (role === 'user') {
+    return message.metadata?.mentions ? { ...base, metadata: message.metadata.mentions } : base;
+  }
 
   const interpreted = interpretCheckpointReportPayload(reportOf(message));
   const report: ReportPayload | undefined = interpreted?.report;

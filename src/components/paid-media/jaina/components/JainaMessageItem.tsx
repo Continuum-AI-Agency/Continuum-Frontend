@@ -8,6 +8,7 @@ import type {
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
+import { SentDocumentAttachments } from '@/components/chat/attachments';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
@@ -271,6 +272,7 @@ function JainaMessageItemImpl({
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
               lightboxTitle="Attachment"
             />
+            <SentDocumentAttachments documents={message.metadata?.documents} />
           </>
         ) : (
           <>
