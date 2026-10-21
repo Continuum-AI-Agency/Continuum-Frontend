@@ -62,6 +62,11 @@ const PresentationWorkspace = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
 );
 
+const NativeHyperframesEditor = dynamic(
+  () => import('@/components/forge/native/NativeHyperframesEditor').then((module) => module.NativeHyperframesEditor),
+  { loading: () => <Skeleton className="h-96 w-full" /> },
+);
+
 // Forge — bring your own After Effects project.
 //
 // The Library still OWNS the file: an upload here goes through the same resumable path into the
@@ -581,6 +586,15 @@ export function ForgeWorkbench({
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
           onRevisionTaken={() => setRevision(null)}
           onChanged={refreshTemplate}
+        />
+      ) : current?.family === 'hyperframes' ? (
+        <NativeHyperframesEditor
+          key={`${brandId}:${current.assetId}`}
+          brandId={brandId}
+          assetId={current.assetId}
+          name={sourceDisplayName(current)}
+          onBack={() => open(null)}
+          onDraftChange={exitGuard.onDraftChange}
         />
       ) : current?.family === 'blender' ? (
         // A .blend is fields and cameras, not comps and slots: none of the After Effects sheet applies.

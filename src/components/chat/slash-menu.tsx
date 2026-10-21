@@ -1,7 +1,8 @@
 'use client';
 
 // The `/` typeahead, shared by every prompt surface: canvas text boxes, the Omni prompt,
-// the canvas composer and the Organic agent chat. Focus never leaves the host input, so
+// the canvas composer, the Organic agent chat and the Video Studio agent. The surface decides
+// what is offered (`useSkillSlashOptions` for a brand's skills). Focus never leaves the host input, so
 // the host forwards its keystrokes (`onKeyDown`) and caret (`track`); this file owns the
 // state and the list. `useSlashTextarea` is the whole wiring for a plain <textarea>;
 // a contenteditable host (PromptInput) drives `useSlashMenu` itself.
@@ -29,15 +30,21 @@ export type SlashMenuProps = {
   className?: string;
 };
 
+/** A brand's skills as `/` options; undefined (no brand) switches the menu off. */
+export function useSkillSlashOptions(
+  skills: readonly Skill[] | undefined,
+): readonly SlashOption[] | undefined {
+  return useMemo(() => (skills ? buildSlashOptions(skills) : undefined), [skills]);
+}
+
 /**
- * `skills` undefined switches the menu off (a surface with no brand has nothing to
- * offer). `onApply` replaces the fragment `query` spans with `/<slug> `.
+ * `options` undefined switches the menu off (a surface with nothing to offer). `onApply`
+ * replaces the fragment `query` spans with `/<slug> `.
  */
 export function useSlashMenu(
-  skills: readonly Skill[] | undefined,
+  options: readonly SlashOption[] | undefined,
   onApply: (option: SlashOption, query: SlashQuery) => void,
 ) {
-  const options = useMemo(() => (skills ? buildSlashOptions(skills) : null), [skills]);
   const [active, setActiveState] = useState<SlashQuery | null>(null);
   const activeRef = useRef<SlashQuery | null>(null);
   const [highlight, setHighlight] = useState(0);
@@ -117,11 +124,11 @@ export function useSlashMenu(
 
 /** The whole `/` wiring for a controlled <textarea>: spread the handlers, render the menu. */
 export function useSlashTextarea(
-  skills: readonly Skill[] | undefined,
+  options: readonly SlashOption[] | undefined,
   setValue: (next: string) => void,
 ) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const slash = useSlashMenu(skills, (option, query) => {
+  const slash = useSlashMenu(options, (option, query) => {
     const textarea = ref.current;
     if (!textarea) return;
     const next = applySlashOption(textarea.value, query, option.slug);

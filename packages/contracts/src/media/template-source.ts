@@ -775,6 +775,16 @@ export const templatePreviewSchema = z
   .strict();
 export type TemplatePreview = z.infer<typeof templatePreviewSchema>;
 
+/** Parse completion and native compilation are independent facts. */
+export const templateNativeIngestStatusSchema = z.object({
+  state: z.enum(['pending', 'compiling', 'compiled', 'unsupported', 'failed']),
+  error: z.string().max(1000).nullable(),
+  parseDurationMs: z.number().int().min(0).max(600000).nullable(),
+  compileDurationMs: z.number().int().min(0).max(600000).nullable(),
+  sceneSha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+}).strict().refine(value => (value.state === 'compiled') === (value.sceneSha256 !== null), { message: 'Compiled native status requires its scene identity' });
+export type TemplateNativeIngestStatus = z.infer<typeof templateNativeIngestStatusSchema>;
+
 /** A `media.template_sources` row on the wire. */
 export const templateSourceSchema = z
   .object({
@@ -783,6 +793,7 @@ export const templateSourceSchema = z
     versionId: z.string().uuid(),
     family: templateSourceFamilySchema,
     parseState: templateParseStateSchema,
+    nativeIngest: templateNativeIngestStatusSchema.optional(),
     parser: z.string().nullable().default(null),
     parse: templateParseSchema.nullable().default(null),
     fonts: z.array(z.string()).default([]),

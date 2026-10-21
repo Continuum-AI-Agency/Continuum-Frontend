@@ -19810,6 +19810,85 @@ export type Database = {
           },
         ]
       }
+      native_scene_render_attempts: {
+        Row: {
+          brand_id: string
+          cleanup_fenced_at: string | null
+          job_id: string
+          lease_token: string
+          next_sweep_at: string | null
+          publication_xid: number | null
+          registered_at: string
+          worker_id: string
+        }
+        Insert: {
+          brand_id: string
+          cleanup_fenced_at?: string | null
+          job_id: string
+          lease_token: string
+          next_sweep_at?: string | null
+          publication_xid?: number | null
+          registered_at?: string
+          worker_id: string
+        }
+        Update: {
+          brand_id?: string
+          cleanup_fenced_at?: string | null
+          job_id?: string
+          lease_token?: string
+          next_sweep_at?: string | null
+          publication_xid?: number | null
+          registered_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_scene_render_attempts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      native_scene_render_results: {
+        Row: {
+          asset_refs: Json
+          brand_id: string
+          created_at: string
+          job_id: string
+          lease_token: string
+          render_result: Json
+          worker_id: string
+        }
+        Insert: {
+          asset_refs: Json
+          brand_id: string
+          created_at?: string
+          job_id: string
+          lease_token: string
+          render_result: Json
+          worker_id: string
+        }
+        Update: {
+          asset_refs?: Json
+          brand_id?: string
+          created_at?: string
+          job_id?: string
+          lease_token?: string
+          render_result?: Json
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "native_scene_render_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preview_jobs: {
         Row: {
           adapter: string
@@ -21310,6 +21389,105 @@ export type Database = {
           },
         ]
       }
+      template_ingest_dependencies: {
+        Row: {
+          byte_length: number
+          created_at: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status: number | null
+          redirect_to: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }
+        Insert: {
+          byte_length: number
+          created_at?: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status?: number | null
+          redirect_to?: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }
+        Update: {
+          byte_length?: number
+          created_at?: string
+          job_id?: string
+          kind?: string
+          media_type?: string
+          redirect_status?: number | null
+          redirect_to?: string | null
+          sha256?: string
+          source_url?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_ingest_dependencies_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_ingest_variant_intents: {
+        Row: {
+          actor_id: string
+          brand_id: string
+          created_at: string
+          intent: Json
+          job_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Insert: {
+          actor_id: string
+          brand_id: string
+          created_at?: string
+          intent: Json
+          job_id: string
+          source_asset_id: string
+          source_version_id: string
+        }
+        Update: {
+          actor_id?: string
+          brand_id?: string
+          created_at?: string
+          intent?: Json
+          job_id?: string
+          source_asset_id?: string
+          source_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_ingest_variant_inten_source_version_id_source_ass_fkey"
+            columns: ["source_version_id", "source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_ingest_variant_intents_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "client_render_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_ingest_variant_intents_source_asset_id_brand_id_fkey"
+            columns: ["source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       template_layer_views: {
         Row: {
           asset_id: string
@@ -21377,6 +21555,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_revision_native: {
+        Row: {
+          brand_id: string
+          edits: Json
+          edits_sha256: string
+          intent: Json
+          revision_id: string
+          scene: Json
+        }
+        Insert: {
+          brand_id: string
+          edits: Json
+          edits_sha256: string
+          intent: Json
+          revision_id: string
+          scene: Json
+        }
+        Update: {
+          brand_id?: string
+          edits?: Json
+          edits_sha256?: string
+          intent?: Json
+          revision_id?: string
+          scene?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_revision_native_revision_id_brand_id_fkey"
+            columns: ["revision_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id"]
           },
         ]
       }
@@ -21493,6 +21706,7 @@ export type Database = {
           edits: Json
           id: string
           idempotency_key: string
+          native_family: string | null
           parent_revision_id: string | null
           revision_number: number
           source_asset_id: string
@@ -21510,6 +21724,7 @@ export type Database = {
           edits?: Json
           id?: string
           idempotency_key: string
+          native_family?: string | null
           parent_revision_id?: string | null
           revision_number: number
           source_asset_id: string
@@ -21527,6 +21742,7 @@ export type Database = {
           edits?: Json
           id?: string
           idempotency_key?: string
+          native_family?: string | null
           parent_revision_id?: string | null
           revision_number?: number
           source_asset_id?: string
@@ -21889,6 +22105,7 @@ export type Database = {
           aep_sha256: string | null
           asset_id: string
           brand_id: string
+          compile_duration_ms: number | null
           content_hash: string | null
           contract_version: string | null
           created_at: string
@@ -21898,7 +22115,11 @@ export type Database = {
           forge_run_id: string | null
           forge_state: string | null
           house: boolean
+          native_compile_error: string | null
+          native_compile_state: string
+          native_scene: Json | null
           parse: Json
+          parse_duration_ms: number | null
           parse_error: string | null
           parse_state: string
           parsed_at: string | null
@@ -21918,6 +22139,7 @@ export type Database = {
           aep_sha256?: string | null
           asset_id: string
           brand_id: string
+          compile_duration_ms?: number | null
           content_hash?: string | null
           contract_version?: string | null
           created_at?: string
@@ -21927,7 +22149,11 @@ export type Database = {
           forge_run_id?: string | null
           forge_state?: string | null
           house?: boolean
+          native_compile_error?: string | null
+          native_compile_state?: string
+          native_scene?: Json | null
           parse?: Json
+          parse_duration_ms?: number | null
           parse_error?: string | null
           parse_state?: string
           parsed_at?: string | null
@@ -21947,6 +22173,7 @@ export type Database = {
           aep_sha256?: string | null
           asset_id?: string
           brand_id?: string
+          compile_duration_ms?: number | null
           content_hash?: string | null
           contract_version?: string | null
           created_at?: string
@@ -21956,7 +22183,11 @@ export type Database = {
           forge_run_id?: string | null
           forge_state?: string | null
           house?: boolean
+          native_compile_error?: string | null
+          native_compile_state?: string
+          native_scene?: Json | null
           parse?: Json
+          parse_duration_ms?: number | null
           parse_error?: string | null
           parse_state?: string
           parsed_at?: string | null
@@ -22428,6 +22659,10 @@ export type Database = {
         Args: { p_brand_id: string; p_user_id: string }
         Returns: boolean
       }
+      can_read_native_render_output: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
       can_see_asset: {
         Args: { p_asset: string; p_brand: string }
         Returns: boolean
@@ -22441,6 +22676,10 @@ export type Database = {
         Args: { p_collection: string; p_user: string }
         Returns: boolean
       }
+      cancel_native_scene_render_job: {
+        Args: { p_actor: string; p_brand_id: string; p_job_id: string }
+        Returns: Json
+      }
       canvas_library_context: {
         Args: {
           p_asset_ids: string[]
@@ -22452,6 +22691,42 @@ export type Database = {
       capture_template_authoring_settings_plan: {
         Args: { p_asset_id: string; p_commands: Json }
         Returns: Json
+      }
+      checkpoint_service_template_ingest_dependencies: {
+        Args: {
+          p_dependencies?: Json
+          p_job_id: string
+          p_lease_token: string
+          p_worker_id: string
+        }
+        Returns: {
+          byte_length: number
+          created_at: string
+          job_id: string
+          kind: string
+          media_type: string
+          redirect_status: number | null
+          redirect_to: string | null
+          sha256: string
+          source_url: string
+          storage_path: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "template_ingest_dependencies"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      checkpoint_service_template_ingest_parse: {
+        Args: {
+          p_duration_ms: number
+          p_job_id: string
+          p_lease_token: string
+          p_parse: Json
+          p_worker_id: string
+        }
+        Returns: undefined
       }
       claim_client_render_job: {
         Args: {
@@ -22791,6 +23066,49 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_service_template_ingest_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_service_url_ingest_job: {
         Args: {
           p_job_id?: string
@@ -23019,6 +23337,24 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      complete_native_scene_render_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_render_result: Json
+          p_worker_id: string
+        }
+        Returns: Json
+      }
+      complete_native_scene_render_job_registered: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_render_result: Json
+          p_worker_id: string
+        }
+        Returns: Json
+      }
       complete_presentation_export: {
         Args: {
           p_asset_id: string
@@ -23073,6 +23409,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      complete_service_template_ingest_job: {
+        Args: {
+          p_duration_ms: number
+          p_job_id: string
+          p_lease_token: string
+          p_scene: Json
+          p_worker_id: string
+        }
+        Returns: undefined
       }
       complete_service_url_ingest_job: {
         Args: {
@@ -23269,6 +23615,15 @@ export type Database = {
         Args: { p_brand_id: string }
         Returns: number
       }
+      ensure_native_template_original: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_scene_sha256: string
+          p_version_id: string
+        }
+        Returns: string
+      }
       expire_client_render_targets: { Args: never; Returns: number }
       fail_forge_micro_render_job: {
         Args: {
@@ -23373,6 +23728,18 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fail_service_template_ingest_job: {
+        Args: {
+          p_disposition: string
+          p_error_code: string
+          p_error_message: string
+          p_job_id: string
+          p_lease_token: string
+          p_stage: string
+          p_worker_id: string
+        }
+        Returns: undefined
+      }
       fail_service_url_ingest_job: {
         Args: {
           p_error_code: string
@@ -23426,6 +23793,15 @@ export type Database = {
           remaining_usd: number
           used_usd: number
         }[]
+      }
+      heartbeat_service_template_ingest_job: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_lease_token: string
+          p_worker_id: string
+        }
+        Returns: undefined
       }
       heartbeat_service_url_ingest_job: {
         Args: {
@@ -23716,6 +24092,45 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      lock_service_template_ingest_job: {
+        Args: { p_job_id: string; p_lease_token: string; p_worker_id: string }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_asset_seen: {
         Args: { p_asset_id: string }
         Returns: {
@@ -23902,7 +24317,20 @@ export type Database = {
       reap_expired_forge_micro_render_jobs: { Args: never; Returns: number }
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
+      reap_expired_service_template_ingest_jobs: {
+        Args: never
+        Returns: number
+      }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      reclaim_native_scene_render_attempts: {
+        Args: never
+        Returns: {
+          brand_id: string
+          job_id: string
+          lease_token: string
+          paths: string[]
+        }[]
+      }
       reconcile_template_authoring_artifact_settings: {
         Args: {
           p_asset_id: string
@@ -24028,6 +24456,14 @@ export type Database = {
         }
         Returns: Json
       }
+      register_native_scene_render_attempt: {
+        Args: { p_job_id: string; p_lease_token: string; p_worker_id: string }
+        Returns: boolean
+      }
+      register_native_template_revision: {
+        Args: { p_payload: Json }
+        Returns: string
+      }
       register_psd_static_export: {
         Args: {
           p_payload: Json
@@ -24093,6 +24529,10 @@ export type Database = {
           p_variant_id: string
         }
         Returns: string
+      }
+      register_uploaded_native_template: {
+        Args: { p_payload: Json }
+        Returns: Json
       }
       register_uploaded_template_variant: {
         Args: { p_parent_asset_id: string; p_payload: Json }
@@ -24329,6 +24769,15 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      }
+      validate_native_revision_scene: {
+        Args: {
+          p_brand_id: string
+          p_entry_sha256: string
+          p_scene: Json
+          p_source_sha256: string
+        }
+        Returns: boolean
       }
       visible_asset_ids_as: {
         Args: { p_assets: string[]; p_brand: string; p_user: string }

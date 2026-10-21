@@ -19,6 +19,7 @@ import {
   type LibraryUploadTicket,
   libraryUploadRefusal,
   libraryUploadTicketSchema,
+  type NativeTemplateUploadVariant,
   type PinnedLibraryImageRef,
   registerMediaErrorSchema,
   registerMediaResponseSchema,
@@ -96,6 +97,7 @@ export async function computeChecksum(file: File): Promise<string | null> {
 
 export interface UploadMediaAssetResult {
   assetId: string;
+  ingestJobId?: string;
   storagePath: string;
   signedUrl: string;
   /** Storage path of the generated poster; null for images and for videos whose poster failed. */
@@ -186,6 +188,7 @@ export type UploadMediaAssetParams = {
   file: File;
   brandId: string;
   templateVariantOf?: string;
+  nativeVariant?: NativeTemplateUploadVariant;
   signal?: AbortSignal;
   resume?: UploadResumeState | null;
   onResumeState?: (state: UploadResumeState) => void;
@@ -378,11 +381,16 @@ export async function uploadMediaAsset(
     ...(checksum ? { checksum } : {}),
     integrityState,
     ...(params.templateVariantOf ? { templateVariantOf: params.templateVariantOf } : {}),
+    ...(params.nativeVariant ? { nativeVariant: params.nativeVariant } : {}),
     ...(durationSec === null ? {} : { durationSec }),
   });
 
   const ok = registerMediaResponseSchema.safeParse(data);
   if (ok.success) {
+    if (params.nativeVariant && !ok.data.ingestJobId)
+      throw new Error(
+        'The native upload acknowledgement is incomplete. Retry registration with this upload ticket.',
+      );
     forgetResume(resumeStore, resumeKey);
     // A recording past analyze_media's budget is transcribed on the server (chunked through
     // Continuum-Render), which the server preview starts. Videos always reach it through
@@ -427,6 +435,7 @@ export async function uploadMediaAsset(
     return {
       assetId: ok.data.assetId,
       versionId: ok.data.versionId,
+      ...(ok.data.ingestJobId ? { ingestJobId: ok.data.ingestJobId } : {}),
       storagePath: ok.data.storagePath,
       signedUrl: ok.data.signedUrl,
       thumbnailPath,

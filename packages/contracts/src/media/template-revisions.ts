@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hyperframesRevisionSchema } from './hyperframes-native-revisions';
 import { templateRevisionRefSchema } from './template-revision-pin';
 
 export * from './template-revision-pin';
@@ -215,6 +216,8 @@ export const templateRevisionSchema = z
     /** An auth user id: any Postgres uuid. Seeded users (the local fixture) are not RFC v4. */
     createdBy: z.guid().nullable(),
     nativeCommitId: z.string().nullable().default(null),
+    /** Present for a saved native source/scene; legacy revision wire shapes stay unchanged. */
+    native: hyperframesRevisionSchema.optional(),
   })
   .strict();
 export type TemplateRevision = z.infer<typeof templateRevisionSchema>;

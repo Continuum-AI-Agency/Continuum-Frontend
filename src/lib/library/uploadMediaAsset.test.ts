@@ -130,6 +130,28 @@ describe('uploadMediaAsset', () => {
     });
   });
 
+  it('retains the native ingestion job identity independently of upload completion', async () => {
+    const ingestJobId = '22222222-2222-4222-8222-222222222222';
+    const client = makeClient({
+      calls: [],
+      register: { data: { ...VALID_REGISTER, ingestJobId } },
+    });
+    const result = await uploadMediaAsset(
+      {
+        file: new File(['<main>Native</main>'], 'source.html', { type: 'text/html' }),
+        brandId: 'b1',
+      },
+      {
+        createClient: () => client,
+        supabaseUrl: 'https://fixture.invalid',
+        resumableUpload: async () => ({ uploadUrl: 'https://fixture.invalid/upload/id' }),
+        attachPreview: async () => 'ready',
+      },
+    );
+    expect(result.ingestJobId).toBe(ingestJobId);
+    expect(result.versionId).toBe(VALID_REGISTER.versionId);
+  });
+
   // analyze_media only sees bytes, so it cannot work out a duration for itself. The
   // browser has the decoded file already, and register is the call that enqueues
   // analysis — so the duration has to ride along with it or the long-form skip is
@@ -583,4 +605,40 @@ it('reserves an authored variant at registration before catalog discovery', asyn
   );
   expect(bodies.find((body) => body.action === 'register')?.templateVariantOf).toBe(parent);
   expect(bodies.find((body) => body.action === 'sign_upload')?.templateVariantOf).toBeUndefined();
+});
+
+it('registers native uploaded variants with frozen parent pins only after byte upload', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const client = makeClient({
+    calls: [],
+    bodies,
+    register: {
+      data: { ...VALID_REGISTER, ingestJobId: '22222222-2222-4222-8222-222222222222' },
+      error: null,
+    },
+  });
+  const id = '11111111-1111-4111-8111-111111111111';
+  const nativeVariant = {
+    schemaVersion: 'hyperframes.upload-variant/1' as const,
+    templateId: id,
+    variantId: id,
+    parentRevisionId: id,
+    sourceAssetId: id,
+    sourceVersionId: id,
+    sourceSha256: 'a'.repeat(64),
+    sceneSha256: 'b'.repeat(64),
+    name: 'Uploaded child',
+  };
+  await uploadMediaAsset(
+    { brandId: 'b1', file: new File(['<html></html>'], 'child.html'), nativeVariant },
+    {
+      createClient: () => client,
+      attachPreview: async () => 'unsupported',
+      supabaseUrl: 'https://db.test',
+      resumableUpload: async () => ({ uploadUrl: 'https://db.test/upload/id' }),
+    },
+  );
+  expect(bodies.find((body) => body.action === 'register')?.nativeVariant).toEqual(nativeVariant);
+  expect(bodies.find((body) => body.action === 'register')?.templateVariantOf).toBeUndefined();
+  expect(bodies.find((body) => body.action === 'sign_upload')?.nativeVariant).toBeUndefined();
 });

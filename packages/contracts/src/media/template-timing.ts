@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { templateParseStateSchema } from './template-source';
+import { templateNativeIngestStatusSchema, templateParseStateSchema } from './template-source';
 
 // `GET /api/ai-studio/templates/:assetId/timing` — one timeline shape for every template family,
 // built only from what is already stored: the parse, a Photoshop import's own .psd, a HyperFrames
@@ -105,6 +105,7 @@ export type TemplateParseRetryRequest = z.infer<typeof templateParseRetryRequest
 
 /** 202. `pending` while the parse is still running; poll the template for its outcome. */
 export const templateParseRetryResponseSchema = z
-  .object({ assetId: z.string().uuid(), parseState: templateParseStateSchema })
+  .object({ assetId: z.string().uuid(), parseState: templateParseStateSchema,
+    nativeIngest: templateNativeIngestStatusSchema.optional() })
   .strict();
 export type TemplateParseRetryResponse = z.infer<typeof templateParseRetryResponseSchema>;

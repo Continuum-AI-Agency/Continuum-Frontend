@@ -25,6 +25,7 @@ import {
 import {
   addHyperframesClipInputSchema,
   addHyperframesClipOutputSchema,
+  addMotionGraphicInputSchema,
   editHyperframesClipMotionInputSchema,
   editHyperframesClipMotionOutputSchema,
   getHyperframesClipMotionInputSchema,
@@ -38,6 +39,7 @@ import {
   staggerClipsInputSchema,
   staggerClipsOutputSchema,
 } from './motion-timeline';
+import { videoHouseEffectSchema } from './video-effects';
 
 // ── Platform export presets ────────────────────────────────────────────────────────────
 
@@ -299,9 +301,14 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'read',
     description:
-      'List saved editing workflows for this brand. When asked to run one, read its prompt and carry out those instructions on the CURRENT project with the named editor operations. A saved workflow is reusable instructions, not fixed clip IDs.',
+      "List this brand's saved editing workflows and the house effects (/shoulder-zoom, /glass-graph, …). Each is a name and a prompt: to run one, carry out its prompt on the CURRENT project with the named editor operations. They are reusable instructions, not fixed clip IDs.",
     input: z.object({ ...projectRef }).strict(),
-    output: z.object({ workflows: z.array(videoEditorWorkflowSchema) }).strict(),
+    output: z
+      .object({
+        workflows: z.array(videoEditorWorkflowSchema),
+        effects: z.array(videoHouseEffectSchema),
+      })
+      .strict(),
   },
   save_workflow: {
     group: 'edit',
@@ -798,6 +805,16 @@ export const VIDEO_EDITOR_OPS = {
     description:
       'Place a HyperFrames composition (its revisionId) on its own overlay track as a transparent film at atSec, linked to the revision so get_hyperframes_clip_motion and edit_hyperframes_clip_motion can read and change its animations. Renders the film first, which takes a while.',
     input: addHyperframesClipInputSchema.extend(projectRef),
+    output: committed(addHyperframesClipOutputSchema.shape),
+  },
+  add_motion_graphic: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Compose a ready-made motion graphic (recipe glass_graph, particle_push, dot_matrix or word_lock) from the words and figures given, and place it at atSec on an overlay track for durationSec as a transparent HyperFrames film — its entrances stay editable with edit_hyperframes_clip_motion. Renders the film first, which takes a while.',
+    input: addMotionGraphicInputSchema.extend(projectRef),
     output: committed(addHyperframesClipOutputSchema.shape),
   },
   get_hyperframes_clip_motion: {

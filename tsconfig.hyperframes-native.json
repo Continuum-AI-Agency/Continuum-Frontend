@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": ".next/cache/tsconfig.hyperframes-native.tsbuildinfo",
+    "types": [
+      "bun",
+      "next"
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/components/forge/native/**/*.ts",
+    "src/components/forge/native/**/*.tsx",
+    "src/lib/library/hyperframesFilm.ts",
+    "src/lib/library/hyperframesNative.ts",
+    "src/lib/library/hyperframesNative.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "e2e/**"
+  ]
+}
