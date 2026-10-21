@@ -1340,20 +1340,46 @@ export const MOTION_GRAPHIC_RECIPES = [
   'particle_push',
   'dot_matrix',
   'word_lock',
+  'screen_push',
+  'over_shoulder',
 ] as const;
 export type MotionGraphicRecipe = (typeof MOTION_GRAPHIC_RECIPES)[number];
 
 const graphicText = (max: number) => z.string().trim().min(1).max(max);
+const shoulderCardSchema = z
+  .object({
+    label: z.string().trim().max(24).default(''),
+    big: graphicText(24),
+    small: z.string().trim().max(32).default(''),
+  })
+  .strict();
+const unitFraction = z.number().min(0).max(1);
 
 export const addMotionGraphicInputSchema = z
   .object({
     recipe: z
       .enum(MOTION_GRAPHIC_RECIPES)
       .describe(
-        'glass_graph: a frosted glass card whose line graph climbs to a figure (label, value, unit, points). particle_push: particles pour into a box that opens into up to 3 numbered steps (steps). dot_matrix: words in LED dots, one after another (words). word_lock: newspaper pages cut fast with one highlighted word locked in the centre (keyword, lines).',
+        'glass_graph: a liquid glass card that refracts the footage under it while a line graph climbs to a figure (label, value, unit, points). particle_push: particles pour into a box that opens into up to 3 numbered steps (steps). dot_matrix: words in LED dots, one after another (words). word_lock: newspaper pages cut fast with one highlighted word locked in the centre (keyword, lines). screen_push: cuts to an extreme close-up of a monitor that shows the exact words, hard-cutting to each word as the speaker says it (text; it times itself from the transcript). over_shoulder: the camera pushes in, looks to a card over one shoulder, whips to a card over the other, then pulls back, 4.6 s (cards, faceX, faceWidth, eyeY, lightSpeed).',
       ),
-    atSec: secondsSchema.default(0),
-    durationSec: z.number().min(1).max(15).default(4),
+    atSec: secondsSchema
+      .default(0)
+      .describe(
+        'Where it starts; screen_push starts on the first of its words said at or after it',
+      ),
+    durationSec: z
+      .number()
+      .min(1)
+      .max(15)
+      .default(4)
+      .describe('How long it shows; screen_push and over_shoulder set their own'),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional()
+      .describe(
+        'The accent as #RRGGBB: the glass_graph line, the screen_push letters, the over_shoulder outline; omit for the brand accent',
+      ),
     label: graphicText(24).optional().describe('glass_graph: the metric, 1–3 words ("Retention")'),
     value: z.number().finite().optional().describe('glass_graph: the figure the graph climbs to'),
     unit: z.string().trim().max(4).optional().describe('glass_graph: "%", "$", "k", "x" or empty'),
@@ -1382,6 +1408,27 @@ export const addMotionGraphicInputSchema = z
       .max(10)
       .optional()
       .describe('word_lock: 3–10 sentences, each containing the keyword'),
+    text: graphicText(120)
+      .optional()
+      .describe('screen_push: 1–15 words the speaker says, shown exactly as written'),
+    cards: z
+      .array(shoulderCardSchema)
+      .length(2)
+      .optional()
+      .describe(
+        'over_shoulder: the start card (over the left shoulder) then the end card, each { label, big, small } — "BEFORE" | "$3,200" | "per month"',
+      ),
+    lightSpeed: z
+      .boolean()
+      .optional()
+      .describe("over_shoulder: the start card's big text flies into the end card at light speed"),
+    faceX: unitFraction
+      .optional()
+      .describe('over_shoulder: the middle of the face across the frame, 0–1, read from get_frame'),
+    faceWidth: unitFraction
+      .optional()
+      .describe("over_shoulder: the head's width ear to ear as a share of the frame width"),
+    eyeY: unitFraction.optional().describe("over_shoulder: the eyes' height in the frame, 0 = top"),
     trackId: z.string().optional(),
     newTrack: z.boolean().default(false),
   })
@@ -1402,6 +1449,18 @@ export const motionGraphicParamsSchema = z.discriminatedUnion('recipe', [
     recipe: z.literal('word_lock'),
     keyword: graphicText(20),
     lines: z.array(graphicText(160)).min(3).max(10),
+  }),
+  z.object({
+    recipe: z.literal('screen_push'),
+    text: graphicText(120).refine((text) => text.split(/\s+/).length <= 15, 'At most 15 words.'),
+  }),
+  z.object({
+    recipe: z.literal('over_shoulder'),
+    cards: z.array(shoulderCardSchema).length(2),
+    lightSpeed: z.boolean().default(false),
+    faceX: unitFraction.default(0.5),
+    faceWidth: unitFraction.default(0.32),
+    eyeY: unitFraction.default(0.255),
   }),
 ]);
 export type MotionGraphicParams = z.infer<typeof motionGraphicParamsSchema>;

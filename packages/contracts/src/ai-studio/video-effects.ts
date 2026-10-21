@@ -27,8 +27,8 @@ export const VIDEO_HOUSE_EFFECTS: readonly VideoHouseEffect[] = [
   {
     slug: 'shoulder-zoom',
     name: 'Shoulder zoom',
-    description: 'Punch in on the speaker as a before/after pair of figures pops up',
-    prompt: `Read get_transcript. Find the line where the speaker contrasts a before and an after (a price, a count, a time, a percentage); else their strongest claim with a number. At that line's start, animate_clip the main video clip with punch_in at that time. Then add_text template stat_callout with the BEFORE figure as text and "Before" as secondaryText, from the line's start for 1.5 s, animationIn pop; then a second stat_callout with the AFTER figure and "After", starting as the first ends, for 2 s, animationIn pop. ${NO_INVENTED_FIGURES}`,
+    description: 'The camera pushes in on the speaker as a before/after pair of cards pops up',
+    prompt: `Read get_transcript. Find the line where the speaker contrasts a before and an after (a price, a count, a time, a percentage). get_frame at that line's start and read where the face sits: faceX = the face centre across the frame (0 to 1), faceWidth = the face's width over the frame width, eyeY = the eye line down the frame (0 to 1). add_motion_graphic recipe over_shoulder at that line's start with those three and cards = [{label: "BEFORE", big: the before figure, small: its qualifier in 1 to 3 words}, {label: "AFTER", big: the after figure, small: its qualifier}]; lightSpeed true only when asked for the light-speed version. color only when one is asked for, as #RRGGBB. ${NO_INVENTED_FIGURES}`,
   },
   {
     slug: 'card-strike',
@@ -68,7 +68,7 @@ export const VIDEO_HOUSE_EFFECTS: readonly VideoHouseEffect[] = [
     slug: 'glass-graph',
     name: 'Glass graph',
     description: 'A glass card with a graph that climbs to their number',
-    prompt: `Read get_transcript. Find the line with a growth figure (retention, revenue, followers, a percentage). add_motion_graphic recipe glass_graph at that line's start, durationSec 4: label = what is measured in 1 to 3 words, value = the figure, unit = its unit ("%", "$", "k", "x" or empty), points = 6 to 8 rising values ending at value when they give a start figure, else omit points. ${NO_INVENTED_FIGURES}`,
+    prompt: `Read get_transcript. Find the line with a growth figure (retention, revenue, followers, a percentage). add_motion_graphic recipe glass_graph at that line's start, durationSec 4: label = what is measured in 1 to 3 words, value = the figure, unit = its unit ("%", "$", "k", "x" or empty), points = 6 to 8 rising values ending at value when they give a start figure, else omit points; color only when one is asked for, as #RRGGBB. ${NO_INVENTED_FIGURES}`,
   },
   {
     slug: 'particle-push',
@@ -81,6 +81,12 @@ export const VIDEO_HOUSE_EFFECTS: readonly VideoHouseEffect[] = [
     name: 'Dot matrix',
     description: 'Their punchiest words in LED dots, one at a time',
     prompt: `Read get_transcript and pick the strongest line. add_motion_graphic recipe dot_matrix at that line's start, durationSec = the line's length (2 to 5 s), words = its 2 to 4 punchiest words, verbatim and in order. ${NO_INVENTED_FIGURES}`,
+  },
+  {
+    slug: 'pixel-monitor',
+    name: 'Pixel monitor',
+    description: 'Cut to a macro of a screen, their words lit in pixels one by one',
+    prompt: `Read get_transcript and pick their punchiest phrase, 3 to 8 words, verbatim. add_motion_graphic recipe screen_push with text = that phrase and atSec = the start of the line it is in: the screen cuts in on the first word, cuts to each word as it is said, and cuts back after the last while their voice plays on. color only when one is asked for, as #RRGGBB. ${NO_INVENTED_FIGURES}`,
   },
   {
     slug: 'word-lock',
