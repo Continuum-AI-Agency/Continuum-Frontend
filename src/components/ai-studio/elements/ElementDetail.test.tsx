@@ -150,6 +150,25 @@ describe('ElementDetail', () => {
     expect(screen.getByTestId('element-history-strip').querySelectorAll('button')).toHaveLength(2);
   });
 
+  it('shows a person Element as its portrait character sheet, opened large on click', async () => {
+    renderDetail(
+      buildElement({
+        category: 'character',
+        rightsNote: 'own employee',
+        referenceHistory: ['sheet-1'],
+        defaultReferenceAssetId: 'sheet-1',
+      }),
+    );
+
+    const preview = await screen.findByAltText('Aria character sheet');
+    expect(preview.closest('.aspect-\\[3\\/4\\]')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate character sheet' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Aria character sheet' }));
+    const fullSize = await screen.findByRole('link', { name: 'Open full size' });
+    expect(fullSize.getAttribute('href')).toBe(signedUrlFor('sheet-1'));
+  });
+
   it('says a generation failed instead of just stopping the spinner', () => {
     renderDetail(buildElement({ referenceHistory: ['ref-1'], defaultReferenceAssetId: 'ref-1' }), {
       generateError: new Error('element_reference_generation_failed'),

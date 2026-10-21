@@ -125,7 +125,9 @@ describe('ElementCreateForm', () => {
         screen.getByText('A Model Element needs a rights basis before it can be saved.'),
       ).toBeTruthy();
     });
-    const submit = screen.getByRole('button', { name: 'Create Element' }) as HTMLButtonElement;
+    const submit = screen.getByRole('button', {
+      name: 'Create and make character sheet',
+    }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
     expect(onSubmit).not.toHaveBeenCalled();
@@ -148,7 +150,9 @@ describe('ElementCreateForm', () => {
       target: { value: 'she wears glasses' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Element' }));
+    // A person is made as their character sheet: the form says so before it is paid for.
+    expect(screen.getByText(/makes their character sheet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create and make character sheet' }));
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalled();
