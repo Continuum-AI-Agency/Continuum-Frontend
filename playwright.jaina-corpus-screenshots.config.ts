@@ -4,15 +4,20 @@ import { benchBrowserChannel, loadProdSupabaseEnv } from './e2e/support/prodEnv'
 // The 20 depth-corpus answers as the reader sees them (`jaina-corpus-screenshots.bench.spec.ts`),
 // rendered by this Frontend against a Backend that is ALREADY RUNNING (default
 // http://localhost:4002, JAINA_CORPUS_SHOTS_API_URL to change it — this config never starts one).
+// JAINA_CORPUS_SHOTS_BASE_URL=https://app.beta.trycontinuum.ai drives the deployed app instead: no
+// dev server, and the Backend defaults to prod (https://api.trycontinuum.ai), the one beta calls.
 // Prod Supabase is pinned before the dev server spawns; port 3112 is in the Backend CORS
 // allowlist and is the answer-formats bench's, so the two never run at once. Run with
 // --workers=3: each question is its own conversation.
 
 loadProdSupabaseEnv();
 
+const deployedApp = process.env.JAINA_CORPUS_SHOTS_BASE_URL?.trim().replace(/\/$/, '') || null;
 const PORT = process.env.JAINA_CORPUS_SHOTS_PORT ?? '3112';
-const API_URL = process.env.JAINA_CORPUS_SHOTS_API_URL ?? 'http://localhost:4002';
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`;
+const API_URL =
+  process.env.JAINA_CORPUS_SHOTS_API_URL ??
+  (deployedApp ? 'https://api.trycontinuum.ai' : 'http://localhost:4002');
+const baseURL = deployedApp ?? `http://localhost:${PORT}`;
 process.env.PLAYWRIGHT_BASE_URL = baseURL;
 process.env.JAINA_CORPUS_SHOTS_API_URL = API_URL;
 
@@ -33,7 +38,11 @@ export default defineConfig({
     video: 'off',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
-  webServer: {
+  ...(deployedApp ? {} : { webServer: localFrontend() }),
+});
+
+function localFrontend() {
+  return {
     command: 'bun run dev',
     env: {
       NEXT_DIST_DIR: '.next/jaina-answer-formats-e2e',
@@ -49,7 +58,7 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: 240_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
-});
+    stdout: 'pipe' as const,
+    stderr: 'pipe' as const,
+  };
+}

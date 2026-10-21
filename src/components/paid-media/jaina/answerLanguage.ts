@@ -29,6 +29,10 @@ export const SECTION_LABELS: Record<
     nowWhat: string;
     /** Set before a tile's prior-period figure: "vs 24,214 · Sep 14–20". */
     versus: string;
+    /** Set before an insight item's impact line. */
+    impact: string;
+    /** The data-scope line's lead word. */
+    scope: string;
   }
 > = {
   es: {
@@ -40,6 +44,8 @@ export const SECTION_LABELS: Record<
     soWhat: 'Qué significa',
     nowWhat: 'Qué hacer',
     versus: 'vs',
+    impact: 'Impacto',
+    scope: 'Alcance',
   },
   en: {
     why: 'Why',
@@ -50,6 +56,34 @@ export const SECTION_LABELS: Record<
     soWhat: 'So what',
     nowWhat: 'Now what',
     versus: 'vs',
+    impact: 'Impact',
+    scope: 'Scope',
+  },
+};
+
+/**
+ * An insight item's priority as the reader says it. The contract defaults it to `now`, so every
+ * item code composes printed the raw "NOW" beside Spanish text (gate-p3); a value with no word
+ * here (a model's "P1") is shown as written.
+ */
+export const ITEM_PRIORITY_LABEL: Record<AnswerLanguage, Record<string, string>> = {
+  es: { now: 'Ahora', next: 'Después', later: 'Más adelante' },
+  en: { now: 'Now', next: 'Next', later: 'Later' },
+};
+
+/** Where a report's figures came from, in the answer's language (the data-scope line). */
+export const SCOPE_SOURCE_LABEL: Record<AnswerLanguage, Record<string, string>> = {
+  es: {
+    db: 'datos sincronizados',
+    api: 'lectura en vivo de la plataforma',
+    sheet: 'hoja del cliente',
+    mixed: 'datos sincronizados + hoja del cliente',
+  },
+  en: {
+    db: 'synced data',
+    api: 'live platform read',
+    sheet: 'client sheet',
+    mixed: 'synced data + client sheet',
   },
 };
 

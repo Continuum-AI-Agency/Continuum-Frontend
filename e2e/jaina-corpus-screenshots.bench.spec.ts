@@ -22,7 +22,8 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //
 // ── WRITES ── the bench user's active-brand preference (restored when it was another brand) and
 // the conversations the asks create, deleted at the end through the product's DELETE endpoint.
-// Output: <out>/<task-id>.png and <out>/manifest.json (default artifacts/factory/jaina/phase3/).
+// Output: <out>/<task-id>.png, its visible text <out>/<task-id>.txt, and <out>/manifest-<pid>.json
+// (default artifacts/factory/jaina/phase3/). JAINA_CORPUS_SHOTS_BASE_URL in the config drives beta.
 //
 // Usage: cd Continuum-Frontend && bunx playwright test --config playwright.jaina-corpus-screenshots.config.ts
 // ---------------------------------------------------------------------------
@@ -182,13 +183,14 @@ async function shoot(context: BrowserContext, task: Task): Promise<void> {
     const file = resolve(OUT_DIR, `${task.id}.png`);
     // A report is captured whole; an answer in plain text (a lookup the fast path answers) is the
     // chat as the reader sees it, once the composer is back.
-    if ((await reportRoot(page).count()) > 0) await reportRoot(page).screenshot({ path: file });
-    else {
+    const captured = (await reportRoot(page).count()) > 0 ? reportRoot(page) : page.locator('body');
+    if ((await reportRoot(page).count()) === 0)
       await expect(page.getByRole('textbox', { name: 'Message Jaina' })).toBeVisible({
         timeout: 60_000,
       });
-      await page.screenshot({ path: file });
-    }
+    await captured.screenshot({ path: file });
+    // The text the reader sees, beside the picture: what a language or leak check greps.
+    writeFileSync(file.replace(/\.png$/, '.txt'), await captured.innerText());
     shot.file = file;
     recorder.record(
       task.id,
