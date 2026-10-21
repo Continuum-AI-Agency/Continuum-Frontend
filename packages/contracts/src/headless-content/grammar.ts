@@ -18,6 +18,8 @@ export const headlessGrammarSchema = z.enum([
   'pov',
   'unpopular-opinion',
   'busy-day-routine',
+  // A presenter walking a place room by room (a home, a venue): 8 beats, 22–40 s.
+  'tour',
 ]);
 export type HeadlessGrammar = z.infer<typeof headlessGrammarSchema>;
 /** The one thing a variant changes against its base, in the order a winner is iterated. `effect`
