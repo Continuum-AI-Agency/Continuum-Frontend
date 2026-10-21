@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -242,30 +243,34 @@ export function TemplateGallery({
         </div>
         <fieldset className="flex flex-wrap gap-1" aria-label="Filter templates">
           {FILTERS.map(({ id, label }) => (
-            <button
+            <Button
               key={id}
               type="button"
+              variant={filter === id ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={filter === id}
               onClick={() => setFilter(id)}
-              className={chipClass(filter === id)}
+              className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
               {label}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
-            </button>
+            </Button>
           ))}
         </fieldset>
         <fieldset className="flex flex-wrap gap-1" aria-label="Filter by motion">
           {MOTIONS.map(({ id, label }) => (
-            <button
+            <Button
               key={id}
               type="button"
+              variant={motion === id ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={motion === id}
               onClick={() => setMotion(motion === id ? null : id)}
-              className={chipClass(motion === id)}
+              className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
               {label}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
-            </button>
+            </Button>
           ))}
         </fieldset>
         <div className="ml-auto">

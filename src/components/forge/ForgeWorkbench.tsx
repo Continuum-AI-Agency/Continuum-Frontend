@@ -16,14 +16,21 @@ import {
 import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import dynamic from 'next/dynamic';
 import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { TemplateDetail } from '@/components/forge/TemplateDetail';
-import { TemplateGallery } from '@/components/forge/TemplateGallery';
+const TemplateDetail = dynamic(() =>
+  import('@/components/forge/TemplateDetail').then((m) => m.TemplateDetail),
+  { loading: () => <div className="h-40 animate-pulse rounded-md bg-muted/40" /> },
+);
+const TemplateGallery = dynamic(() =>
+  import('@/components/forge/TemplateGallery').then((m) => m.TemplateGallery),
+  { loading: () => <div className="h-40 animate-pulse rounded-md bg-muted/40" /> },
+);
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';

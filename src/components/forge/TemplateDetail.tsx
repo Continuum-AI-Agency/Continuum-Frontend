@@ -41,7 +41,6 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
-import { LineagePanel } from '@/components/forge/LineagePanel';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -75,9 +74,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { Video } from '@/components/ui/video';
 import {
   advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
@@ -1337,14 +1344,12 @@ export function TemplateDetail({
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
                       node:
                         rendered.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-                          <video
+                          <Video
                             src={rendered.url}
-                            className="size-full object-contain"
-                            controls
+                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
                             muted
-                            playsInline
-                            preload="metadata"
+                            className="aspect-auto! size-full rounded-none border-0"
+                            videoClassName="object-contain"
                           />
                         ) : (
                           // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
@@ -1451,25 +1456,31 @@ export function TemplateDetail({
                 Select text on the preview, then click a font here or drag it onto any text box.
               </p>
               {selectedTextBox ? (
-                <label className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <span className="min-w-32 truncate">{selectedTextBox.label}</span>
-                  <select
-                    className="min-w-0 flex-1 rounded border border-input bg-background p-1"
-                    aria-label={`Font for ${selectedTextBox.label}`}
-                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font ?? ''}
-                    onChange={(event) => applyTextFont(event.currentTarget.value)}
+                  <Select
+                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font || '__current__'}
+                    onValueChange={(val) => applyTextFont(val === '__current__' ? '' : val)}
                   >
-                    <option value="">Keep current font</option>
-                    {editableFonts.map((font) => (
-                      <option key={font.id} value={font.postScriptName ?? ''}>
-                        {font.family} · {font.style}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <SelectTrigger
+                      className="h-8 min-w-0 flex-1 text-xs"
+                      aria-label={`Font for ${selectedTextBox.label}`}
+                    >
+                      <SelectValue placeholder="Keep current font" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__current__">Keep current font</SelectItem>
+                      {editableFonts.map((font) => (
+                        <SelectItem key={font.id} value={font.postScriptName ?? ''}>
+                          {font.family} · {font.style}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : null}
               <fieldset
-                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border border-dashed border-input p-2"
+                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded-md border border-dashed border-input p-2"
                 aria-label="Fonts available to drag onto text; drop font files here to add them"
                 onDragOver={(event) => {
                   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
@@ -1481,11 +1492,13 @@ export function TemplateDetail({
                 }}
               >
                 {editableFonts.map((font) => (
-                  <button
+                  <Button
                     key={font.id}
                     type="button"
+                    variant="outline"
+                    size="xs"
                     draggable
-                    className="cursor-grab rounded border border-input bg-background px-2 py-1 text-left hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:cursor-grabbing"
+                    className="h-auto cursor-grab px-2 py-1 text-left font-normal active:cursor-grabbing"
                     title={`Drag onto text or click to apply to ${selectedTextBox?.label ?? 'selected text'}`}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(TEXT_REPAIR_FONT_MIME, font.postScriptName ?? '');
@@ -1494,7 +1507,7 @@ export function TemplateDetail({
                     onClick={() => applyTextFont(font.postScriptName ?? '')}
                   >
                     {font.family} · {font.style}
-                  </button>
+                  </Button>
                 ))}
                 {editableFonts.length === 0 ? (
                   <span className="text-muted-foreground">
@@ -1648,10 +1661,7 @@ export function TemplateDetail({
             Source revision
           </TabsTrigger>
           <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-            Variants
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-none px-0 text-xs">
-            History
+            Versions
           </TabsTrigger>
           <TabsTrigger value="details" className="flex-none px-0 text-xs">
             Details
@@ -1709,8 +1719,9 @@ export function TemplateDetail({
           />
         </TabsContent>
         <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
-          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
-              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
+          {/* The template as a git history: checkpoints, forks (sizes, languages, looks), tags, and
+              the live checkpoint every render uses. It replaced a History tab that drew only the
+              tree, which production returns empty. */}
           <VariantsPanel
             brandId={brandId}
             assetId={assetId}
@@ -1724,9 +1735,6 @@ export function TemplateDetail({
                 }
               : {})}
           />
-        </TabsContent>
-        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-          <LineagePanel brandId={brandId} assetId={assetId} />
         </TabsContent>
         <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">

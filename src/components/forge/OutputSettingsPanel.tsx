@@ -367,25 +367,29 @@ export function EncodeSettingsFields({
               </Select>
             </div>
             {current !== undefined || isCleared ? (
-              <button
+              <Button
                 type="button"
-                className="mb-1.5 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+                size="icon-xs"
+                variant="ghost"
+                className="mb-1.5 text-muted-foreground"
                 aria-label={`Reset ${field.label} to inherited`}
                 title="Reset to inherited"
                 onClick={() => onSet({ [field.key]: undefined })}
               >
                 <RotateCcw className="size-3" aria-hidden />
-              </button>
+              </Button>
             ) : onClear && fallback.length ? (
-              <button
+              <Button
                 type="button"
-                className="mb-1.5 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+                size="icon-xs"
+                variant="ghost"
+                className="mb-1.5 text-muted-foreground"
                 aria-label={`Clear inherited ${field.label}`}
                 title="Clear inherited value"
                 onClick={() => onClear(field.key)}
               >
                 <X className="size-3" aria-hidden />
-              </button>
+              </Button>
             ) : null}
           </div>
         );

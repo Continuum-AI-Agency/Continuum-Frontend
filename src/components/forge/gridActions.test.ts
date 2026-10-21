@@ -99,6 +99,27 @@ describe('the Generate with AI menu', () => {
     });
   });
 
+  it('leaves factual fields (price, sku) out of a no-typing draft', () => {
+    const spy = mock((_args: { ids: string[]; count: number; varyKeys: string[] }) => {});
+    const ctx = context({
+      contract: {
+        variables: [
+          variable({ key: 'headline', label: 'Headline' }),
+          variable({ key: 'price', label: 'Price', kind: 'text', role: 'price' }),
+          variable({ key: 'sku', label: 'SKU Number', kind: 'text' }),
+          variable({ key: 'cta', label: 'Call to action', kind: 'text' }),
+        ],
+      } as unknown as ApiRenderTemplateContract,
+      actions: { generateWithAi: spy, varyWithAi: mock(() => {}) } as unknown as RequestRowActions,
+    });
+    presetIn(generateIn(rowActions(ctx, 'a')), 3).run();
+    expect(spy.mock.calls[0]![0]).toEqual({
+      ids: ['a'],
+      count: 3,
+      varyKeys: ['headline', 'cta'],
+    });
+  });
+
   it('disables only the presets that would not fit, each with the reason', () => {
     // 46 rows: 3 fits (49), 6 and 12 do not.
     const rows = Array.from({ length: MAX_BATCH_ROWS - 4 }, (_, index) => row(`r${index}`));

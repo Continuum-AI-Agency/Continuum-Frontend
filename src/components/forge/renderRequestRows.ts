@@ -621,6 +621,8 @@ export function autoMapHeaders(
   const register = (name: string, target: string) => {
     const lower = name.trim().toLowerCase();
     if (!byName.has(lower)) byName.set(lower, target);
+    const unaccented = lower.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    if (!byName.has(unaccented)) byName.set(unaccented, target);
   };
   for (const field of IMPORT_FIELDS) register(field.header, field.target);
   for (const variable of importable)
@@ -633,7 +635,9 @@ export function autoMapHeaders(
   const used = new Set<string>();
   const mapped = Object.fromEntries(
     headers.map((header) => {
-      const target = byName.get(header.trim().toLowerCase());
+      const lower = header.trim().toLowerCase();
+      const unaccented = lower.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+      const target = byName.get(lower) ?? byName.get(unaccented);
       if (!target || used.has(target)) return [header, IMPORT_SKIP];
       used.add(target);
       return [header, target];
@@ -641,6 +645,8 @@ export function autoMapHeaders(
   );
   const tokens = (value: string) =>
     value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .toLowerCase()
       .split(/[^a-z0-9]+/)

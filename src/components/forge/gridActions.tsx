@@ -2,6 +2,7 @@
 
 import {
   type ApiRenderTemplateContract,
+  type ApiRenderVariable,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   readableLayerName,
 } from '@continuum/contracts';
@@ -102,9 +103,40 @@ const isPictureKind = (kind: string) => kind === 'image' || kind === 'video';
  * falls back to a slot's own label and returns plausible-but-arbitrary assets that pass every
  * downstream check, so a picture changes only through "With a brief…".
  */
+export const FACTUAL_SLOT_ROLES: ReadonlySet<string> = new Set([
+  'price',
+  'old_price',
+  'discount_percent',
+  'sku',
+  'external_id',
+  'quantity',
+  'promo_start',
+  'promo_end',
+  'promo_dates',
+  'legal_text',
+  'landing_url',
+]);
+
+export function isFactualVariable(variable: ApiRenderVariable): boolean {
+  if (variable.role && FACTUAL_SLOT_ROLES.has(variable.role)) return true;
+  const lowerKey = variable.key.toLowerCase();
+  const lowerLabel = variable.label.toLowerCase();
+  return (
+    lowerKey === 'price' ||
+    lowerKey.includes('price') ||
+    lowerKey === 'sku' ||
+    lowerKey === 'discount' ||
+    lowerLabel.includes('price') ||
+    lowerLabel.includes('sku')
+  );
+}
+
 const keysToVary = (ctx: GridActionContext) =>
   ctx.contract.variables
-    .filter((variable) => !variable.reserved && !isPictureKind(variable.kind))
+    .filter(
+      (variable) =>
+        !variable.reserved && !isPictureKind(variable.kind) && !isFactualVariable(variable),
+    )
     .map((variable) => variable.key);
 
 /** "Six more like this", as a menu: presets, then the brief for everything they cannot say. */

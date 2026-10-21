@@ -522,8 +522,10 @@ export function AiDraftDialog({
                           ? 'Reading file…'
                           : 'Uploading…'}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={`Remove ${file.name}`}
                     disabled={busy || uploading}
                     onClick={() =>
@@ -531,7 +533,7 @@ export function AiDraftDialog({
                     }
                   >
                     <X className="size-3.5" aria-hidden />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
