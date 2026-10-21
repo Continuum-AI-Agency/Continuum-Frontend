@@ -9,6 +9,7 @@
 // every consumer of this engine — the optimizer service and the Backend — loads contracts
 // already, so nothing new reaches a bundle.
 import type {
+  BudgetMoveAction,
   CandidateHeadline,
   EntityAutomation,
   EntityLevel,
@@ -557,11 +558,10 @@ export type ReallocationResult = {
   refusal?: ReallocationRefusal;
 };
 
-export type ReallocationRefusal = {
-  reason: 'frozen_above_total';
-  frozenBudget: number;
-  totalBudget: number;
-};
+export type ReallocationRefusal =
+  | { reason: 'frozen_above_total'; frozenBudget: number; totalBudget: number }
+  /** Entities inside their learning protection (solver `hold`) keep more than the pool. */
+  | { reason: 'protected_above_total'; protectedBudget: number; totalBudget: number };
 
 // --- Full-cycle layer (classify -> triggers -> pacing -> reallocate) --------
 
@@ -596,7 +596,11 @@ export type RecommendationKind =
    *  negative term, a keyword to promote or pause, a bid target, an asset group's coverage, a
    *  weak hook, a Spark candidate. Recommend-only; `platformSignal` carries the card and the
    *  proposed action, and `trigger` is `signal:<rule>`. */
-  | 'platform_signal';
+  | 'platform_signal'
+  /** G27, decision 17: budget moved from one platform to another in a mixed portfolio, the same
+   *  percentage on every entity of each side. `budgetMove` carries the executor's action; a
+   *  person approves it (autopilot keeps cross-platform moves as proposals, G5's invariant). */
+  | 'budget_move';
 
 /** `adSetId` of a portfolio-level recommendation (the settings family). */
 export const PORTFOLIO_SCOPE = 'portfolio';
@@ -755,12 +759,32 @@ export type Recommendation = {
    *  `adSetId` is the entity it is about (campaign, ad group, asset group) and `adId` the
    *  subject inside it (a term, a keyword, an ad, a post). */
   platformSignal?: PlatformSignalPayload;
+  /** A budget_move recommendation's move: the action a person approves, and the summary the
+   *  queue reads. Persisted as the row's seed. */
+  budgetMove?: BudgetMovePayload;
   /** The platform the recommendation is about, stamped by runCycle from the cycle's roster —
    *  absent on Meta (recommendations.platform defaults to 'meta'). */
   platform?: PlatformId;
   /** The entity it is about, when the recommendation names one the roster knows. */
   entityRef?: PlatformEntityRef;
   needsApproval: true; // recommendations ALWAYS need user approval (engine never auto-acts)
+};
+
+export type BudgetMovePayload = {
+  action: BudgetMoveAction;
+  move: {
+    donorPlatform: PlatformId;
+    receiverPlatform: PlatformId;
+    amountMinor: number;
+    currency: string;
+    donorPct: number;
+    receiverPct: number;
+    ratio: number;
+    costPerResult: { donor: number; receiver: number };
+    /** The engine's own answer to "may this run without a person?" — always false while
+     *  cross-platform autopilot stays a proposal (the cycle never hands it autopilot state). */
+    autoApply: boolean;
+  };
 };
 
 export type PlatformSignalPayload = {
@@ -891,6 +915,9 @@ export type RuleSkip = {
   adSetId: string;
   family: RuleFamily;
   reason: `not_applicable:${PlatformId}`;
+  /** The platform's own rules that judge this family instead (signalRules.ts): the Meta stage
+   *  is skipped, the entity is not unjudged. Absent when nothing covers it yet. */
+  coveredBy?: readonly string[];
 };
 
 /** The rule families whose inputs are Meta-only today (see multiplatform/capabilities). */

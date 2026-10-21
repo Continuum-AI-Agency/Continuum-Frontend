@@ -1331,6 +1331,81 @@ export const addHyperframesClipOutputSchema = z
   })
   .strict();
 
+// Motion graphics the editor composes in code — no model writes them — then files as a HyperFrames
+// revision and places like add_hyperframes_clip. The input is flat, not a union: the agent's
+// provider cannot fill a declared union, so each recipe's fields are optional here and
+// `motionGraphicParamsSchema` holds a recipe to its own.
+export const MOTION_GRAPHIC_RECIPES = [
+  'glass_graph',
+  'particle_push',
+  'dot_matrix',
+  'word_lock',
+] as const;
+export type MotionGraphicRecipe = (typeof MOTION_GRAPHIC_RECIPES)[number];
+
+const graphicText = (max: number) => z.string().trim().min(1).max(max);
+
+export const addMotionGraphicInputSchema = z
+  .object({
+    recipe: z
+      .enum(MOTION_GRAPHIC_RECIPES)
+      .describe(
+        'glass_graph: a frosted glass card whose line graph climbs to a figure (label, value, unit, points). particle_push: particles pour into a box that opens into up to 3 numbered steps (steps). dot_matrix: words in LED dots, one after another (words). word_lock: newspaper pages cut fast with one highlighted word locked in the centre (keyword, lines).',
+      ),
+    atSec: secondsSchema.default(0),
+    durationSec: z.number().min(1).max(15).default(4),
+    label: graphicText(24).optional().describe('glass_graph: the metric, 1–3 words ("Retention")'),
+    value: z.number().finite().optional().describe('glass_graph: the figure the graph climbs to'),
+    unit: z.string().trim().max(4).optional().describe('glass_graph: "%", "$", "k", "x" or empty'),
+    points: z
+      .array(z.number().finite())
+      .min(2)
+      .max(12)
+      .optional()
+      .describe('glass_graph: the line, 2–12 values in order; omit for a steady climb'),
+    steps: z
+      .array(graphicText(18))
+      .min(1)
+      .max(3)
+      .optional()
+      .describe('particle_push: 1–3 step labels of one or two words'),
+    words: z
+      .array(graphicText(12))
+      .min(1)
+      .max(6)
+      .optional()
+      .describe('dot_matrix: 1–6 words, shown one after another'),
+    keyword: graphicText(20).optional().describe('word_lock: the one word locked in the centre'),
+    lines: z
+      .array(graphicText(160))
+      .min(3)
+      .max(10)
+      .optional()
+      .describe('word_lock: 3–10 sentences, each containing the keyword'),
+    trackId: z.string().optional(),
+    newTrack: z.boolean().default(false),
+  })
+  .strict();
+export type AddMotionGraphicInput = z.infer<typeof addMotionGraphicInputSchema>;
+
+export const motionGraphicParamsSchema = z.discriminatedUnion('recipe', [
+  z.object({
+    recipe: z.literal('glass_graph'),
+    label: graphicText(24),
+    value: z.number().finite(),
+    unit: z.string().trim().max(4).default(''),
+    points: z.array(z.number().finite()).min(2).max(12).optional(),
+  }),
+  z.object({ recipe: z.literal('particle_push'), steps: z.array(graphicText(18)).min(1).max(3) }),
+  z.object({ recipe: z.literal('dot_matrix'), words: z.array(graphicText(12)).min(1).max(6) }),
+  z.object({
+    recipe: z.literal('word_lock'),
+    keyword: graphicText(20),
+    lines: z.array(graphicText(160)).min(3).max(10),
+  }),
+]);
+export type MotionGraphicParams = z.infer<typeof motionGraphicParamsSchema>;
+
 export const getHyperframesClipMotionInputSchema = z.object({ clipId: clipIdSchema }).strict();
 export const getHyperframesClipMotionOutputSchema = z
   .object({

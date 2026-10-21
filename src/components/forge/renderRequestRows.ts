@@ -61,7 +61,24 @@ export type RequestRowCheck =
       test: boolean;
       guardrails?: ApiRenderPreflightResponse['guardrails'];
     }
-  | { state: 'error'; message: string; guardrails?: ApiRenderPreflightResponse['guardrails'] };
+  | {
+      state: 'error';
+      message: string;
+      code?: string;
+      guardrails?: ApiRenderPreflightResponse['guardrails'];
+    };
+
+export function isFontPreflightRefusal(
+  code?: string,
+  findings: readonly { code: string }[] = [],
+): boolean {
+  return (
+    code === 'render_fonts_missing' ||
+    (code === 'render_brand_guardrail_blocked' &&
+      findings.length > 0 &&
+      findings.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+  );
+}
 
 export type RequestRowMedia = {
   w?: number;

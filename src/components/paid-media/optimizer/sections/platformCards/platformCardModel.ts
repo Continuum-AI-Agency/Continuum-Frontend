@@ -29,6 +29,10 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'google_bid_target':
     case 'google_low_quality_keyword':
     case 'google_delivery_issue':
+    case 'google_ad_drag':
+    case 'google_ad_winner':
+    case 'google_audience_saturation':
+    case 'google_pmax_assets':
       return ['google_ads'];
     case 'tiktok_creative_fatigue':
     case 'tiktok_scheduled_decrease':
@@ -68,6 +72,10 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
   tiktok_attribution_window: 'Attribution',
   google_delivery_issue: 'Delivery',
   tiktok_delivery_issue: 'Delivery',
+  google_ad_drag: 'Ad',
+  google_ad_winner: 'Creative',
+  google_audience_saturation: 'Audience',
+  google_pmax_assets: 'Assets',
 };
 
 /** The variants whose body carries the platform's mark beside the title. The wave-6/7
@@ -85,6 +93,10 @@ const MARKED_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'tiktok_attribution_window',
   'google_delivery_issue',
   'tiktok_delivery_issue',
+  'google_ad_drag',
+  'google_ad_winner',
+  'google_audience_saturation',
+  'google_pmax_assets',
 ]);
 
 export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
@@ -95,12 +107,16 @@ export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
  *  Google's API, so its card sends a person to Google Ads and offers nothing to approve; an
  *  attribution-window card explains why platforms are not compared and has nothing to apply; a
  *  delivery problem is fixed where the platform names it (a policy, billing, a review), never
- *  by a write of ours. */
+ *  by a write of ours. A new ad, a replacement asset and a wider audience are made by a person
+ *  in Google Ads too. */
 const READ_ONLY_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'google_video_readonly',
   'tiktok_attribution_window',
   'google_delivery_issue',
   'tiktok_delivery_issue',
+  'google_ad_winner',
+  'google_audience_saturation',
+  'google_pmax_assets',
 ]);
 
 export function isReadOnly(card: PlatformCard): boolean {
@@ -142,6 +158,8 @@ export function platformCardActionLabel(card: PlatformCard): string | null {
     }
     case 'google_low_quality_keyword':
       return 'Pause keyword';
+    case 'google_ad_drag':
+      return 'Pause ad';
     case 'tiktok_hook_retention':
       return 'Request a new opening';
     case 'tiktok_spark_candidate':
@@ -196,12 +214,13 @@ export function googleAdsCampaignHref(campaignId: string): string {
   return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
 }
 
+/** Google Ads' campaigns list: where a card that carries no campaign id sends a person. */
+export const GOOGLE_ADS_CAMPAIGNS_HREF = 'https://ads.google.com/aw/campaigns';
+
 /** Where a delivery problem is fixed: the policy manager when ads are disapproved, the
  *  campaigns list otherwise. The card carries no campaign id, so it never deep-links one. */
 export function googleDeliveryHref(disapprovedAds: number): string {
-  return disapprovedAds > 0
-    ? 'https://ads.google.com/aw/policymanager'
-    : 'https://ads.google.com/aw/campaigns';
+  return disapprovedAds > 0 ? 'https://ads.google.com/aw/policymanager' : GOOGLE_ADS_CAMPAIGNS_HREF;
 }
 
 /** Google's campaign primary_status_reasons in a person's words. A code Google adds later
@@ -239,6 +258,25 @@ const GOOGLE_REASON_WORDS: Readonly<Record<string, string>> = {
 
 function codeInWords(code: string): string {
   return code.toLowerCase().replace(/_+/g, ' ').trim();
+}
+
+/** "LONG_HEADLINE" → "Long headline": a Google enum as the start of a sentence. */
+export function codeLabel(code: string): string {
+  const words = codeInWords(code);
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+type PmaxAsset = Extract<PlatformCard, { variant: 'google_pmax_assets' }>['assets'][number];
+
+/** One asset of a PMax assets card against the best of its own field type. */
+export function pmaxAssetLine(asset: PmaxAsset, currency: string | null): string {
+  const kind = codeInWords(asset.field_type);
+  const spent = formatCurrency(asset.spend, currency);
+  const cost =
+    asset.cost_per_result == null
+      ? `spent ${spent} with no conversion`
+      : `costs ${formatCurrency(asset.cost_per_result, currency)} per conversion (${plural(asset.conversions, 'conversion', 'conversions')}, ${spent} spent)`;
+  return `${codeLabel(asset.field_type)} "${asset.label}" ${cost}; the best ${kind}, "${asset.best_of_kind.label}", converts at ${formatCurrency(asset.best_of_kind.cost_per_result, currency)}.`;
 }
 
 export function googleReasonInWords(code: string): string {
@@ -400,6 +438,23 @@ export function platformCardTitle(card: PlatformCard): string {
         card.secondary_status != null ? `: ${tiktokStatusInWords(card.secondary_status)}` : '';
       return `${card.ad_group_name} ${darkFor(card.dark_days)}${status}`;
     }
+    case 'google_ad_drag':
+      return card.cost_per_result == null
+        ? `"${card.ad_label}" in ${card.ad_group_name} spent ${formatCurrency(card.spend, card.currency)} in ${card.window_days} days without a conversion`
+        : `"${card.ad_label}" takes ${percentLabel(card.spend_share)} of ${card.ad_group_name}'s spend at ${formatCurrency(card.cost_per_result, card.currency)} per conversion`;
+    case 'google_ad_winner':
+      return `"${card.winner.label}" is the best ad in ${card.ad_group_name}: ${formatCurrency(card.winner.cost_per_result, card.currency)} per conversion against ${formatCurrency(card.comparator.cost_per_result, card.currency)}`;
+    case 'google_audience_saturation':
+      return `The same people saw ${card.campaign_name} ${countLabel(card.frequency)} times in 7 days, and a result now costs ${formatCurrency(card.cost_per_result_now, card.currency)} against ${formatCurrency(card.cost_per_result_before, card.currency)}`;
+    case 'google_pmax_assets': {
+      // A PMax campaign's one asset group often carries the campaign's own name.
+      const where =
+        card.asset_group_name === card.campaign_name
+          ? card.campaign_name
+          : `${card.asset_group_name} (${card.campaign_name})`;
+      const one = card.assets.length === 1;
+      return `${plural(card.assets.length, 'asset', 'assets')} in ${where} ${one ? 'costs' : 'cost'} more than the best of ${one ? 'its' : 'their'} kind`;
+    }
   }
 }
 
@@ -414,6 +469,9 @@ export const CROSS_PLATFORM_APPROVAL_NOTE =
 
 export const VIDEO_READONLY_NOTE =
   'Google does not let the API pause or change budgets on Video campaigns. Change it in Google Ads if you want to scale it.';
+
+export const PMAX_ASSETS_NOTE =
+  'Add a replacement before removing one: Google needs enough assets of each kind.';
 
 export const PMAX_NOTE =
   'Google does not report conversions per asset group; it does say what each one is missing.';

@@ -238,7 +238,7 @@ export function ForgeProjectDrop({
           {packing ? 'Preparing folder…' : 'New template'}
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
-          Drop a PowerPoint deck or template, project folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
+          Drop a PowerPoint deck or template, project folder, web component folder, ZIP, After Effects project, layered Photoshop or Illustrator file,
           or click to choose files.
         </span>
       </Button>

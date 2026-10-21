@@ -12,6 +12,7 @@ import {
   type ApiRenderTemplateContract,
   describeEncodeSettings,
   encodeContainerOf,
+  isWebTemplateKey,
   leavesCheckIncomplete,
   mergeEncodeSettings,
   outputFormatsOfParse,
@@ -49,6 +50,7 @@ import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { explainFinding, readinessLine, readinessReasons } from '@/components/forge/readinessCopy';
 import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
+  isFontPreflightRefusal,
   PREFLIGHT_DEBOUNCE_MS,
   renderedRatios,
   rowFileCount,
@@ -144,7 +146,7 @@ const STEPS: { id: Step; label: string }[] = [
 type Review =
   | { state: 'loading'; checking: number }
   | { state: 'ready'; readiness: ApiRenderBatchReadiness }
-  | { state: 'refused'; message: string; details: string[] }
+  | { state: 'refused'; message: string; details: string[]; canOverrideFonts: boolean }
   | { state: 'failed'; message: string };
 
 type Destinations =
@@ -155,7 +157,11 @@ type Destinations =
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-function describeFailure(error: unknown): { message: string; details: string[] } {
+function describeFailure(error: unknown): {
+  message: string;
+  details: string[];
+  canOverrideFonts: boolean;
+} {
   const message = describeRenderDiscoveryFailure(error);
   const guardrails = error instanceof ApiError ? error.payload?.guardrails : undefined;
   const details = Array.isArray(guardrails)
@@ -165,7 +171,16 @@ function describeFailure(error: unknown): { message: string; details: string[] }
           : [],
       )
     : [];
-  return { message, details };
+  const codes = Array.isArray(guardrails)
+    ? guardrails.flatMap((item) =>
+        item && typeof item === 'object' && 'code' in item && typeof item.code === 'string'
+          ? [{ code: item.code }]
+          : [],
+      )
+    : [];
+  const canOverrideFonts =
+    error instanceof ApiError && isFontPreflightRefusal(error.code ?? error.message, codes);
+  return { message, details, canOverrideFonts };
 }
 
 /**
@@ -302,6 +317,9 @@ export function RenderReviewTray({
     return format ? [format.ratio ?? format.label] : [];
   };
   const fileCount = rows.reduce((total, row) => total + rowFileCount(contract, row), 0);
+  // A web component renders in Continuum's render browser and lands in the Library only: no
+  // renderer to pick, and Slack, Meta and approval rooms are refused for it.
+  const web = isWebTemplateKey(templateKey);
 
   // Each record's findings, by everything its check reads. The set's revision is left out: every
   // save bumps it, and it changes no row's verdict — so an edit re-checks only the rows it changed.
@@ -362,10 +380,10 @@ export function RenderReviewTray({
         settle();
       } catch (error) {
         if (mine !== latestReview.current) return;
-        const { message, details } = describeFailure(error);
+        const { message, details, canOverrideFonts } = describeFailure(error);
         setReview(
           error instanceof ApiError && error.status === 422
-            ? { state: 'refused', message, details }
+            ? { state: 'refused', message, details, canOverrideFonts }
             : { state: 'failed', message },
         );
       }
@@ -386,15 +404,14 @@ export function RenderReviewTray({
 
   // Only a font refusal offers a way past itself. Every other 422 — a stale revision, a
   // delivery target that no longer exists — is a thing to fix, not a thing to override.
-  const refusedOnFonts =
-    review.state === 'refused' &&
-    [review.message, ...review.details].some((line) => /typeface/i.test(line));
+  const refusedOnFonts = review.state === 'refused' && review.canOverrideFonts;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
     setStep('review');
     setProblem(null);
-    void runReview();
+    setAcceptMissingFonts(false);
+    void runReview(false);
   }, [reviewKey]);
 
   useEffect(() => {
@@ -562,6 +579,11 @@ export function RenderReviewTray({
   // What Confirm says, wherever Confirm is: Proof or Final, and what each row's files come out as.
   const confirmation = (
     <>
+      {acceptMissingFonts ? (
+        <p role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
+          Missing-font check bypassed for this batch. The worker may substitute fonts.
+        </p>
+      ) : null}
       <section aria-label="Render as" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
         <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           Render as
@@ -591,36 +613,38 @@ export function RenderReviewTray({
           </div>
         </RadioGroup>
       </section>
-      <section aria-label="Renderer" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
-        <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-          Renderer
-        </h3>
-        <RadioGroup
-          aria-label="Renderer"
-          value={renderer}
-          onValueChange={(value) =>
-            setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
-          }
-          className="flex flex-wrap gap-x-6 gap-y-1.5"
-        >
-          <div className="flex flex-col gap-0.5">
-            <Label className="text-xs">
-              <RadioGroupItem value="after_effects" />
-              After Effects
-            </Label>
-            <span className="pl-6 text-muted-foreground">The render farm.</span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <Label className="text-xs">
-              <RadioGroupItem value="experimental" />
-              Continuum&apos;s New Renderer
-            </Label>
-            <span className="pl-6 text-muted-foreground">
-              Anything it can&apos;t render goes to After Effects automatically.
-            </span>
-          </div>
-        </RadioGroup>
-      </section>
+      {web ? null : (
+        <section aria-label="Renderer" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
+          <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+            Renderer
+          </h3>
+          <RadioGroup
+            aria-label="Renderer"
+            value={renderer}
+            onValueChange={(value) =>
+              setRenderer(value === 'experimental' ? 'experimental' : 'after_effects')
+            }
+            className="flex flex-wrap gap-x-6 gap-y-1.5"
+          >
+            <div className="flex flex-col gap-0.5">
+              <Label className="text-xs">
+                <RadioGroupItem value="after_effects" />
+                After Effects
+              </Label>
+              <span className="pl-6 text-muted-foreground">The render farm.</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <Label className="text-xs">
+                <RadioGroupItem value="experimental" />
+                Continuum&apos;s New Renderer
+              </Label>
+              <span className="pl-6 text-muted-foreground">
+                Anything it can&apos;t render goes to After Effects automatically.
+              </span>
+            </div>
+          </RadioGroup>
+        </section>
+      )}
       <ul aria-label="Output per row" className="divide-y divide-border border-y border-border">
         {rows.map((row, index) => (
           <li key={row.rowId} className={cn(ROW, 'grid-cols-[minmax(0,16rem)_minmax(0,1fr)]')}>
@@ -813,9 +837,9 @@ export function RenderReviewTray({
                             way. A render in a face nobody chose is what this whole gate exists
                             to stop, so taking the file is a choice, never a default. */}
                         <span className="text-muted-foreground">
-                          The worker will pick the missing faces itself — the output will not be in
-                          the designed typeface. To choose them, substitute on the template&rsquo;s
-                          Fonts check.
+                          The worker may substitute missing fonts. This choice applies only to this
+                          batch and is recorded in the render ledger. To choose the fonts, use the
+                          template&rsquo;s Fonts check.
                         </span>
                       </div>
                     ) : (
@@ -944,34 +968,38 @@ export function RenderReviewTray({
                       to this brand’s Library.
                     </p>
                   </DeliverSection>
-                  <DeliverSection title="Slack">
-                    <SlackDestinationPicker
-                      brandId={brandId}
-                      slack={slack}
-                      value={slackDestination}
-                      onChange={setSlackDestination}
-                    />
-                  </DeliverSection>
-                  <DeliverSection title="Meta ads">
-                    <DeliveryTargetPicker
-                      brandId={brandId}
-                      meta={meta}
-                      rows={rows}
-                      outputs={replaceFormats}
-                      formatByRow={formatByRow}
-                      onDeliveryChange={onDeliveryChange}
-                      onFormatChange={(rowId, outputId) =>
-                        setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
-                      }
-                    />
-                  </DeliverSection>
-                  <DeliverSection title="Approval">
-                    <ApprovalDestinationsField
-                      brandId={brandId}
-                      value={approvalDestinationIds}
-                      onChange={setApprovalDestinationIds}
-                    />
-                  </DeliverSection>
+                  {web ? null : (
+                    <>
+                      <DeliverSection title="Slack">
+                        <SlackDestinationPicker
+                          brandId={brandId}
+                          slack={slack}
+                          value={slackDestination}
+                          onChange={setSlackDestination}
+                        />
+                      </DeliverSection>
+                      <DeliverSection title="Meta ads">
+                        <DeliveryTargetPicker
+                          brandId={brandId}
+                          meta={meta}
+                          rows={rows}
+                          outputs={replaceFormats}
+                          formatByRow={formatByRow}
+                          onDeliveryChange={onDeliveryChange}
+                          onFormatChange={(rowId, outputId) =>
+                            setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
+                          }
+                        />
+                      </DeliverSection>
+                      <DeliverSection title="Approval">
+                        <ApprovalDestinationsField
+                          brandId={brandId}
+                          value={approvalDestinationIds}
+                          onChange={setApprovalDestinationIds}
+                        />
+                      </DeliverSection>
+                    </>
+                  )}
                 </section>
                 {goesToMeta ? null : confirmation}
               </>

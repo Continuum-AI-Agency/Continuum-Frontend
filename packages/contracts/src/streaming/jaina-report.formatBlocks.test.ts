@@ -6,11 +6,11 @@ import {
   checkpointBlockV2Schema,
   comparisonBlockSchema,
   groundingViolationsOf,
-  J2_BLOCK_ORDER,
+  PRISM_BLOCK_ORDER,
   sectionOfBlock,
   sectionOfBlockCategory,
   stepsBlockSchema,
-  withJ2BlockOrder,
+  withPrismBlockOrder,
 } from './jaina-report';
 
 /**
@@ -73,8 +73,8 @@ describe('steps block', () => {
 
   it('is part of the answer, never folded under the justification', () => {
     expect(sectionOfBlockCategory('steps')).toBe('answer');
-    expect(J2_BLOCK_ORDER).toContain('steps');
-    expect(new Set(J2_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
+    expect(PRISM_BLOCK_ORDER).toContain('steps');
+    expect(new Set(PRISM_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
   });
 
   it('puts its figures on the grounding walk like any cell', () => {
@@ -223,19 +223,19 @@ describe('answer_format — the block that IS the requested format', () => {
     expect('answer_format' in checkpointBlockV2Schema.parse(table)).toBe(false);
   });
 
-  it('orders the format block right after the frame — the requested format follows the sentence', () => {
+  it('orders the format block first — the requested format follows the sentence, above the scope', () => {
     const block = (category: string, block_id: string, extra: Record<string, unknown> = {}) => ({
       category,
       block_id,
       ...extra,
     });
-    const ordered = withJ2BlockOrder([
+    const ordered = withPrismBlockOrder([
       block('metric_grid', 'grid'),
       block('narrative', 'prose'),
       block('data_table', 'asked', { answer_format: true }),
       block('data_table', 'other'),
       block('data_scope', 'scope'),
     ]);
-    expect(ordered.map((b) => b.block_id)).toEqual(['scope', 'asked', 'grid', 'prose', 'other']);
+    expect(ordered.map((b) => b.block_id)).toEqual(['asked', 'scope', 'grid', 'other', 'prose']);
   });
 });

@@ -559,7 +559,8 @@ describe('JainaReportV2 — the J2 card takes no label over its own parts', () =
         block_id: 'reading',
         category: 'narrative',
         title: 'Lectura',
-        body: 'x',
+        // The Backend ships the body beside the boxes; they are drawn only when they hold it.
+        body: 'SEDE Cañadas trae el 31% de las conversaciones con el 27% del gasto.\n\nEl costo promedio está 1.55 MXN arriba del objetivo.\n\nMover 300 MXN al día de ITESO a Cañadas.',
         what: 'SEDE Cañadas trae el 31% de las conversaciones con el 27% del gasto.',
         so_what: 'El costo promedio está 1.55 MXN arriba del objetivo.',
         now_what: 'Mover 300 MXN al día de ITESO a Cañadas.',

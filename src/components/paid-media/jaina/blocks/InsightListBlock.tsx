@@ -4,6 +4,8 @@ import { EyeIcon, HelpCircleIcon, LightbulbIcon, ZapIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { ITEM_PRIORITY_LABEL, SECTION_LABELS } from '../answerLanguage';
+import { useAnswerLanguage } from '../answerLanguageContext';
 import { JAINA_TYPE, JUDGEMENT_LABEL, JUDGEMENT_TEXT, judgeValue } from '../reading';
 import { BlockHeading } from './BlockHeading';
 import { BlockSourcesFooter, CitationChips } from './citations';
@@ -25,6 +27,7 @@ const itemTypeIcon: Record<ItemType, IconComponent> = {
 };
 
 export default function InsightListBlock({ block }: InsightListBlockProps) {
+  const language = useAnswerLanguage();
   // One neutral module; the items inside are separated by space, never by a rule or a card.
   return (
     <div className={JAINA_MODULE.neutral} data-jaina-module="block">
@@ -69,7 +72,7 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                       JAINA_TYPE.label,
                     )}
                   >
-                    {item.priority}
+                    {ITEM_PRIORITY_LABEL[language][item.priority.toLowerCase()] ?? item.priority}
                   </span>
                 )}
               </div>
@@ -90,7 +93,7 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
               )}
               {item.impact && (
                 <p className={cn('mt-1 font-medium text-foreground/80', JAINA_TYPE.table)}>
-                  Impact: <InlineProse text={item.impact} />
+                  {SECTION_LABELS[language].impact}: <InlineProse text={item.impact} />
                 </p>
               )}
               <CitationChips

@@ -9,6 +9,7 @@
  */
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { WEB_COMPONENT_BINDING_ID } from '@continuum/contracts';
 import { useEffect } from 'react';
 
 const TEMPLATE = {
@@ -593,6 +594,47 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Other set');
   });
 
+  test('shows the font refusal beside Render and clears it after the row passes', async () => {
+    const reason = 'Card A requires Brand Sans. Upload it in Library → Typography.';
+    preflightMock.mockImplementation(async () => {
+      throw new ApiError('render_fonts_missing', 422, undefined, { detail: reason });
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByText('Rejected');
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    const button = within(toolbar).getByRole<HTMLButtonElement>('button', { name: /Render 1/ });
+    expect(button.disabled).toBe(true);
+    expect(within(toolbar).getByText(reason)).toBeTruthy();
+    expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(
+      reason,
+    );
+    preflightMock.mockImplementation(async () => READY_RESPONSE);
+    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'New copy' } });
+    await waitFor(() => expect(button.disabled).toBe(false));
+    expect(within(toolbar).queryByText(reason)).toBeNull();
+    expect(button.getAttribute('aria-describedby')).toBeNull();
+  });
+
+  test('a rejected font row can open override review without accepting it or starting a render', async () => {
+    preflightMock.mockImplementation(async () => {
+      throw new ApiError('Missing fonts.', 422, 'render_fonts_missing', {
+        detail: 'Upload the missing font.',
+      });
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByText('Rejected');
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Review font override' }));
+    expect(await screen.findByRole('list', { name: 'Rows to render' })).toBeTruthy();
+    expect(
+      batchPreflightMock.mock.calls.every(
+        (call) => !(call[0] as { acceptMissingFonts?: boolean }).acceptMissingFonts,
+      ),
+    ).toBe(true);
+  });
+
   test('associates an authoritative guardrail refusal with its row and cell', async () => {
     preflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
@@ -617,6 +659,7 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Review font override' })).toBeNull();
     // A value the server refuses is wrong, not missing.
     expect(screen.getByText('Invalid')).toBeTruthy();
   });
@@ -1139,6 +1182,64 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
     expect(onFired).toHaveBeenCalledWith([JOB.id]);
     await waitFor(() => expect(screen.getByDisplayValue('Base')).toBeTruthy());
+  });
+
+  test('a web component saves and reviews its set on the nil binding, Library only, no renderer to pick', async () => {
+    const webKey = 'web:99999999-9999-4999-8999-999999999999';
+    extraTemplates = [
+      { ...TEMPLATE, key: webKey, bindingId: WEB_COMPONENT_BINDING_ID, displayName: 'Hello card' },
+    ];
+    contractOverrides = {
+      web: {
+        width: 1080,
+        height: 1080,
+        durationSec: 4,
+        fps: 30,
+        previewUrl: 'https://api.test/preview',
+        variables: [{ key: 'headline', nodeId: 'title', property: 'text' }],
+      },
+    };
+    // The row's preview page never arrives; the set and the review are what is under test.
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch,
+    );
+    try {
+      render(<RenderRequestsGrid brandId={BRAND} intent={{ templateKey: webKey }} />);
+      await screen.findByDisplayValue('Hola mundo');
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain(
+          'Hello card',
+        ),
+      );
+      fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+      await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
+      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
+        name: 'Untitled set',
+        templateKey: webKey,
+        bindingId: WEB_COMPONENT_BINDING_ID,
+      });
+      await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
+      expect(batchPreflightMock.mock.calls[0]?.[0]).toMatchObject({
+        templateKey: webKey,
+        bindingId: WEB_COMPONENT_BINDING_ID,
+      });
+      // The row previews from the component's own page, not the After Effects kit.
+      expect(fetchSpy.mock.calls.map(([url]) => url)).toContain('https://api.test/preview');
+
+      await press('Next: delivery');
+      fireEvent.click(within(tray).getByRole('button', { name: 'Change delivery' }));
+      const options = within(tray).getByRole('region', { name: 'Delivery options' });
+      expect(within(options).getByText('Library')).toBeTruthy();
+      expect(within(options).queryByText('Slack')).toBeNull();
+      expect(within(options).queryByText('Meta ads')).toBeNull();
+      expect(within(options).queryByText('Approval')).toBeNull();
+      expect(within(tray).queryByRole('radiogroup', { name: 'Renderer' })).toBeNull();
+      expect(within(tray).getByRole('radiogroup', { name: 'Render as' })).toBeTruthy();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   test('Render saves only a set with edits, and silently; Save is what says “Saved”, once', async () => {

@@ -1,6 +1,12 @@
 'use client';
 
-import { type ApiRenderJob, type ApiRenderOutput, matchOutputFormat } from '@continuum/contracts';
+import {
+  type ApiRenderJob,
+  type ApiRenderOutput,
+  isWebTemplateKey,
+  matchOutputFormat,
+  WEB_COMPONENT_BINDING_ID,
+} from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -94,20 +100,27 @@ export function formatsNamedByJob(job: ApiRenderJob): PreviewFormat[] {
 function useJobFormats(job: ApiRenderJob, given: PreviewFormat[] | undefined) {
   const queryClient = useQueryClient();
   const { brandId, templateKey } = job;
+  // A web component lives in no workspace: its contract is read the way the Render grid reads it.
+  const web = isWebTemplateKey(templateKey);
   const { data: environments } = useQuery({
     queryKey: forgeQueryKeys.environments(brandId),
     queryFn: () => apiRendersApi.listEnvironments(brandId),
     staleTime: FORGE_STALE_MS.lists,
     retry: false,
+    enabled: !web,
   });
   const environment =
     environments?.items.find((item) => item.workspace === job.environment) ??
     environments?.items.find((item) => item.isDefault);
-  const bindingId = environment && !environment.isDefault ? environment.bindingId : null;
+  const bindingId = web
+    ? WEB_COMPONENT_BINDING_ID
+    : environment && !environment.isDefault
+      ? environment.bindingId
+      : null;
   const { data: contract } = useQuery({
     queryKey: forgeQueryKeys.contract(brandId, bindingId, templateKey),
     queryFn: () => apiRendersApi.getContract(brandId, templateKey, bindingId),
-    enabled: environments !== undefined,
+    enabled: web || environments !== undefined,
     staleTime: FORGE_STALE_MS.contract,
     retry: false,
   });
@@ -157,9 +170,9 @@ export function RenderModePill({ test }: { test: boolean }) {
 }
 
 /**
- * Which renderer a job ran on, only when Continuum's New Renderer was asked: it rendered the job
- * itself, or handed it to After Effects and the reason it named rides on the pill. Nothing for an
- * ordinary After Effects job.
+ * Which renderer a job ran on, only when it was not plain After Effects: Continuum's New Renderer
+ * rendered it, or handed it to After Effects with the reason it named on the pill, or it was a web
+ * component rendered in the browser. Nothing for an ordinary After Effects job.
  */
 export function RenderEnginePill({
   job,
@@ -170,6 +183,12 @@ export function RenderEnginePill({
     return (
       <Pill variant="muted" title={`Sent to After Effects: ${job.engineFallback}`}>
         New Renderer → After Effects
+      </Pill>
+    );
+  if (job.engine === 'web')
+    return (
+      <Pill variant="muted" title="Rendered from the web component in Continuum's render browser.">
+        Web
       </Pill>
     );
   return job.engine === 'micro' ? (

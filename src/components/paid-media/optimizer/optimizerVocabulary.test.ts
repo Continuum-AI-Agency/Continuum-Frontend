@@ -27,7 +27,7 @@ const BANNED = [
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry);
-    if (statSync(path).isDirectory()) return sourceFiles(path);
+    if (statSync(path).isDirectory()) return entry === '__fixtures__' ? [] : sourceFiles(path);
     if (!/\.tsx?$/.test(entry)) return [];
     if (/\.test\.tsx?$/.test(entry)) return [];
     return [path];

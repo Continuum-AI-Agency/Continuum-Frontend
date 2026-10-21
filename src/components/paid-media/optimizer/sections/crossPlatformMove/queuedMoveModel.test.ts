@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { leg, MOVE_ID, moveRec, ref, TIKTOK_TO_META } from './moveFixtures';
-import { formatMinorExact, isBudgetMoveRecommendation, readQueuedMove } from './queuedMoveModel';
+import { leg, META_TO_GOOGLE, MOVE_ID, moveRec, ref, TIKTOK_TO_META } from './moveFixtures';
+import {
+  formatMinorExact,
+  isBudgetMoveRecommendation,
+  moveWritesOffNote,
+  readQueuedMove,
+} from './queuedMoveModel';
 
 describe('isBudgetMoveRecommendation', () => {
   test('only the budget_move kind', () => {
@@ -56,6 +61,27 @@ describe('readQueuedMove', () => {
     expect(readQueuedMove(moveRec({ action: reversed }))).toBeNull();
   });
 
+  test('reads the move the daily cycle records under seed.action (there is no action column)', () => {
+    const rec = moveRec({
+      action: undefined,
+      trigger: 'rule:G27_cross_platform_move',
+      adset_id: 'move:tiktok_ads>meta',
+      platform: 'tiktok_ads',
+      seed: {
+        action: TIKTOK_TO_META,
+        move: { donorPlatform: 'tiktok_ads', receiverPlatform: 'meta', amountMinor: 5_925 },
+      },
+    });
+    const move = readQueuedMove(rec);
+    expect(move?.moveId).toBe(MOVE_ID);
+    expect(move?.legs).toHaveLength(4);
+    // The parsed action itself, which is what Approve sends to /apply/actions.
+    expect(move?.action).toEqual(TIKTOK_TO_META);
+    // The contract still refuses a seed move that raises before it lowers.
+    const reversed = { ...TIKTOK_TO_META, legs: [...TIKTOK_TO_META.legs].reverse() };
+    expect(readQueuedMove(moveRec({ action: undefined, seed: { action: reversed } }))).toBeNull();
+  });
+
   test('a move that spans two donor platforms lists both, in leg order', () => {
     const action = {
       ...TIKTOK_TO_META,
@@ -84,5 +110,35 @@ describe('formatMinorExact', () => {
 
   test('an unknown currency prints a bare two-decimal figure, never a dollar sign', () => {
     expect(formatMinorExact(5_341, null)).toBe('53.41');
+  });
+});
+
+describe('moveWritesOffNote', () => {
+  const metaToGoogle = () => {
+    const move = readQueuedMove(moveRec({ action: META_TO_GOOGLE }));
+    if (!move) throw new Error('fixture must parse');
+    return move;
+  };
+
+  test('names the platform among the legs whose writes are switched off', () => {
+    expect(moveWritesOffNote({ platform_writes: { google_ads: false } }, metaToGoogle())).toBe(
+      'This move is a proposal only — writes to Google Ads are switched off for this portfolio.',
+    );
+    // Any platform but Meta writes only when its row is switched on.
+    expect(moveWritesOffNote({ platform_writes: {} }, metaToGoogle())).toContain(
+      'writes to Google Ads are switched off',
+    );
+    expect(
+      moveWritesOffNote({ platform_writes: { meta: false, google_ads: false } }, metaToGoogle()),
+    ).toBe(
+      'This move is a proposal only — writes to Meta and Google Ads are switched off for this portfolio.',
+    );
+  });
+
+  test('null when every platform among the legs may be written', () => {
+    expect(moveWritesOffNote({ platform_writes: { google_ads: true } }, metaToGoogle())).toBeNull();
+    expect(
+      moveWritesOffNote({ platform_writes: { meta: true, google_ads: true } }, metaToGoogle()),
+    ).toBeNull();
   });
 });

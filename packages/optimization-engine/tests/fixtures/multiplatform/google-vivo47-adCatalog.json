@@ -1,0 +1,691 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT campaign.id, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.ad.name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.status, ad_group_ad.ad_strength FROM ad_group_ad WHERE ad_group_ad.status IN ('ENABLED', 'PAUSED') AND ad_group.status = 'ENABLED' AND campaign.status = 'ENABLED'",
+    "rows": 4
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139",
+        "name": "Vivo 47"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/155765678139~680665389502",
+        "status": "ENABLED",
+        "ad": {
+          "type": "RESPONSIVE_SEARCH_AD",
+          "responsiveSearchAd": {
+            "headlines": [
+              {
+                "text": "Gimnasio Familiar",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Entrenamiento Fitness",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Ejercicios Crosfit y Hiit",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "VIVO 47 | Family Fitness Club",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio en Guadalajara",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio en Zapopan",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio cerca de mi",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Con Clases De Salón",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Equipado",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Pase de cortesía",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio en Valle Real",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio en Naciones Unidas",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio en Palomar",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Club Deportivo Premium",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "El club deportivo familiar premium más equipado de Guadalajara. Obtén tu pase de cortesía.",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Entrenamiento funcional, Cycling, Yoga y Más",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Tenemos el tipo de entrenamiento perfecto para ti, solicita HOY su pase de cortesía.",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Disfruta de más de 500 clases al mes sin tener que pagar extra. Obtén tu pase de cortesía.",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ]
+          },
+          "resourceName": "customers/3710693645/ads/680665389502",
+          "id": "680665389502"
+        },
+        "adStrength": "AVERAGE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156451805980",
+        "id": "156451805980",
+        "name": "Acuática"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156451805980~680706855496",
+        "status": "ENABLED",
+        "ad": {
+          "type": "RESPONSIVE_SEARCH_AD",
+          "responsiveSearchAd": {
+            "headlines": [
+              {
+                "text": "Gimnasio con alberca",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Con Alberca Zapopan",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases De Natación",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Acuática Vivo 47",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Nado Libre",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases de natación para niños",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Natación en Guadalajara",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gym Con Alberca",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Curso De Natación",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Alberca en Guadalajara",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Aquaerobics",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Con Alberca",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases De Natación Adultos",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases De Natación Cerca De Mí",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Alberca semi olímpica",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Clases de natación para niños, adultos y adultos mayores desde nivel principiante",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Conoce Acuática",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Ven a nadar en nuestra alberca semiolímpica con 6 carriles. Instructores certificados",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases de natación en Guadalajara tus hijos aprenden a nadar de forma divertida y segura.",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ]
+          },
+          "resourceName": "customers/3710693645/ads/680706855496",
+          "id": "680706855496"
+        },
+        "adStrength": "GOOD"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156639249738",
+        "id": "156639249738",
+        "name": "Yoga/Barré"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156639249738~680743711337",
+        "status": "PAUSED",
+        "ad": {
+          "type": "RESPONSIVE_SEARCH_AD",
+          "responsiveSearchAd": {
+            "headlines": [
+              {
+                "text": "Clases de yoga",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Barré y Pilates",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Exhala Vivo 47",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Yoga para principiantes",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases de yoga Guadalajara",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Yoga en Zapopan",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Estudio de Yoga",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Con Yoga",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases de pilates",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Pilates En Guadalajara",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases De Barré",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Principiantes y Expertos",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Yoga Para Embarazadas",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Clases de yoga, Pilates y Barré para principiantes y expertos en Guadalajara.",
+                "assetPerformanceLabel": "LEARNING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Con Yoga",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Entrena en nuestras salones del club Vivo47. Instructores, instalaciones premium.",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Mejora la flexibilidad de tu cuerpo, relaja tu mente. Clases ilimitadas todo el mes.",
+                "assetPerformanceLabel": "GOOD",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ]
+          },
+          "resourceName": "customers/3710693645/ads/680743711337",
+          "id": "680743711337"
+        },
+        "adStrength": "EXCELLENT"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/3710693645/campaigns/20775796216",
+        "id": "20775796216"
+      },
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/159194048041",
+        "id": "159194048041",
+        "name": "Neo Ride"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/159194048041~680706127090",
+        "status": "PAUSED",
+        "ad": {
+          "type": "RESPONSIVE_SEARCH_AD",
+          "responsiveSearchAd": {
+            "headlines": [
+              {
+                "text": "Neo Ride",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Indoor cycling en Guadalajara",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases indoor cycling",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases spining Guadalajara",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Clases bici antro Guadalajara",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Indoor cycling en Zapopan",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Vivo 47",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Estudio de Indoor Cycling",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Indoor Cycling",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Ride",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Gimnasio Familiar",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "VIVO 47 | Family Fitness Club",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Ejercicio Para Piernas",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ],
+            "descriptions": [
+              {
+                "text": "Indoor cycling en el mejor Studio de Guadalajara dentro de las instalaciones de Vivo 47",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Conoce nuestro Studio Neo Ride",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Rueda al ritmo de la música y con luces envolventes, clases ilimitadas todo el mes.",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              },
+              {
+                "text": "Disfruta de las mejores clases de spinning en Guadalajara por instructores certificados",
+                "assetPerformanceLabel": "PENDING",
+                "policySummaryInfo": {
+                  "reviewStatus": "REVIEWED",
+                  "approvalStatus": "APPROVED"
+                }
+              }
+            ]
+          },
+          "resourceName": "customers/3710693645/ads/680706127090",
+          "id": "680706127090"
+        },
+        "adStrength": "EXCELLENT"
+      }
+    }
+  ]
+}

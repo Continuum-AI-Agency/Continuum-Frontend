@@ -55,6 +55,17 @@ export const TIKTOK_TO_META: BudgetMoveAction = {
   ],
 };
 
+/** Meta → Google (G6): one Meta ad set 500.00 → 400.00, one Google campaign 700.00 → 800.00. */
+export const META_TO_GOOGLE: BudgetMoveAction = {
+  kind: 'budget_move',
+  moveId: MOVE_ID,
+  currency: 'MXN',
+  legs: [
+    leg(ref('meta', '120252366877000236', 'CAÑADAS // AGOSTO - BROAD'), 50_000, 40_000),
+    leg(ref('google_ads', '24274603133', 'PMax · Branches'), 70_000, 80_000),
+  ],
+};
+
 export function moveRec(over: Partial<RecommendationRow> & Record<string, unknown> = {}) {
   return {
     id: '11111111-2222-4333-8444-555555555555',

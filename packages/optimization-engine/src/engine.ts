@@ -9,6 +9,7 @@
 import type { DeepPartial, EngineConfig } from './config';
 import { resolveConfig } from './config';
 import { clamp, sum } from './internal/math';
+import { protectDaysFor } from './multiplatform/learning';
 import { kpiEvents, scoreAdSet } from './scoring';
 import { adSetCpaInterval, shrinkScores } from './significance';
 import type { SolverItem, SolverOutput } from './solver';
@@ -48,11 +49,39 @@ export function reallocate(
   // the −8% cap as an additional floor (effective down = the smaller reduction).
   const upPct = cfg.velocityUpPct ?? cfg.velocityCapPct;
   const downBasePct = cfg.velocityDownPct ?? cfg.velocityCapPct;
-  const downPctFor = (s: AdSetSnapshot): number =>
-    isLearning(s) ? Math.min(downBasePct, cfg.learningReductionCapPct) : downBasePct;
+  // A platform whose new entities learn longer than Meta's (PMax: 14 days, learning.ts) keeps
+  // its whole budget while graced: grace only averages the score, so with the normal down-cap
+  // an 8-day PMax beside a dominant winner lost 30 %. Meta's grace keeps its down-cap.
+  const longProtected = (s: AdSetSnapshot): boolean =>
+    s.status === 'grace' && protectDaysFor(s, cfg) > cfg.newItemProtectDays;
 
   // --- 1. Score every ad set -------------------------------------------
   const scored = snapshots.map((s) => ({ s, sc: scoreAdSet(s, cfg, priorComposites?.[s.id]) }));
+
+  // A Google or TikTok entity in grace borrows the score of the portfolio's ACTIVE entities.
+  // With none to borrow from, the fallback below is its peers' own unsettled scores, and a
+  // move on it is an even split of slack, not efficiency (G5 follow-up): it holds this cycle.
+  // Meta's grace keeps that fallback.
+  const noActivePeer = !scored.some((x) => x.s.status === 'active');
+  const heldInGrace = (s: AdSetSnapshot): boolean =>
+    noActivePeer && s.status === 'grace' && (s.platform ?? 'meta') !== 'meta';
+  const holdOf = (s: AdSetSnapshot): SolverItem['hold'] =>
+    heldInGrace(s) ? 'both' : longProtected(s) ? 'down' : undefined;
+  const downPctFor = (s: AdSetSnapshot): number =>
+    holdOf(s)
+      ? 0
+      : isLearning(s)
+        ? Math.min(downBasePct, cfg.learningReductionCapPct)
+        : downBasePct;
+  const upLimit = (s: AdSetSnapshot): number =>
+    s.noRaise || heldInGrace(s) ? s.currentBudget : s.currentBudget * (1 + upPct);
+  for (const x of scored) {
+    if (heldInGrace(x.s) && isEligible(x.s)) {
+      notes.push(
+        `held: ${x.s.name ?? x.s.id} is in grace with no active entity to borrow a score from; its budget holds this cycle`,
+      );
+    }
+  }
 
   // --- 1b. Shrinkage (P1) ----------------------------------------------
   // Pull data-bearing composites toward the event-weighted cohort mean so a
@@ -146,19 +175,34 @@ export function reallocate(
     // A creative-drag ad set keeps its budget but may not GROW it: raising an ad set whose
     // money is landing on a creative we already judged funds the loser, not the ad set.
     // Down-moves are untouched — this withholds a raise, it does not starve.
-    velocityUp: x.s.noRaise ? x.s.currentBudget : x.s.currentBudget * (1 + upPct),
+    velocityUp: upLimit(x.s),
+    ...(holdOf(x.s) ? { hold: holdOf(x.s) } : {}),
   }));
+
+  // What the held items keep whatever the pool: a total under it cannot be met without
+  // cutting a protection, so it is refused like a frozen total (below).
+  const protectedBudget = sum(
+    solverItems.filter((it) => it.hold).map((it) => Math.max(it.floor, it.velocityDown)),
+  );
 
   // A negative pool is not a smaller allocation, it is no allocation: frozen ad sets alone
   // hold more than the total, and nothing the solver may move can bring the sum back under
   // it. Solving anyway scaled floors by pool/0 and reported the result as conserved. Refuse
   // by name instead — every budget holds, and the result says the total is not met.
   const refusal: ReallocationRefusal | undefined =
-    pool < -POOL_EPS ? { reason: 'frozen_above_total', frozenBudget, totalBudget } : undefined;
+    pool < -POOL_EPS
+      ? { reason: 'frozen_above_total', frozenBudget, totalBudget }
+      : pool < protectedBudget - POOL_EPS
+        ? { reason: 'protected_above_total', protectedBudget, totalBudget }
+        : undefined;
   const solved = refusal ? holdEverything(solverItems) : solve(solverItems, pool, cfg);
-  if (refusal) {
+  if (refusal?.reason === 'frozen_above_total') {
     notes.push(
       `refused: frozen ad sets hold ${frozenBudget.toFixed(2)}, above the ${totalBudget.toFixed(2)} total — no budget moved; lower them by hand or raise the total`,
+    );
+  } else if (refusal) {
+    notes.push(
+      `refused: entities inside their learning protection hold ${protectedBudget.toFixed(2)}, above the ${pool.toFixed(2)} left to allocate — no budget moved; raise the total or wait out the protection`,
     );
   }
   const allocById = new Map(solved.allocations.map((a) => [a.id, a]));
@@ -171,11 +215,7 @@ export function reallocate(
     const share = isEligible(s) && denom > 0 ? allocationWeight(x) / denom : 0;
     const raw = isEligible(s) ? share * pool : 0;
     const velocityCapped = isEligible(s)
-      ? clamp(
-          raw,
-          s.currentBudget * (1 - downPctFor(s)),
-          s.noRaise ? s.currentBudget : s.currentBudget * (1 + upPct),
-        )
+      ? clamp(raw, s.currentBudget * (1 - downPctFor(s)), upLimit(s))
       : s.currentBudget;
 
     let finalBudget: number;

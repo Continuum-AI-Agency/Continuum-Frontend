@@ -6,8 +6,10 @@
 // paid-creative-intel) and — on Google — fatigue (frequency and the Meta CTR series).
 // Fed a Google or TikTok entity they would not fire, and that silence would read as
 // "nothing wrong". So a family that cannot apply is skipped BY NAME, with the reason
-// 'not_applicable:<platform>', and the cycle carries the skip.
-// Design: google-acciones.html §4 (G09/G10/G23 are "siguiente"), tiktok.html §4.1.
+// 'not_applicable:<platform>', and the cycle carries the skip. Where the platform has its own
+// rules for the family (Google since G7: delivery G12, creative G09/G10/G18, fatigue G23 in
+// signalRules.ts), the skip names them: the Meta stage stays off, the entity is still judged.
+// Design: google-acciones.html §4, tiktok.html §4.1.
 // ---------------------------------------------------------------------------
 
 import type { EntityAutomation, PlatformId } from '@continuum/contracts';
@@ -35,12 +37,24 @@ function notApplicable(platform: PlatformId): RuleApplicability {
 /** Rule families that read Meta-only inputs, per platform. Meta keeps every family. */
 const META_ONLY_FAMILIES: Readonly<Record<PlatformId, readonly RuleFamily[]>> = {
   meta: [],
-  // Delivery reads Meta's blockers and roster (Google darkness is the account/campaign
-  // read in googleRules); creative needs the per-ad standing; fatigue needs frequency.
+  // Delivery reads Meta's blockers and roster, creative the per-ad standing from
+  // paid-creative-intel, fatigue the Meta frequency and CTR series: Google's own rules
+  // (GOOGLE_COVERAGE) judge the same families from Google's reads.
   google_ads: ['delivery', 'fatigue', 'creative'],
   // F1/F2 port as-is (tiktok.html §4.1 rules 04–05). Delivery needs secondary_status mapped
   // into DeliverySignals and creative needs AUCTION_AD reporting: neither exists yet.
   tiktok_ads: ['delivery', 'creative'],
+};
+
+/** The platform rules that judge a family its Meta stage cannot, per platform. */
+const COVERED_BY: Readonly<
+  Partial<Record<PlatformId, Readonly<Partial<Record<RuleFamily, readonly string[]>>>>>
+> = {
+  google_ads: {
+    delivery: ['G12'],
+    fatigue: ['G23'],
+    creative: ['G09', 'G10', 'G18_pmax_assets', 'G18_pmax_coverage'],
+  },
 };
 
 const PLATFORM_CONTROLS_SUBUNITS: ReadonlySet<EntityAutomation> = new Set<EntityAutomation>([
@@ -77,7 +91,13 @@ export function ruleSkipsFor(snapshots: readonly AdSetSnapshot[]): RuleSkip[] {
     for (const family of RULE_FAMILIES) {
       const applicability = caps.rules[family];
       if (!applicability.applies) {
-        skips.push({ adSetId: s.id, family, reason: applicability.reason });
+        const coveredBy = COVERED_BY[s.platform]?.[family];
+        skips.push({
+          adSetId: s.id,
+          family,
+          reason: applicability.reason,
+          ...(coveredBy ? { coveredBy } : {}),
+        });
       }
     }
   }

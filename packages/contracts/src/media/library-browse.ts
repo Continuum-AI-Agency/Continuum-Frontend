@@ -131,6 +131,7 @@ const FAMILY_FORMAT_GROUP: Readonly<Record<LibraryFormatFamily, LibraryFormatGro
   blender: 'model_3d',
   html_bundle: 'html',
   hyperframes: 'html',
+  web_component: 'design',
   font: 'other',
   generic: 'other',
 };

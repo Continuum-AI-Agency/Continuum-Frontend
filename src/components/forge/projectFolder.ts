@@ -4,9 +4,14 @@ import type { FolderFile } from '@/lib/library/folderUpload';
 
 /** One folder becomes one package, including every linked asset at its original relative path. */
 export async function packageProjectFolder(entries: readonly FolderFile[]): Promise<File> {
-  if (!entries.some(({ file }) => /\.(aep|aepx|aet|psd|ai)$/i.test(file.name)))
+  if (
+    !entries.some(
+      ({ file }) =>
+        /\.(aep|aepx|aet|psd|ai)$/i.test(file.name) || file.name === 'forge-component.json',
+    )
+  )
     throw new Error(
-      'Choose a folder containing an After Effects, Photoshop or Illustrator project.',
+      'Choose a folder containing an After Effects, Photoshop or Illustrator project, or a web component project (forge-component.json).',
     );
   const limit = `This folder exceeds the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit. Choose a smaller project folder or upload a compressed ZIP.`;
   if (entries.reduce((total, { file }) => total + file.size, 0) > FORGE_PROJECT_FILE_MAX_BYTES)

@@ -236,6 +236,79 @@ export const TIKTOK_DELIVERY = parse({
   ],
 });
 
+/** Escenario 45, the other side: "Gimnasio con alberca" moved into EKATAR's "Vivo 47" group,
+ *  so the brand ad holds 88% of the group's spend at 3× the cost per conversion (REAL figures). */
+export const GOOGLE_AD_DRAG = parse({
+  variant: 'google_ad_drag',
+  campaign_name: 'VIVO 47-EKATAR',
+  ad_group_name: 'Vivo 47',
+  ad_label: 'Gimnasio Familiar',
+  currency: 'MXN',
+  window_days: 30,
+  spend: 31366.43,
+  spend_share: 0.88,
+  conversions: 1123.23,
+  cost_per_result: 27.93,
+  winner: { label: 'Gimnasio con alberca', cost_per_result: 9.24 },
+  ads_remaining: 1,
+});
+
+/** Escenario 45: the same group's winner, the ad a new one starts from. */
+export const GOOGLE_AD_WINNER = parse({
+  variant: 'google_ad_winner',
+  campaign_name: 'VIVO 47-EKATAR',
+  ad_group_name: 'Vivo 47',
+  currency: 'MXN',
+  window_days: 30,
+  winner: { label: 'Gimnasio con alberca', cost_per_result: 9.24, conversions: 441.1 },
+  comparator: { label: 'Gimnasio Familiar', cost_per_result: 27.93 },
+  best_assets: [],
+});
+
+/** Escenario 47, the other side (invented): EKATAR as Display, 3.4 views per person in 7 days,
+ *  a lead 27% dearer over 3 days than over 14. */
+export const GOOGLE_AUDIENCE_SATURATION = parse({
+  variant: 'google_audience_saturation',
+  campaign_name: 'VIVO 47-EKATAR',
+  channel_type: 'DISPLAY',
+  frequency: 3.4,
+  frequency_cap: 3,
+  unique_users: 17796,
+  currency: 'MXN',
+  cost_per_result_now: 1373.95,
+  cost_per_result_before: 1080.17,
+});
+
+/** Escenario 46: Easy Fit's PMax at b9cebbcf's 99 MXN target, two of its five assets (REAL). */
+export const GOOGLE_PMAX_ASSETS = parse({
+  variant: 'google_pmax_assets',
+  campaign_name: 'PMax | Octubre | Easy Fit | Leads',
+  asset_group_name: 'PMax | Octubre | Easy Fit | Leads',
+  currency: 'MXN',
+  window_days: 30,
+  assets: [
+    {
+      field_type: 'DESCRIPTION',
+      label: 'Promociones mensuales para que aproveches al máximo tu entrenamiento.',
+      spend: 894.24,
+      conversions: 1,
+      cost_per_result: 894.24,
+      best_of_kind: {
+        label: 'Easy Fit: la manera de hacer ejercicio de manera cómoda y familiar.',
+        cost_per_result: 47.97,
+      },
+    },
+    {
+      field_type: 'HEADLINE',
+      label: 'Clases de fitness',
+      spend: 229.75,
+      conversions: 0,
+      cost_per_result: null,
+      best_of_kind: { label: 'Easy Fit: Comodidad Familiar', cost_per_result: 58.06 },
+    },
+  ],
+});
+
 export const EVERY_CARD = [
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_PMAX,
@@ -254,4 +327,8 @@ export const EVERY_CARD = [
   TIKTOK_ATTRIBUTION_WINDOW,
   GOOGLE_DELIVERY_ACCOUNT_WIDE,
   TIKTOK_DELIVERY,
+  GOOGLE_AD_DRAG,
+  GOOGLE_AD_WINNER,
+  GOOGLE_AUDIENCE_SATURATION,
+  GOOGLE_PMAX_ASSETS,
 ] as const;

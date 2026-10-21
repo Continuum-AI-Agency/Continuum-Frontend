@@ -113,6 +113,7 @@ import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
 import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
 import {
   isBudgetMoveRecommendation,
+  moveWritesOffNote,
   type QueuedMove,
   readQueuedMove,
 } from './crossPlatformMove/queuedMoveModel';
@@ -690,12 +691,14 @@ export function OptimizerActionsPortfolioGroup({
   );
   const proposalsOnly = proposalsOnlyNote(portfolio, moves.current);
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
-  const [decidingMove, setDecidingMove] = React.useState<string | null>(null);
-  const decideMove = (rec: RecommendationRow, status: 'approved' | 'rejected') => {
-    setDecidingMove(rec.id);
+  // A move is approved by writing it (BudgetMoveQueueRow's dry run → confirm); dismissing it is
+  // the one decision recorded here.
+  const [dismissingMove, setDismissingMove] = React.useState<string | null>(null);
+  const dismissMove = (rec: RecommendationRow) => {
+    setDismissingMove(rec.id);
     setStatus.mutate(
-      { recommendation_id: rec.id, status },
-      { onSettled: () => setDecidingMove(null) },
+      { recommendation_id: rec.id, status: 'rejected' },
+      { onSettled: () => setDismissingMove(null) },
     );
   };
   // A recommendation row's own Dismiss: the same rejected decision a move row records.
@@ -1265,13 +1268,15 @@ export function OptimizerActionsPortfolioGroup({
         >
           {moveRows.map(({ key, rec, move }) => (
             <BudgetMoveQueueRow
-              busy={decidingMove === rec.id}
+              busy={dismissingMove === rec.id}
               key={key}
               move={move}
-              onApproveMove={() => decideMove(rec, 'approved')}
-              onDismiss={() => decideMove(rec, 'rejected')}
+              onApplied={() => setStatus.mutate({ recommendation_id: rec.id, status: 'approved' })}
+              onDismiss={() => dismissMove(rec)}
+              portfolioId={portfolio.id}
               rec={rec}
               writesBlocked={writesBlocked}
+              writesOffNote={moveWritesOffNote(portfolio, move)}
             />
           ))}
         </ul>
@@ -1434,7 +1439,6 @@ function PortfolioRecentActions({
         {recent.map((item) =>
           item.kind === 'move' ? (
             <MoveDecisionCard
-              brandId={brandId}
               className="space-y-2 rounded-none border-0 bg-transparent px-0 py-3"
               currency={currency}
               key={item.key}

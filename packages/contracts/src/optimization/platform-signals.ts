@@ -10,6 +10,7 @@ const count = z.number().int().nonnegative();
 const amount = z.number().nonnegative();
 const fraction = z.number().min(0).max(1);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const AdStrengthEnum = z.enum(['POOR', 'AVERAGE', 'GOOD', 'EXCELLENT', 'PENDING', 'UNSPECIFIED']);
 
 /** Totals over the signal's window (spend in major units of the account currency). */
 export const SignalWindowTotalsSchema = z.object({
@@ -63,12 +64,55 @@ export const GoogleAssetGroupSignalSchema = z.object({
   asset_group_id: z.string().min(1),
   campaign_id: z.string().min(1),
   name: z.string().min(1),
-  ad_strength: z
-    .enum(['POOR', 'AVERAGE', 'GOOD', 'EXCELLENT', 'PENDING', 'UNSPECIFIED'])
-    .nullable(),
+  ad_strength: AdStrengthEnum.nullable(),
   primary_status: z.string().min(1).nullable(),
   /** asset_coverage.ad_strength_action_items, as Google words them. */
   missing: z.array(z.string().min(1)),
+});
+
+/** One ad of an ad group (G09, G10): its window totals and, for an RSA, the texts Google rates
+ *  BEST (ad_group_ad_asset_view.performance_label). Paused ads are read too: "never leave a
+ *  group with no active ad" counts what is enabled, and a paused ad is not compared. */
+export const GoogleAdSignalSchema = z.object({
+  ad_id: z.string().min(1),
+  ad_group_id: z.string().min(1),
+  ad_group_name: z.string().min(1),
+  campaign_id: z.string().min(1),
+  /** ad_group_ad.ad.type: RESPONSIVE_SEARCH_AD, RESPONSIVE_DISPLAY_AD, … */
+  type: z.string().min(1),
+  status: z.enum(['ENABLED', 'PAUSED']),
+  ad_strength: AdStrengthEnum.nullable(),
+  /** What a person recognises the ad by: its first headline, else its name, else its id. */
+  label: z.string().min(1),
+  best_assets: z.array(z.string().min(1)),
+  totals: SignalWindowTotalsSchema,
+});
+
+/** One asset of a Performance Max asset group (G18_pmax_assets). Google reports per-asset
+ *  metrics on asset_group_asset since the performance label was removed (v22): an asset is
+ *  measured against the other assets of its field type in the same group, never across groups. */
+export const GooglePmaxAssetSignalSchema = z.object({
+  asset_id: z.string().min(1),
+  asset_group_id: z.string().min(1),
+  asset_group_name: z.string().min(1),
+  campaign_id: z.string().min(1),
+  /** asset_group_asset.field_type: HEADLINE, DESCRIPTION, MARKETING_IMAGE, YOUTUBE_VIDEO, … */
+  field_type: z.string().min(1),
+  /** The text of a text asset; null for an image or a video. */
+  text: z.string().min(1).nullable(),
+  /** asset_group_asset.primary_status: ELIGIBLE, LIMITED, PENDING, NOT_ELIGIBLE, … */
+  primary_status: z.string().min(1).nullable(),
+  totals: SignalWindowTotalsSchema,
+});
+
+/** How often the same people saw a campaign in the last 7 complete days (G23). */
+export const GoogleAudienceSignalSchema = z.object({
+  campaign_id: z.string().min(1),
+  /** campaign.advertising_channel_type: SEARCH, DISPLAY, VIDEO, DEMAND_GEN, … */
+  channel_type: z.string().min(1),
+  /** metrics.average_impression_frequency_per_user; null when Google reports none. */
+  frequency_7d: z.number().nonnegative().nullable(),
+  unique_users_7d: count.nullable(),
 });
 
 export const TikTokCreativeDaySchema = z.object({
@@ -163,6 +207,10 @@ export const PlatformSignalsSchema = z.object({
       asset_groups: z.array(GoogleAssetGroupSignalSchema),
       /** Absent on signals recorded before wave 9. */
       delivery: z.array(GoogleDeliverySignalSchema).optional(),
+      /** Absent on signals recorded before G7. */
+      ads: z.array(GoogleAdSignalSchema).optional(),
+      pmax_assets: z.array(GooglePmaxAssetSignalSchema).optional(),
+      audience: z.array(GoogleAudienceSignalSchema).optional(),
     })
     .nullable(),
   tiktok: z
