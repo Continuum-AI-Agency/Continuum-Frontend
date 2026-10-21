@@ -87,6 +87,52 @@ export const SCOPE_SOURCE_LABEL: Record<AnswerLanguage, Record<string, string>> 
   },
 };
 
+/** The data-provenance tooltip (`EvidenceTooltip`), in the answer's language. */
+export const PROVENANCE_TEXT: Record<
+  AnswerLanguage,
+  {
+    trigger: string;
+    computed: string;
+    computedDetail: string;
+    model: string;
+    modelDetail: string;
+    source: string;
+    period: string;
+    entity: string;
+    records: string;
+    references: string;
+  }
+> = {
+  es: {
+    trigger: 'Origen de los datos',
+    computed: 'Datos verificados',
+    computedDetail:
+      'Los valores se llenaron en el servidor con el conjunto de datos leído. Las métricas de entrega, la segmentación configurada y las clasificaciones derivadas siguen identificadas por separado en sus referencias de evidencia.',
+    model: 'Escrito por el modelo',
+    modelDetail:
+      'La IA escribió este bloque con la evidencia que reunió. Contrasta las cifras importantes con los datos de origen.',
+    source: 'Fuente',
+    period: 'Periodo de datos',
+    entity: 'Entidad',
+    records: 'Registros',
+    references: 'Referencias de evidencia',
+  },
+  en: {
+    trigger: 'Data provenance',
+    computed: 'Verified data',
+    computedDetail:
+      'Values were filled server-side from the registered dataset. Delivery metrics, configured targeting, and derived classifications remain separately identified in its evidence references.',
+    model: 'Model-authored',
+    modelDetail:
+      'This block was written by the AI from the evidence it gathered. Cross-check important figures against the source data.',
+    source: 'Source',
+    period: 'Data period',
+    entity: 'Entity',
+    records: 'Records',
+    references: 'Evidence references',
+  },
+};
+
 /**
  * The one-word read of a metric against its target or its prior, in the answer's language.
  * The contract carries the read as a language-neutral key (`mejor` / `peor` / `igual` /

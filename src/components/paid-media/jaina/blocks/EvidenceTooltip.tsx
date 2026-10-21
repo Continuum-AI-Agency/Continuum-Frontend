@@ -11,6 +11,8 @@ import { InfoIcon } from 'lucide-react';
 import { useId } from 'react';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PROVENANCE_TEXT } from '../answerLanguage';
+import { useAnswerLanguage } from '../answerLanguageContext';
 
 type BlockProvenance = {
   source: 'computed' | 'model';
@@ -30,6 +32,9 @@ type EvidenceTooltipProps = {
   evidenceRefs?: string[] | null;
 };
 
+// An entity label that is only its id ("account-521903353286118"): the Backend falls back to it.
+const ENTITY_ID_SHAPE = /^(?:act_|(?:account|campaign|adset|ad|creative)[-_])?\d{6,}$/i;
+
 const formatPeriod = (period: BlockProvenance['period']): string | null => {
   if (!period) return null;
   if (period.since && period.until) {
@@ -40,34 +45,40 @@ const formatPeriod = (period: BlockProvenance['period']): string | null => {
 
 export function EvidenceTooltip({ provenance, datasetId, evidenceRefs }: EvidenceTooltipProps) {
   const descriptionId = useId();
+  const text = PROVENANCE_TEXT[useAnswerLanguage()];
   // Older blocks predate structured provenance; a non-null dataset_id still
   // proves server-side materialization.
   const isComputed = provenance?.source === 'computed' || (!provenance && Boolean(datasetId));
   const period = formatPeriod(provenance?.period ?? null);
 
-  const headline = isComputed ? 'Verified data' : 'Model-authored';
-  const detail = isComputed
-    ? 'Values were filled server-side from the registered dataset. Delivery metrics, configured targeting, and derived classifications remain separately identified in its evidence references.'
-    : 'This block was written by the AI from the evidence it gathered. Cross-check important figures against the source data.';
+  const headline = isComputed ? text.computed : text.model;
+  const detail = isComputed ? text.computedDetail : text.modelDetail;
 
-  const facts: Array<{ label: string; value: string }> = [];
-  if (provenance?.tool) facts.push({ label: 'Source', value: provenance.tool });
-  if (period) facts.push({ label: 'Data period', value: period });
-  if (provenance?.entity_label) facts.push({ label: 'Entity', value: provenance.entity_label });
+  // `internal` facts are for checking in the hover panel: a tool name or an id is nothing to read.
+  const facts: Array<{ label: string; value: string; internal?: boolean }> = [];
+  if (provenance?.tool) facts.push({ label: text.source, value: provenance.tool, internal: true });
+  if (period) facts.push({ label: text.period, value: period });
+  if (provenance?.entity_label) {
+    facts.push({
+      label: text.entity,
+      value: provenance.entity_label,
+      internal: ENTITY_ID_SHAPE.test(provenance.entity_label),
+    });
+  }
   if (typeof provenance?.record_count === 'number') {
-    facts.push({ label: 'Records', value: String(provenance.record_count) });
+    facts.push({ label: text.records, value: String(provenance.record_count) });
   }
   if (evidenceRefs?.length) {
-    facts.push({ label: 'Evidence references', value: String(evidenceRefs.length) });
+    facts.push({ label: text.references, value: String(evidenceRefs.length) });
   }
   const id = datasetId ?? null;
   const visibleEvidenceRefs = evidenceRefs?.slice(0, 5) ?? [];
 
+  // Read on every focus of the ⓘ, so it says what the reader can use, in the answer's language.
   const srSummary = [
     headline,
     detail,
-    ...facts.map((f) => `${f.label}: ${f.value}`),
-    ...visibleEvidenceRefs,
+    ...facts.filter((f) => !f.internal).map((f) => `${f.label}: ${f.value}`),
   ].join('. ');
 
   return (
@@ -77,7 +88,7 @@ export function EvidenceTooltip({ provenance, datasetId, evidenceRefs }: Evidenc
           render={
             <button
               type="button"
-              aria-label="Data provenance"
+              aria-label={text.trigger}
               aria-describedby={descriptionId}
               className="inline-flex cursor-help items-center text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:text-foreground"
             >
