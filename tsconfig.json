@@ -17,7 +17,9 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@continuum/contracts": ["./packages/contracts/src/index.ts"]
+      "@continuum/contracts": ["./packages/contracts/src/index.ts"],
+      "@continuum/billing": ["../packages/billing/src/index.ts"],
+      "@continuum/billing-ui": ["../packages/billing-ui/src/index.ts"]
     },
     "types": ["bun"]
   },
@@ -27,6 +29,9 @@
     "src/**/*.tsx",
     "packages/contracts/**/*.ts",
     "packages/contracts/**/*.tsx",
+    "../packages/billing-ui/src/**/*.ts",
+    "../packages/billing-ui/src/**/*.tsx",
+    "../packages/billing/src/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next/wpd/types/**/*.ts",

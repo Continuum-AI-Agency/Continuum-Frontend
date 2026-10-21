@@ -7,6 +7,7 @@ import {
   CyclePreviewResponseSchema,
   CycleRunReportSchema,
   EnrollRequestSchema,
+  EnrollResultSchema,
   getOptimizationMetricDefinition,
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
@@ -141,6 +142,45 @@ describe('EnrollRequestSchema — exactly one of adset_ids | campaign_id', () =>
   });
   test('rejects neither', () => {
     expect(() => EnrollRequestSchema.parse({ portfolio_id: UUID })).toThrow();
+  });
+});
+
+describe('EnrollResultSchema — expansion distinguishes empty-match from read failure', () => {
+  test('the adset_ids path carries no expansion', () => {
+    expect(EnrollResultSchema.parse({ enrolled: 2, first_cycle: 'queued' })).toMatchObject({
+      enrolled: 2,
+    });
+  });
+  test('a campaign that genuinely matched nothing says so', () => {
+    const parsed = EnrollResultSchema.parse({
+      enrolled: 0,
+      first_cycle: 'queued',
+      expansion: {
+        campaign_id: 'c1',
+        snapshots_read: 64,
+        matched: 0,
+        outcome: 'no_adsets_matched',
+      },
+    });
+    expect(parsed.expansion?.outcome).toBe('no_adsets_matched');
+    expect(parsed.expansion?.snapshots_read).toBe(64);
+  });
+  test('a successful expansion reports the matched count', () => {
+    const parsed = EnrollResultSchema.parse({
+      enrolled: 7,
+      first_cycle: 'queued',
+      expansion: { campaign_id: 'c1', snapshots_read: 64, matched: 7, outcome: 'expanded' },
+    });
+    expect(parsed.expansion?.matched).toBe(7);
+  });
+  test('rejects an unknown expansion outcome', () => {
+    expect(() =>
+      EnrollResultSchema.parse({
+        enrolled: 0,
+        first_cycle: 'queued',
+        expansion: { campaign_id: 'c1', snapshots_read: 0, matched: 0, outcome: 'read_failed' },
+      }),
+    ).toThrow();
   });
 });
 

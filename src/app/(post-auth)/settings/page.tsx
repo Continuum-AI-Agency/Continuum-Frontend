@@ -43,6 +43,7 @@ import {
 import type { AgentRequestPayload } from '@/lib/onboarding/agentClient';
 import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
 import { ensureOnboardingState, fetchOnboardingState } from '@/lib/onboarding/storage';
+import { decideBillingAccess } from '@continuum/billing-ui';
 import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
 
 type SettingsPageProps = {
@@ -296,10 +297,18 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <>
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
-          title="Billing & credits"
-          description="AI Studio tier, credits, and plan management."
+          title="Billing"
+          description="Products, AI Studio metered credits, payment method, invoices, and Stripe checkout for this brand."
         >
-          <BrandBillingPanel tier={activeBrandTier} />
+          <BrandBillingPanel
+            brandId={activeBrandId}
+            role={
+              permissions.find((p) => p.brand_profile_id === activeBrandId)?.role ?? null
+            }
+            tier={activeBrandTier}
+            brandName={defaultBrandName}
+            selfEmail={userEmail !== 'Unknown' ? userEmail : null}
+          />
         </SettingsSection>
       </>
     );
@@ -368,6 +377,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     );
   }
 
+  const billingRole =
+    permissions.find((p) => p.brand_profile_id === activeBrandId)?.role ?? null;
+  const billingTabVisibility = decideBillingAccess(billingRole).tabVisibility;
+
   return (
     <div className="flex h-[var(--app-content-h)] min-h-0 w-full max-w-none flex-col overflow-hidden px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
       <header className="mb-3 shrink-0 space-y-1">
@@ -382,6 +395,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             brandPill={<BrandNavPill name={defaultBrandName} logoUrl={brandLogoUrl} />}
             accountPill={<AccountNavPill email={userEmail} />}
             activeSectionSlot={activeSectionSlot}
+            billingTabVisibility={billingTabVisibility}
           />
         </Suspense>
       </div>

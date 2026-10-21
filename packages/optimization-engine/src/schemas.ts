@@ -83,6 +83,10 @@ export const FreezeReasonSchema = z.enum([
   // The ad set buys a different currency than the portfolio prices. Not comparable, so
   // not compared — see runCycle's currency check.
   'kpi_mismatch',
+  // No budget of its own to move (and no campaign-level owner of it) — a boosted post.
+  'no_own_budget',
+  // Declares no objective at all AND bought none of the portfolio's events — see runCycle.
+  'no_declared_objective',
 ]);
 
 /** How far a creative standing can be trusted. Mirrors CreativeStandingFlag in ./types. */

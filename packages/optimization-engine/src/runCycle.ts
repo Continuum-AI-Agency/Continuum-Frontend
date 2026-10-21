@@ -11,8 +11,8 @@ import { classifyPortfolio } from './classify';
 import { portfolioConfidence } from './confidence';
 import type { DeepPartial, EngineConfig } from './config';
 import { resolveConfig } from './config';
-import { reallocate } from './engine';
 import { evaluateCreative } from './creative';
+import { reallocate } from './engine';
 import { evaluateFatigue } from './fatigue';
 import { sum } from './internal/math';
 import { computePacing } from './pacing';
@@ -81,8 +81,39 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
     return { ...s, freeze: true as const, freezeReason: 'kpi_mismatch' as const };
   });
 
+  // --- Two things the optimizer has no business funding ------------------
+  // Both run HERE, beside the currency check and before the triggers, because both mean
+  // "this ad set is not a member of the pool" rather than "this ad set is doing badly".
+  // A recommendation about a non-member is a verdict we have no standing to reach, so —
+  // exactly as with kpi_mismatch — silence beats confidence.
+  //
+  // The live case that forced this: four active "Instagram Post" boosted posts on a 64-ad-set
+  // account, each with currentBudget 0, spend 0, and (three of them) no declared goal. They
+  // were not frozen at ingest, so they entered the pool, and a zero-budget item's solver box
+  // collapses onto the floor (lower = upper = floor). The engine handed them $23.95/day each
+  // on no evidence whatsoever.
+  const eligibilityChecked = currencyChecked.map((s) => {
+    if (s.freeze) return s;
+    // No budget of its own. The reallocation moves money BETWEEN ad sets; there is nothing
+    // here to move, and nothing that explains where the money lives instead (a CBO/lifetime
+    // ad set arrives already frozen `unsupported_budget` from ingest and is skipped above).
+    if (s.currentBudget <= 0) {
+      return { ...s, freeze: true as const, freezeReason: 'no_own_budget' as const };
+    }
+    // Declares nothing, and bought none of what this pool prices. Only meaningful once the
+    // portfolio itself declares a currency — without cfg.kpiField there is no currency for
+    // the ad set to have failed to declare. An undeclared ad set that DID produce the
+    // portfolio's events keeps being scored: the events establish what the declaration
+    // omitted (see the older-sync fallback in currency.test.ts).
+    const declaresNothing = !s.optimization_goal && !s.kpiField;
+    if (baseCfg.kpiField && declaresNothing && kpiEvents(s.windows.d14, baseCfg) <= 0) {
+      return { ...s, freeze: true as const, freezeReason: 'no_declared_objective' as const };
+    }
+    return s;
+  });
+
   // --- Classify, then run triggers, then mark starved -------------------
-  const classified = classifyPortfolio(currencyChecked, baseCfg);
+  const classified = classifyPortfolio(eligibilityChecked, baseCfg);
   const { recommendations: pauseRecs, starveIds } = evaluateTriggers(classified, baseCfg);
   // Fatigue is independent of pauses: it never starves, and skips ad sets a pause
   // trigger already flagged (avoid double-noise on the same ad set).

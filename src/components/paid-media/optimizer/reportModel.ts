@@ -66,6 +66,16 @@ export function freezeLabel(
         label: 'Held · lifetime budget',
         hint: 'This campaign has a whole-flight lifetime budget, not a daily one. The optimizer paces and scores in daily terms, so it will not resize a flight it cannot reason about.',
       };
+    case 'no_own_budget':
+      return {
+        label: 'Held · no budget of its own',
+        hint: 'This ad set has no ad-set budget for the optimizer to move — boosted posts and promoted posts usually look like this. It is left alone rather than handed a share of the pool it never had. Give it an ad-set daily budget in Meta if you want the optimizer to manage it.',
+      };
+    case 'no_declared_objective':
+      return {
+        label: 'Held · no declared goal',
+        hint: 'This ad set does not tell Meta what result it is buying, and it has produced none of the results this portfolio measures. Scoring it would rank it on events it never claimed to buy, so it is held instead. Set an optimization goal on the ad set in Meta.',
+      };
     case 'kpi_mismatch':
       return {
         label: 'Held · different goal',

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { FreezeReasonSchema } from '@continuum/contracts';
 
 import {
   applyModePill,
@@ -42,9 +43,27 @@ describe('freezeLabel', () => {
     expect(freezeLabel('no_conversions')?.label).toBe('Held · no conversion signal');
     expect(freezeLabel('missing_window')?.label).toBe('Held · incomplete data');
     expect(freezeLabel('unsupported_budget')?.label).toBe('Held · CBO/lifetime');
+    expect(freezeLabel('no_own_budget')?.label).toBe('Held · no budget of its own');
+    expect(freezeLabel('no_declared_objective')?.label).toBe('Held · no declared goal');
+  });
+  it('distinguishes no_own_budget from the campaign-level unsupported_budget', () => {
+    // Both are zero-budget ad sets, and the operator's next action differs: one needs an
+    // ad-set budget created, the other has a budget already — on the campaign.
+    expect(freezeLabel('no_own_budget')?.hint).not.toBe(freezeLabel('unsupported_budget')?.hint);
+    expect(freezeLabel('no_own_budget')?.hint).toContain('boosted');
   });
   it('falls back to a generic Held for an unknown loose reason', () => {
     expect(freezeLabel('some_future_reason')?.label).toBe('Held');
+  });
+  it('has a real label for EVERY reason in the contracts union — none degrade to bare "Held"', () => {
+    // The drift fence. A reason added to the contracts enum without a case here renders as an
+    // unexplained "Held", which tells an operator nothing about why their budget did not move.
+    for (const reason of FreezeReasonSchema.options) {
+      const rendered = freezeLabel(reason);
+      expect(rendered).not.toBeNull();
+      expect(rendered?.label).not.toBe('Held');
+      expect(rendered?.hint.length).toBeGreaterThan(0);
+    }
   });
 });
 

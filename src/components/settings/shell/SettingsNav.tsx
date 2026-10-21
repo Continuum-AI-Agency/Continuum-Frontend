@@ -2,26 +2,42 @@
 
 import type { ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
+import type { BillingTabVisibility } from "@continuum/billing-ui";
 import { ACCOUNT_SECTIONS, BRAND_SECTIONS } from "./sections";
 import { SettingsNavItem } from "./SettingsNavItem";
 
 type SettingsNavProps = {
   brandPill: ReactNode;
   accountPill: ReactNode;
+  /** Owner: full; admin: locked (visible); others: hidden */
+  billingTabVisibility?: BillingTabVisibility;
 };
 
-export function SettingsNav({ brandPill, accountPill }: SettingsNavProps) {
+export function SettingsNav({
+  brandPill,
+  accountPill,
+  billingTabVisibility = "full",
+}: SettingsNavProps) {
+  const brandSections = BRAND_SECTIONS.filter((section) => {
+    if (section.key !== "billing") return true;
+    return billingTabVisibility !== "hidden";
+  });
+
   return (
     <Tabs.List
       aria-label="Settings sections"
       className="flex flex-col gap-6"
     >
       <NavGroup label="Brand" pill={brandPill}>
-        {BRAND_SECTIONS.map((section) => (
+        {brandSections.map((section) => (
           <SettingsNavItem
             key={section.key}
             value={section.key}
-            label={section.label}
+            label={
+              section.key === "billing" && billingTabVisibility === "locked"
+                ? "Billing (owner)"
+                : section.label
+            }
             icon={section.icon}
           />
         ))}

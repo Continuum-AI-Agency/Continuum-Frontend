@@ -7,6 +7,7 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { BillingTabVisibility } from "@continuum/billing-ui";
 import { resolveSection, type SectionKey } from "./sections";
 import { SettingsNav } from "./SettingsNav";
 import { SwitchingIndicator } from "./SwitchingIndicator";
@@ -16,6 +17,7 @@ type SettingsShellProps = {
   brandPill: ReactNode;
   accountPill: ReactNode;
   activeSectionSlot: ReactNode;
+  billingTabVisibility?: BillingTabVisibility;
 };
 
 export function SettingsShell({
@@ -23,6 +25,7 @@ export function SettingsShell({
   brandPill,
   accountPill,
   activeSectionSlot,
+  billingTabVisibility = "full",
 }: SettingsShellProps) {
   const router = useRouter();
   const params = useSearchParams();
@@ -70,14 +73,22 @@ export function SettingsShell({
             </SheetTrigger>
             <SheetContent side="left" className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6">
               <SheetTitle className="sr-only">Settings sections</SheetTitle>
-              <SettingsNav brandPill={brandPill} accountPill={accountPill} />
+              <SettingsNav
+                brandPill={brandPill}
+                accountPill={accountPill}
+                billingTabVisibility={billingTabVisibility}
+              />
             </SheetContent>
           </Sheet>
         </div>
 
         <aside className="hidden @[56rem]/settings:block">
           <div className="sticky top-4">
-            <SettingsNav brandPill={brandPill} accountPill={accountPill} />
+            <SettingsNav
+              brandPill={brandPill}
+              accountPill={accountPill}
+              billingTabVisibility={billingTabVisibility}
+            />
           </div>
         </aside>
 

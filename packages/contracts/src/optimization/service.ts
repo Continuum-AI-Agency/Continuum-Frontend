@@ -258,9 +258,22 @@ export const EnrollRequestSchema = z
   });
 export type EnrollRequest = z.infer<typeof EnrollRequestSchema>;
 
+/** How a `campaign_id` enrollment resolved. Present ONLY on the campaign path, and only
+ *  when the ad-set snapshot read SUCCEEDED — a failed read is a 502 with
+ *  `reason: 'snapshot_read_failed'`, never a 200 with `enrolled: 0`. Without this the two
+ *  are the same empty answer, and a dead Meta token reads as "the campaign has no ad sets". */
+export const EnrollExpansionSchema = z.object({
+  campaign_id: z.string(),
+  snapshots_read: z.number().int().nonnegative(),
+  matched: z.number().int().nonnegative(),
+  outcome: z.enum(['expanded', 'no_adsets_matched']),
+});
+export type EnrollExpansion = z.infer<typeof EnrollExpansionSchema>;
+
 export const EnrollResultSchema = z.object({
   enrolled: z.number().int().nonnegative(),
   first_cycle: z.literal('queued'),
+  expansion: EnrollExpansionSchema.optional(),
 });
 export type EnrollResult = z.infer<typeof EnrollResultSchema>;
 
