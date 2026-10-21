@@ -16,7 +16,7 @@ import {
 } from '@continuum/contracts';
 import { Loader2, Plus, X } from 'lucide-react';
 import React from 'react';
-import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
+import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -101,7 +101,8 @@ export function ElementBoard({ element, brandId }: ElementBoardProps) {
       ),
     [skills],
   );
-  const slash = useSlashTextarea(skills, (text) => {
+  const slashOptions = useSkillSlashOptions(skills);
+  const slash = useSlashTextarea(slashOptions, (text) => {
     setStyleDraft('');
     const picked = [...text.matchAll(SLASH_TOKEN)].map((match) => match[1] ?? '');
     const refused = picked.find((slug) => !styleSlugSet.has(slug));
