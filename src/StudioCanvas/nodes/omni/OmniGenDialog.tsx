@@ -17,7 +17,7 @@
 import type { Skill } from '@continuum/contracts';
 import { Download, Loader2, Sparkles, Video, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
+import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -89,7 +89,7 @@ export function OmniGenDialog({
   slashSkills,
 }: OmniGenDialogProps) {
   const [draft, setDraft] = useState('');
-  const slash = useSlashTextarea(slashSkills, setDraft);
+  const slash = useSlashTextarea(useSkillSlashOptions(slashSkills), setDraft);
 
   const hasChain = variations.length > 0;
   // The in-flight flag is the optimistic pending variation itself, which lives in

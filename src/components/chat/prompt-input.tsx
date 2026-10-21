@@ -21,9 +21,9 @@ import { streamJainaSpeechToText } from '@/lib/jaina/speech';
 import { cn } from '@/lib/utils';
 import { type Attachment, Attachments } from './attachments';
 import { MentionPickerMenu, type MentionPlatformOption } from './mention-picker-menu';
-import { SlashMenu, useSlashMenu } from './slash-menu';
 import type { MentionAnalyticsContext } from './mention-suggestion-hover';
 import { MENTION_DRAG_TYPE } from './SessionContentTray';
+import { SlashMenu, useSkillSlashOptions, useSlashMenu } from './slash-menu';
 import { SpeechInput } from './speech-input';
 import { ACCEPTED_ATTACHMENT_TYPES, type ChatAttachmentsController } from './useChatAttachments';
 
@@ -487,7 +487,8 @@ export function PromptInput({
     return serialized;
   }, []);
 
-  const slash = useSlashMenu(slashSkills, (option, query) => {
+  const slashOptions = useSkillSlashOptions(slashSkills);
+  const slash = useSlashMenu(slashOptions, (option, query) => {
     const root = editorRef.current;
     if (!root) return;
     root.focus();

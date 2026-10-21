@@ -1,9 +1,11 @@
 'use client';
 
-import type {
-  VideoEditorAgentRequest,
-  VideoEditorPoolAsset,
-  VideoEditorWorkflow,
+import {
+  resolveVideoEffects,
+  type VideoEditorAgentRequest,
+  type VideoEditorPoolAsset,
+  type VideoEditorWorkflow,
+  workflowSlug,
 } from '@continuum/contracts';
 import {
   AtSign,
@@ -22,8 +24,9 @@ import {
   ConversationEmptyState,
 } from '@/components/ai-elements/conversation';
 import { Message } from '@/components/ai-elements/message';
-import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
+import { appendDictation, DictationButton } from '@/components/dictation/DictationButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,6 +46,7 @@ import { streamVideoEditorAgent } from '@/lib/api/videoEditorAgent.client';
 import { cn } from '@/lib/utils';
 import { hasFootage } from '../brief/briefGoals';
 import type { VideoStudioContext } from '../types';
+import { effectOptions } from './effectOptions';
 import {
   applyFrame,
   assetMention,
@@ -118,7 +122,9 @@ export function EditorAgentPanel({
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [workflowError, setWorkflowError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const slashOptions = useMemo(() => effectOptions(workflows), [workflows]);
+  const slash = useSlashTextarea(slashOptions, setDraft);
+  const textareaRef = slash.ref;
   const running = turns.at(-1)?.status === 'running';
   useEffect(() => {
     onRunningChange?.(running);
@@ -126,6 +132,20 @@ export function EditorAgentPanel({
   }, [onRunningChange, running]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Saved workflows feed the `/` menu; the house effects are there without them. The workspace
+  // may hand a fresh runOp every render, so read it once on mount.
+  const runOp = useRef(studio.runOp);
+  runOp.current = studio.runOp;
+  useEffect(() => {
+    runOp
+      .current('list_workflows', {})
+      .then((result) => setWorkflows(result.workflows))
+      .catch(() => undefined);
+  }, []);
+
+  const effectNames = (prompt: string) =>
+    resolveVideoEffects(prompt, workflows).applied.map((effect) => effect.name);
 
   // The pool is read on first @-mention; an op not landed yet leaves only the clips.
   useEffect(() => {
@@ -289,7 +309,10 @@ export function EditorAgentPanel({
                       <SafeMarkdown content={turn.text} isAnimating={turn.status === 'running'} />
                     ) : turn.status === 'running' ? (
                       <span className="flex items-center gap-2 text-muted-foreground">
-                        <Spinner className="size-3" /> Working…
+                        <Spinner className="size-3" />
+                        {effectNames(turn.prompt).length
+                          ? `Editing with ${effectNames(turn.prompt).join(', ')}…`
+                          : 'Working…'}
                       </span>
                     ) : null}
                     {turn.status === 'stopped' ? (
@@ -363,7 +386,12 @@ export function EditorAgentPanel({
                       requestAnimationFrame(() => textareaRef.current?.focus());
                     }}
                   >
-                    {workflow.name}
+                    <span className="truncate">{workflow.name}</span>
+                    {workflowSlug(workflow.name) ? (
+                      <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
+                        /{workflowSlug(workflow.name)}
+                      </span>
+                    ) : null}
                   </Button>
                 ))
               )}
@@ -415,10 +443,11 @@ export function EditorAgentPanel({
 
         <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
           <PopoverAnchor className="relative">
+            {slash.menuProps ? <SlashMenu {...slash.menuProps} /> : null}
             <Textarea
               ref={textareaRef}
               value={draft}
-              placeholder="Ask the editor… (@ to mention a clip or asset)"
+              placeholder="Ask the editor… (@ to mention, / for effects)"
               className="min-h-16 resize-none pr-28 text-sm"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
@@ -426,7 +455,10 @@ export function EditorAgentPanel({
                 const typed = value.slice(0, selectionStart);
                 if (/(^|\s)@$/.test(typed)) setMentionOpen(true);
               }}
+              onSelect={slash.onSelect}
+              onBlur={slash.close}
               onKeyDown={(event) => {
+                if (slash.onKeyDown(event)) return;
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   void send(draft);
