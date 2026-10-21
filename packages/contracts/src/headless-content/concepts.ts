@@ -122,7 +122,7 @@ export const headlessConceptSchema = z
           .strict(),
       )
       .min(3)
-      .max(8),
+      .max(9),
     /** The finished reel's length: the owner's 8–12 s, a story's 12–20 s, or a tour's 22–40 s. */
     seconds: z.object({ min: z.number().positive(), max: z.number().positive() }).strict(),
     casting: z
@@ -459,15 +459,16 @@ export const HEADLESS_CONCEPTS: readonly HeadlessConcept[] = [
     id: 'tour',
     label: 'Tour',
     summary:
-      'One host walks a place room by room: she names it at the front, a silent glide previews each room before she speaks in it, and she closes outside with the invitation.',
+      'A drone opens over the place, then one host walks it room by room: she names it at the front, a silent glide previews each room before she speaks in it, and she closes outside with the invitation.',
     whenToUse:
       'A place is the product: a home for sale, a model home, a venue, a showroom, a studio. Each room is a scene, so the listing photos become the openings.',
     beats: [
+      beat('overhead', 'a silent drone shot descending over the front of the place', 'none'),
       beat('hook', 'at the front of the place, she names it'),
       beat('proof', 'still at the front, one thing true of the whole place'),
       beat('detail', 'a silent glide through the first room', 'none'),
       beat('proof', 'in the first room, what it gives the buyer'),
-      beat('overhead', 'a silent drift over the second room', 'none'),
+      beat('detail', 'a silent glide through the second room', 'none'),
       beat('proof', 'in the second room, what it gives the buyer'),
       beat('pov', 'a silent glide out to the outdoor space', 'none'),
       beat('cta', 'outside, the invitation to visit'),
@@ -479,7 +480,7 @@ export const HEADLESS_CONCEPTS: readonly HeadlessConcept[] = [
     },
     headlineOnHook: false,
     sceneDefaults:
-      'Four places in walking order: the front, two rooms, and the outdoor space. The brand’s own photos of each, when it has them.',
+      'Four places in walking order: the front (the drone shot and her first two beats), two rooms, and the outdoor space. The brand’s own photos of each, when it has them: the front photo is the drone’s reference too.',
     soundPolicy: 'Her voice on each spoken beat, in the quiet room she is in. The glides are silent.',
     guidance: [
       'Every number she says is one the brief gives (bedrooms, square feet, price): never invent a fact about the place.',
