@@ -27,6 +27,25 @@ type ActionsState = {
 };
 let actionsState: ActionsState = { data: [], isLoading: false };
 
+// The enrolled roster the feed reads its ad-set names from. Everything else the client is asked
+// is refused, so a read this suite did not expect fails loudly instead of hanging.
+let rosterRows: unknown[] = [];
+let rosterReads = 0;
+mock.module('@/lib/supabase/client', () => {
+  const rpc = async (name: string) => {
+    if (name !== 'optimizer_list_portfolio_adsets') return { data: null, error: 'unmocked' };
+    rosterReads += 1;
+    return { data: rosterRows, error: null };
+  };
+  return {
+    createSupabaseBrowserClient: () => ({
+      rpc,
+      schema: () => ({ rpc }),
+      functions: { invoke: rpc },
+    }),
+  };
+});
+
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
 const realOptimizerData = await import('../useOptimizerData');
@@ -88,6 +107,8 @@ const action = (over: Partial<OptimizerActionFeedRow> = {}): OptimizerActionFeed
 
 beforeEach(() => {
   actionsState = { data: [], isLoading: false };
+  rosterRows = [];
+  rosterReads = 0;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
@@ -178,9 +199,45 @@ describe('OptimizerActionFeed', () => {
       isLoading: false,
     };
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(screen.getAllByText('daily_total').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Total daily budget').length).toBeGreaterThan(0);
+    expect(screen.queryByText('daily_total')).toBeNull();
     expect(screen.getByText('4200')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
+  });
+
+  it('reads a switch flipped as one sentence, never the column and its raw values', () => {
+    actionsState = {
+      data: [
+        action({
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          family: 'settings',
+          op: 'setting',
+          entity_id: 'creative_analysis',
+          before: { value: 'off' },
+          after: { value: 'on' },
+          reversible: false,
+          actor_kind: 'human',
+          receipt: null,
+        }),
+        action({
+          id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          family: 'settings',
+          op: 'setting',
+          entity_id: 'autopilot_paused',
+          before: { value: 'true' },
+          after: { value: 'false' },
+          reversible: false,
+          actor_kind: 'human',
+          receipt: null,
+        }),
+      ],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const timeline = screen.getByTestId('action-timeline');
+    expect(within(timeline).getByText('Creative analysis turned on')).toBeTruthy();
+    expect(within(timeline).getByText('Autopilot resumed')).toBeTruthy();
+    expect(timeline.textContent).not.toMatch(/creative_analysis|autopilot_paused|true|false/);
   });
 
   it('paginates on the RPC cursor rather than calling one page the world', () => {
@@ -311,8 +368,8 @@ describe('OptimizerActionFeed — timeline by day', () => {
   });
 });
 
-// The rows carry ids; a person reads names. The name comes from the enrolled roster the
-// portfolio screen already holds in the React Query cache — never a new read.
+// The rows carry ids; a person reads names. The name comes from each portfolio's enrolled
+// roster — from the cache when another screen loaded it, read once otherwise.
 describe('OptimizerActionFeed — entity names', () => {
   const KNOWN_ID = '120251303880680236';
   const seedRoster = () =>
@@ -326,6 +383,24 @@ describe('OptimizerActionFeed — entity names', () => {
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
     const name = within(screen.getByTestId('action-timeline')).getByText('Lookalike 3% — Spain');
     expect(name.getAttribute('title')).toBe(KNOWN_ID);
+  });
+
+  it('reads the roster itself when no other screen has loaded it yet', async () => {
+    rosterRows = [{ adset_id: KNOWN_ID, adset_name: 'Lookalike 3% — Spain', active: true }];
+    actionsState = { data: [action()], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const timeline = screen.getByTestId('action-timeline');
+    const name = await waitFor(() => within(timeline).getByText('Lookalike 3% — Spain'));
+    expect(name.getAttribute('title')).toBe(KNOWN_ID);
+    expect(within(timeline).queryByText(KNOWN_ID)).toBeNull();
+    expect(rosterReads).toBe(1);
+  });
+
+  it('reads nothing when the roster is already in the cache', () => {
+    seedRoster();
+    actionsState = { data: [action()], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    expect(rosterReads).toBe(0);
   });
 
   it('falls back to the id when no name is known for it', () => {

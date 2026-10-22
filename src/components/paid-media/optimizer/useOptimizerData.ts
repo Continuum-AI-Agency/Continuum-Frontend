@@ -2316,6 +2316,19 @@ export function useOptimizerAdsetInventory(
   };
 }
 
+/** The enrolled-roster read as query options: one definition for every surface that reads
+ *  `optimizerQueryKeys.enrolledAdsets`, so the detail, its prefetch and the Activity feed's
+ *  names share one cache entry. */
+export function enrolledAdsetsQuery(portfolioId: string) {
+  return {
+    queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
+    queryFn: () => withReadTimeout(fetchEnrolledAdsets(portfolioId)),
+    staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: retryUnlessTimeout(1),
+  };
+}
+
 /** The ad sets enrolled in a portfolio — powers the manage panel's pre-selection
  *  and add/remove diff. */
 export function useOptimizerEnrolledAdsets(portfolioId: string | null) {
@@ -2622,11 +2635,7 @@ export function usePrefetchPortfolioDetail(brandId: string) {
         queryFn: () => withReadTimeout(fetchTimelineEvents(portfolioId)),
         staleTime: FIVE_MINUTES,
       });
-      void queryClient.prefetchQuery({
-        queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
-        queryFn: () => withReadTimeout(fetchEnrolledAdsets(portfolioId)),
-        staleTime: TEN_MINUTES,
-      });
+      void queryClient.prefetchQuery(enrolledAdsetsQuery(portfolioId));
     },
     [brandId, queryClient],
   );

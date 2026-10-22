@@ -16,6 +16,7 @@ import {
   OPTIMIZER_MANAGED_PLATFORM,
   readAdPlatform,
 } from './platforms/platformTabsModel';
+import { settingLabel, settingSentence, settingValue } from './settingChange';
 
 /** How one action's before/after should be printed. `unit` decides the formatter:
  *  'money' values are MINOR units and the caller applies its currency; 'text' is printed
@@ -25,6 +26,9 @@ export type ActionChange = {
   unit: 'money' | 'text';
   before: string | number | null;
   after: string | number | null;
+  /** The whole change as one sentence, when it reads better that way than before → after:
+   *  a switch flipped ("Creative analysis turned on", "Autopilot resumed"). */
+  sentence?: string;
 };
 
 /** MINOR → MAJOR by the currency's ISO 4217 exponent: 100 for MXN and USD, 1 for JPY, 1000
@@ -89,13 +93,18 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
         before: readKey(row.before, 'status'),
         after: readKey(row.after, 'status'),
       };
-    case 'setting':
+    case 'setting': {
+      // `entity_id` is the audited COLUMN here, and the values are the text the audit stored.
+      const after = readKey(row.after, 'value');
+      const sentence = settingSentence(row.entity_id, after);
       return {
-        label: row.entity_id ?? 'Setting',
+        label: settingLabel(row.entity_id),
         unit: 'text',
-        before: readKey(row.before, 'value'),
-        after: readKey(row.after, 'value'),
+        before: settingValue(readKey(row.before, 'value')),
+        after: settingValue(after),
+        ...(sentence ? { sentence } : {}),
       };
+    }
     case 'decision':
       return {
         label: 'Recommendation',

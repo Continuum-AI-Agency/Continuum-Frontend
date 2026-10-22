@@ -58,8 +58,9 @@ describe('readActionChange reads one row shape across four unit systems', () => 
         after: { value: '4200' },
       }),
     );
-    expect(change.label).toBe('daily_total');
+    expect(change.label).toBe('Total daily budget');
     expect(change.after).toBe('4200');
+    expect(change.sentence).toBeUndefined();
   });
 
   it('reads a recommendation decision as its status transition', () => {

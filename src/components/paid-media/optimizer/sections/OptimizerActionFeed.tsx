@@ -18,14 +18,14 @@
 // again.
 
 import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
-import { skipToken, useQueries } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { ArrowRightIcon, ListChecksIcon } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import {
+  enrolledAdsetsQuery,
   type OptimizerActionFeedRow,
-  optimizerQueryKeys,
   useOptimizerActions,
 } from '../useOptimizerData';
 import {
@@ -99,22 +99,27 @@ export function ActionRow({
     >
       <div className="min-w-0">
         <p className="text-sm leading-snug">
-          <span className="font-semibold text-foreground">{change.label}</span>{' '}
+          <span className="font-semibold text-foreground">{change.sentence ?? change.label}</span>{' '}
           {row.op !== 'setting' ? (
             <span className="text-foreground" title={entity.id ?? undefined}>
               {entity.name}
             </span>
           ) : null}{' '}
-          <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
-            <span className="font-mono text-muted-foreground tabular-nums">
-              {printChangeValue(change, change.before, currency)}
+          {change.sentence ? null : (
+            <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
+              <span className="font-mono text-muted-foreground tabular-nums">
+                {printChangeValue(change, change.before, currency)}
+              </span>
+              <ArrowRightIcon
+                aria-hidden="true"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
+              <span className="font-mono font-semibold text-foreground tabular-nums">
+                {printChangeValue(change, change.after, currency)}
+              </span>
+              <ActionDelta change={change} />
             </span>
-            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-            <span className="font-mono font-semibold text-foreground tabular-nums">
-              {printChangeValue(change, change.after, currency)}
-            </span>
-            <ActionDelta change={change} />
-          </span>
+          )}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
           <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
@@ -153,12 +158,13 @@ function namesFromRosters(rosters: { data: unknown }[]): ActionEntityNames {
 }
 
 /**
- * Names for the ids the action rows carry, from the enrolled rosters the portfolio screen
- * already loaded (`optimizerQueryKeys.enrolledAdsets`, filled by the portfolio detail and its
- * hover prefetch, the Actions groups and the manage panel). It OBSERVES that cache and never
- * fetches (`skipToken`): the feed spans every portfolio of the brand, and a read per portfolio
- * just to decorate a card is not this surface's job. A roster that lands later re-renders
- * the cards named; an id no roster knows stays an id.
+ * Names for the ids the action rows carry, from the enrolled roster of each portfolio the feed
+ * mentions (`enrolledAdsetsQuery` — the same key and staleTime the portfolio detail, its hover
+ * prefetch, the Actions groups and the manage panel read, so a roster already loaded costs
+ * nothing). It used to only observe that cache, and an operator who opened Activity first read
+ * "Daily budget 120252366915460236" on every row. A brand holds a handful of portfolios, so
+ * one small roster read each is the price of a feed people can read. Until a roster lands — or
+ * when it never does, or the ad set has since left the portfolio — the id stays an id.
  */
 export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEntityNames {
   const portfolioIds = useMemo(
@@ -169,10 +175,7 @@ export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEnti
     [rows],
   );
   return useQueries({
-    queries: portfolioIds.map((portfolioId) => ({
-      queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
-      queryFn: skipToken,
-    })),
+    queries: portfolioIds.map((portfolioId) => enrolledAdsetsQuery(portfolioId)),
     combine: namesFromRosters,
   });
 }
@@ -242,7 +245,7 @@ function ActionTimelineEntry({
       ts={row.ts}
     >
       <p className="text-sm leading-snug">
-        <span className="font-semibold text-foreground">{change.label}</span>{' '}
+        <span className="font-semibold text-foreground">{change.sentence ?? change.label}</span>{' '}
         <span className="text-foreground" title={entity.id ?? undefined}>
           {entity.name}
         </span>
@@ -251,17 +254,22 @@ function ActionTimelineEntry({
         ) : null}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-        <span className="inline-flex items-center gap-1.5" data-figure-role="change">
-          <span className="font-mono tabular-nums">
-            {printChangeValue(change, change.before, currency)}
+        {change.sentence ? null : (
+          <span className="inline-flex items-center gap-1.5" data-figure-role="change">
+            <span className="font-mono tabular-nums">
+              {printChangeValue(change, change.before, currency)}
+            </span>
+            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
+            <span className="font-mono font-semibold text-foreground tabular-nums">
+              {printChangeValue(change, change.after, currency)}
+            </span>
+            <ActionDelta change={change} />
           </span>
-          <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
-          <span className="font-mono font-semibold text-foreground tabular-nums">
-            {printChangeValue(change, change.after, currency)}
-          </span>
-          <ActionDelta change={change} />
+        )}
+        <span>
+          {change.sentence ? '' : '· '}
+          {actorLabel(row)}
         </span>
-        <span>· {actorLabel(row)}</span>
         <PlatformChip platform={platform} />
       </div>
       {row.justification ? (
