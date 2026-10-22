@@ -7,6 +7,7 @@ import {
 } from '@continuum/contracts';
 import {
   addMarkerEdit,
+  canvasStartingCut,
   clipEnd,
   clipRows,
   deleteClipsEdit,
@@ -518,4 +519,26 @@ test('simultaneous clips get distinct reachable rows and adjacent clips reuse th
   expect(layout.rows.get('late')).toBe(0);
   expect(clips).toEqual(original);
   expect(clipRows([]).count).toBe(1);
+});
+
+test('canvas starting cut lays wired videos down in order, once, and only on an empty edit', () => {
+  const wired = (asset: VideoEditorPoolAsset): VideoEditorPoolAsset => ({
+    ...asset,
+    origin: 'graph',
+  });
+  const { durationSec: _unknown, ...noLength } = wired(video('b', 1));
+  const pool: VideoEditorPoolAsset[] = [
+    wired(video('a', 8)),
+    { ...wired(video('still', 1)), kind: 'image' },
+    video('already-in-project', 3),
+    noLength,
+    wired(video('c', 5)),
+  ];
+  expect(canvasStartingCut(blank(), pool)).toEqual([
+    { assetId: 'a', versionId: 'a-v1', atSec: 0 },
+    { assetId: 'b', versionId: 'b-v1', atSec: 8 },
+    { assetId: 'c', versionId: 'c-v1', atSec: 86_400 },
+  ]);
+  const edited = commit(blank(), placeAssetEdit(blank(), video('x', 4), { atSec: 0 }));
+  expect(canvasStartingCut(edited, pool)).toEqual([]);
 });
