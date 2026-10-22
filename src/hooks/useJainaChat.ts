@@ -24,16 +24,59 @@
 
 import { useChat } from '@ai-sdk/react';
 import type { BillingPaymentRequired, JainaUIMessage } from '@continuum/contracts';
-import { DefaultChatTransport } from 'ai';
-import { useCallback, useMemo, useRef } from 'react';
+import { DefaultChatTransport, type UIMessageChunk } from 'ai';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { backendTimeoutPolicy, fetchWithTimeout } from '@/lib/api/timeout';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { paymentRequiredFetch, readPaymentRequired } from '@/lib/billing/paymentRequired';
 import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
+import {
+  continuedToolCallIds,
+  dropOrphanToolChunks,
+  type OrphanToolChunk,
+} from '@/lib/jaina/orphanToolChunks';
 
 const STREAM_PATH = '/api/agents/jaina/chat/stream';
+
+type SendOptions = Parameters<DefaultChatTransport<JainaUIMessage>['sendMessages']>[0];
+type ReconnectOptions = Parameters<DefaultChatTransport<JainaUIMessage>['reconnectToStream']>[0];
+type TransportInit = ConstructorParameters<typeof DefaultChatTransport<JainaUIMessage>>[0];
+
+const reportOrphan = (orphan: OrphanToolChunk): void => {
+  console.warn('jaina_orphan_tool_chunk_dropped', orphan);
+};
+
+/**
+ * The SDK's transport, with every response stream passed through `dropOrphanToolChunks`: a tool
+ * result for a call the transcript never saw would otherwise end the whole turn as an error, and
+ * a resume of the same run would end the same way, every time.
+ *
+ * A send carries the messages the SDK continues from; a reconnect does not, so the transcript on
+ * screen is read through `currentMessages`.
+ */
+class JainaChatTransport extends DefaultChatTransport<JainaUIMessage> {
+  constructor(
+    init: TransportInit,
+    private readonly currentMessages: () => readonly JainaUIMessage[],
+  ) {
+    super(init);
+  }
+
+  override async sendMessages(options: SendOptions): Promise<ReadableStream<UIMessageChunk>> {
+    const stream = await super.sendMessages(options);
+    return dropOrphanToolChunks(stream, continuedToolCallIds(options.messages), reportOrphan);
+  }
+
+  override async reconnectToStream(
+    options: ReconnectOptions,
+  ): Promise<ReadableStream<UIMessageChunk> | null> {
+    const stream = await super.reconnectToStream(options);
+    if (!stream) return null;
+    return dropOrphanToolChunks(stream, continuedToolCallIds(this.currentMessages()), reportOrphan);
+  }
+}
 
 /** What the composer hands over for one turn. `query` is what goes on the wire. */
 export type JainaTurnInput = Omit<JainaChatInput, 'onDispatchError'> & {
@@ -79,47 +122,52 @@ export function useJainaChat({
   // The failure callback of the turn currently in flight. `sendMessage` resolves before the fetch
   // settles, so the only honest place to learn a turn was dropped is the hook's own error path.
   const dispatchErrorRef = useRef<((message: string) => void) | null>(null);
+  // The transcript the SDK resumes onto, for the transport's reconnect (which is not handed it).
+  const messagesRef = useRef<readonly JainaUIMessage[]>(initialMessages ?? []);
 
   const transport = useMemo(() => {
     const api = `${getApiBaseUrl()}${STREAM_PATH}`;
 
-    return new DefaultChatTransport<JainaUIMessage>({
-      api,
-      // A 402 is thrown as PaymentRequiredError with the contracts body, instead of the SDK's
-      // Error whose message is the raw JSON text. The Backend bound applies to the headers
-      // only — the resume GET at the read bound, the turn's POST at the job bound — so a hung
-      // Backend ends as a named error instead of a transcript that never settles, while a
-      // streaming answer keeps its connection.
-      fetch: fetchWithTimeout(backendTimeoutPolicy, paymentRequiredFetch),
-      // Resolved per request, not captured once: a Supabase access token expires mid-session and a
-      // stale bearer would 401 the turn the reader is waiting on.
-      headers: async () => {
-        const token = await getBrowserAccessToken();
-        return {
-          // Asking for the AI SDK stream is what selects the native wire.
-          Accept: 'text/event-stream',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        };
-      },
+    return new JainaChatTransport(
+      {
+        api,
+        // A 402 is thrown as PaymentRequiredError with the contracts body, instead of the SDK's
+        // Error whose message is the raw JSON text. The Backend bound applies to the headers
+        // only — the resume GET at the read bound, the turn's POST at the job bound — so a hung
+        // Backend ends as a named error instead of a transcript that never settles, while a
+        // streaming answer keeps its connection.
+        fetch: fetchWithTimeout(backendTimeoutPolicy, paymentRequiredFetch),
+        // Resolved per request, not captured once: a Supabase access token expires mid-session and a
+        // stale bearer would 401 the turn the reader is waiting on.
+        headers: async () => {
+          const token = await getBrowserAccessToken();
+          return {
+            // Asking for the AI SDK stream is what selects the native wire.
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          };
+        },
 
-      // The SDK would post `{ id, messages, trigger }`. Jaina's route takes the turn's own request
-      // shape, and the composer already assembled it — this only parses it against the contract.
-      prepareSendMessagesRequest: ({ body }) => {
-        const input = (body as { jainaInput?: JainaTurnInput } | undefined)?.jainaInput;
-        if (!input) {
-          // Louder than a narrowed turn. A send with no input would otherwise reach the Backend
-          // missing every optional field and come back as a plausible, smaller answer.
-          throw new Error('Jaina turn dispatched without a request input.');
-        }
-        return { body: buildJainaChatStreamRequest(input) };
-      },
+        // The SDK would post `{ id, messages, trigger }`. Jaina's route takes the turn's own request
+        // shape, and the composer already assembled it — this only parses it against the contract.
+        prepareSendMessagesRequest: ({ body }) => {
+          const input = (body as { jainaInput?: JainaTurnInput } | undefined)?.jainaInput;
+          if (!input) {
+            // Louder than a narrowed turn. A send with no input would otherwise reach the Backend
+            // missing every optional field and come back as a plausible, smaller answer.
+            throw new Error('Jaina turn dispatched without a request input.');
+          }
+          return { body: buildJainaChatStreamRequest(input) };
+        },
 
-      // Without this the transport would GET `${api}/${chatId}/stream`. Jaina resumes on the same
-      // path with the session as a query parameter, and answers 204 when nothing is in flight.
-      prepareReconnectToStreamRequest: ({ id }) => ({
-        api: `${api}?session_id=${encodeURIComponent(id)}`,
-      }),
-    });
+        // Without this the transport would GET `${api}/${chatId}/stream`. Jaina resumes on the same
+        // path with the session as a query parameter, and answers 204 when nothing is in flight.
+        prepareReconnectToStreamRequest: ({ id }) => ({
+          api: `${api}?session_id=${encodeURIComponent(id)}`,
+        }),
+      },
+      () => messagesRef.current,
+    );
   }, []);
 
   const chat = useChat<JainaUIMessage>({
@@ -148,6 +196,11 @@ export function useJainaChat({
       dispatchErrorRef.current = null;
     },
   });
+
+  // Read by a reconnect only after its GET answers, which is always after this effect has run.
+  useEffect(() => {
+    messagesRef.current = chat.messages;
+  }, [chat.messages]);
 
   const { sendMessage } = chat;
 

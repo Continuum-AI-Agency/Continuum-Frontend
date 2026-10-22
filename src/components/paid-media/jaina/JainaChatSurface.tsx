@@ -92,7 +92,6 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import { useJainaChat } from '@/hooks/useJainaChat';
-import { useBrandSkills } from '@/lib/organic/skills';
 import {
   isTerminalRunStatus,
   type JainaRunStatusRow,
@@ -116,7 +115,7 @@ import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
-import { cancelJainaRun, clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
+import { clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
   createConversationSessionResponseSchema,
@@ -134,6 +133,7 @@ import {
   operatorActionOutcome,
   operatorDispatchRefusal,
 } from '@/lib/jaina/operatorOutcome';
+import { jainaRunFailureNotice } from '@/lib/jaina/runFailureNotice';
 import {
   frontendCheckpointReportSchema,
   type JainaObjectiveStatus,
@@ -148,6 +148,7 @@ import {
   type TranscriptProjectionCache,
 } from '@/lib/jaina/uiMessageProjection';
 import { isPersistedResultStub, parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
+import { useBrandSkills } from '@/lib/organic/skills';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -944,7 +945,16 @@ export function JainaChatSurface({
   // run still executing after the user switched away and came back. Drives the Stop control and
   // guards the queue so a returned-to running session doesn't dispatch a second turn.
   const viewedSessionStreaming = useAgentRunStore(isSessionStreaming(sessionId));
-  const isViewedStreaming = isStreaming || viewedSessionStreaming;
+  // How this reader's last turn failed, as the transcript says it.
+  const chatFailure = React.useMemo(
+    () => (chatError ? jainaRunFailureNotice(chatError) : null),
+    [chatError],
+  );
+  // A run this reader saw end in an error it cannot resume is over for this reader, whatever its
+  // row still says. A row a killed process left `running` would otherwise hold Stop and the
+  // composer lock forever over a turn that already said it was interrupted.
+  const isViewedStreaming =
+    isStreaming || (viewedSessionStreaming && chatFailure?.canResume !== false);
 
   const anchors = React.useMemo(() => deriveJainaAnchors(messages), [messages]);
   const [shaderState, setShaderState] = React.useState<'visible' | 'sweeping' | 'hidden'>(
@@ -2299,11 +2309,13 @@ export function JainaChatSurface({
     queuedMessages,
   ]);
 
+  // Starting a new conversation LEAVES the current one; it does not end its run. Cancelling here
+  // recorded "Run cancelled." on a turn nobody stopped whenever a new-conversation link (an Ask
+  // Jaina chip, `new=1`) reached a tab that was reading a run — a run another tab may have
+  // started. Switching conversation already only detaches; this now matches it, and the run's
+  // completion toast still finds the reader. Stop is the one control that ends a run.
   const handleClearConversation = React.useCallback(() => {
-    if (isStreaming) {
-      void cancelJainaRun(liveChatMessage?.runId);
-      stopChat();
-    }
+    if (isStreaming) stopChat();
     setUiMessages([]);
     setQueuedMessages([]);
     setEditingQueueMessageId(null);
@@ -2318,7 +2330,7 @@ export function JainaChatSurface({
     processedCanvasEnvelopeKeysRef.current.clear();
     processedReportArtifactJobIdsRef.current.clear();
     persistedAssistantResponseIdsRef.current.clear();
-  }, [isStreaming, liveChatMessage?.runId, setUiMessages, stopChat]);
+  }, [isStreaming, setUiMessages, stopChat]);
 
   // A new-conversation link that arrives while this surface is already open (the person was on
   // the Jaina tab, or it stayed mounted) starts a fresh session, exactly as on first load.
@@ -2651,14 +2663,21 @@ export function JainaChatSurface({
     onAutoSendConsumed,
   ]);
 
-  // A deep link that arrives AFTER mount — "Back to chat" onto a Scale page Next kept alive —
-  // switches the thread. The mount-time one is the bootstrap's; this is every later one.
+  // A deep link that arrives AFTER mount — "Back to chat", or a run toast's View onto a Scale page
+  // Next kept alive — switches the thread. It is handed to the bootstrap rather than opened here:
+  // the link can also move the ad account, and a conversation read under the account the surface
+  // happened to hold opened the wrong account's history. The bootstrap reads it for whichever
+  // account it settles on, and leaves it unspent while there is none.
   const lastDeepLinkRef = React.useRef(initialSessionId ?? null);
   React.useEffect(() => {
-    if (!historyReady || !initialSessionId || initialSessionId === lastDeepLinkRef.current) return;
+    if (!initialSessionId || initialSessionId === lastDeepLinkRef.current) return;
     lastDeepLinkRef.current = initialSessionId;
-    void handleSelectConversation(initialSessionId);
-  }, [handleSelectConversation, historyReady, initialSessionId]);
+    if (initialSessionId === activeSessionIdRef.current) return;
+    // Release the local reader first — the run keeps executing, exactly as on a sidebar switch.
+    stopChat();
+    deepLinkSessionIdRef.current = initialSessionId;
+    retryHistory();
+  }, [initialSessionId, retryHistory, stopChat]);
 
   // The companion canvas follows the thread's latest scaffold, once per scaffold.
   const latestScaffold = React.useMemo(() => {
@@ -3140,23 +3159,25 @@ export function JainaChatSurface({
                     </div>
                   ) : null}
 
-                  {chatError && !isStreaming && !paymentRequired ? (
+                  {chatFailure && !isStreaming && !paymentRequired ? (
                     <p
                       className="mx-1 mb-2 flex flex-wrap items-center gap-x-2 text-destructive-ink text-xs"
                       data-testid="jaina-chat-error"
                       role="alert"
                     >
-                      {loadFailureMessage("Jaina's answer", chatError)}
-                      <button
-                        className="font-medium underline underline-offset-4"
-                        onClick={() => {
-                          clearChatError();
-                          void resumeStream();
-                        }}
-                        type="button"
-                      >
-                        Try again
-                      </button>
+                      {chatFailure.text}
+                      {chatFailure.canResume ? (
+                        <button
+                          className="font-medium underline underline-offset-4"
+                          onClick={() => {
+                            clearChatError();
+                            void resumeStream();
+                          }}
+                          type="button"
+                        >
+                          Try again
+                        </button>
+                      ) : null}
                     </p>
                   ) : null}
 

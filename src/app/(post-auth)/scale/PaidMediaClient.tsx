@@ -47,7 +47,11 @@ import {
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
-import { jainaNewConversationParam, jainaPlatformParam } from '@/lib/jaina/deepLink';
+import {
+  jainaAdAccountParam,
+  jainaNewConversationParam,
+  jainaPlatformParam,
+} from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
@@ -220,6 +224,9 @@ export default function PaidMediaClientPage({
   // Deep link from completion toasts (/scale?tab=jaina&sessionId=...): a session id
   // implies the Jaina tab even when the tab param is missing or invalid.
   const jainaSessionIdParam = searchParams.get('sessionId');
+  // The ad account the linked conversation belongs to (`jainaSessionHref`). Jaina reads history
+  // for the selected account, so a link that did not pin it opened the default account's Jaina.
+  const deepLinkAdAccountId = jainaAdAccountParam(searchParams.get('adAccountId'));
   // Deep link with a question already written (/scale?tab=jaina&prompt=...): the Optimizer's
   // "Ask Jaina" chips, "Explore options with Jaina" and a dashboard's refresh all land here.
   // A slash-prefixed prompt is a Goal command, not chat input, and is left alone.
@@ -344,11 +351,45 @@ export default function PaidMediaClientPage({
     [knownAccounts, savedAccountId, portfolioAccountRank],
   );
 
+  // A deep link's account is applied once per link, as a pick, so the default below does not
+  // move off it; a later pick by the person is theirs to keep.
+  const deepLinkedAccountId = React.useMemo(
+    () =>
+      deepLinkAdAccountId
+        ? (knownAccounts?.find((account) => isSameAdAccount(account.id, deepLinkAdAccountId))?.id ??
+          null)
+        : null,
+    [deepLinkAdAccountId, knownAccounts],
+  );
+  const [appliedDeepLinkAccountId, setAppliedDeepLinkAccountId] = React.useState<string | null>(
+    null,
+  );
+  React.useEffect(() => {
+    if (!deepLinkedAccountId || isBrandContextTransition) return;
+    if (appliedDeepLinkAccountId === deepLinkedAccountId) return;
+    setAppliedDeepLinkAccountId(deepLinkedAccountId);
+    setSelectedAdAccount(deepLinkedAccountId, true);
+  }, [
+    appliedDeepLinkAccountId,
+    deepLinkedAccountId,
+    isBrandContextTransition,
+    setSelectedAdAccount,
+  ]);
+  // Jaina opens the linked conversation ONCE, on its first history load, for the account it is
+  // handed. Handing it the default account while the link's account is still being resolved
+  // would spend the link on the wrong account's history.
+  const jainaAccountPending =
+    deepLinkAdAccountId !== null &&
+    (optimizerAccounts.isPending ||
+      (deepLinkedAccountId !== null && appliedDeepLinkAccountId !== deepLinkedAccountId));
+
   // Until the person picks, the page sits on the preferred account rather than the server
   // seed (the alphabetical first assigned account). A saved choice applies at once; the
   // portfolio-holder default waits for the portfolio list so it does not flip twice.
   React.useEffect(() => {
     if (isBrandContextTransition || accountContext.userChosen) return;
+    // The deep link's pick lands in the same flush; the default must not overwrite it.
+    if (deepLinkedAccountId) return;
     if (!preferredAccountId || !savedChoiceRead) return;
     if (!savedAccountId && !portfoliosSettled) return;
     if (isSameAdAccount(selectedAdAccount, preferredAccountId)) return;
@@ -356,6 +397,7 @@ export default function PaidMediaClientPage({
   }, [
     isBrandContextTransition,
     accountContext.userChosen,
+    deepLinkedAccountId,
     preferredAccountId,
     savedChoiceRead,
     savedAccountId,
@@ -926,7 +968,7 @@ export default function PaidMediaClientPage({
                 <JainaChatSurface
                   brandProfileId={brandProfileId}
                   brandName={brandName}
-                  adAccountId={selectedAdAccount}
+                  adAccountId={jainaAccountPending ? null : selectedAdAccount}
                   campaignId={selectedCampaign}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}

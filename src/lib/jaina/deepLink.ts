@@ -10,6 +10,7 @@
 // opens a new conversation for it instead of appending it to the most recent one.
 
 import { type PlatformId, PlatformIdSchema } from '@continuum/contracts';
+import { z } from 'zod';
 
 export function jainaPromptHref(
   prompt: string,
@@ -45,4 +46,51 @@ export function jainaOpeningSessionId(input: {
   if (input.deepLinkSessionId) return input.deepLinkSessionId;
   if (input.newConversation) return null;
   return input.latestSessionId ?? null;
+}
+
+/**
+ * The link to one Jaina conversation. A conversation belongs to ONE ad account, and the Jaina
+ * tab reads history for the account it has selected — which, unasked, is the brand's default
+ * (the first portfolio holder). Without the account in the link a "View" from a run toast opened
+ * the default account's Jaina instead of the conversation it named.
+ */
+export function jainaSessionHref(sessionId: string, adAccountId?: string | null): string {
+  const params = new URLSearchParams({ tab: 'jaina', sessionId });
+  if (adAccountId) params.set('adAccountId', adAccountId);
+  return `/scale?${params.toString()}`;
+}
+
+/** `?adAccountId=` on /scale: the account a deep link pins, or null. */
+export function jainaAdAccountParam(raw: string | null): string | null {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : null;
+}
+
+const sessionAccountResponseSchema = z.object({
+  sessions: z.array(z.object({ sessionId: z.string(), adAccountId: z.string().nullable() })),
+});
+
+/**
+ * Which ad account a conversation belongs to, read from the brand-wide session list (the same
+ * read the sidebar makes, without the account filter). Null when it cannot be told — the caller
+ * then links without an account rather than not linking at all.
+ */
+export async function resolveJainaSessionAdAccount(
+  input: { brandId: string; sessionId: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({ brandId: input.brandId, sessionsLimit: '100' });
+    const response = await fetchImpl(`/api/agents/jaina/chat/conversations?${params}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return null;
+    const parsed = sessionAccountResponseSchema.safeParse(await response.json());
+    if (!parsed.success) return null;
+    const session = parsed.data.sessions.find((row) => row.sessionId === input.sessionId);
+    return session?.adAccountId ?? null;
+  } catch {
+    return null;
+  }
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  jainaAdAccountParam,
   jainaNewConversationParam,
   jainaOpeningSessionId,
   jainaPlatformParam,
   jainaPromptHref,
+  jainaSessionHref,
+  resolveJainaSessionAdAccount,
 } from './deepLink';
 
 describe('jainaPromptHref', () => {
@@ -92,5 +95,68 @@ describe('jainaOpeningSessionId — which conversation the Jaina tab opens on', 
         latestSessionId: 's-latest',
       }),
     ).toBe('s-1');
+  });
+});
+
+describe('jainaSessionHref', () => {
+  it('pins the conversation and, when known, its ad account', () => {
+    expect(jainaSessionHref('jaina_session_c41d')).toBe(
+      '/scale?tab=jaina&sessionId=jaina_session_c41d',
+    );
+    const href = jainaSessionHref('jaina_session_c41d', 'act_1234567890');
+    const params = new URL(href, 'https://app.example').searchParams;
+    expect(params.get('tab')).toBe('jaina');
+    expect(params.get('sessionId')).toBe('jaina_session_c41d');
+    expect(jainaAdAccountParam(params.get('adAccountId'))).toBe('act_1234567890');
+  });
+
+  it('reads a blank or absent account as none', () => {
+    expect(jainaAdAccountParam(null)).toBeNull();
+    expect(jainaAdAccountParam('  ')).toBeNull();
+  });
+});
+
+describe('resolveJainaSessionAdAccount', () => {
+  const sessionsPayload = {
+    sessions: [
+      { sessionId: 'jaina_session_tours', adAccountId: 'act_111' },
+      { sessionId: 'jaina_session_c41d', adAccountId: 'act_222' },
+    ],
+  };
+  const respond = (body: unknown, status = 200): typeof fetch =>
+    (async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })) as unknown as typeof fetch;
+
+  it("finds the conversation's account in the brand-wide list, not the default's", async () => {
+    let requested = '';
+    const fetchImpl = (async (url: string) => {
+      requested = url;
+      return new Response(JSON.stringify(sessionsPayload), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(
+      resolveJainaSessionAdAccount(
+        { brandId: 'brand_1', sessionId: 'jaina_session_c41d' },
+        fetchImpl,
+      ),
+    ).resolves.toBe('act_222');
+    // Brand-wide: no account filter, or the conversation could not be found from the wrong one.
+    expect(requested).not.toContain('adAccountId');
+  });
+
+  it('answers null when it cannot tell', async () => {
+    const lookup = { brandId: 'brand_1', sessionId: 'jaina_session_gone' };
+    await expect(
+      resolveJainaSessionAdAccount(lookup, respond(sessionsPayload)),
+    ).resolves.toBeNull();
+    await expect(resolveJainaSessionAdAccount(lookup, respond({}, 502))).resolves.toBeNull();
+    await expect(
+      resolveJainaSessionAdAccount(lookup, (async () => {
+        throw new TypeError('Failed to fetch');
+      }) as unknown as typeof fetch),
+    ).resolves.toBeNull();
   });
 });
