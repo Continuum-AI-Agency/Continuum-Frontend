@@ -67,6 +67,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** AE stores colours as RGB in 0..1; the colour input speaks #rrggbb. */
+export const rgbToHex = (rgb: readonly number[]) =>
+  `#${rgb
+    .slice(0, 3)
+    .map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0'))
+    .join('')}`;
+export const hexToRgb = (hex: string): [number, number, number] => {
+  const n = Number.parseInt(hex.slice(1, 7), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+
 const Note = ({ children }: { children: ReactNode }) => (
   <p className="text-2xs text-muted-foreground">{children}</p>
 );
@@ -148,6 +159,24 @@ export function TemplateLayerInspector({
             onCheckedChange={(visible) => onEdit({ visible }, editGroup('visible'))}
           />
         </div>
+        {layer.fillColor ? (
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor={`${idPrefix}-fill-${layer.compId}-${layer.layerId}`} className="text-xs">
+              {layer.kind === 'text' ? 'Text colour' : 'Fill'}
+            </label>
+            <input
+              id={`${idPrefix}-fill-${layer.compId}-${layer.layerId}`}
+              type="color"
+              className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent disabled:cursor-not-allowed disabled:opacity-50"
+              value={rgbToHex(edit?.fillColor ?? layer.fillColor)}
+              disabled={disabled || layer.fillReason !== null}
+              title={layer.fillReason ?? undefined}
+              onChange={(event) => onEdit({ fillColor: hexToRgb(event.target.value) }, editGroup('fill'))}
+              onBlur={() => commitGroup('fill')}
+            />
+          </div>
+        ) : null}
+        {layer.fillColor && layer.fillReason ? <Note>Fill: {layer.fillReason.replaceAll('_', ' ')}</Note> : null}
         {layer.visibilitySlotKeys.length ? (
           <Note>Visibility follows this layer’s shared Show field across formats.</Note>
         ) : null}

@@ -8,6 +8,10 @@ import { designArrangementSchema } from '../hyperframes-aep/design-import';
 import { templateSourceKindSchema, templateSourceSummarySchema } from './template-source';
 import { templateSourceSlotEditSchema } from './template-source-slot';
 
+const unit = z.number().finite().min(0).max(1);
+/** An RGB colour in 0..1, as After Effects stores it. */
+export const rgbSchema = z.tuple([unit, unit, unit]);
+
 const transformPairSchema = (limit: number) =>
   z.tuple([z.number().finite().min(-limit).max(limit), z.number().finite().min(-limit).max(limit)]);
 
@@ -32,6 +36,8 @@ export const templateRevisionLayerEditSchema = z
     rotation: z.number().finite().min(-36_000).max(36_000).optional(),
     scale: transformPairSchema(10_000).optional(),
     opacity: z.number().finite().min(0).max(100).optional(),
+    /** The layer's own fill (a text's fill or a shape's solid Fill), RGB in 0..1. */
+    fillColor: rgbSchema.optional(),
   })
   .strict()
   .refine(
@@ -48,6 +54,7 @@ export const templateRevisionLayerEditSchema = z
         'rotation',
         'scale',
         'opacity',
+        'fillColor',
       ].some((key) => key in edit),
     'Choose a layer change',
   );

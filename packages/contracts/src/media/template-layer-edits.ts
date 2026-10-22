@@ -81,6 +81,10 @@ export const templateEditableLayerSchema = z
     rotation: z.number().finite().nullable().optional(),
     scale: z.tuple([z.number().finite(), z.number().finite()]).nullable().optional(),
     opacity: z.number().finite().nullable().optional(),
+    /** The layer's own fill colour (text fill or single solid shape Fill), RGB in 0..1. */
+    fillColor: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).nullable().optional(),
+    /** Why `fillColor` cannot be written; null = editable. Absent on writers without fill edits. */
+    fillReason: z.string().nullable().optional(),
     /** Why a transform property cannot be written, per property. Absent = editable. */
     transformLocks: z.partialRecord(z.enum(TEMPLATE_LAYER_TRANSFORMS), z.string()).optional(),
     /** The parent layer: its children move with it, and `x`/`y` are in its space. */
