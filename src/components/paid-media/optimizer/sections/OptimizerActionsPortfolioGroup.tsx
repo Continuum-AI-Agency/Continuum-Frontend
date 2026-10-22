@@ -128,6 +128,7 @@ import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
   asOfLine,
+  daysSince,
   evidenceLine,
   formatSettingsValue,
   impactLabel,
@@ -138,7 +139,8 @@ import {
   type SettingsPatch,
   settingsFieldLabel,
   settingsPatchOf,
-  triggerWords,
+  triggerReason,
+  withHonestCapBinding,
 } from './recQueueModel';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
@@ -164,6 +166,9 @@ export type RecQueueRow = {
   rec: RecommendationRow;
   /** rec.status === 'approved' — a pause awaiting "Pause N ad sets". */
   approved: boolean;
+  /** Why this proposal can no longer be approved (its ad set left the roster, or the whole
+   *  roster left Meta). Shown in place of Approve; absent while it still stands. */
+  blocked?: string | null;
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
@@ -257,6 +262,7 @@ export function isSelectableRow(row: QueueRow): boolean {
   // ad set, so it never joins a batch approval.
   if (row.route === 'settings') return false;
   if (row.route === 'budget') return !row.approved;
+  if (row.blocked) return false;
   // An audience recommendation is decided on its card (create the new ad set), never in a
   // batch approval that would only open a renewal task.
   if (isAudienceRecommendation(row.rec)) return false;
@@ -274,6 +280,8 @@ export function buildActionQueue(
   /** Whether a budget move's platform may be written here (platformWrites.ts): a move nobody
    *  may write stays a proposal on the chart and never becomes an Approve row. */
   writable: (item: CycleItemRow) => boolean = () => true,
+  /** Why a recommendation can no longer be approved, or null while it stands. */
+  blockedNote: (rec: RecommendationRow) => string | null = () => null,
 ): QueueRow[] {
   if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
@@ -315,6 +323,7 @@ export function buildActionQueue(
       name: resolveAdsetName(rec, nameById),
       rec,
       approved: rec.status === 'approved',
+      blocked: rec.status === 'pending' ? blockedNote(rec) : null,
     });
   }
 
@@ -345,6 +354,51 @@ export function buildActionQueue(
   return rows.sort(
     (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
   );
+}
+
+/**
+ * Why a pause proposal can no longer be approved: its ad set left this portfolio (the same
+ * note the withdrawn budget move carries), or the whole roster left Meta — a pause on an ad
+ * set that is not there is a write with nothing to write to. Only pauses are blocked; the
+ * other routes open tasks or briefs, which stay a person's call.
+ */
+export function pauseBlockedNote(
+  rec: Pick<RecommendationRow, 'kind' | 'adset_id'>,
+  portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason'>,
+  movedNotes: ReadonlyMap<string, string>,
+): string | null {
+  if (actionRoute(rec.kind) !== 'pause') return null;
+  const moved = movedNotes.get(rec.adset_id);
+  if (moved) return `Withdrawn: ${moved}.`;
+  if (
+    portfolio.roster_state === 'absent' ||
+    portfolio.withdrawn_reason === 'roster_absent' ||
+    portfolio.withdrawn_reason === 'no_members'
+  ) {
+    return "Withdrawn: this portfolio's ad sets are no longer on Meta, so there is nothing to pause.";
+  }
+  return null;
+}
+
+/**
+ * How many decisions the tray says are waiting — the same definition as the list read's
+ * pending_recommendations + pending_budget_moves (reportModel.pendingWorkCount), so the
+ * Overview, the Portfolios list and this header print one number.
+ *
+ * It used to be "the selectable visible rows", which left out a pending settings row (decided
+ * from its own button, never selectable), an audience row, and anything the search or a
+ * filter hid: the list said 9 and the tray said 8. Budget rows count whether held or already
+ * approved and awaiting the drain (the list counts `approved_pending` too); a recommendation
+ * counts while pending; an approved pause awaiting its drain is not a decision any more.
+ */
+export function queueWaitingCount(
+  rows: readonly QueueRow[],
+  moveRows: readonly MoveQueueRow[],
+  platformCardCount: number,
+): number {
+  const queued = rows.filter((row) => row.route === 'budget' || row.rec.status === 'pending');
+  const moves = moveRows.filter((row) => row.rec.status === 'pending');
+  return queued.length + moves.length + platformCardCount;
 }
 
 /** A cross-platform move waiting on a person (pending) or on its write (approved). */
@@ -653,8 +707,11 @@ export function OptimizerActionsPortfolioGroup({
   // The recommendations still decided as rows: every one the cards above do not stand for.
   const queueRecs = React.useMemo(() => {
     const shownAsCards = new Set(platformCards.map(cardRecommendationId));
-    return (report?.recommendations ?? []).filter((rec) => !shownAsCards.has(rec.id));
-  }, [platformCards, report?.recommendations]);
+    const items = report?.latest_items ?? [];
+    return (report?.recommendations ?? [])
+      .filter((rec) => !shownAsCards.has(rec.id))
+      .map((rec) => withHonestCapBinding(rec, items));
+  }, [platformCards, report?.recommendations, report?.latest_items]);
   // A withdrawn cycle's moves, and a move whose ad set left this portfolio, are never queue
   // work: the budget rows come from the moves that still stand, so the rows agree with the
   // list read's pending_budget_moves. The story below still shows them, as history.
@@ -686,8 +743,9 @@ export function OptimizerActionsPortfolioGroup({
         nameById,
         carriedRecs,
         (item) => itemWritable(portfolio, item),
+        (rec) => pauseBlockedNote(rec, portfolio, moves.notes),
       ),
-    [report, moves.current, nameById, carriedRecs, queueRecs, portfolio],
+    [report, moves.current, moves.notes, nameById, carriedRecs, queueRecs, portfolio],
   );
   const proposalsOnly = proposalsOnlyNote(portfolio, moves.current);
   const moveRows = React.useMemo(() => buildMoveQueue(report), [report]);
@@ -1136,8 +1194,7 @@ export function OptimizerActionsPortfolioGroup({
 
   const busyApprove = requestApplyItems.isPending || setStatuses.isPending || setStatus.isPending;
 
-  const waitingCount =
-    (selectableVisible.length || rows.length) + moveRows.length + platformCards.length;
+  const waitingCount = queueWaitingCount(rows, moveRows, platformCards.length);
   const sentence = queueSentence(waitingCount, summary, currency);
 
   return (
@@ -1528,8 +1585,8 @@ export type QueueSentencePart = {
 
 /**
  * The queue in one sentence, biggest money first:
- *   "9 waiting on a decision: 3 refresh creative for creative fatigue, 224 MXN/day at stake;
- *    4 not being delivered for off meta."
+ *   "9 waiting on a decision: 3 refresh creative (creative fatigue), 224 MXN/day at stake;
+ *    4 not being delivered (paused or removed on Meta)."
  * Null when nothing waits. A queue with a single reason says only how many wait — the rows
  * below already name that reason, and a sentence repeating it is the pill row it replaces.
  */
@@ -1552,7 +1609,7 @@ export function queueSentence(
     if (index > 0) parts.push({ text: '; ' });
     parts.push({ text: String(group.count), figure: true });
     parts.push({
-      text: ` ${group.label.toLowerCase()} for ${triggerWords(group.trigger)}`,
+      text: ` ${group.label.toLowerCase()} (${triggerReason(group.trigger)})`,
     });
     if (group.impactPerDay > 0) {
       parts.push({ text: ', ' });
@@ -1578,15 +1635,25 @@ export function queueSentence(
  * carrying an ISO date — and printing it verbatim put "days_absent 1 not ACTIVE on Meta since
  * 2026-10-09" in front of the user. Everything else falls back to the shared evidence line.
  */
-export function recRowLine(rec: RecommendationRow, currency: string | null): string | null {
+export function recRowLine(
+  rec: RecommendationRow,
+  currency: string | null,
+  now: Date = new Date(),
+  timeZone?: string,
+): string | null {
   const headline = queueHeadlineLine(rec, currency);
   if (headline) return headline;
   const evidence = rec.evidence;
   if (evidence?.metric === 'days_absent') {
-    const days = Math.round(evidence.value);
-    const span = `${days} day${days === 1 ? '' : 's'}`;
+    // The count is today's distance from the day the row names, not the engine's figure frozen
+    // at cycle time — that one floored a mid-day timestamp against the cycle's midnight and
+    // printed "-1 days" (see recQueueModel.daysSince).
     const since = /(\d{4}-\d{2}-\d{2})/.exec(evidence.comparator)?.[1] ?? null;
     const sinceAt = since ? Date.parse(`${since}T12:00:00Z`) : Number.NaN;
+    const days = Number.isNaN(sinceAt)
+      ? Math.max(0, Math.round(evidence.value))
+      : (daysSince(since as string, now, timeZone) ?? Math.max(0, Math.round(evidence.value)));
+    const span = `${days} day${days === 1 ? '' : 's'}`;
     return Number.isNaN(sinceAt)
       ? `Not active for ${span}`
       : `Not active since ${SINCE_DAY.format(new Date(sinceAt))} · ${span}`;
@@ -2058,6 +2125,14 @@ function QueueRowView({
               >
                 Dismiss
               </Button>
+            ) : null}
+            {row.route !== 'budget' && row.blocked ? (
+              <span
+                className="max-w-56 text-muted-foreground text-xs"
+                data-testid="queue-row-blocked"
+              >
+                {row.blocked}
+              </span>
             ) : null}
             {selectable ? (
               <Button

@@ -216,3 +216,39 @@ describe('buildReallocationStory on a zero-conversion ad set', () => {
     expect(story.rows[0].standing).toBe('unknown');
   });
 });
+
+describe('buildReallocationStory — a cycle that only cuts', () => {
+  // Easy Fit, Oct 2026: six pacing cuts and no raise read "Moving $0.00 MXN/day from 6 ad sets
+  // back to the pool" — the total summed only the raises.
+  it('moves the money the cuts free, not the raises that did not happen', () => {
+    const story = buildReallocationStory({
+      items: [
+        item('a', 500, 300),
+        item('b', 400, 200),
+        item('c', 300, 180),
+        item('d', 250, 150),
+        item('e', 200, 100),
+        item('f', 150, 70),
+      ],
+      metric: lead,
+      lookback: 7,
+      target: null,
+      currency: 'MXN',
+    });
+    expect(story.moved).toBe(800);
+    expect(story.summary).toContain('/day from 6 ad sets back to the pool');
+    expect(story.summary).not.toContain('0.00');
+    expect(story.summary).toContain('800');
+  });
+
+  it('still reports the raised side of a conserved move', () => {
+    const story = buildReallocationStory({
+      items: [item('up', 100, 160), item('down', 100, 40)],
+      metric: lead,
+      lookback: 7,
+      target: null,
+      currency: 'USD',
+    });
+    expect(story.moved).toBe(60);
+  });
+});

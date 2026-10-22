@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   asOfLine,
   audienceExpansionPrompt,
+  daysSince,
   evidenceLine,
   evidenceSeries,
   formatEvidenceValue,
@@ -13,7 +14,9 @@ import {
   queueHeadlineLine,
   queueSummary,
   settingsPatchOf,
+  triggerReason,
   triggerWords,
+  withHonestCapBinding,
 } from './recQueueModel';
 
 const evidence = (over: Record<string, unknown> = {}) => ({
@@ -380,5 +383,97 @@ describe('audience expansion hand-off', () => {
     expect(prompt).toContain('three buckets');
     expect(prompt).toContain('estimated size');
     expect(jainaPromptHref('a b')).toBe('/scale?tab=jaina&prompt=a%20b');
+  });
+});
+
+describe('triggerReason', () => {
+  it('says the engine trigger in words, never its id', () => {
+    expect(triggerReason('D1_off_meta')).toBe('paused or removed on Meta');
+    expect(triggerReason('S1_velocity_cap_binding')).toBe('the per-cycle change cap');
+    expect(triggerReason('F1_creative_fatigue')).toBe('creative fatigue');
+  });
+
+  it('falls back to the cleaned id for a trigger it does not know', () => {
+    expect(triggerReason('Z9_brand_new_thing')).toBe('brand new thing');
+  });
+});
+
+describe('daysSince', () => {
+  it('counts calendar days to today in the given zone', () => {
+    expect(daysSince('2026-10-14', new Date('2026-10-19T15:00:00Z'), 'UTC')).toBe(5);
+  });
+
+  it('is zero, never negative, on the day itself or a day ahead', () => {
+    expect(daysSince('2026-10-20', new Date('2026-10-20T03:00:00Z'), 'UTC')).toBe(0);
+    expect(daysSince('2026-10-21', new Date('2026-10-20T03:00:00Z'), 'UTC')).toBe(0);
+  });
+
+  it("reads today in the account's zone, not UTC", () => {
+    // 03:00 UTC on Oct 21 is still Oct 20 in Mexico City.
+    const now = new Date('2026-10-21T03:00:00Z');
+    expect(daysSince('2026-10-14', now, 'America/Mexico_City')).toBe(6);
+    expect(daysSince('2026-10-14', now, 'UTC')).toBe(7);
+  });
+
+  it('is null for a day that does not parse', () => {
+    expect(daysSince('not-a-day', new Date(), 'UTC')).toBeNull();
+  });
+});
+
+describe('withHonestCapBinding', () => {
+  const s1 = {
+    id: 's1',
+    trigger: 'S1_velocity_cap_binding',
+    reason:
+      'The ±30% velocity cap bound on 6 of 6 moves this cycle: the engine scored bigger changes than the cap let through.',
+    evidence: {
+      metric: 'cap_binding_share',
+      value: 1,
+      comparator: '6 of 6 moves at the ±30% cap',
+      threshold: 0.5,
+      window: 'd3' as const,
+      estImpactPerDay: null,
+      source: 'engine',
+      headline: {
+        kind: 'share',
+        value: 100,
+        unit: 'percent',
+        label: 'of moves hit the cap',
+        from: null,
+        to: null,
+      },
+    },
+  };
+
+  it('says pacing carried the moves past the cap instead of claiming the cap bound them', () => {
+    const items = [-0.37, -0.42, -0.5, -0.55, -0.6, -0.45].map((change_pct) => ({ change_pct }));
+    const out = withHonestCapBinding(s1 as never, items);
+    expect(out.reason).toBe(
+      '6 of 6 moves went past the ±30% per-cycle cap: pacing (or keeping the pool whole) may exceed it, so the cap did not bind them. The cap held none of them back.',
+    );
+    expect(out.reason).not.toContain('bound on');
+    expect(queueHeadlineLine(out as never, null)).toBe('100% of moves went past the cap');
+  });
+
+  it('counts the moves the cap did hold beside the ones that went past it', () => {
+    const items = [
+      { change_pct: -0.3 },
+      { change_pct: 0.3 },
+      { change_pct: -0.5 },
+      { change_pct: 0 },
+    ];
+    const out = withHonestCapBinding(s1 as never, items);
+    expect(out.reason).toContain('1 of 3 moves went past the ±30% per-cycle cap');
+    expect(out.reason).toContain('The cap held 2 other moves at ±30%.');
+  });
+
+  it('leaves the engine reason alone when every move sits at or under the cap', () => {
+    const items = [{ change_pct: -0.3 }, { change_pct: 0.3 }];
+    expect(withHonestCapBinding(s1 as never, items)).toBe(s1 as never);
+  });
+
+  it('leaves every other trigger alone', () => {
+    const other = { ...s1, trigger: 'P2_sustained_poor' };
+    expect(withHonestCapBinding(other as never, [{ change_pct: -0.9 }])).toBe(other as never);
   });
 });

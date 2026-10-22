@@ -326,7 +326,9 @@ const {
   buildActionQueue,
   buildMoveQueue,
   isSelectableRow,
+  pauseBlockedNote,
   queueSentence,
+  queueWaitingCount,
   recRowLine,
   selectionLabel,
 } = await import('./OptimizerActionsPortfolioGroup');
@@ -486,6 +488,103 @@ describe('OptimizerActionsPortfolioGroup — withdrawn moves', () => {
       'Withdrawn — now in Conversaciones Whatsapp',
     );
     expect(screen.queryByLabelText('Select budget move for Budget Set')).toBeNull();
+  });
+});
+
+// Beta, Oct 2026: a portfolio whose roster read "gone since Oct 15 · 3 of 3 ad sets" and
+// "withdrawn" still offered Approve on a pause — a Meta write to an ad set that is not there.
+describe('OptimizerActionsPortfolioGroup — a pause on a roster that left Meta', () => {
+  const gone = {
+    roster_state: 'absent' as const,
+    roster_absent_since: '2026-10-15T12:00:00Z',
+    roster_missing_count: 3,
+    last_cycle_current: false,
+    withdrawn_reason: 'roster_absent' as const,
+    last_actual_cycle_at: '2026-10-15T12:00:00Z',
+  };
+
+  it('replaces Approve with why it cannot be approved', () => {
+    renderGroup(gone);
+    expect(
+      screen.queryByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+    ).toBeNull();
+    expect(screen.getByTestId('queue-row-blocked').textContent).toBe(
+      "Withdrawn: this portfolio's ad sets are no longer on Meta, so there is nothing to pause.",
+    );
+    const box = screen.getByLabelText(/^Select pause ad set for Pause Set$/);
+    expect(box.getAttribute('aria-disabled')).toBe('true');
+    // A creative brief is not a write to the gone ad set: it stays a person's call.
+    expect(screen.getByRole('button', { name: /^Approve .* for Winner Set$/ })).toBeDefined();
+  });
+
+  it('keeps Approve on a pause whose roster still stands', () => {
+    renderGroup();
+    expect(
+      screen.getByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+    ).toBeDefined();
+    expect(screen.queryByTestId('queue-row-blocked')).toBeNull();
+  });
+
+  it('names the new holder when only that ad set left the portfolio', () => {
+    const note = pauseBlockedNote(
+      { kind: 'pause', adset_id: 'as-pause' },
+      { roster_state: 'partial', withdrawn_reason: null },
+      new Map([['as-pause', 'now in Conversaciones Whatsapp']]),
+    );
+    expect(note).toBe('Withdrawn: now in Conversaciones Whatsapp.');
+    expect(
+      pauseBlockedNote(
+        { kind: 'variate_creative', adset_id: 'as-pause' },
+        { roster_state: 'absent', withdrawn_reason: 'roster_absent' },
+        new Map(),
+      ),
+    ).toBeNull();
+  });
+});
+
+// Beta, Oct 2026: the Portfolios list said 9 waiting and the tray said 8. The list counts
+// pending recommendations + pending budget moves; the tray counted selectable rows, which
+// leaves out a pending settings row (decided from its own button).
+describe("queueWaitingCount — the list read's definition", () => {
+  const settingsRec = {
+    id: 'settings-1',
+    adset_id: '__portfolio__',
+    kind: 'settings',
+    trigger: 'S1_velocity_cap_binding',
+    severity: 'medium',
+    reason: 'cap',
+    status: 'pending',
+  };
+
+  it('counts every pending recommendation and every budget move, selectable or not', () => {
+    const rows = buildActionQueue({
+      portfolio: null,
+      latest_run: { id: RUN_ID } as never,
+      latest_items: report.latest_items as never,
+      recommendations: [...report.recommendations, settingsRec] as never,
+      history: [],
+    });
+    // budget move + pause + ad-level pause + creative + settings — the settings and ad-level
+    // rows are not selectable, and still wait on a decision.
+    expect(rows.filter(isSelectableRow).length).toBe(3);
+    expect(queueWaitingCount(rows, [], 0)).toBe(5);
+  });
+
+  it('does not count an approved pause awaiting its drain, and does count an approved budget move', () => {
+    const rows = buildActionQueue({
+      portfolio: null,
+      latest_run: { id: RUN_ID } as never,
+      latest_items: [{ ...report.latest_items[0], apply_status: 'approved_pending' }] as never,
+      recommendations: [{ ...report.recommendations[0], status: 'approved' }] as never,
+      history: [],
+    });
+    expect(queueWaitingCount(rows, [], 0)).toBe(1);
+  });
+
+  it('prints the same number in the tray header, whatever the search hides', () => {
+    renderGroup();
+    const header = screen.getByTestId('queue-tray').querySelector('header');
+    expect(header?.textContent).toContain('Prospecting4 waiting');
   });
 });
 
@@ -1587,7 +1686,7 @@ describe('queueSentence', () => {
       'MXN',
     );
     expect(text(parts)).toBe(
-      '9 waiting on a decision: 3 refresh creative for creative fatigue, $224 MXN/day at stake; 4 not being delivered for off meta.',
+      '9 waiting on a decision: 3 refresh creative (creative fatigue), $224 MXN/day at stake; 4 not being delivered (paused or removed on Meta).',
     );
     const figures = (parts ?? []).filter((part) => part.figure).map((part) => part.text);
     expect(figures).toEqual(['9', '3', '$224 MXN/day', '4']);
@@ -1610,9 +1709,40 @@ describe('recRowLine', () => {
         window: 'd7',
       }),
       'MXN',
+      new Date('2026-10-10T18:00:00Z'),
+      'UTC',
     );
     expect(line).toBe('Not active since Oct 9 · 1 day');
     expect(line).not.toMatch(/days_absent|ACTIVE|2026-10-09/);
+  });
+
+  // Beta, Oct 2026: "since Oct 20 · -1 days" and "since Oct 14 · -1 days" beside another
+  // "since Oct 14 · 5 days" — the engine's frozen, floored figure. The day the row names is
+  // the one fact; the count is today's distance from it.
+  it('counts from the named day to today, never negative, one count per day', () => {
+    const now = new Date('2026-10-21T15:00:00Z');
+    const line = (since: string, value: number) =>
+      recRowLine(
+        rec({
+          metric: 'days_absent',
+          value,
+          comparator: `not ACTIVE on Meta since ${since}`,
+          window: 'd7',
+        }),
+        'MXN',
+        now,
+        'America/Mexico_City',
+      );
+    expect(line('2026-10-20', -1)).toBe('Not active since Oct 20 · 1 day');
+    expect(line('2026-10-14', -1)).toBe('Not active since Oct 14 · 7 days');
+    expect(line('2026-10-14', 5)).toBe('Not active since Oct 14 · 7 days');
+    expect(line('2026-10-21', -1)).toBe('Not active since Oct 21 · 0 days');
+  });
+
+  it('clamps a negative engine figure when the comparator carries no date', () => {
+    expect(
+      recRowLine(rec({ metric: 'days_absent', value: -1, comparator: 'off', window: 'd7' }), null),
+    ).toBe('Not active for 0 days');
   });
 
   it('keeps the span when the comparator carries no date', () => {
