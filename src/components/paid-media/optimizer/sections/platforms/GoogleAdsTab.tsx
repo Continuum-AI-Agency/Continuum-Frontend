@@ -22,6 +22,7 @@ import {
   type GoogleOverview,
   MAX_GROUP_TILES,
   MIN_TILES,
+  NO_SINGLE_RESULT,
   percentAgainst,
   windowRangeLabel,
 } from './googleAdsOverviewModel';
@@ -47,6 +48,9 @@ function costComparison(
   overview: GoogleOverview,
   currency: string | null,
 ): string {
+  if (group.conversions == null) {
+    return `${formatCurrency(group.spend, currency)} spent · ${group.sharePct}% of spend · ${NO_SINGLE_RESULT.toLowerCase()}`;
+  }
   const cost = costPerConversion(group);
   if (cost == null) {
     return `${formatCurrency(group.spend, currency)} without a conversion · ${group.sharePct}% of spend`;
@@ -61,6 +65,11 @@ function costComparison(
   return `${formatCurrency(cost, currency)} each${against} · ${group.sharePct}% of spend`;
 }
 
+/** The group's count, or an honest dash when the account has no single result to count. */
+function groupValue(group: CampaignGroup): string {
+  return group.conversions == null ? '—' : `${formatConversions(group.conversions)} conv.`;
+}
+
 function groupLabel(group: CampaignGroup, byType: boolean): string {
   if (!byType) return group.label;
   return `${group.label} · ${group.campaigns} ${group.campaigns === 1 ? 'campaign' : 'campaigns'}`;
@@ -69,7 +78,14 @@ function groupLabel(group: CampaignGroup, byType: boolean): string {
 function Headline({ overview, currency }: { overview: GoogleOverview; currency: string | null }) {
   const window = figureWindowOf(overview.days);
   const change = percentAgainst(overview.spend, overview.priorSpend);
-  const converting = overview.groups.filter((group) => group.conversions > 0).slice(0, 3);
+  const converting = overview.groups
+    .filter((group) => group.conversions != null && group.conversions > 0)
+    .slice(0, 3);
+  const ending = !overview.resultsDefined
+    ? '. Conversions are not shown: no single result is defined for this account.'
+    : overview.spend > 0
+      ? ' and recorded no conversions.'
+      : '.';
   return (
     <p
       className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
@@ -83,7 +99,7 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
         {formatCurrency(overview.spend, currency)}
       </span>
       {change != null ? ` (${signedPct(change)} on the period before)` : ''}
-      {converting.length > 0 ? ': ' : overview.spend > 0 ? ' and recorded no conversions.' : '.'}
+      {converting.length > 0 ? ': ' : ending}
       {converting.map((group, index) => (
         <span key={group.key}>
           {index > 0 ? (index === converting.length - 1 ? ' and ' : ', ') : ''}
@@ -98,7 +114,7 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
               'count',
             )}
           >
-            {formatConversions(group.conversions)}
+            {formatConversions(group.conversions ?? 0)}
           </span>{' '}
           {group.conversions === 1 ? 'conversion' : 'conversions'} at{' '}
           <span
@@ -150,12 +166,14 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
         )}
         label="Conversions"
         sub={
-          overview.costPerConversion != null
-            ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
-            : 'none recorded in the window'
+          overview.conversions == null
+            ? NO_SINGLE_RESULT
+            : overview.costPerConversion != null
+              ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
+              : 'none recorded in the window'
         }
         testId="google-tile-conversions"
-        value={formatConversions(overview.conversions)}
+        value={overview.conversions == null ? '—' : formatConversions(overview.conversions)}
       />
       {groups.map((group) => (
         <KpiTile
@@ -170,7 +188,7 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
           label={groupLabel(group, overview.byType)}
           sub={costComparison(group, overview, currency)}
           testId="google-tile-group"
-          value={`${formatConversions(group.conversions)} conv.`}
+          value={groupValue(group)}
         />
       ))}
       {showClicks ? (
@@ -337,7 +355,7 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
             label={groupLabel(group, overview.byType)}
             sub={costComparison(group, overview, account.currency)}
             testId="google-tile-group"
-            value={`${formatConversions(group.conversions)} conv.`}
+            value={groupValue(group)}
           />
         ))}
       </div>

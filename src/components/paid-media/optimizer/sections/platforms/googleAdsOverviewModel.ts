@@ -26,15 +26,29 @@ const CurrencyFields = {
   currency_code: z.string().nullable().optional(),
 };
 
+/**
+ * Which business result the edge counted as a conversion (`google_conversion_rule_v1`). When the
+ * account's goals name no single result — leads AND purchases, or neither — `unambiguous` is
+ * false and the edge nulls every conversion count and CPA rather than add unlike things.
+ * Optional: payloads cached before the edge carried it have none.
+ */
+const ResultBasisSchema = z.object({
+  rule: z.string(),
+  bucket: z.string().nullable(),
+  unambiguous: z.boolean(),
+});
+
 export const GoogleAccountOverviewSchema = z.object({
   metrics: z.object({
     spend: z.number(),
     impressions: z.number(),
     clicks: z.number(),
     ctr: z.number(),
-    cpa: z.number(),
+    /** Null when the result basis is ambiguous. */
+    cpa: z.number().nullable(),
   }),
   comparison: z.object({ spend: ComparisonValueSchema }).partial().optional(),
+  result_basis: ResultBasisSchema.optional(),
   range: RangeSchema,
   ...CurrencyFields,
 });
@@ -50,10 +64,12 @@ export const GoogleTopCampaignsSchema = z.object({
         spend: z.number(),
         impressions: z.number(),
         clicks: z.number(),
-        conversions: z.number(),
+        /** Null when the result basis is ambiguous. */
+        conversions: z.number().nullable(),
       }),
     }),
   ),
+  result_basis: ResultBasisSchema.optional(),
   range: RangeSchema,
   ...CurrencyFields,
 });
@@ -98,7 +114,8 @@ export type CampaignGroup = {
   label: string;
   campaigns: number;
   spend: number;
-  conversions: number;
+  /** Null when no single result is defined for the account (see `resultsDefined`). */
+  conversions: number | null;
   impressions: number;
   /** Share of the Google spend in the window, 0–100. */
   sharePct: number;
@@ -113,7 +130,10 @@ export type GoogleOverview = {
   spend: number;
   /** Null when the prior-window read came back empty or failed — there is nothing to compare. */
   priorSpend: number | null;
-  conversions: number;
+  /** False when the account's goals name no single business result, so the edge counted none:
+   *  conversions and every cost per conversion are null, never zero. */
+  resultsDefined: boolean;
+  conversions: number | null;
   costPerConversion: number | null;
   clicks: number;
   ctr: number;
@@ -174,6 +194,10 @@ export function buildGoogleOverview(
   const byType =
     spending.length > 0 && spending.every((row) => campaignTypeOf(row.labels?.channel_type));
   const totalSpend = account.metrics.spend;
+  const resultsDefined =
+    account.result_basis?.unambiguous !== false &&
+    campaigns.result_basis?.unambiguous !== false &&
+    spending.every((row) => row.metrics.conversions != null);
 
   const groups = new Map<string, CampaignGroup>();
   for (const row of spending) {
@@ -184,13 +208,13 @@ export function buildGoogleOverview(
       label: type ? CAMPAIGN_TYPE_LABELS[type] : row.name,
       campaigns: 0,
       spend: 0,
-      conversions: 0,
+      conversions: resultsDefined ? 0 : null,
       impressions: 0,
       sharePct: 0,
     };
     group.campaigns += 1;
     group.spend += row.metrics.spend;
-    group.conversions += row.metrics.conversions;
+    if (group.conversions != null) group.conversions += row.metrics.conversions ?? 0;
     group.impressions += row.metrics.impressions;
     groups.set(key, group);
   }
@@ -201,7 +225,9 @@ export function buildGoogleOverview(
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  const conversions = spending.reduce((sum, row) => sum + row.metrics.conversions, 0);
+  const conversions = resultsDefined
+    ? spending.reduce((sum, row) => sum + (row.metrics.conversions ?? 0), 0)
+    : null;
   const prior = account.comparison?.spend?.previous;
   return {
     currency: googleCurrencyOf(account) ?? googleCurrencyOf(campaigns),
@@ -210,8 +236,9 @@ export function buildGoogleOverview(
     days: daysBetween(account.range.since, account.range.until),
     spend: totalSpend,
     priorSpend: prior != null && prior > 0 ? prior : null,
+    resultsDefined,
     conversions,
-    costPerConversion: conversions > 0 ? totalSpend / conversions : null,
+    costPerConversion: conversions != null && conversions > 0 ? totalSpend / conversions : null,
     clicks: account.metrics.clicks,
     ctr: account.metrics.ctr,
     byType,
@@ -219,13 +246,18 @@ export function buildGoogleOverview(
   };
 }
 
+/** Said wherever a conversion count or its cost would sit when the account has no single result. */
+export const NO_SINGLE_RESULT = 'No single result defined';
+
 /** Room for six tiles: spend, conversions, and up to four campaign groups. */
 export const MAX_GROUP_TILES = 4;
 /** O1's floor. Under it, the clicks tile fills in rather than leaving a half-empty row. */
 export const MIN_TILES = 4;
 
 export function costPerConversion(group: CampaignGroup): number | null {
-  return group.conversions > 0 ? group.spend / group.conversions : null;
+  return group.conversions != null && group.conversions > 0
+    ? group.spend / group.conversions
+    : null;
 }
 
 /** Signed % of `value` against `base`, rounded; null when there is no base to compare with. */

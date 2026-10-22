@@ -1,5 +1,9 @@
 import { describe, expect, it, mock } from 'bun:test';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
+import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+} from './__fixtures__/googleAmbiguousResultBasis';
 
 // The edge is the boundary under test: what the page sends to paid-media-metrics and what it
 // does with the answer. The client is replaced; the parsing and the fold are the real ones.
@@ -63,6 +67,17 @@ describe('fetchGoogleAdsOverview', () => {
     await expect(fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW)).rejects.toThrow(
       'Google Ads account not configured or access token missing',
     );
+  });
+
+  it('reads an account with no single result instead of calling its shape unknown', async () => {
+    invoke = async (_name, { body }) => ({
+      data: body.scope === 'account_overview' ? ambiguousAccountOverview : ambiguousTopCampaigns,
+      error: null,
+    });
+    const overview = await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW);
+    expect(overview.resultsDefined).toBe(false);
+    expect(overview.conversions).toBeNull();
+    expect(overview.groups.map((group) => group.label)).toEqual(['Search', 'Display']);
   });
 
   it('refuses a payload it does not know rather than print zeros', async () => {

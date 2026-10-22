@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
 import { cleanup, render } from '@testing-library/react';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
+import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+} from './__fixtures__/googleAmbiguousResultBasis';
 import { GoogleAdsTabView, GoogleCampaignTypeBreakdown } from './GoogleAdsTab';
 import {
   buildGoogleOverview,
@@ -210,5 +214,62 @@ describe('GoogleCampaignTypeBreakdown — currency', () => {
       getByTestId('google-breakdown').textContent?.match(/currency not reported by Google/g)
         ?.length,
     ).toBe(1);
+  });
+});
+
+describe('an account with no single business result', () => {
+  const ambiguous = buildGoogleOverview(
+    GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
+    GoogleTopCampaignsSchema.parse(ambiguousTopCampaigns),
+  );
+
+  it('shows a dash with the reason where conversions and their cost would sit', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview: ambiguous }} />,
+    );
+    expect(getByTestId('google-headline').textContent).toBe(
+      'Google spent $55,205 MXN. Conversions are not shown: no single result is defined for this account.',
+    );
+    expect([...getByTestId('google-tiles').children].map(tileText)).toEqual([
+      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
+      { label: 'Conversions', value: '—', sub: 'No single result defined' },
+      {
+        label: 'Search · 3 campaigns',
+        value: '—',
+        sub: '$44,713 MXN spent · 81% of spend · no single result defined',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '—',
+        sub: '$10,492 MXN spent · 19% of spend · no single result defined',
+      },
+    ]);
+    expect(
+      getByTestId('google-tiles')
+        .querySelector('[data-figure="google.tiles.conversions"]')
+        ?.getAttribute('data-figure-raw'),
+    ).toBe('');
+  });
+
+  it('renders the split by campaign type instead of the shape error', () => {
+    const { getByTestId, getAllByTestId, queryByTestId } = render(
+      <GoogleCampaignTypeBreakdown
+        state={{ status: 'ready', account: VIVO_47, overview: ambiguous }}
+      />,
+    );
+    expect(queryByTestId('google-breakdown-error')).toBeNull();
+    expect(getByTestId('google-breakdown').textContent).toContain('By campaign type');
+    expect(getAllByTestId('google-tile-group').map(tileText)).toEqual([
+      {
+        label: 'Search · 3 campaigns',
+        value: '—',
+        sub: '$44,713 MXN spent · 81% of spend · no single result defined',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '—',
+        sub: '$10,492 MXN spent · 19% of spend · no single result defined',
+      },
+    ]);
   });
 });

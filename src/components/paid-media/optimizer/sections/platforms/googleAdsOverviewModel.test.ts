@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+} from './__fixtures__/googleAmbiguousResultBasis';
+import {
   buildGoogleOverview,
   campaignTypeOf,
   completeDaysWindow,
+  costPerConversion,
   figureWindowOf,
   formatConversions,
   type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
   type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
   googleCurrencyOf,
   percentAgainst,
   windowRangeLabel,
@@ -147,5 +154,56 @@ describe('googleCurrencyOf — the code the read carries', () => {
     );
     expect(overview.currency).toBe('MXN');
     expect(buildGoogleOverview(account(100), campaigns([])).currency).toBeNull();
+  });
+});
+
+describe('an account with no single business result — what the edge sends', () => {
+  const parsedAccount = GoogleAccountOverviewSchema.safeParse(ambiguousAccountOverview);
+  const ranked = GoogleTopCampaignsSchema.safeParse(ambiguousTopCampaigns);
+
+  it('parses the null CPA and null conversions instead of refusing the read', () => {
+    expect(parsedAccount.success).toBe(true);
+    expect(ranked.success).toBe(true);
+    expect(parsedAccount.data?.metrics.cpa).toBeNull();
+    expect(parsedAccount.data?.result_basis).toEqual({
+      rule: 'google_conversion_rule_v1',
+      bucket: null,
+      unambiguous: false,
+    });
+    expect(ranked.data?.rows.every((row) => row.metrics.conversions === null)).toBe(true);
+  });
+
+  it('keeps spend and the split by type, and reports conversions as unknown, never zero', () => {
+    if (!parsedAccount.success || !ranked.success) throw new Error('fixture did not parse');
+    const overview = buildGoogleOverview(parsedAccount.data, ranked.data);
+    expect(overview.resultsDefined).toBe(false);
+    expect(overview.spend).toBe(55205.2636);
+    expect(overview.conversions).toBeNull();
+    expect(overview.costPerConversion).toBeNull();
+    expect(overview.byType).toBe(true);
+    expect(overview.groups.map((g) => [g.label, g.conversions, g.sharePct])).toEqual([
+      ['Search', null, 81],
+      ['Display', null, 19],
+    ]);
+    expect(overview.groups.map(costPerConversion)).toEqual([null, null]);
+  });
+
+  it('still refuses a CPA that is neither a number nor null', () => {
+    expect(
+      GoogleAccountOverviewSchema.safeParse({
+        ...ambiguousAccountOverview,
+        metrics: { ...ambiguousAccountOverview.metrics, cpa: 'n/a' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('counts the single result when the basis names one', () => {
+    const overview = buildGoogleOverview(
+      { ...account(500), result_basis: { rule: 'r', bucket: 'leads', unambiguous: true } },
+      campaigns([row('1', 500, 5, 'SEARCH')]),
+    );
+    expect(overview.resultsDefined).toBe(true);
+    expect(overview.conversions).toBe(5);
+    expect(overview.costPerConversion).toBe(100);
   });
 });
