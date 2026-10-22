@@ -17,6 +17,23 @@ export const editorProjectBindingSchema = z
   .strict();
 export type EditorProjectBinding = z.infer<typeof editorProjectBindingSchema>;
 
+const ROOM_QUALIFIED_NODE =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(.+)$/i;
+
+/**
+ * A `canvas_node` binding names the room as well as the node. Node ids are unique only
+ * within one canvas — agent-built canvases reuse `editor`, `video_1` — so a bare id let
+ * two rooms of a brand open one project and read each other's wiring (Airtable #405).
+ */
+export const canvasNodeBindingId = (roomId: string, nodeId: string): string =>
+  `${roomId}/${nodeId}`;
+
+/** The node (and room, when the binding names one) behind a `canvas_node` external id. */
+export function parseCanvasNodeBindingId(externalId: string): { roomId?: string; nodeId: string } {
+  const match = ROOM_QUALIFIED_NODE.exec(externalId);
+  return match?.[1] && match[2] ? { roomId: match[1], nodeId: match[2] } : { nodeId: externalId };
+}
+
 export const createEditorProjectRequestSchema = z
   .object({
     brandId: databaseUuidSchema,
