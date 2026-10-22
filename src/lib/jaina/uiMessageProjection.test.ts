@@ -15,6 +15,12 @@ import { JAINA_UI_DATA_PART, type JainaUIMessage } from '@continuum/contracts';
 
 import { buildThinkingSegments } from '@/components/paid-media/jaina/components/thinkingUtils';
 import {
+  CLARIFICATION_ID,
+  CLARIFICATION_OPTIONS,
+  CLARIFICATION_QUESTION,
+  clarificationTurn,
+} from './clarificationTurn.fixture';
+import {
   approvalsOf,
   canvasActionsOf,
   checkpointSummaryOf,
@@ -337,6 +343,43 @@ describe('toJainaChatMessage fills the whole render model', () => {
     expect(asking.pendingClarification).toEqual({ id: 'clar_1', question: 'Which ad account?' });
     expect(asking.content).toBe('Which ad account?');
     expect(asking.renderAsReport).toBe(false);
+  });
+
+  it('reads the request nested in the Backend frame, with the survey s alternatives as options', () => {
+    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+
+    expect(asking.pendingClarification).toEqual({
+      id: CLARIFICATION_ID,
+      question: CLARIFICATION_QUESTION,
+      options: CLARIFICATION_OPTIONS,
+    });
+    expect(asking.content).toBe(CLARIFICATION_QUESTION);
+  });
+
+  it('never projects the survey that asked the question as a report', () => {
+    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+
+    expect(asking.reportV2).toBeUndefined();
+    expect(asking.report).toBeUndefined();
+    expect(asking.renderAsReport).toBe(false);
+  });
+
+  it('falls back to the streamed text, never a fixed label, when the request has no question', () => {
+    const asking = toJainaChatMessage(
+      uiMessage([
+        text('¿Qué cuenta publicitaria debo revisar?'),
+        data(JAINA_UI_DATA_PART.clarification, 'run_1:clarification', {
+          item_id: 'item_1',
+          clarification: { id: 'clar_2' },
+        }),
+      ]),
+      { isStreaming: false },
+    );
+
+    expect(asking.pendingClarification).toEqual({
+      id: 'clar_2',
+      question: '¿Qué cuenta publicitaria debo revisar?',
+    });
   });
 });
 

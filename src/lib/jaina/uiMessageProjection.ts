@@ -34,6 +34,8 @@ import {
   paidScaffoldProgressPayloadSchema,
   paidScaffoldProposedPayloadSchema,
   paidScaffoldReceiptPayloadSchema,
+  type SurveyBlock,
+  surveyBlockSchema,
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
 import {
@@ -406,18 +408,46 @@ const scaffoldFromGateInput = (message: JainaUIMessage): JainaScaffoldState | un
   return undefined;
 };
 
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const surveyBlocksOf = (message: JainaUIMessage): SurveyBlock[] =>
+  partsOfType(message, JAINA_UI_DATA_PART.reportBlock).flatMap((block) => {
+    const parsed = surveyBlockSchema.safeParse(block);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+/**
+ * The question Jaina asked back, and the answers she offered.
+ *
+ * The Backend's `response.clarification_request` frame is `{ item_id, part_id, clarification }` —
+ * the `ClarificationRequest` (`id`, `question`, …) is NESTED, and the part carries that frame's
+ * `data` whole. Reading `question` off the top level found nothing, so every clarification fell
+ * back to a fixed "Clarification needed." and lost its id, which is what the composer sends back
+ * to pair the reply with the question. The flat shape is still read for older persisted parts.
+ *
+ * The frame has no field for choices. When the question came from a `survey` block (the planner's
+ * "which business result?"), the block streamed beside it carries the alternatives, so they are
+ * read from there — the survey whose title IS the question, else the turn's last survey.
+ */
 export const clarificationOf = (
   message: JainaUIMessage,
 ): JainaChatMessage['pendingClarification'] => {
   const data = partsOfType(message, JAINA_UI_DATA_PART.clarification).at(-1);
   if (!data) return undefined;
-  const question =
-    [data.question, data.prompt, data.message].find(
-      (value): value is string => typeof value === 'string' && value.trim().length > 0,
-    ) ?? 'Clarification needed.';
+  const request = asRecord(data.clarification) ?? data;
+  const surveys = surveyBlocksOf(message);
+  const statedQuestion = [request.question, request.prompt, request.message]
+    .map(nonEmptyString)
+    .find((value): value is string => value !== undefined);
+  const survey =
+    surveys.find((block) => block.title?.trim() === statedQuestion) ?? surveys.at(-1) ?? null;
+  const question = statedQuestion ?? nonEmptyString(survey?.title) ?? textOf(message).trim();
+  const id = nonEmptyString(request.id);
   return {
-    ...(typeof data.id === 'string' ? { id: data.id } : {}),
-    question: question.trim(),
+    ...(id ? { id } : {}),
+    question,
+    ...(survey ? { options: survey.alternatives } : {}),
   };
 };
 
@@ -747,7 +777,12 @@ export const toJainaChatMessage = (
     return message.metadata?.mentions ? { ...base, metadata: message.metadata.mentions } : base;
   }
 
-  const interpreted = interpretCheckpointReportPayload(reportOf(message));
+  // A question back to the reader is not an answer, so it is never a report: the survey block
+  // that asked it would otherwise render as one, with its Evidence fold and its export row.
+  const pendingClarification = clarificationOf(message);
+  const interpreted = pendingClarification
+    ? undefined
+    : interpretCheckpointReportPayload(reportOf(message));
   const report: ReportPayload | undefined = interpreted?.report;
 
   const reasoning = reasoningEntriesOf(message);
@@ -759,7 +794,6 @@ export const toJainaChatMessage = (
   const toolCalls = toolCallsOf(message);
   const toolResults = toolResultsOf(message);
   const approvals = approvalsOf(message);
-  const pendingClarification = clarificationOf(message);
   const checkpointSummary = checkpointSummaryOf(message);
   const reportArtifactJob = reportArtifactJobOf(message);
   const optimizerCitations = optimizerCitationsOf(message);

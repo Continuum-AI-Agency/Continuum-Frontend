@@ -31,7 +31,7 @@ import {
   normalizeJainaMarkdownTables,
 } from '../jainaUtils';
 import type { JainaChatMessage } from '../types';
-import { ClarificationBanner } from './ClarificationBanner';
+import { ClarificationCard } from './ClarificationCard';
 import { CreativesSection } from './CreativesSection';
 import { JainaInlineReport } from './JainaInlineReport';
 import { JainaReportV2 } from './JainaReportV2';
@@ -194,8 +194,12 @@ function JainaMessageItemImpl({
     (message.deniedToolOutputs ?? []).find((entry) =>
       entry.toolName.startsWith('paid_scaffold_'),
     ) ?? null;
-  const report = message.report;
-  const reportV2 = message.reportV2;
+  // A question back to the reader supersedes any report the turn streamed before asking it: the
+  // survey block that carries the question would otherwise render as a report, with an Evidence
+  // fold and PDF/Sheets/Email exports, around a turn that has not answered anything yet.
+  const isClarification = Boolean(message.pendingClarification);
+  const report = isClarification ? undefined : message.report;
+  const reportV2 = isClarification ? undefined : message.reportV2;
   const plan = message.plan;
 
   const structuredReport = React.useMemo(() => {
@@ -217,8 +221,13 @@ function JainaMessageItemImpl({
     trimmedContent && reportV2?.executive_summary?.trim() === trimmedContent,
   );
 
+  // A clarification's content IS its question, which the clarification card already sets as
+  // its body — rendering it as prose too printed the question twice.
   const hasRenderableContent =
-    trimmedContent.length > 0 && !shouldHideMarkdownContent && !isRedundantReportContent;
+    trimmedContent.length > 0 &&
+    !shouldHideMarkdownContent &&
+    !isRedundantReportContent &&
+    !isClarification;
 
   const structuredFallbackContent = React.useMemo(() => {
     if (shouldRenderInlineReport || reportV2) return null;
@@ -334,9 +343,12 @@ function JainaMessageItemImpl({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               >
-                <ClarificationBanner
+                <ClarificationCard
                   question={message.pendingClarification.question}
+                  options={message.pendingClarification.options}
+                  onSelectOption={onSuggestionClick}
                   onFocusInput={onFocusInput}
+                  disabled={isStreaming}
                 />
               </motion.div>
             ) : null}
