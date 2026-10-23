@@ -340,6 +340,23 @@ describe('RenderRowsImport', () => {
     );
     expect(importButton().hasAttribute('disabled')).toBe(true);
   });
+
+  test('takes a dropped CSV exactly as a chosen one', async () => {
+    renderImport();
+    const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
+    fireEvent.dragOver(zone);
+    fireEvent.drop(zone, { dataTransfer: { files: [csv('Headline\nDropped\n')] } });
+    // The auto-mapped preview means the drop reached the same review path as the picker.
+    await waitFor(() => expect(screen.getByText('Dropped')).toBeTruthy());
+  });
+
+  test('offers a blank template download inside the dialog', () => {
+    const create = spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:template');
+    spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    renderImport();
+    fireEvent.click(screen.getByRole('button', { name: 'Download blank template' }));
+    expect(create).toHaveBeenCalledTimes(1);
+  });
 });
 
 // The owner's own Fecha 10 workbook: three tabs, notes above the data, a colour legend under it.
