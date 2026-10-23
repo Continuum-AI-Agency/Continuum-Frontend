@@ -20,6 +20,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { chromium, type Locator, type Page } from 'playwright';
 import { mintSessionBundleForEmail } from './support/auth';
@@ -429,14 +430,10 @@ async function run() {
       );
       // An output's Edit lands on that composition; a build or named variant has its own source.
       const composition = page.getByRole('combobox', { name: 'Composition' });
+      if (isOutput) await expect(composition).toHaveText(subName, { timeout: 120_000 });
       const landed = await composition
         .waitFor({ timeout: 120_000 })
-        .then(() =>
-          composition.evaluate((node) => {
-            const select = node as HTMLSelectElement;
-            return select.selectedOptions[0]?.textContent?.trim() ?? '';
-          }),
-        )
+        .then(async () => (await composition.textContent())?.trim() ?? '')
         .catch(() => null);
       if (isOutput)
         check(
@@ -482,7 +479,12 @@ async function run() {
       headings.join(' · '),
     );
     const search = page.getByRole('combobox', { name: 'Search templates' });
-    const word = found?.title.split(/\s+/)[0] ?? 'bench';
+    const available = await options.allTextContents();
+    const word = available.flatMap((text) => text.trim().split(/\s+/)).find((candidate) => {
+      const matches = available.filter((text) => text.toLowerCase().includes(candidate.toLowerCase()));
+      return matches.length > 0 && matches.length < total;
+    });
+    if (!word) throw new Error('The render picker has no distinct template name to search');
     await search.fill(word);
     const narrowed = await options.allTextContents();
     check(
