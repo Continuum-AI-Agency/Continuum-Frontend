@@ -110,14 +110,6 @@ type SortKey = keyof typeof SORT_COLUMNS;
 type Sort = { key: SortKey; dir: 'asc' | 'desc' };
 const MOTION_RANK: Record<Motion | 'unknown', number> = { animated: 0, static: 1, unknown: 2 };
 
-const chipClass = (active: boolean) =>
-  cn(
-    'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors',
-    active
-      ? 'border-primary bg-primary/10 text-foreground'
-      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-  );
-
 const toggled = (keys: Set<string>, key: string) => {
   const next = new Set(keys);
   if (!next.delete(key)) next.add(key);
@@ -594,30 +586,34 @@ export function TemplateGallery({
         </div>
         <fieldset className="flex flex-wrap gap-1" aria-label="Filter templates">
           {FILTERS.map(({ id, label }) => (
-            <button
+            <Button
               key={id}
               type="button"
+              variant={filter === id ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={filter === id}
               onClick={() => setFilter(id)}
-              className={chipClass(filter === id)}
+              className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
               {label}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
-            </button>
+            </Button>
           ))}
         </fieldset>
         <fieldset className="flex flex-wrap gap-1" aria-label="Filter by motion">
           {MOTIONS.map(({ id, label }) => (
-            <button
+            <Button
               key={id}
               type="button"
+              variant={motion === id ? 'secondary' : 'outline'}
+              size="sm"
               aria-pressed={motion === id}
               onClick={() => setMotion(motion === id ? null : id)}
-              className={chipClass(motion === id)}
+              className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
               {label}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
-            </button>
+            </Button>
           ))}
         </fieldset>
         <Select value={sourceType} onValueChange={(next) => setSourceType(next as SourceType)}>
