@@ -37,9 +37,21 @@ const updateDraft = (
   draftId: string,
   updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
 ): void => {
-  if (storeState.draft?.id !== draftId) return;
-  storeState.draft = updater(storeState.draft);
-  storeState.writes += 1;
+  const card = storeState.draft;
+  if (!card) return;
+  if (card.id === draftId) {
+    storeState.draft = updater(card);
+    storeState.writes += 1;
+    return;
+  }
+  // A group's member rows live on the card, as in the real store.
+  if (!card.groupMembers?.some((member) => member.draft?.id === draftId)) return;
+  storeState.draft = {
+    ...card,
+    groupMembers: card.groupMembers.map((member) =>
+      member.draft?.id === draftId ? { ...member, draft: updater(member.draft) } : member,
+    ),
+  };
 };
 
 const markDraftEditPending = (draftId: string, fields: readonly DraftEditField[]): void => {
@@ -63,6 +75,9 @@ mock.module('@/lib/api/http', () => ({ request, http: { request } }));
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
 mock.module('@/lib/organic/store', () =>
   createCalendarStoreStub({
+    get days() {
+      return storeState.draft ? [{ id: 'day-1', slots: [storeState.draft] }] : [];
+    },
     updateDraft,
     markDraftEditPending,
     clearDraftEditPending,
@@ -291,6 +306,51 @@ describe('editField', () => {
     expect(requestCalls.map((call) => call.path)).toEqual([
       '/api/organic/calendar/drafts/srv-1/fields',
     ]);
+  });
+
+  // A platform ticked before the caption was typed copied an empty row, and that row's readiness
+  // refused the whole group's publish — Instagram included.
+  it('gives an empty group row the caption, and keeps it following the bursts it was given', async () => {
+    const facebook = draft({
+      id: 'local-1::facebook',
+      backendDraftId: 'srv-fb',
+      updatedAt: 'T-fb',
+      platforms: ['facebook'],
+      captionPreview: '',
+    });
+    const target = draft({
+      captionPreview: '',
+      groupMembers: [
+        { backendDraftId: 'srv-1', platform: 'instagram', status: 'draft', accountId: null },
+        {
+          backendDraftId: 'srv-fb',
+          platform: 'facebook',
+          status: 'draft',
+          accountId: null,
+          draft: facebook,
+        },
+      ],
+    });
+    seed(target);
+    requestImpl = async () => ({ updated_at: 'T-next' });
+    const { result } = renderHook(() => useDraftFieldEditor(target));
+
+    await act(async () => {
+      await result.current.editField({ caption: 'La' }, ['caption'], { captionPreview: 'La' });
+    });
+    await act(async () => {
+      await result.current.editField({ caption: 'La alineación' }, ['caption'], {
+        captionPreview: 'La alineación',
+      });
+    });
+
+    const facebookWrites = requestCalls.filter((call) => call.path.includes('srv-fb'));
+    expect(facebookWrites.map((call) => call.body?.caption)).toEqual(['La', 'La alineación']);
+    expect(facebookWrites[0]?.body?.expected_updated_at).toBe('T-fb');
+    expect(
+      storedDraft()?.groupMembers?.find((member) => member.platform === 'facebook')?.draft
+        ?.captionPreview,
+    ).toBe('La alineación');
   });
 
   // One caption rule: the route refuses an over-limit caption and names the limit; never truncate.

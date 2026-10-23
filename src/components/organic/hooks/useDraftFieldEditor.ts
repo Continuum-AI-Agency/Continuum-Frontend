@@ -12,7 +12,7 @@ import type { OrganicCalendarDraft } from '@/components/organic/primitives/types
 import { useToast } from '@/components/ui/ToastProvider';
 import { ApiError } from '@/lib/api/errors';
 import { request } from '@/lib/api/http';
-import { groupMemberDrafts, isGroup } from '@/lib/organic/groupDraft';
+import { groupMemberDrafts, groupRowsToFill, isGroup } from '@/lib/organic/groupDraft';
 import { type DraftEditField, useCalendarStore } from '@/lib/organic/store';
 
 /**
@@ -171,6 +171,9 @@ type QueuedEdit = {
 
 type Typed = { draftId: string; patch: Partial<OrganicCalendarDraft> };
 
+const captionOf = (draft: OrganicCalendarDraft): string =>
+  draft.captionPreview?.trim() ? draft.captionPreview : '';
+
 /**
  * `localPatch` exists because the store's draft shape is not the wire patch: a
  * caption is `captionPreview` locally and `copy.caption` on the wire. Callers pass
@@ -206,6 +209,30 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
   const queuedRef = React.useRef<QueuedEdit | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = React.useRef(new Set<Promise<boolean>>());
+
+  // Group rows that had no caption take this one, and keep following it while they still hold
+  // exactly what they were given — a caption arrives in bursts, and the first is only a prefix.
+  const filledCaptionsRef = React.useRef(new Map<string, string>());
+  const fillEmptyGroupCaptions = React.useCallback(
+    async (draftId: string, caption: string): Promise<void> => {
+      if (!caption.trim()) return;
+      const filled = filledCaptionsRef.current;
+      const rows = groupRowsToFill(useCalendarStore.getState().days, draftId, captionOf, filled);
+      await Promise.all(
+        rows.map(async (row) => {
+          const saved = await persistDraftFields(row, { caption });
+          if (!saved.ok) return;
+          filled.set(row.id, caption);
+          updateDraft(row.id, (current) => ({
+            ...current,
+            captionPreview: caption,
+            updatedAt: saved.updatedAt ?? current.updatedAt,
+          }));
+        }),
+      );
+    },
+    [persistDraftFields, updateDraft],
+  );
 
   const send = React.useCallback(
     async (
@@ -261,6 +288,8 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
             ...(result.updatedAt ? { updatedAt: result.updatedAt } : {}),
           }));
         }
+        // Before finish(): approve and publish flush, and must see the rows this fills.
+        if (typeof patch.caption === 'string') await fillEmptyGroupCaptions(draftId, patch.caption);
         settleTyped();
         setSaveError(null);
         return finish(true);
@@ -294,6 +323,7 @@ export function useDraftFieldEditor(draft: OrganicCalendarDraft): UseDraftFieldE
       updateDraft,
       requestCalendarRefetch,
       show,
+      fillEmptyGroupCaptions,
     ],
   );
 
