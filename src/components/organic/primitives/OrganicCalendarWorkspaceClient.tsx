@@ -53,6 +53,7 @@ import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
+import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
 import {
   findSelectionFocusTarget,
@@ -795,6 +796,18 @@ function OrganicCalendarWorkspaceInner({
   const handleViewSelectedPostMetrics = React.useCallback(() => {
     if (selectedPostMetricsHref) router.push(selectedPostMetricsHref);
   }, [router, selectedPostMetricsHref]);
+  const handlePublishedPostDeleted = React.useCallback(() => {
+    closePreview();
+    // The server sent the post's draft back to `draft`.
+    void refetchCalendarDrafts();
+  }, [closePreview, refetchCalendarDrafts]);
+  const { deletePost: deletePublishedPost, deletingId: deletingPublishedPostId } =
+    useDeletePublishedPost(handlePublishedPostDeleted);
+  const deletablePost =
+    previewPost && canDeletePublishedPost(previewPost.post) ? previewPost.post : null;
+  const handleDeleteSelectedPost = React.useCallback(() => {
+    if (deletablePost) void deletePublishedPost(deletablePost);
+  }, [deletablePost, deletePublishedPost]);
   const hasSelection = Boolean(selectedId || previewPost);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
@@ -1516,6 +1529,8 @@ function OrganicCalendarWorkspaceInner({
             brandName={brandName}
             className="h-full w-full overflow-y-auto border-0"
             onViewMetrics={selectedPostMetricsHref ? handleViewSelectedPostMetrics : undefined}
+            onDelete={deletablePost ? handleDeleteSelectedPost : undefined}
+            isDeleting={deletingPublishedPostId === previewPost.post.id}
           />
         ) : previewDraft ? (
           <OrganicDraftPreview

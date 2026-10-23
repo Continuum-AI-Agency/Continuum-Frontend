@@ -51,6 +51,22 @@ describe('PostedContentPreview', () => {
     expect(onViewMetrics).toHaveBeenCalledTimes(1);
   });
 
+  it('offers "Delete from Facebook" only when given a delete, and locks it while deleting', () => {
+    const onDelete = mock(() => undefined);
+    const { rerender } = render(<PostedContentPreview post={post({ platform: 'facebook' })} />);
+    expect(screen.queryByRole('button', { name: /Delete from/ })).toBeNull();
+
+    rerender(<PostedContentPreview post={post({ platform: 'facebook' })} onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete from Facebook' }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <PostedContentPreview post={post({ platform: 'facebook' })} onDelete={onDelete} isDeleting />,
+    );
+    const pending = screen.getByRole('button', { name: 'Deleting from Facebook…' });
+    expect(pending.hasAttribute('disabled')).toBe(true);
+  });
+
   it('renders a text-only Facebook post with no media box, stamped with its own time', () => {
     const { container } = render(<PostedContentPreview post={post({ platform: 'facebook' })} />);
 
