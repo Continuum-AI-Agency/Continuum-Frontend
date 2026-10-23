@@ -8,6 +8,7 @@ import { templateLayerEditSchema } from './template-layer-edits';
 import { templateLayerPositionSourceSchema, templateMaskSourceGeometrySchema } from './template-source';
 import { templateAuthoringSourceKeyframeIdSchema } from './template-authoring-keyframes';
 import { templateLayerPreviewResponseSchema } from './template-layer-edits';
+import { rgbSchema } from './template-revisions';
 
 const uuid = z.string().uuid();
 const nativeCompId = z.number().int().positive();
@@ -102,6 +103,7 @@ export const templateAuthoringDraftNodeEditSchema = z
       ])
       .optional(),
     opacity: z.number().finite().min(0).max(100).optional(),
+    fillColor: rgbSchema.optional(),
   })
   .strict()
   .refine((v) => Object.values(v).some((value) => value !== undefined), 'Choose a layer change');
@@ -405,6 +407,8 @@ export const templateAuthoringNodeSchema = z
     textContent: z.string().nullable(),
     fontRef: fontRefSchema.nullable(),
     fillColor: z.tuple([z.number(), z.number(), z.number()]).nullable(),
+    /** Why the layer's fill cannot be recoloured; null = `fillColor` edits are safe. */
+    fillReason: z.string().nullable().default('authoring_fill_preflight_pending'),
     kind: z.enum(['text', 'shape', 'composition', 'artwork', 'group']),
     artworkAssetRef: artworkAssetRefSchema.nullable().default(null),
     shape: z.enum(['rectangle', 'ellipse']).nullable(),

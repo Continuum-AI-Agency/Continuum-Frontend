@@ -8,6 +8,7 @@ export * from './common';
 export * from './competitor-spy';
 export * from './dataset';
 export * from './envelope';
+export * from './forge-agent';
 export * from './hyperframes';
 export * from './jaina';
 export * from './jaina-answer-shape';

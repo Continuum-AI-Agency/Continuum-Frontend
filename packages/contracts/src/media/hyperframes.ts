@@ -113,7 +113,8 @@ export const hyperframesStructureSchema = z.object({
     z.object({
       id: z.string(),
       nodeId: z.string(),
-      kind: z.enum(['text', 'media']),
+      /** `color`/`boolean` come from `data-hf-color`/`data-hf-switch`: AE export controls, not variant edits. */
+      kind: z.enum(['text', 'media', 'color', 'boolean']),
       value: z.string(),
       attribute: z.string().optional(),
       copyKind: z.string().nullable().optional(),

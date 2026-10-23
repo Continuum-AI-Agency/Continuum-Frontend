@@ -599,6 +599,7 @@ export function projectTemplateAuthoringCommands(
         textContent: null,
         fontRef: null,
         fillColor: null,
+        fillReason: 'layer_has_no_fill',
         kind: 'artwork',
         shape: null,
         size: command.size,
@@ -660,6 +661,7 @@ export function projectTemplateAuthoringCommands(
         textContent: null,
         fontRef: null,
         fillColor: null,
+        fillReason: command.fill.type === 'solid' ? null : 'layer_has_no_fill',
         kind: 'shape',
         shape: command.shape,
         size: command.size,
@@ -714,6 +716,7 @@ export function projectTemplateAuthoringCommands(
         textContent: command.text,
         fontRef: command.fontRef,
         fillColor: command.fillColor,
+        fillReason: null,
         kind: 'text',
         shape: null,
         size: null,
@@ -788,6 +791,7 @@ export function projectTemplateAuthoringCommands(
         textContent: null,
         fontRef: null,
         fillColor: null,
+        fillReason: 'layer_has_no_fill',
         kind: 'group',
         shape: null,
         size: null,
@@ -1121,6 +1125,8 @@ export function projectTemplateAuthoringCommands(
           rotation: edit.rotation ?? node.rotation,
           scale: edit.scale ?? node.scale,
           opacity: edit.opacity ?? node.opacity,
+          fillColor: edit.fillColor ?? node.fillColor,
+          fill: edit.fillColor && node.fill?.type === 'solid' ? { ...node.fill, color: edit.fillColor } : node.fill,
           keyframeChannels: node.keyframeChannels.map((channel) => {
             if (edit.scale !== undefined && channel.channel === 'scale' && channel.reason === null &&
                 channel.keyframes.length === 0 && Array.isArray(channel.baseValue) && channel.baseValue.length === 3)
