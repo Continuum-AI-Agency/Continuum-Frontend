@@ -122,8 +122,8 @@ export const headlessConceptSchema = z
           .strict(),
       )
       .min(3)
-      .max(6),
-    /** The finished reel's length: the owner's 8–12 s, or a story's 12–20 s. */
+      .max(9),
+    /** The finished reel's length: the owner's 8–12 s, a story's 12–20 s, or a tour's 22–40 s. */
     seconds: z.object({ min: z.number().positive(), max: z.number().positive() }).strict(),
     casting: z
       .object({
@@ -180,6 +180,7 @@ const REEL = { min: 8, max: 12 };
 /** Owner-approved 2026-09-29: Mateo, the street concepts' standing interviewer (bench tenant). */
 const STANDING_INTERVIEWER = 'f8b217bd-aac8-48b7-956a-425ff47ad2cf';
 const STORY = { min: 12, max: 20 };
+const TOUR = { min: 22, max: 40 };
 const beat = (
   role: ReelShotRole,
   purpose: string,
@@ -452,6 +453,40 @@ export const HEADLESS_CONCEPTS: readonly HeadlessConcept[] = [
       'A display word is what time means to her (TIEMPO, PRISA), never a unit of time.',
     ],
     status: 'benched',
+    exemplar: null,
+  },
+  {
+    id: 'tour',
+    label: 'Tour',
+    summary:
+      'A drone opens over the place, then one host walks it room by room: she names it at the front, a silent glide previews each room before she speaks in it, and she closes outside with the invitation.',
+    whenToUse:
+      'A place is the product: a home for sale, a model home, a venue, a showroom, a studio. Each room is a scene, so the listing photos become the openings.',
+    beats: [
+      beat('overhead', 'a silent drone shot descending over the front of the place', 'none'),
+      beat('hook', 'at the front of the place, she names it'),
+      beat('proof', 'still at the front, one thing true of the whole place'),
+      beat('detail', 'a silent glide through the first room', 'none'),
+      beat('proof', 'in the first room, what it gives the buyer'),
+      beat('detail', 'a silent glide through the second room', 'none'),
+      beat('proof', 'in the second room, what it gives the buyer'),
+      beat('pov', 'a silent glide out to the outdoor space', 'none'),
+      beat('cta', 'outside, the invitation to visit'),
+    ],
+    seconds: TOUR,
+    casting: {
+      people: 1,
+      persona: 'the host who knows the place: a listing agent, a builder, an owner or a manager',
+    },
+    headlineOnHook: false,
+    sceneDefaults:
+      'Four places in walking order: the front (the drone shot and her first two beats), two rooms, and the outdoor space. The brand’s own photos of each, when it has them: the front photo is the drone’s reference too.',
+    soundPolicy: 'Her voice on each spoken beat, in the quiet room she is in. The glides are silent.',
+    guidance: [
+      'Every number she says is one the brief gives (bedrooms, square feet, price): never invent a fact about the place.',
+      'The glides show the room alone: no person, no sign, no lettering.',
+    ],
+    status: 'draft',
     exemplar: null,
   },
 ];

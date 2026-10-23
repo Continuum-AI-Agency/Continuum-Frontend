@@ -11,6 +11,7 @@
  * is refused before anyone is asked. Outputs are chat-media refs, never URLs.
  */
 import { z } from 'zod';
+import { HEADLESS_CONCEPTS } from '../headless-content/concepts';
 import { headlessCreativeBlocksSchema } from '../headless-content/styles';
 import { chatMediaItemSchema } from './chat-media';
 import { organicGeneratablePlatformSchema } from './publishing';
@@ -30,6 +31,23 @@ export const HEADLESS_BATCH_PIECE_COST_USD = {
   reel: { capUsd: 9, expectedUsd: 3.5 },
   still_set: { capUsd: 5, expectedUsd: 1 },
 } as const satisfies Record<HeadlessBatchFormat, { capUsd: number; expectedUsd: number }>;
+
+/** A reel whose concept runs past six beats (a tour's eight), held at twice a reel's cap. */
+export const HEADLESS_BATCH_LONG_REEL_COST_USD = { capUsd: 18, expectedUsd: 7 } as const;
+const LONG_REEL_BEATS = 6;
+
+/** What one piece holds: its format's cost, or the long reel's when its concept runs long.
+ *  ponytail: a conceptVariantId on a long base reads as a short reel and is refused over_item_cap
+ *  at its run; resolve the variant's base here if brands make long variants. */
+export function headlessBatchPieceCost(item: {
+  format: HeadlessBatchFormat;
+  blocks?: { concept?: string };
+}): { capUsd: number; expectedUsd: number } {
+  const beats = HEADLESS_CONCEPTS.find((concept) => concept.id === item.blocks?.concept)?.beats;
+  return item.format === 'reel' && (beats?.length ?? 0) > LONG_REEL_BEATS
+    ? HEADLESS_BATCH_LONG_REEL_COST_USD
+    : HEADLESS_BATCH_PIECE_COST_USD[item.format];
+}
 
 /** A brand with no approved cast approves the drafted people once: one pack render each. */
 export const HEADLESS_BATCH_CAST_PACK_USD = 2;
@@ -95,12 +113,24 @@ export const headlessBatchCreateInputSchema = z
     language: z.string().trim().min(2).max(32).optional(),
     /** The most this batch may hold, re-directs included. Default: 1.6 × the summed caps. */
     maxUsd: z.number().positive().max(1000).optional(),
+    /** `/slug` shortcuts every piece carries (the create tools' `shortcuts`); a format shortcut
+     *  (`/tour`) also makes every reel that pins no concept that concept. */
+    shortcuts: z
+      .array(
+        z
+          .string()
+          .trim()
+          .regex(/^\/?[a-z0-9][a-z0-9-]*$/i, 'a shortcut slug such as goldenhour'),
+      )
+      .max(6)
+      .optional(),
+    /** Fold the brand book's imagery and personality into every piece's style. */
+    brandBook: z.boolean().optional(),
   })
   .strict()
-  .refine(
-    (input) => input.items.every((item) => !item.caption || !('draftId' in item.slot)),
-    { message: 'a caption is for a new placeholder; a named draft keeps its own copy' },
-  );
+  .refine((input) => input.items.every((item) => !item.caption || !('draftId' in item.slot)), {
+    message: 'a caption is for a new placeholder; a named draft keeps its own copy',
+  });
 export type HeadlessBatchCreateInput = z.infer<typeof headlessBatchCreateInputSchema>;
 
 const usd = z.number().nonnegative();
@@ -138,6 +168,7 @@ const dollars = (value: number) => `$${value.toFixed(2)}`;
 export function quoteHeadlessBatch(
   items: ReadonlyArray<{
     format: HeadlessBatchFormat;
+    blocks?: { concept?: string };
     caption?: string;
     slot?: HeadlessBatchSlot;
   }>,
@@ -145,11 +176,11 @@ export function quoteHeadlessBatch(
 ): HeadlessBatchQuote {
   const reels = items.filter((item) => item.format === 'reel').length;
   const stillSets = items.length - reels;
+  const longReels = items.filter(
+    (item) => headlessBatchPieceCost(item) === HEADLESS_BATCH_LONG_REEL_COST_USD,
+  ).length;
   const sum = (key: 'capUsd' | 'expectedUsd') =>
-    cents(
-      reels * HEADLESS_BATCH_PIECE_COST_USD.reel[key] +
-        stillSets * HEADLESS_BATCH_PIECE_COST_USD.still_set[key],
-    );
+    cents(items.reduce((total, item) => total + headlessBatchPieceCost(item)[key], 0));
   const capUsd = sum('capUsd');
   const captioned = items.filter(
     (item) => !item.caption && !(item.slot && 'draftId' in item.slot),
@@ -159,8 +190,10 @@ export function quoteHeadlessBatch(
   const boundUsd = cents(capUsd + copyUsd + castPackUsd);
   const maxUsd = cents(options.maxUsd ?? Math.ceil(capUsd * HEADLESS_BATCH_DEFAULT_MAX_MULTIPLE));
   const pieces = [
-    `${reels} reel${reels === 1 ? '' : 's'} at up to ${dollars(HEADLESS_BATCH_PIECE_COST_USD.reel.capUsd)} and ${stillSets} still set${stillSets === 1 ? '' : 's'} at up to ${dollars(HEADLESS_BATCH_PIECE_COST_USD.still_set.capUsd)}`,
-    copyUsd ? `${dollars(copyUsd)} of copy for ${captioned} caption${captioned === 1 ? '' : 's'}` : '',
+    `${reels - longReels} reel${reels - longReels === 1 ? '' : 's'} at up to ${dollars(HEADLESS_BATCH_PIECE_COST_USD.reel.capUsd)}${longReels ? `, ${longReels} long reel${longReels === 1 ? '' : 's'} at up to ${dollars(HEADLESS_BATCH_LONG_REEL_COST_USD.capUsd)}` : ''} and ${stillSets} still set${stillSets === 1 ? '' : 's'} at up to ${dollars(HEADLESS_BATCH_PIECE_COST_USD.still_set.capUsd)}`,
+    copyUsd
+      ? `${dollars(copyUsd)} of copy for ${captioned} caption${captioned === 1 ? '' : 's'}`
+      : '',
     castPackUsd
       ? `up to ${dollars(castPackUsd)} of character packs (${dollars(HEADLESS_BATCH_CAST_PACK_USD)} each, up to ${HEADLESS_BATCH_CAST_MAX_CHARACTERS})`
       : '',
