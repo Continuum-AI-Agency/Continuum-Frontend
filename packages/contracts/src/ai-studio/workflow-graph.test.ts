@@ -1557,10 +1557,16 @@ describe('#293 videoModelOptions', () => {
   });
 
   it('leaves the reachable models selectable and unannotated', () => {
+    const option = videoModelOptions().find((entry) => entry.model === 'gemini-omni-flash');
+    expect(option?.selectable).toBe(true);
+    expect(option?.note).toBeUndefined();
+  });
+
+  it('marks every Veo model retired: unselectable, saying it now runs on Omni', () => {
     for (const model of ['veo-3.1', 'veo-3.1-fast', 'veo-3.1-lite'] as const) {
       const option = videoModelOptions().find((entry) => entry.model === model);
-      expect(option?.selectable).toBe(true);
-      expect(option?.note).toBeUndefined();
+      expect(option?.selectable).toBe(false);
+      expect(option?.note).toBe('Retired by Google · runs on Omni');
     }
   });
 
