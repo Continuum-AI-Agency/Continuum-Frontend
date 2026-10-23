@@ -662,12 +662,13 @@ export function autoMapHeaders(
 ): Record<string, string> {
   const importable = importableVariables(variables);
   const byName = new Map<string, string>();
+  const byFoldedName = new Map<string, string>();
   // "Région" is the same column as "Region": accents fold away as a fallback, never over an exact name.
   const unaccent = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '');
   const register = (name: string, target: string) => {
     const lower = name.trim().toLowerCase();
     if (!byName.has(lower)) byName.set(lower, target);
-    if (!byName.has(unaccent(lower))) byName.set(unaccent(lower), target);
+    if (!byFoldedName.has(unaccent(lower))) byFoldedName.set(unaccent(lower), target);
   };
   for (const field of IMPORT_FIELDS) register(field.header, field.target);
   for (const variable of importable)
@@ -681,7 +682,7 @@ export function autoMapHeaders(
   const mapped = Object.fromEntries(
     headers.map((header) => {
       const lower = header.trim().toLowerCase();
-      const target = byName.get(lower) ?? byName.get(unaccent(lower));
+      const target = byName.get(lower) ?? byFoldedName.get(unaccent(lower));
       if (!target || used.has(target)) return [header, IMPORT_SKIP];
       used.add(target);
       return [header, target];

@@ -52,6 +52,7 @@ try {
       variables: row.variables,
       ...(row.outputIds.length ? { outputIds: row.outputIds } : {}),
       ...(row.encode ? { encode: row.encode } : {}),
+      ...(row.delivery ? { delivery: row.delivery } : {}),
     }],
   });
   await rec.step('Parse the real batch response including records[0].engine', async () => {

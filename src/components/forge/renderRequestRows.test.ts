@@ -447,6 +447,15 @@ describe('CSV', () => {
     });
   });
 
+  test('an accent-folded label cannot take another variable exact header', () => {
+    const accented = variable({ key: 'accented', label: 'Région' });
+    const plain = variable({ key: 'plain', label: 'Region' });
+    expect(autoMapHeaders(['Region', 'Région'], [accented, plain])).toEqual({
+      Region: 'plain',
+      Région: 'accented',
+    });
+  });
+
   test('a media link column maps by detected type when it has one matching slot', () => {
     const image = variable({ key: 'hero', label: 'Hero asset', kind: 'image' });
     const video = variable({ key: 'clip', label: 'Motion asset', kind: 'video' });
