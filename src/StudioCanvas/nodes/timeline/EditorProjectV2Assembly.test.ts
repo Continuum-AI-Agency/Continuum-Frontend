@@ -490,6 +490,29 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     expect(restored.durationSec).toBe(16);
   });
 
+  test.each([
+    ['blur', 7, 15],
+    ['whip', 7, 15],
+    ['zoom_blur', 7, 15],
+    ['glitch', 7, 15],
+    ['flash', 8, 16],
+  ] as const)('a %s transition lays the next clip at %ss: only the overlapping kinds pull it under', (transitionType, secondStart, total) => {
+    const initial = projectFixture();
+    const add = upsertTransitionOperation(initial, {
+      trackId: 'production-masters',
+      fromClipId: 'clip-a',
+      toClipId: 'clip-b',
+      transitionType,
+      durationSec: 1,
+    });
+    const transitioned = applyDrafts(initial, add.forward);
+    expect(
+      orderedVideoClips(primaryVideoTrack(transitioned)).map((clip) => clip.timelineStartSec),
+    ).toEqual([0, secondStart]);
+    expect(transitioned.durationSec).toBe(total);
+    expect(videoLayout(transitioned, 80).totalSec).toBe(total);
+  });
+
   test('builds one synchronized exact-version mix for base video and enabled audio lanes', () => {
     const initial = projectFixture();
     const withAudio = applyDrafts(

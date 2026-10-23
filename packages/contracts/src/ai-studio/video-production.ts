@@ -7,6 +7,7 @@ import {
   editorPinnedAssetRefSchema,
   editorProductionStageSchema,
   editorProjectV2Schema,
+  editorTransitionTypeSchema,
 } from './editor-project-v2';
 
 export const editorProjectBindingSchema = z
@@ -112,19 +113,7 @@ export const editorTimelineOperationSchema = z
     blendMode: z
       .enum(['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'])
       .optional(),
-    transitionType: z
-      .enum([
-        'cut',
-        'crossfade',
-        'dip_to_black',
-        'dip_to_white',
-        'wipe',
-        'slide',
-        'zoom',
-        'blur',
-        'custom',
-      ])
-      .optional(),
+    transitionType: editorTransitionTypeSchema.optional(),
     transitionDurationSec: z.number().finite().positive().max(86_400).optional(),
     transitionAlignment: z.enum(['before_cut', 'centered', 'after_cut']).optional(),
   })

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { TimelineDocument } from './adapter';
-import { projectTimelineDocumentToEditorProjectV2 } from './editorProjectV2Projection';
+import {
+  projectTimelineDocumentToEditorProjectV2,
+  transitionKind,
+} from './editorProjectV2Projection';
 
 function timelineFixture(): TimelineDocument {
   return {
@@ -491,5 +494,23 @@ describe('the export quality ladder rides the preset id', () => {
     });
     expect(project.exportSettings.presetId).toBe('square-1080');
     expect(project.exportSettings.width).toBe(1080);
+  });
+});
+
+describe('transitionKind — the new transition vocabulary round-trips to the V2 document', () => {
+  test.each([
+    ['blur', 'blur', {}],
+    ['whipLeft', 'whip', { direction: 'left' }],
+    ['whipRight', 'whip', { direction: 'right' }],
+    ['whipUp', 'whip', { direction: 'up' }],
+    ['whipDown', 'whip', { direction: 'down' }],
+    ['zoomBlur', 'zoom_blur', {}],
+    ['flash', 'flash', {}],
+    ['glitch', 'glitch', {}],
+  ] as const)('%s becomes a %s transition %j', (type, transitionType, parameters) => {
+    expect(transitionKind({ type, durationSec: 0.4 })).toMatchObject({
+      transitionType,
+      parameters,
+    });
   });
 });

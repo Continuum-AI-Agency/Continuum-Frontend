@@ -2110,6 +2110,14 @@ export const CLIP_TRANSITION_TYPES = [
   'wipeRight',
   'zoomIn',
   'spin',
+  'blur',
+  'whipLeft',
+  'whipRight',
+  'whipUp',
+  'whipDown',
+  'zoomBlur',
+  'flash',
+  'glitch',
 ] as const;
 
 export type ClipTransitionType = (typeof CLIP_TRANSITION_TYPES)[number];

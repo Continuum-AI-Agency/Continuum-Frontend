@@ -21,6 +21,7 @@ export * from './design-grounding';
 export * from './editor-clip-edits';
 export * from './editor-project-reducer';
 export * from './editor-project-v2';
+export * from './editor-retime';
 export * from './export-formats';
 export * from './forge-live-fit';
 export * from './forge-live-text';

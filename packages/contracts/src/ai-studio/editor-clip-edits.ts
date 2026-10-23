@@ -85,8 +85,10 @@ export function editorClipAtSpeed<
     throw new Error('Speed must be between 0.05 and 20.');
   const media: EditorVideoClip | EditorAudioClip | undefined =
     clip.kind === 'video' || clip.kind === 'audio' ? clip : undefined;
-  if (media?.reverse || media?.timeRemap?.length)
-    throw new Error('Constant speed cannot edit a reversed or time-remapped clip.');
+  if (media?.timeRemap?.length)
+    throw new Error(
+      'Constant speed cannot edit a speed-ramped or frozen clip; undo the ramp or freeze first.',
+    );
   const factor = clip.playbackRate / rate;
   const durationSec = clip.durationSec * factor;
   return {
@@ -186,4 +188,165 @@ export function editorCaptionWordsWithText(
       'A spelling correction must keep the number of timed words; edit explicit word timings to insert or remove words.',
     );
   return words.map((word, index) => ({ ...word, text: tokens[index] }));
+}
+
+// ── Source clock: where in the source file a clip is at a given moment ──────────────────────
+
+/** The fields of a video or audio clip that decide which source frame shows when. */
+export type EditorClipTiming = {
+  durationSec: number;
+  sourceInSec?: number;
+  playbackRate?: number;
+  reverse?: boolean;
+  timeRemap?: readonly {
+    timeSec: number;
+    sourceSec: number;
+    interpolation?: 'hold' | 'linear' | 'bezier';
+  }[];
+};
+type RemapPoint = NonNullable<EditorClipTiming['timeRemap']>[number];
+
+const REMAP_EPSILON = 1e-6;
+
+/** The index of the segment of `points` that holds output time `t` (never the last point). */
+const remapSegment = (points: readonly RemapPoint[], t: number): number => {
+  let low = 0;
+  let high = points.length - 1;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (points[mid].timeSec <= t) low = mid;
+    else high = mid;
+  }
+  return low;
+};
+
+/** The ABSOLUTE source second a remap curve shows at clip-local output time `t`. */
+export function editorTimeRemapSourceAt(points: readonly RemapPoint[], t: number): number {
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return 0;
+  if (t <= first.timeSec) return first.sourceSec;
+  if (t >= last.timeSec) return last.sourceSec;
+  const a = points[remapSegment(points, t)];
+  const b = points[remapSegment(points, t) + 1];
+  if (a.interpolation === 'hold') return a.sourceSec;
+  const u = (t - a.timeSec) / (b.timeSec - a.timeSec);
+  const k = a.interpolation === 'bezier' ? u * u * (3 - 2 * u) : u;
+  return a.sourceSec + (b.sourceSec - a.sourceSec) * k;
+}
+
+/** Source seconds per output second (signed: negative plays backwards) of a remap curve at `t`. */
+export function editorTimeRemapRateAt(points: readonly RemapPoint[], t: number): number {
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last || t < first.timeSec || t > last.timeSec) return 0;
+  const index = Math.min(remapSegment(points, t), points.length - 2);
+  const a = points[index];
+  const b = points[index + 1];
+  if (a.interpolation === 'hold') return 0;
+  const slope = (b.sourceSec - a.sourceSec) / (b.timeSec - a.timeSec);
+  if (a.interpolation !== 'bezier') return slope;
+  const u = (t - a.timeSec) / (b.timeSec - a.timeSec);
+  return slope * 6 * u * (1 - u);
+}
+
+/** True when a clip's source clock is not plain forward playback at one constant rate. */
+export const editorClipIsRetimed = (clip: Pick<EditorClipTiming, 'reverse' | 'timeRemap'>) =>
+  Boolean(clip.reverse || clip.timeRemap?.length);
+
+/**
+ * The ABSOLUTE source second a clip shows at clip-local output time `localSec`. One answer for
+ * the three ways a clip can run — constant `playbackRate`, `reverse`, and a `timeRemap` curve —
+ * so the renderer, the preview and the ops never each re-derive it.
+ */
+export function editorClipSourceAt(clip: EditorClipTiming, localSec: number): number {
+  if (clip.timeRemap?.length) return editorTimeRemapSourceAt(clip.timeRemap, localSec);
+  const t = Math.min(Math.max(localSec, 0), clip.durationSec);
+  return (
+    (clip.sourceInSec ?? 0) + (clip.reverse ? clip.durationSec - t : t) * (clip.playbackRate ?? 1)
+  );
+}
+
+/** Signed source seconds per output second at `localSec` (0 on a freeze, negative reversed). */
+export function editorClipRateAt(clip: EditorClipTiming, localSec: number): number {
+  if (clip.timeRemap?.length) return editorTimeRemapRateAt(clip.timeRemap, localSec);
+  return (clip.reverse ? -1 : 1) * (clip.playbackRate ?? 1);
+}
+
+/** The source seconds a clip reaches: the lowest and the highest it ever shows. */
+export function editorClipSourceSpan(clip: EditorClipTiming): { startSec: number; endSec: number } {
+  if (clip.timeRemap?.length) {
+    const seconds = clip.timeRemap.map((point) => point.sourceSec);
+    return { startSec: Math.min(...seconds), endSec: Math.max(...seconds) };
+  }
+  const startSec = clip.sourceInSec ?? 0;
+  return { startSec, endSec: startSec + clip.durationSec * (clip.playbackRate ?? 1) };
+}
+
+/** Samples laid inside a remap segment that a window cuts through the middle of. */
+const REMAP_PARTIAL_SAMPLES = 6;
+
+/**
+ * The part of a clip between clip-local output seconds `fromSec` and `toSec`, as that clip's
+ * own timing fields (duration, source-in, reverse, remap curve) re-based so it starts at 0.
+ * Split and trim use it, so a reversed or ramped clip keeps showing exactly the frames it did.
+ * A smoothstep segment cut mid-way becomes a few linear samples of the true curve.
+ */
+export function editorClipWindow<T extends EditorClipTiming>(
+  clip: T,
+  fromSec: number,
+  toSec: number,
+): T {
+  const from = Math.max(0, fromSec);
+  const to = Math.min(clip.durationSec, toSec);
+  if (!(to > from + REMAP_EPSILON)) throw new Error('A clip window must lie inside the clip.');
+  const durationSec = to - from;
+  const rate = clip.playbackRate ?? 1;
+  if (!clip.timeRemap?.length) {
+    return {
+      ...clip,
+      durationSec,
+      sourceInSec: (clip.sourceInSec ?? 0) + (clip.reverse ? clip.durationSec - to : from) * rate,
+    };
+  }
+  const points = clip.timeRemap;
+  const knots = [
+    from,
+    ...points
+      .map((point) => point.timeSec)
+      .filter((t) => t > from + REMAP_EPSILON && t < to - REMAP_EPSILON),
+    to,
+  ];
+  const out: RemapPoint[] = [];
+  for (let index = 0; index < knots.length - 1; index += 1) {
+    const a = knots[index];
+    const b = knots[index + 1];
+    const segment = remapSegment(points, a + REMAP_EPSILON);
+    const interpolation = points[segment].interpolation ?? 'linear';
+    const cutThrough =
+      interpolation === 'bezier' &&
+      (a > points[segment].timeSec + REMAP_EPSILON ||
+        b < points[segment + 1].timeSec - REMAP_EPSILON);
+    const steps = cutThrough ? REMAP_PARTIAL_SAMPLES : 1;
+    for (let step = 0; step < steps; step += 1) {
+      const t = a + ((b - a) * step) / steps;
+      out.push({
+        timeSec: t - from,
+        sourceSec: editorTimeRemapSourceAt(points, t),
+        interpolation: cutThrough ? 'linear' : interpolation,
+      });
+    }
+  }
+  out.push({
+    timeSec: durationSec,
+    sourceSec: editorTimeRemapSourceAt(points, to),
+    interpolation: 'linear',
+  });
+  out[0] = { ...out[0], timeSec: 0 };
+  return {
+    ...clip,
+    durationSec,
+    sourceInSec: Math.min(...out.map((point) => point.sourceSec)),
+    timeRemap: out,
+  };
 }

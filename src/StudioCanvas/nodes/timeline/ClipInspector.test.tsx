@@ -95,9 +95,11 @@ describe('ClipInspector effect controls', () => {
     'Tint',
   ];
 
+  // A SliderField's slider root and its thumb input both carry the label, so a slider field
+  // is found twice.
   it('surfaces every ClipEffectSpec field the export already draws', () => {
-    const { getByLabelText } = renderInspector(item());
-    for (const label of LABELS) expect(getByLabelText(label)).toBeTruthy();
+    const { getAllByLabelText } = renderInspector(item());
+    for (const label of LABELS) expect(getAllByLabelText(label).length).toBeGreaterThan(0);
   });
 
   it('writes the whole chroma-key object on, and removes it off', () => {
@@ -128,8 +130,8 @@ describe('ClipInspector effect controls', () => {
       item({ chromaKey: { color: '#00ff00', tolerance: 0.2, softness: 0 } }),
     );
     expect(on.getByLabelText('Key colour')).toBeTruthy();
-    expect(on.getByLabelText('Tolerance')).toBeTruthy();
-    expect(on.getByLabelText('Softness')).toBeTruthy();
+    expect(on.getAllByLabelText('Tolerance').length).toBeGreaterThan(0);
+    expect(on.getAllByLabelText('Softness').length).toBeGreaterThan(0);
   });
 
   it('keeps the tint amount when only the colour changes', () => {

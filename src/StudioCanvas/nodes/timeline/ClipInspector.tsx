@@ -56,6 +56,14 @@ const TRANSITION_OPTIONS: { type: ClipTransitionType; label: string }[] = [
   { type: 'wipeLeft', label: 'Wipe ←' },
   { type: 'zoomIn', label: 'Zoom' },
   { type: 'spin', label: 'Spin' },
+  { type: 'blur', label: 'Blur' },
+  { type: 'whipLeft', label: 'Whip ←' },
+  { type: 'whipRight', label: 'Whip →' },
+  { type: 'whipUp', label: 'Whip ↑' },
+  { type: 'whipDown', label: 'Whip ↓' },
+  { type: 'zoomBlur', label: 'Zoom through' },
+  { type: 'flash', label: 'Flash' },
+  { type: 'glitch', label: 'Glitch' },
 ];
 
 // Right-rail inspector for the selected clip. Surfaces trim/duration/mute plus

@@ -17,16 +17,21 @@ import {
 } from '../editorProjectV2AssemblyModel';
 
 const TRANSITION_OPTIONS: Array<{
-  value: 'cut' | Exclude<EditorTransition['transitionType'], 'cut' | 'blur' | 'custom'>;
+  value: 'cut' | Exclude<EditorTransition['transitionType'], 'cut' | 'custom'>;
   label: string;
 }> = [
   { value: 'cut', label: 'Cut' },
   { value: 'crossfade', label: 'Crossfade' },
   { value: 'dip_to_black', label: 'Dip to black' },
   { value: 'dip_to_white', label: 'Dip to white' },
+  { value: 'flash', label: 'Flash' },
   { value: 'wipe', label: 'Wipe' },
   { value: 'slide', label: 'Slide' },
   { value: 'zoom', label: 'Zoom' },
+  { value: 'blur', label: 'Blur' },
+  { value: 'whip', label: 'Whip pan' },
+  { value: 'zoom_blur', label: 'Zoom through' },
+  { value: 'glitch', label: 'Glitch' },
 ];
 
 export function TransitionEditor({

@@ -155,6 +155,70 @@ const waitForSeek = (media: HTMLMediaElement, timestamp: number): Promise<void> 
   });
 };
 
+const SCRAMBLE_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+<>/=';
+/** Glyphs flip this many times a second while a scramble resolves. */
+const SCRAMBLE_RATE = 20;
+const glyphAt = (index: number, step: number): string =>
+  SCRAMBLE_GLYPHS[((index + 1) * 7919 + step * 104_729) % SCRAMBLE_GLYPHS.length] ?? '#';
+
+/**
+ * What a `data-hf-text` element reads at `progress` (0 before its window, 1 settled). `type`
+ * reveals the text a character at a time. `scramble` shows `from` (or glyphs), then settles left
+ * to right on the text while every unsettled character that differs from `from` flips through
+ * glyphs — a fix like SEC0MDS → SECONDS. Deterministic: glyphs follow the index and the time.
+ */
+export function textEffectAt(
+  effect: string,
+  text: string,
+  from: string | undefined,
+  progress: number,
+  timestamp: number,
+): string {
+  const chars = Array.from(text);
+  if (effect === 'type') return chars.slice(0, Math.round(chars.length * progress)).join('');
+  if (progress >= 1) return text;
+  if (progress <= 0)
+    return from ?? chars.map((char, index) => (char === ' ' ? ' ' : glyphAt(index, 0))).join('');
+  const start = Array.from(from ?? '');
+  const settled = Math.floor(chars.length * progress);
+  const step = Math.floor(timestamp * SCRAMBLE_RATE);
+  return chars
+    .map((char, index) =>
+      index < settled || char === ' ' || start[index] === char ? char : glyphAt(index, step),
+    )
+    .join('');
+}
+
+const finalText = new WeakMap<Element, string>();
+
+/**
+ * The text effects at t: `data-hf-text="type|scramble"` on a text-only element, from
+ * `data-hf-text-at` (composition seconds) over `data-hf-text-dur` (default 0.6 s), scramble
+ * starting from `data-hf-text-from`. The element's authored text is what it settles on.
+ */
+function applyTextEffects(doc: Document, timestamp: number): void {
+  for (const element of Array.from(doc.querySelectorAll('[data-hf-text]'))) {
+    if (element.childElementCount > 0) continue;
+    const text = finalText.get(element) ?? element.textContent ?? '';
+    finalText.set(element, text);
+    const at = Number(element.getAttribute('data-hf-text-at') ?? 0);
+    const duration = Number(element.getAttribute('data-hf-text-dur') ?? 0.6);
+    const progress = Math.min(1, Math.max(0, (timestamp - at) / (duration > 0 ? duration : 0.001)));
+    const shown = textEffectAt(
+      element.getAttribute('data-hf-text') ?? '',
+      text,
+      element.getAttribute('data-hf-text-from') ?? undefined,
+      progress,
+      timestamp,
+    );
+    // Edit the text node in place: a characterData change never invalidates the node map.
+    const node = element.firstChild;
+    if (node?.nodeType === 3) {
+      if ((node as Text).data !== shown) (node as Text).data = shown;
+    } else element.textContent = shown;
+  }
+}
+
 /** `__hyperframe.seek`, then `__timelines`, then every document animation and `<video>` at t. */
 export async function seekComposition(
   doc: Document,
@@ -167,6 +231,7 @@ export async function seekComposition(
   // Callback-driven text and canvas drawing must update before the frame is captured.
   for (const timeline of Object.values(hyperframes.__timelines ?? {}))
     timeline.seek?.(timestamp, false);
+  applyTextEffects(doc, timestamp);
   for (const animation of doc.getAnimations()) {
     animation.pause();
     animation.currentTime = timestamp * 1000;
