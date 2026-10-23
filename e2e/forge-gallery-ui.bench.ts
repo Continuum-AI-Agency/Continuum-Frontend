@@ -480,7 +480,9 @@ async function run() {
       headings.join(' · '),
     );
     const search = page.getByRole('combobox', { name: 'Search templates' });
-    const available = await options.allTextContents();
+    const available = await options.evaluateAll((nodes) =>
+      nodes.map((node) => node.querySelector('span.truncate')?.textContent ?? ''),
+    );
     const word = available.flatMap((text) => text.trim().split(/\s+/)).find((candidate) => {
       const matches = available.filter((text) => text.toLowerCase().includes(candidate.toLowerCase()));
       return matches.length > 0 && matches.length < total;
