@@ -380,7 +380,7 @@ function AdAccountSelector({
         </SelectContent>
       </Select>
 
-      {isLoading && <Skeleton className="h-6 w-6 rounded animate-pulse" />}
+      {isLoading && <Skeleton className="h-6 w-6 rounded" />}
     </div>
   );
 }
@@ -416,7 +416,7 @@ function CampaignSelector({
         </SelectContent>
       </Select>
 
-      {isLoading && <Skeleton className="h-6 w-6 rounded animate-pulse" />}
+      {isLoading && <Skeleton className="h-6 w-6 rounded" />}
     </div>
   );
 }

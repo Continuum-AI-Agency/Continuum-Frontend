@@ -87,6 +87,7 @@ import {
 import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
 import { jainaSessionContent } from '@/components/paid-media/jaina/sessionContent';
 import { useActiveProjectOptional } from '@/components/projects';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
@@ -203,21 +204,21 @@ function ConversationSkeleton() {
   return (
     <div className="space-y-6 px-4 py-6" aria-hidden="true">
       <div className="flex justify-end">
-        <div className="h-9 w-48 animate-pulse rounded-2xl bg-muted/50" />
+        <Skeleton className="h-9 w-48 rounded-2xl" />
       </div>
       <div className="flex flex-col gap-2">
-        <div className="h-4 w-3/4 animate-pulse rounded bg-muted/40" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-muted/40" />
-        <div className="h-4 w-1/2 animate-pulse rounded bg-muted/30" />
+        <Skeleton className="h-4 w-3/4 rounded" />
+        <Skeleton className="h-4 w-2/3 rounded" />
+        <Skeleton className="h-4 w-1/2 rounded" />
       </div>
       <div className="flex justify-end">
-        <div className="h-9 w-64 animate-pulse rounded-2xl bg-muted/50" />
+        <Skeleton className="h-9 w-64 rounded-2xl" />
       </div>
       <div className="flex flex-col gap-2">
-        <div className="h-4 w-4/5 animate-pulse rounded bg-muted/40" />
-        <div className="h-4 w-3/5 animate-pulse rounded bg-muted/40" />
-        <div className="h-4 w-2/5 animate-pulse rounded bg-muted/30" />
-        <div className="h-4 w-3/4 animate-pulse rounded bg-muted/20" />
+        <Skeleton className="h-4 w-4/5 rounded" />
+        <Skeleton className="h-4 w-3/5 rounded" />
+        <Skeleton className="h-4 w-2/5 rounded" />
+        <Skeleton className="h-4 w-3/4 rounded" />
       </div>
     </div>
   );

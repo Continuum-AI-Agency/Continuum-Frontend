@@ -27,10 +27,6 @@ export function Spinner({ size = 24 }: { size?: number }) {
   );
 }
 
-export function Skeleton({ className = 'h-4 w-full' }: { className?: string }) {
-  return <div className={`rounded-md bg-muted animate-pulse ${className}`} />;
-}
-
 export function LoadingOverlay({ show, label = 'Loading...' }: { show: boolean; label?: string }) {
   return (
     <AnimatePresence>

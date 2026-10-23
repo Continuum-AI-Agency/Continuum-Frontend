@@ -14,6 +14,7 @@ import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/p
 import { ReviewQueueLazy } from '@/components/organic/review/ReviewQueueLazy';
 import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
 import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
@@ -40,7 +41,7 @@ type OrganicPageProps = {
 function OrganicContentSkeleton({ view }: { view: 'week' | 'month' | 'list' }) {
   return (
     <div data-testid="organic-content-skeleton" className="flex h-full w-full flex-col gap-3">
-      <div className="h-8 w-48 animate-pulse rounded-md bg-muted/70" />
+      <Skeleton className="h-8 w-48 rounded-md" />
       <div className="min-h-0 flex-1">
         <PlannerViewSkeleton view={view} />
       </div>

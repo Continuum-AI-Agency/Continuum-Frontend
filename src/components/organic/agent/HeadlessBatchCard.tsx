@@ -6,6 +6,7 @@ import { ArrowUpRight, Check } from 'lucide-react';
 import { Fragment, type RefObject, useEffect, useRef, useState } from 'react';
 import { MediaStrip, mediaStripTileWidth } from '@/components/chat/media/MediaStrip';
 import { AgentButton } from '@/components/shared/agent-cards/agentCardKit';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api/errors';
 import {
   approveHeadlessBatchCast,
@@ -366,14 +367,10 @@ function BatchItemRow({
               tileHeight={TILE_HEIGHT}
               className="[&>figcaption]:sr-only"
             />
+          ) : item.state === 'running' ? (
+            <Skeleton aria-hidden="true" className="size-full rounded-none" />
           ) : (
-            <span
-              aria-hidden="true"
-              className={cn(
-                'block size-full',
-                item.state === 'running' && 'animate-pulse bg-muted/60 motion-reduce:animate-none',
-              )}
-            />
+            <span aria-hidden="true" className="block size-full" />
           )}
         </div>
       </div>

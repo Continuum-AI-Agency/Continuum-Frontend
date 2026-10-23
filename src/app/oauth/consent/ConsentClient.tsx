@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   type ConsentBrandOption,
@@ -275,13 +276,13 @@ function ConsentShell({ children }: { children: React.ReactNode }) {
 export function ConsentSkeleton() {
   return (
     <ConsentShell>
-      <div className="space-y-4 animate-pulse">
-        <div className="h-12 w-12 rounded-xl bg-zinc-200 dark:bg-zinc-800 mx-auto" />
-        <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-800 mx-auto" />
-        <div className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800/50" />
+      <div className="space-y-4">
+        <Skeleton className="mx-auto h-12 w-12 rounded-xl" />
+        <Skeleton className="mx-auto h-5 w-40 rounded" />
+        <Skeleton className="h-10 rounded-lg" />
         <div className="space-y-2 pt-2">
-          <div className="h-10 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800/50" />
+          <Skeleton className="h-10 rounded-lg" />
+          <Skeleton className="h-10 rounded-lg" />
         </div>
       </div>
     </ConsentShell>

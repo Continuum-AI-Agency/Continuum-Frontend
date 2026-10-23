@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -1050,10 +1051,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           {isLoading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-[52px] animate-pulse rounded-lg border border-white/[0.04] bg-white/[0.03]"
-                />
+                <Skeleton key={i} className="h-[52px] rounded-lg border border-white/[0.04]" />
               ))}
             </div>
           ) : filteredCatalogs.length === 0 ? (
@@ -1682,7 +1680,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
               {isCatalogLinksLoading ? (
                 <div className="space-y-2">
                   {[0, 1].map((i) => (
-                    <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />
+                    <Skeleton key={i} className="h-9 rounded-md" />
                   ))}
                 </div>
               ) : catalogProducts.length === 0 ? (
@@ -2014,7 +2012,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
             {isCatalogLinksLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />
+                  <Skeleton key={i} className="h-9 rounded-md" />
                 ))}
               </div>
             ) : catalogLinks.length === 0 ? (

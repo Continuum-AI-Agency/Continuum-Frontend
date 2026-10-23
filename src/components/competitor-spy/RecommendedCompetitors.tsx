@@ -2,6 +2,7 @@
 
 import type { RecommendedCompetitor } from '@continuum/contracts';
 import { useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   useCreateCompetitor,
   useDismissRecommendation,
@@ -46,7 +47,7 @@ export function RecommendedCompetitors({ brandId }: { brandId: string }) {
         {heading}
         <div className={GRID}>
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-xl bg-muted/70" />
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
       </section>

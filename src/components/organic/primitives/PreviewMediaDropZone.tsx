@@ -12,6 +12,7 @@ import { ImageIcon, Loader2, Upload } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import type { PlacementError } from '@/components/organic/hooks/useDraftMediaPlacement';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 export type DropZoneState =
@@ -165,7 +166,7 @@ export function PreviewMediaDropZone({
       {children}
 
       {/* Placing skeleton shimmer */}
-      {isPlacing && <div className="absolute inset-0 z-10 animate-pulse bg-muted/70" aria-hidden />}
+      {isPlacing && <Skeleton className="absolute inset-0 z-10 rounded-none" aria-hidden />}
 
       {/* Success accent ring settle — opacity-only, no bounce */}
       {isSuccess && (

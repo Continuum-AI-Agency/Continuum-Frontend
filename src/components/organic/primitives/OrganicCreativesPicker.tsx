@@ -7,6 +7,7 @@ import { ImageOff, Play, Search } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { cn } from '@/lib/utils';
@@ -25,7 +26,7 @@ function SkeletonGrid() {
   return (
     <div className="grid grid-cols-4 gap-1.5">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted/40" />
+        <Skeleton key={i} className="aspect-square rounded-lg" />
       ))}
     </div>
   );

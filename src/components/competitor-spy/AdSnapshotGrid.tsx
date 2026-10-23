@@ -1,5 +1,6 @@
 'use client';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAdTimeline } from '@/lib/api/competitorSpy';
 import { AdSnapshotCard } from './AdSnapshotCard';
 
@@ -40,7 +41,7 @@ export function AdSnapshotGrid({
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} className="aspect-[4/5] animate-pulse rounded-xl bg-muted/70" />
+          <Skeleton key={i} className="aspect-[4/5] rounded-xl" />
         ))}
       </div>
     );

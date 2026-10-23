@@ -3,6 +3,7 @@
 import type { Competitor } from '@continuum/contracts';
 import { X } from 'lucide-react';
 import { TikTokIcon, YouTubeIcon } from '@/components/shared/icons/brandIcon';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   useAdCounts,
   useCompetitors,
@@ -61,7 +62,7 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/70" />
+          <Skeleton key={i} className="h-16 rounded-xl" />
         ))}
       </div>
     );

@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 
 import { AdSnapshotCard } from '@/components/competitor-spy/AdSnapshotCard';
 import { SaveToBoardButton } from '@/components/competitor-spy/SaveToBoardButton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { CompetitorPostHoverTile } from './CompetitorPostHoverTile';
 import type { InspirationFeedItem } from './inspirationFeed';
@@ -52,7 +53,7 @@ export function InspirationFeedGrid({
     return (
       <div className={cn(gridClassName)}>
         {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-          <div key={index} className="aspect-square w-full animate-pulse rounded-md bg-muted/70" />
+          <Skeleton key={index} className="aspect-square w-full rounded-md" />
         ))}
       </div>
     );
