@@ -25,7 +25,9 @@ import {
   bidTargetLabel,
   budgetProjectionLabel,
   CROSS_PLATFORM_APPROVAL_NOTE,
+  codeLabel,
   countLabel,
+  GOOGLE_ADS_CAMPAIGNS_HREF,
   givingLegs,
   googleAdsCampaignHref,
   googleDeliveryHref,
@@ -33,9 +35,11 @@ import {
   legChangeLabel,
   markedPlatformOf,
   negativesLabel,
+  PMAX_ASSETS_NOTE,
   PMAX_NOTE,
   percentLabel,
   platformCardTitle,
+  pmaxAssetLine,
   SPARK_NOTE,
   scheduledLabel,
   takingLegs,
@@ -487,6 +491,61 @@ function VariantEvidence({
       return <GoogleDeliveryEvidence card={card} />;
     case 'tiktok_delivery_issue':
       return <TikTokDeliveryEvidence card={card} />;
+    case 'google_ad_drag':
+      return (
+        <Evidence testId="platform-card-ad-drag">
+          {card.winner
+            ? `"${card.winner.label}" converts at ${formatCurrency(card.winner.cost_per_result, card.currency)} in the same ad group. `
+            : ''}
+          Pausing it leaves {countLabel(card.ads_remaining)} enabled{' '}
+          {card.ads_remaining === 1 ? 'ad' : 'ads'}.
+        </Evidence>
+      );
+    case 'google_ad_winner':
+      return (
+        <div className="space-y-2">
+          <Evidence testId="platform-card-ad-winner">
+            {countLabel(card.winner.conversions)} conversions in {card.window_days} days.
+            {card.best_assets.length > 0
+              ? ` Google rates these texts Best: ${card.best_assets.map((text) => `"${text}"`).join(', ')}.`
+              : ''}{' '}
+            Write a new ad from it in Google Ads.
+          </Evidence>
+          <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
+        </div>
+      );
+    case 'google_audience_saturation':
+      return (
+        <div className="space-y-2">
+          <Evidence testId="platform-card-saturation">
+            {codeLabel(card.channel_type)} campaign · frequency {countLabel(card.frequency)} against
+            a cap of {countLabel(card.frequency_cap)}
+            {card.unique_users != null ? ` · ${countLabel(card.unique_users)} people` : ''}. Widen
+            or rotate the audience in Google Ads.
+          </Evidence>
+          <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
+        </div>
+      );
+    case 'google_pmax_assets':
+      return (
+        <div className="space-y-2">
+          <ul className="space-y-1 text-sm" data-testid="platform-card-assets">
+            {card.assets.map((asset) => (
+              <li
+                className="text-foreground"
+                data-testid="platform-card-asset"
+                key={`${asset.field_type}:${asset.label}`}
+              >
+                {pmaxAssetLine(asset, card.currency)}
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground text-xs" data-testid="platform-card-assets-note">
+            {PMAX_ASSETS_NOTE}
+          </p>
+          <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
+        </div>
+      );
   }
 }
 

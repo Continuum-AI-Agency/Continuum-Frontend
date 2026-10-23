@@ -150,6 +150,14 @@ const layerBase = {
   filters: filtersSchema.nullable(),
   keys: z.partialRecord(hyperframesAepChannelSchema, z.array(hyperframesAepKeySchema).min(2)),
   variable: hyperframesAepVariableIdSchema.nullable(),
+  /**
+   * `data-hf-color`: the layer's paint (text colour, or a solid box fill) is this colour variable.
+   * Layers sharing a key share the variable. The writer paints the layer with an `ADBE Fill` whose
+   * Color it publishes to Essential Graphics under this name.
+   */
+  colorVariable: hyperframesAepVariableIdSchema.optional(),
+  /** `data-hf-switch` on the element or an ancestor: a Show checkbox gates the layer's opacity. */
+  switchVariable: hyperframesAepVariableIdSchema.optional(),
 };
 
 export const hyperframesAepTextLayerSchema = z

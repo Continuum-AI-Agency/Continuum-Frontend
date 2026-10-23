@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { cleanup, render } from '@testing-library/react';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
+import { AnswerLanguageProvider } from '../answerLanguageContext';
 
 let InsightListBlock: typeof import('./InsightListBlock')['default'];
 
@@ -75,5 +76,29 @@ describe('InsightListBlock prose', () => {
     );
     expect(container.querySelector('[data-prose-highlight]')).toBeNull();
     expect(container.textContent).toContain('trails break-even at 0.49');
+  });
+});
+
+// gate-p3 fix 3: a Spanish answer's findings ("Lo que revisé") printed "Impact:" and "NOW" around
+// Spanish items on beta — the chrome never asked which language the answer is in.
+describe('InsightListBlock chrome follows the answer', () => {
+  const renderIn = (language: 'es' | 'en', priority: string) =>
+    render(
+      <AnswerLanguageProvider language={language}>
+        <InsightListBlock block={block([item({ priority })])} isStreaming={false} />
+      </AnswerLanguageProvider>,
+    );
+
+  it('says impact and priority in Spanish on a Spanish answer', () => {
+    const { container } = renderIn('es', 'now');
+    expect(container.textContent).toContain('Impacto:');
+    expect(container.textContent).toContain('Ahora');
+    expect(container.textContent).not.toMatch(/Impact:|\bnow\b/i);
+  });
+
+  it('keeps English on an English answer, and a priority it has no word for as written', () => {
+    expect(renderIn('en', 'now').container.textContent).toContain('Impact:');
+    expect(renderIn('en', 'now').container.textContent).toContain('Now');
+    expect(renderIn('es', 'P1').container.textContent).toContain('P1');
   });
 });

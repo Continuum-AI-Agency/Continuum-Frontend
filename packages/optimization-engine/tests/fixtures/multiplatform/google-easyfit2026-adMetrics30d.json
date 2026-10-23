@@ -1,0 +1,34 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "5251780631",
+    "customerName": "Easy Fit 2026",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 5251780631",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT ad_group.id, ad_group_ad.ad.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM ad_group_ad WHERE segments.date BETWEEN '2026-09-20' AND '2026-10-19' AND campaign.status = 'ENABLED'",
+    "rows": 1
+  },
+  "data": [
+    {
+      "adGroup": {
+        "resourceName": "customers/5251780631/adGroups/200738977893",
+        "id": "200738977893"
+      },
+      "metrics": {
+        "clicks": "485",
+        "conversions": 3,
+        "costMicros": "2329931115",
+        "impressions": "6170"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/5251780631/adGroupAds/200738977893~827226019916",
+        "ad": {
+          "resourceName": "customers/5251780631/ads/827226019916",
+          "id": "827226019916"
+        }
+      }
+    }
+  ]
+}

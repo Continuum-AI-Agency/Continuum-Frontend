@@ -129,7 +129,7 @@ describe('Jaina block citations', () => {
     expect(screen.getByText(/Used 1 sources/)).toBeDefined();
   });
 
-  it('exposes block and item evidence references through provenance controls', () => {
+  it('counts block and item evidence references in the provenance controls, never by id', () => {
     render(<InsightListBlock block={insightBlock} isStreaming={false} />);
 
     const controls = screen.getAllByRole('button', { name: 'Data provenance' });
@@ -138,8 +138,9 @@ describe('Jaina block citations', () => {
       (control) =>
         document.getElementById(control.getAttribute('aria-describedby') ?? '')?.textContent,
     );
-    expect(summaries[0]).toContain('row:ad-1:18-24:female');
-    expect(summaries[1]).toContain('creative:cr-1');
+    expect(summaries[0]).toContain('Evidence references: 1');
+    expect(summaries[1]).toContain('Evidence references: 2');
+    expect(summaries.join(' ')).not.toMatch(/row:ad-1|creative:cr-1/);
   });
 
   it('renders citation chips and a Sources footer for comparison pairs with cite_ids', () => {

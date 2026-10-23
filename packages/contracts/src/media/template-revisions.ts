@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hyperframesRevisionSchema } from './hyperframes-native-revisions';
 import { templateRevisionRefSchema } from './template-revision-pin';
 
 export * from './template-revision-pin';
@@ -6,6 +7,10 @@ export * from './template-revision-pin';
 import { designArrangementSchema } from '../hyperframes-aep/design-import';
 import { templateSourceKindSchema, templateSourceSummarySchema } from './template-source';
 import { templateSourceSlotEditSchema } from './template-source-slot';
+
+const unit = z.number().finite().min(0).max(1);
+/** An RGB colour in 0..1, as After Effects stores it. */
+export const rgbSchema = z.tuple([unit, unit, unit]);
 
 const transformPairSchema = (limit: number) =>
   z.tuple([z.number().finite().min(-limit).max(limit), z.number().finite().min(-limit).max(limit)]);
@@ -31,6 +36,8 @@ export const templateRevisionLayerEditSchema = z
     rotation: z.number().finite().min(-36_000).max(36_000).optional(),
     scale: transformPairSchema(10_000).optional(),
     opacity: z.number().finite().min(0).max(100).optional(),
+    /** The layer's own fill (a text's fill or a shape's solid Fill), RGB in 0..1. */
+    fillColor: rgbSchema.optional(),
   })
   .strict()
   .refine(
@@ -47,6 +54,7 @@ export const templateRevisionLayerEditSchema = z
         'rotation',
         'scale',
         'opacity',
+        'fillColor',
       ].some((key) => key in edit),
     'Choose a layer change',
   );
@@ -215,6 +223,8 @@ export const templateRevisionSchema = z
     /** An auth user id: any Postgres uuid. Seeded users (the local fixture) are not RFC v4. */
     createdBy: z.guid().nullable(),
     nativeCommitId: z.string().nullable().default(null),
+    /** Present for a saved native source/scene; legacy revision wire shapes stay unchanged. */
+    native: hyperframesRevisionSchema.optional(),
   })
   .strict();
 export type TemplateRevision = z.infer<typeof templateRevisionSchema>;

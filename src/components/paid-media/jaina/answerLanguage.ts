@@ -29,6 +29,10 @@ export const SECTION_LABELS: Record<
     nowWhat: string;
     /** Set before a tile's prior-period figure: "vs 24,214 · Sep 14–20". */
     versus: string;
+    /** Set before an insight item's impact line. */
+    impact: string;
+    /** The data-scope line's lead word. */
+    scope: string;
   }
 > = {
   es: {
@@ -40,6 +44,8 @@ export const SECTION_LABELS: Record<
     soWhat: 'Qué significa',
     nowWhat: 'Qué hacer',
     versus: 'vs',
+    impact: 'Impacto',
+    scope: 'Alcance',
   },
   en: {
     why: 'Why',
@@ -50,6 +56,80 @@ export const SECTION_LABELS: Record<
     soWhat: 'So what',
     nowWhat: 'Now what',
     versus: 'vs',
+    impact: 'Impact',
+    scope: 'Scope',
+  },
+};
+
+/**
+ * An insight item's priority as the reader says it. The contract defaults it to `now`, so every
+ * item code composes printed the raw "NOW" beside Spanish text (gate-p3); a value with no word
+ * here (a model's "P1") is shown as written.
+ */
+export const ITEM_PRIORITY_LABEL: Record<AnswerLanguage, Record<string, string>> = {
+  es: { now: 'Ahora', next: 'Después', later: 'Más adelante' },
+  en: { now: 'Now', next: 'Next', later: 'Later' },
+};
+
+/** Where a report's figures came from, in the answer's language (the data-scope line). */
+export const SCOPE_SOURCE_LABEL: Record<AnswerLanguage, Record<string, string>> = {
+  es: {
+    db: 'datos sincronizados',
+    api: 'lectura en vivo de la plataforma',
+    sheet: 'hoja del cliente',
+    mixed: 'datos sincronizados + hoja del cliente',
+  },
+  en: {
+    db: 'synced data',
+    api: 'live platform read',
+    sheet: 'client sheet',
+    mixed: 'synced data + client sheet',
+  },
+};
+
+/** The data-provenance tooltip (`EvidenceTooltip`), in the answer's language. */
+export const PROVENANCE_TEXT: Record<
+  AnswerLanguage,
+  {
+    trigger: string;
+    computed: string;
+    computedDetail: string;
+    model: string;
+    modelDetail: string;
+    source: string;
+    period: string;
+    entity: string;
+    records: string;
+    references: string;
+  }
+> = {
+  es: {
+    trigger: 'Origen de los datos',
+    computed: 'Datos verificados',
+    computedDetail:
+      'Los valores se llenaron en el servidor con el conjunto de datos leído. Las métricas de entrega, la segmentación configurada y las clasificaciones derivadas siguen identificadas por separado en sus referencias de evidencia.',
+    model: 'Escrito por el modelo',
+    modelDetail:
+      'La IA escribió este bloque con la evidencia que reunió. Contrasta las cifras importantes con los datos de origen.',
+    source: 'Fuente',
+    period: 'Periodo de datos',
+    entity: 'Entidad',
+    records: 'Registros',
+    references: 'Referencias de evidencia',
+  },
+  en: {
+    trigger: 'Data provenance',
+    computed: 'Verified data',
+    computedDetail:
+      'Values were filled server-side from the registered dataset. Delivery metrics, configured targeting, and derived classifications remain separately identified in its evidence references.',
+    model: 'Model-authored',
+    modelDetail:
+      'This block was written by the AI from the evidence it gathered. Cross-check important figures against the source data.',
+    source: 'Source',
+    period: 'Data period',
+    entity: 'Entity',
+    records: 'Records',
+    references: 'Evidence references',
   },
 };
 

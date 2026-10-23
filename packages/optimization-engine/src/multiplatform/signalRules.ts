@@ -7,12 +7,13 @@
 //
 // One entry point, evaluatePlatformSignals(signals, context) — the seam the Optimizer's
 // signal producer calls (mp-w8-signals-producer).
-// Design: google-acciones.html §4 (G05, G07, G11, G12, G18); tiktok.html §4 rules 07, 10, 12,
+// Design: google-acciones.html §4 (G05, G07, G09, G10, G11, G12, G18, G23); tiktok.html §4 rules 07, 10, 12,
 // 14, 16, 20, 21; escenarios.html 20, 31–44.
 // ---------------------------------------------------------------------------
 
 import {
   currencyMinorOffset,
+  formatMoney,
   type MultiPlatformSnapshot,
   NegativeTermSchema,
   type OptimizerAction,
@@ -21,11 +22,21 @@ import {
   PlatformCardSchema,
   type PlatformEntityRef,
   type PlatformSignals,
-  formatMoney,
 } from '@continuum/contracts';
 import { DARK_DAYS_THRESHOLD } from '../delivery';
 import type { OptimizationObjective, WindowMetrics } from '../types';
-import { g03BudgetLimitedRaise, g11LowQualityKeyword, isBudgetConstrained } from './googleRules';
+import {
+  type CreativeSibling,
+  draggingSiblings,
+  G23_FREQUENCY_CAP,
+  g03BudgetLimitedRaise,
+  g09Thresholds,
+  g11LowQualityKeyword,
+  g23Saturation,
+  isBudgetConstrained,
+  pmaxAssetThresholds,
+  winnerToVary,
+} from './googleRules';
 import { googleBudgetLimitedCard } from './platformCards';
 
 /** G05/G19: never more than this many negatives proposed in one cycle, account-wide. */
@@ -103,9 +114,13 @@ export const PLATFORM_SIGNAL_RULES = [
   'G05',
   'G05_promote',
   'G07',
+  'G09',
+  'G10',
   'G11',
   'G12',
+  'G18_pmax_assets',
   'G18_pmax_coverage',
+  'G23',
   'T1',
   'T3',
   'T5',
@@ -300,7 +315,10 @@ function g05NegativeTerms(run: Run, google: GoogleSignals, target: number, curre
     const campaignName = run.name(campaignId, 'campaign');
     const spend = terms.reduce((sum, t) => sum + t.totals.spend, 0);
     const list = terms
-      .map((t) => `"${t.term}" (${formatMoney(t.totals.spend, currency, { distinguishFrom: target })})`)
+      .map(
+        (t) =>
+          `"${t.term}" (${formatMoney(t.totals.spend, currency, { distinguishFrom: target })})`,
+      )
       .join(', ');
     // Each term cost MORE than the target: the target prints with the decimals that tell it
     // from the cheapest of them, so no term reads as a tie with the figure it exceeded.
@@ -658,6 +676,258 @@ function pmaxCoverage(run: Run, google: GoogleSignals) {
             `${g.name} in ${campaignName} has ${g.ad_strength} ad strength and is missing ${g.missing.join(', ')}.`,
         )
         .join(' '),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// G7: the creative and fatigue families on Google.
+// ---------------------------------------------------------------------------
+
+/** At most this many assets on one asset group's card: the most wasteful first. */
+export const G18_MAX_ASSETS_PER_CARD = 5;
+
+type GoogleAd = NonNullable<GoogleSignals['ads']>[number];
+type GooglePmaxAsset = NonNullable<GoogleSignals['pmax_assets']>[number];
+
+const conversionsText = (n: number): string =>
+  `${Number.isInteger(n) ? n : n.toFixed(1)} ${n === 1 ? 'conversion' : 'conversions'}`;
+
+/** The enabled ads of each ad group of a campaign this cycle read, two or more: one ad competes
+ *  with nothing. A group whose campaign is not this portfolio's is left out by name. */
+function adGroupsToCompare(run: Run, rule: 'G09' | 'G10', google: GoogleSignals) {
+  const byGroup = new Map<string, GoogleAd[]>();
+  for (const ad of google.ads ?? []) {
+    if (ad.status !== 'ENABLED') continue;
+    byGroup.set(ad.ad_group_id, [...(byGroup.get(ad.ad_group_id) ?? []), ad]);
+  }
+  const groups: { adGroupId: string; ads: GoogleAd[]; siblings: CreativeSibling[] }[] = [];
+  for (const [adGroupId, ads] of byGroup) {
+    if (ads.length < 2) continue;
+    if (!run.snapshot(ads[0]!.campaign_id)) {
+      run.abstain(
+        rule,
+        adGroupId,
+        `${ads[0]!.ad_group_name}: its campaign was not read this cycle.`,
+      );
+      continue;
+    }
+    const siblings = ads.map((ad) => ({
+      id: ad.ad_id,
+      label: ad.label,
+      spend: ad.totals.spend,
+      conversions: ad.totals.conversions,
+    }));
+    groups.push({ adGroupId, ads, siblings });
+  }
+  return groups;
+}
+
+/** G09 (C1): pause the ad that drags its ad group — zero conversions past the target, or most of
+ *  the group's spend at LAGGARD_COST_MULTIPLE × the group's best ad. One per group per cycle, so
+ *  the group always keeps an enabled ad. */
+function g09AdDrag(run: Run, google: GoogleSignals, target: number, currency: string) {
+  for (const { adGroupId, ads, siblings } of adGroupsToCompare(run, 'G09', google)) {
+    const drag = draggingSiblings(siblings, g09Thresholds(target))[0];
+    if (!drag) continue;
+    const ad = ads.find((a) => a.ad_id === drag.sibling.id)!;
+    const winner = drag.winner;
+    const remaining = ads.length - 1;
+    const share = Math.round(drag.spendShare * 100);
+    const what =
+      drag.costPerResult === null
+        ? `spent ${formatMoney(ad.totals.spend, currency)} (${share}% of the group's spend) with no conversion in the last ${run.windowDays} days`
+        : `takes ${share}% of the group's spend at ${formatMoney(drag.costPerResult, currency)} per conversion, ${(drag.costPerResult / winner.costPerResult).toFixed(2)}× its best ad`;
+    run.recommend({
+      rule: 'G09',
+      platform: 'google_ads',
+      entity: run.ref('google_ads', 'group', 'ad_group', adGroupId, ad.ad_group_name),
+      subject_key: ad.ad_id,
+      severity: 'medium',
+      platform_card: {
+        variant: 'google_ad_drag',
+        campaign_name: run.name(ad.campaign_id, 'campaign'),
+        ad_group_name: ad.ad_group_name,
+        ad_label: ad.label,
+        currency,
+        window_days: run.windowDays,
+        spend: cents(ad.totals.spend),
+        spend_share: drag.spendShare,
+        conversions: ad.totals.conversions,
+        cost_per_result: drag.costPerResult === null ? null : cents(drag.costPerResult),
+        winner: { label: winner.label, cost_per_result: cents(winner.costPerResult) },
+        ads_remaining: remaining,
+      },
+      action: {
+        kind: 'set_status',
+        ref: run.ref('google_ads', 'ad', 'ad', `${adGroupId}~${ad.ad_id}`, ad.label),
+        expected: 'active',
+        target: 'paused',
+      },
+      reason: `"${ad.label}" in ${ad.ad_group_name} ${what}, while "${winner.label}" converts at ${formatMoney(winner.costPerResult, currency)}. Pause it; the group keeps ${plural(remaining, 'enabled ad', 'enabled ads')}.`,
+    });
+  }
+}
+
+/** G10 (C2): the winner of an ad group worth a variation, with the texts Google rates BEST in
+ *  it. No write: the new ad is written in Google Ads. */
+function g10AdWinner(run: Run, google: GoogleSignals, currency: string) {
+  for (const { adGroupId, ads, siblings } of adGroupsToCompare(run, 'G10', google)) {
+    const found = winnerToVary(siblings);
+    if (!found) continue;
+    const ad = ads.find((a) => a.ad_id === found.winner.id)!;
+    const best = ad.best_assets;
+    run.recommend({
+      rule: 'G10',
+      platform: 'google_ads',
+      entity: run.ref('google_ads', 'group', 'ad_group', adGroupId, ad.ad_group_name),
+      subject_key: ad.ad_id,
+      severity: 'low',
+      platform_card: {
+        variant: 'google_ad_winner',
+        campaign_name: run.name(ad.campaign_id, 'campaign'),
+        ad_group_name: ad.ad_group_name,
+        currency,
+        window_days: run.windowDays,
+        winner: {
+          label: found.winner.label,
+          cost_per_result: cents(found.winner.costPerResult),
+          conversions: found.winner.conversions,
+        },
+        comparator: {
+          label: found.comparator.label,
+          cost_per_result: cents(found.comparator.costPerResult),
+        },
+        best_assets: best,
+      },
+      action: null,
+      reason: `"${found.winner.label}" is the best ad in ${ad.ad_group_name}: ${formatMoney(found.winner.costPerResult, currency)} per conversion on ${conversionsText(found.winner.conversions)}, against ${formatMoney(found.comparator.costPerResult, currency)} for "${found.comparator.label}". Write a new ad from it in Google Ads${best.length > 0 ? `, keeping what Google rates best: ${best.map((text) => `"${text}"`).join(', ')}` : ''}.`,
+    });
+  }
+}
+
+const assetLabel = (a: GooglePmaxAsset): string =>
+  a.text ?? `${a.field_type.toLowerCase().replace(/_/g, ' ')} ${a.asset_id}`;
+
+/** G18_pmax_assets: in each PMax asset group, the assets that drag their field type, measured
+ *  against the best asset of the same type (Google's per-asset metrics). One card per asset
+ *  group; no write — the replacement is made and reviewed before the old asset goes. */
+function g18PmaxAssets(run: Run, google: GoogleSignals, target: number, currency: string) {
+  const byKind = new Map<string, GooglePmaxAsset[]>();
+  for (const a of google.pmax_assets ?? []) {
+    const key = `${a.asset_group_id}~${a.field_type}`;
+    byKind.set(key, [...(byKind.get(key) ?? []), a]);
+  }
+  const byGroup = new Map<
+    string,
+    { asset: GooglePmaxAsset; verdict: ReturnType<typeof draggingSiblings>[number] }[]
+  >();
+  for (const assets of byKind.values()) {
+    if (assets.length < 2) continue;
+    const siblings = assets.map((a) => ({
+      id: a.asset_id,
+      label: assetLabel(a),
+      spend: a.totals.spend,
+      conversions: a.totals.conversions,
+    }));
+    for (const verdict of draggingSiblings(siblings, pmaxAssetThresholds(target))) {
+      const asset = assets.find((a) => a.asset_id === verdict.sibling.id)!;
+      byGroup.set(asset.asset_group_id, [
+        ...(byGroup.get(asset.asset_group_id) ?? []),
+        { asset, verdict },
+      ]);
+    }
+  }
+  for (const [assetGroupId, found] of byGroup) {
+    const first = found[0]!.asset;
+    if (!run.snapshot(first.campaign_id)) {
+      run.abstain(
+        'G18_pmax_assets',
+        assetGroupId,
+        `${first.asset_group_name}: its campaign was not read this cycle.`,
+      );
+      continue;
+    }
+    const wasted = (x: (typeof found)[number]) =>
+      x.verdict.costPerResult === null
+        ? x.asset.totals.spend
+        : x.asset.totals.spend - x.asset.totals.conversions * x.verdict.winner.costPerResult;
+    const shown = [...found]
+      .sort((a, b) => wasted(b) - wasted(a) || a.asset.asset_id.localeCompare(b.asset.asset_id))
+      .slice(0, G18_MAX_ASSETS_PER_CARD);
+    const campaignName = run.name(first.campaign_id, 'campaign');
+    // A PMax campaign's one asset group often carries the campaign's own name.
+    const where =
+      first.asset_group_name === campaignName
+        ? campaignName
+        : `${first.asset_group_name} (${campaignName})`;
+    const said = shown.map(({ asset, verdict }) => {
+      const kind = asset.field_type.toLowerCase().replace(/_/g, ' ');
+      const cost =
+        verdict.costPerResult === null
+          ? `spent ${formatMoney(asset.totals.spend, currency)} with no conversion`
+          : `costs ${formatMoney(verdict.costPerResult, currency)} per conversion`;
+      return `the ${kind} "${verdict.sibling.label}" ${cost}, while "${verdict.winner.label}" converts at ${formatMoney(verdict.winner.costPerResult, currency)}`;
+    });
+    run.recommend({
+      rule: 'G18_pmax_assets',
+      platform: 'google_ads',
+      entity: run.ref('google_ads', 'group', 'asset_group', assetGroupId, first.asset_group_name),
+      subject_key: 'assets',
+      severity: 'medium',
+      platform_card: {
+        variant: 'google_pmax_assets',
+        campaign_name: campaignName,
+        asset_group_name: first.asset_group_name,
+        currency,
+        window_days: run.windowDays,
+        assets: shown.map(({ asset, verdict }) => ({
+          field_type: asset.field_type,
+          label: verdict.sibling.label,
+          spend: cents(asset.totals.spend),
+          conversions: asset.totals.conversions,
+          cost_per_result: verdict.costPerResult === null ? null : cents(verdict.costPerResult),
+          best_of_kind: {
+            label: verdict.winner.label,
+            cost_per_result: cents(verdict.winner.costPerResult),
+          },
+        })),
+      },
+      action: null,
+      reason: `In ${where}, over the last ${run.windowDays} days: ${said.join('; ')}. Make replacements first, then remove these in Google Ads.`,
+    });
+  }
+}
+
+/** G23 (F2): a campaign pushed to an audience that sees it too often while each conversion
+ *  gets dearer. Read-only: the audience is widened or rotated in Google Ads. */
+function g23AudienceSaturation(run: Run, google: GoogleSignals, currency: string) {
+  for (const a of google.audience ?? []) {
+    const campaign = run.snapshot(a.campaign_id);
+    if (!campaign) continue;
+    const verdict = g23Saturation(a, campaign.windows, run.context.kpiField);
+    if (!verdict.fires) continue;
+    const name = run.name(a.campaign_id, 'campaign');
+    const rise = Math.round((verdict.costPerResultNow / verdict.costPerResultBefore - 1) * 100);
+    run.recommend({
+      rule: 'G23',
+      platform: 'google_ads',
+      entity: run.ref('google_ads', 'campaign', 'campaign', a.campaign_id, name),
+      subject_key: 'audience',
+      severity: 'medium',
+      platform_card: {
+        variant: 'google_audience_saturation',
+        campaign_name: name,
+        channel_type: a.channel_type,
+        frequency: Math.round(verdict.frequency * 10) / 10,
+        frequency_cap: G23_FREQUENCY_CAP,
+        unique_users: a.unique_users_7d,
+        currency,
+        cost_per_result_now: cents(verdict.costPerResultNow),
+        cost_per_result_before: cents(verdict.costPerResultBefore),
+      },
+      action: null,
+      reason: `The same people saw ${name} ${verdict.frequency.toFixed(1)} times in the last 7 days (the cap is ${G23_FREQUENCY_CAP}), and a result now costs ${formatMoney(verdict.costPerResultNow, currency)} over 3 days against ${formatMoney(verdict.costPerResultBefore, currency)} over 14 (+${rise}%). The audience is saturated: widen or rotate it in Google Ads.`,
     });
   }
 }
@@ -1373,10 +1643,25 @@ export function evaluatePlatformSignals(
       g05NegativeTerms(run, google, target, currency);
       promoteTerms(run, google, target, currency);
       g11Keywords(run, google, target, currency);
-    } else if (google.search_terms.length + google.keywords.length > 0) {
+      g09AdDrag(run, google, target, currency);
+      g18PmaxAssets(run, google, target, currency);
+    } else {
       const why = `no target cost per result in ${currency ?? 'the account currency'}`;
-      for (const rule of ['G05', 'G05_promote', 'G11'] as const)
-        run.abstain(rule, null, `${why}; search terms and keywords are not priced.`);
+      if (google.search_terms.length + google.keywords.length > 0) {
+        for (const rule of ['G05', 'G05_promote', 'G11'] as const)
+          run.abstain(rule, null, `${why}; search terms and keywords are not priced.`);
+      }
+      if ((google.ads ?? []).length > 0)
+        run.abstain('G09', null, `${why}; an ad's spend has no floor to pass.`);
+      if ((google.pmax_assets ?? []).length > 0)
+        run.abstain('G18_pmax_assets', null, `${why}; an asset's spend has no floor to pass.`);
+    }
+    if (currency) {
+      g10AdWinner(run, google, currency);
+      g23AudienceSaturation(run, google, currency);
+    } else if ((google.ads ?? []).length + (google.audience ?? []).length > 0) {
+      for (const rule of ['G10', 'G23'] as const)
+        run.abstain(rule, null, 'the account reports no currency; no cost is printed without one.');
     }
     g03BudgetLimited(run, google);
     g07BidTarget(run, google, context.kpiField);

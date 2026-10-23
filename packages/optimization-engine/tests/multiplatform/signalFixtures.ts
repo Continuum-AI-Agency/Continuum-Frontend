@@ -225,6 +225,94 @@ export function tangassiSnapshots(): MultiPlatformSnapshot[] {
   return googleCampaigns('tangassi').map((c) => c.snapshot);
 }
 
+// ---------------------------------------------------------------------------
+// G7: Easy Fit 2026's ENABLED campaigns (REAL GAQL, recorded 2026-10-20 with
+// record-google-signals.mjs --g7). The ads, assets and frequency reads go through the
+// google_signals scope's own mappers in g7Scenarios.ts.
+// ---------------------------------------------------------------------------
+
+const EASY_FIT_2026 = '5251780631';
+
+type G7CampaignRow = {
+  campaign: {
+    id: string;
+    name: string;
+    advertisingChannelType: string;
+    biddingStrategyType: string;
+    biddingStrategySystemStatus?: string;
+    startDateTime: string;
+  };
+  campaignBudget: { id: string; amountMicros: string; period: string; explicitlyShared: boolean };
+};
+type G7DailyRow = { segments: { date: string }; campaign: { id: string }; metrics: Metrics };
+
+export type G7Campaign = { snapshot: MultiPlatformSnapshot; ageDays: number; channelType: string };
+
+/**
+ * Easy Fit 2026's ENABLED campaigns (the b9cebbcf members that serve) as a cycle on `asOf`
+ * saw them: windows end the day before, from the 14-day daily read; age counts from the
+ * start date as the Optimizer's ageDaysFrom does. Bidding status is the recording's, not the
+ * cycle day's.
+ */
+export function g7EasyFitCampaigns(asOf: string): G7Campaign[] {
+  const campaigns = loadFixture<G7CampaignRow[]>('google-easyfit2026-g7Campaigns.json').data;
+  const daily = loadFixture<G7DailyRow[]>('google-easyfit2026-g7CampaignDaily14d.json').data;
+  const dayMs = 86_400_000;
+  const back = (days: number) =>
+    new Date(Date.parse(asOf) - days * dayMs).toISOString().slice(0, 10);
+  const window = (id: string, days: number) => {
+    const rows = daily.filter(
+      (r) => r.campaign.id === id && r.segments.date >= back(days) && r.segments.date < asOf,
+    );
+    const t = rows.map((r) => totals(r.metrics));
+    const add = (k: keyof (typeof t)[number]) => t.reduce((acc, x) => acc + x[k], 0);
+    return {
+      spend: add('spend'),
+      purchases: 0,
+      addToCarts: 0,
+      clicks: add('clicks'),
+      impressions: add('impressions'),
+      leads: add('conversions'),
+    };
+  };
+  return campaigns.map(({ campaign: c, campaignBudget: b }) => {
+    const ownerRef = {
+      platform: 'google_ads' as const,
+      level: 'campaign' as const,
+      nativeLevel: 'campaign' as const,
+      id: c.id,
+      accountId: EASY_FIT_2026,
+      name: c.name,
+    };
+    const snapshot = MultiPlatformSnapshotSchema.parse({
+      platform: 'google_ads',
+      level: 'campaign',
+      native_level: 'campaign',
+      id: c.id,
+      accountId: EASY_FIT_2026,
+      name: c.name,
+      campaignId: c.id,
+      automation: c.advertisingChannelType === 'PERFORMANCE_MAX' ? 'pmax' : 'manual',
+      budget: {
+        kind: b.period === 'DAILY' ? 'daily' : 'total',
+        minor: Math.round(micros(b.amountMicros) * 100),
+        currency: 'MXN',
+        shared: b.explicitlyShared,
+        ownerRef,
+        nativeBudgetId: b.id,
+      },
+      bidding: {
+        strategyType: c.biddingStrategyType,
+        ...(c.biddingStrategySystemStatus ? { systemStatus: c.biddingStrategySystemStatus } : {}),
+      },
+      windows: { d3: window(c.id, 3), d7: window(c.id, 7), d14: window(c.id, 14) },
+    });
+    const start = c.startDateTime.slice(0, 10);
+    const ageDays = Math.floor((Date.parse(asOf) - Date.parse(start)) / dayMs);
+    return { snapshot, ageDays, channelType: c.advertisingChannelType };
+  });
+}
+
 type TikTokList<T> = { data: { list: T[] } };
 type AdGetRow = {
   ad_id: string;

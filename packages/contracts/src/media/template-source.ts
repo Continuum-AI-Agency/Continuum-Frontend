@@ -231,6 +231,7 @@ export const templateSourceFamilySchema = z.enum([
   'blender',
   'hyperframes',
   'presentation',
+  'web_component',
 ]);
 export type TemplateSourceFamily = z.infer<typeof templateSourceFamilySchema>;
 
@@ -243,6 +244,7 @@ export const templateSourceKindSchema = z.enum([
   'hyperframes',
   'blender',
   'presentation',
+  'web_component',
   'other',
 ]);
 export type TemplateSourceKind = z.infer<typeof templateSourceKindSchema>;
@@ -256,6 +258,7 @@ export const TEMPLATE_SOURCE_KIND_LABELS: Record<TemplateSourceKind, string> = {
   hyperframes: 'HyperFrames',
   blender: 'Blender',
   presentation: 'Presentation',
+  web_component: 'Web component',
   other: 'Other',
 };
 
@@ -772,6 +775,16 @@ export const templatePreviewSchema = z
   .strict();
 export type TemplatePreview = z.infer<typeof templatePreviewSchema>;
 
+/** Parse completion and native compilation are independent facts. */
+export const templateNativeIngestStatusSchema = z.object({
+  state: z.enum(['pending', 'compiling', 'compiled', 'unsupported', 'failed']),
+  error: z.string().max(1000).nullable(),
+  parseDurationMs: z.number().int().min(0).max(600000).nullable(),
+  compileDurationMs: z.number().int().min(0).max(600000).nullable(),
+  sceneSha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+}).strict().refine(value => (value.state === 'compiled') === (value.sceneSha256 !== null), { message: 'Compiled native status requires its scene identity' });
+export type TemplateNativeIngestStatus = z.infer<typeof templateNativeIngestStatusSchema>;
+
 /** A `media.template_sources` row on the wire. */
 export const templateSourceSchema = z
   .object({
@@ -780,6 +793,7 @@ export const templateSourceSchema = z
     versionId: z.string().uuid(),
     family: templateSourceFamilySchema,
     parseState: templateParseStateSchema,
+    nativeIngest: templateNativeIngestStatusSchema.optional(),
     parser: z.string().nullable().default(null),
     parse: templateParseSchema.nullable().default(null),
     fonts: z.array(z.string()).default([]),
@@ -1042,6 +1056,7 @@ export const TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT: Record<string, Templa
   blender: 'blender',
   hyperframes: 'hyperframes',
   html_bundle: 'hyperframes',
+  web_component: 'web_component',
 };
 
 /**

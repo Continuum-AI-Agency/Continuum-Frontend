@@ -5,7 +5,11 @@
  */
 
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { TemplateSource, WorkspaceTemplate } from '@continuum/contracts';
+import {
+  type TemplateSource,
+  WEB_COMPONENT_BINDING_ID,
+  type WorkspaceTemplate,
+} from '@continuum/contracts';
 import React from 'react';
 import * as realtime from '@/lib/supabase/realtime';
 
@@ -109,8 +113,26 @@ mock.module('@/components/library/useMediaUpload', () => ({
     return { uploads: [], uploadFiles: async () => undefined };
   },
 }));
+const WEB_KEY = `web:${ASSET}`;
+const getContract = mock(async (_brandId: string, templateKey: string, _bindingId?: string | null) => ({
+  template: { key: templateKey, name: 'hello', bindingId: WEB_COMPONENT_BINDING_ID },
+  variables: [
+    { key: 'title_text', label: 'Title · text', kind: 'text', options: [] },
+    { key: 'title_align', label: 'Title · align', kind: 'enum', options: ['left', 'center'] },
+  ],
+  outputs: [],
+  publishCheck: { state: 'warn', issues: ['Video needs an even width.'], workerAttachmentId: null, media: [] },
+  web: {
+    width: 1080,
+    height: 1080,
+    durationSec: 4,
+    fps: 30,
+    previewUrl: 'https://api.test/preview',
+    variables: [{ key: 'title_text', nodeId: 'title', property: 'text' }],
+  },
+}));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }) },
+  apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }), getContract },
 }));
 const toasts = await import('@/components/ui/toast-imperative');
 mock.module('@/components/ui/toast-imperative', () => ({
@@ -392,6 +414,41 @@ describe('ForgeWorkbench', () => {
       transition.mockRestore();
     }
   });
+  test('an imported web component opens its own sheet, and Render with this hands over its web key', async () => {
+    fetchedSources = [
+      { ...SOURCE, family: 'web_component', templateKey: WEB_KEY, displayName: 'Hello card' },
+    ];
+    // The preview page never arrives here; the sheet around it is what is under test.
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch,
+    );
+    const onOpenRender = mock((_intent: { templateKey: string }) => undefined);
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <ForgeWorkbench brandId={BRAND} onOpenRender={onOpenRender} />
+        </QueryClientProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Hello card' }));
+
+      const columns = await screen.findByRole('region', { name: 'Render columns' });
+      expect(columns.textContent).toContain('Title · text');
+      expect(columns.textContent).toContain('One of: left, center');
+      expect(screen.getByText('Video needs an even width.')).toBeTruthy();
+      expect(screen.getByText(/Web component · 2 fields · 1080×1080 · 4 s/)).toBeTruthy();
+      // The Render grid's own read: same template key, the web components' nil binding.
+      expect(getContract).toHaveBeenCalledWith(BRAND, WEB_KEY, WEB_COMPONENT_BINDING_ID);
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://api.test/preview');
+      // Not the After Effects sheet: none of its tabs.
+      expect(screen.queryByRole('tab', { name: 'Variables' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Render with this' }));
+      expect(onOpenRender).toHaveBeenCalledWith({ templateKey: WEB_KEY });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   test('a template intent from another tab opens its settings once, and is handed back', async () => {
     const consumed = mock(() => undefined);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

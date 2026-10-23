@@ -1,0 +1,91 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "3710693645",
+    "customerName": "Vivo 47",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 3710693645",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT ad_group.id, ad_group_ad.ad.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM ad_group_ad WHERE segments.date BETWEEN '2026-09-20' AND '2026-10-19' AND campaign.status = 'ENABLED'",
+    "rows": 4
+  },
+  "data": [
+    {
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/155765678139",
+        "id": "155765678139"
+      },
+      "metrics": {
+        "clicks": "2238",
+        "conversions": 1123.231981,
+        "costMicros": "31366429173",
+        "impressions": "47641"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/155765678139~680665389502",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680665389502",
+          "id": "680665389502"
+        }
+      }
+    },
+    {
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156451805980",
+        "id": "156451805980"
+      },
+      "metrics": {
+        "clicks": "462",
+        "conversions": 441.135382,
+        "costMicros": "4076128027",
+        "impressions": "12261"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156451805980~680706855496",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680706855496",
+          "id": "680706855496"
+        }
+      }
+    },
+    {
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/156639249738",
+        "id": "156639249738"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "0"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/156639249738~680743711337",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680743711337",
+          "id": "680743711337"
+        }
+      }
+    },
+    {
+      "adGroup": {
+        "resourceName": "customers/3710693645/adGroups/159194048041",
+        "id": "159194048041"
+      },
+      "metrics": {
+        "clicks": "0",
+        "conversions": 0,
+        "costMicros": "0",
+        "impressions": "0"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/3710693645/adGroupAds/159194048041~680706127090",
+        "ad": {
+          "resourceName": "customers/3710693645/ads/680706127090",
+          "id": "680706127090"
+        }
+      }
+    }
+  ]
+}

@@ -4,6 +4,9 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
+  GOOGLE_AD_DRAG,
+  GOOGLE_AD_WINNER,
+  GOOGLE_AUDIENCE_SATURATION,
   GOOGLE_BID_TARGET,
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_DELIVERY_ACCOUNT_WIDE,
@@ -11,6 +14,7 @@ import {
   GOOGLE_LOW_QUALITY_KEYWORD,
   GOOGLE_NEGATIVE_TERMS,
   GOOGLE_PMAX,
+  GOOGLE_PMAX_ASSETS,
   GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
   META_FATIGUE,
@@ -124,6 +128,9 @@ describe('YouTube read-only', () => {
       TIKTOK_ATTRIBUTION_WINDOW,
       GOOGLE_DELIVERY_ACCOUNT_WIDE,
       TIKTOK_DELIVERY,
+      GOOGLE_AD_WINNER,
+      GOOGLE_AUDIENCE_SATURATION,
+      GOOGLE_PMAX_ASSETS,
     ]);
   });
 });
@@ -443,6 +450,10 @@ describe('every variant', () => {
       'tiktok_attribution_window',
       'google_delivery_issue',
       'tiktok_delivery_issue',
+      'google_ad_drag',
+      'google_ad_winner',
+      'google_audience_saturation',
+      'google_pmax_assets',
     ]);
   });
 });
@@ -522,5 +533,126 @@ describe('TikTok delivery issue', () => {
       'TikTok gives no review reason',
     );
     expect(tiktokStatusInWords('ADGROUP_STATUS_BUDGET_EXCEED')).toBe('out of budget');
+  });
+});
+
+describe('Google ad drag (G09)', () => {
+  it("says how much of the group's spend the ad holds and at what cost, against the group's best", () => {
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={GOOGLE_AD_DRAG} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"Gimnasio Familiar" takes 88% of Vivo 47\'s spend at $27.93 MXN per conversion',
+    );
+    expect(getByTestId('platform-card-ad-drag').textContent).toBe(
+      '"Gimnasio con alberca" converts at $9.24 MXN in the same ad group. Pausing it leaves 1 enabled ad.',
+    );
+    expect(platformCardActionLabel(GOOGLE_AD_DRAG)).toBe('Pause ad');
+    expect(isReadOnly(GOOGLE_AD_DRAG)).toBe(false);
+    expect(platformsOf(GOOGLE_AD_DRAG)).toEqual(['google_ads']);
+    expect(PLATFORM_CARD_TYPE.google_ad_drag).toBe('Ad');
+  });
+
+  it('says the ad bought nothing when it has no conversion, and how many ads the group keeps', () => {
+    const card = PlatformCardSchema.parse({
+      ...GOOGLE_AD_DRAG,
+      spend: 1200,
+      spend_share: 0.3,
+      conversions: 0,
+      cost_per_result: null,
+      winner: null,
+      ads_remaining: 2,
+    });
+    const { getByRole, getByTestId } = render(<PlatformCardBody card={card} />);
+    expect(getByRole('heading').textContent).toBe(
+      '"Gimnasio Familiar" in Vivo 47 spent $1,200 MXN in 30 days without a conversion',
+    );
+    expect(getByTestId('platform-card-ad-drag').textContent).toBe(
+      'Pausing it leaves 2 enabled ads.',
+    );
+  });
+});
+
+describe('Google ad winner (G10)', () => {
+  it('names the winner against the sibling it beats and sends a person to write a new ad', () => {
+    const { getByRole, getByTestId, queryByRole } = render(
+      <PlatformCardBody card={GOOGLE_AD_WINNER} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      '"Gimnasio con alberca" is the best ad in Vivo 47: $9.24 MXN per conversion against $27.93 MXN',
+    );
+    expect(getByTestId('platform-card-ad-winner').textContent).toBe(
+      '441.1 conversions in 30 days. Write a new ad from it in Google Ads.',
+    );
+    expect(getByTestId('platform-card-open-google').getAttribute('href')).toBe(
+      'https://ads.google.com/aw/campaigns',
+    );
+    expect(queryByRole('button')).toBeNull();
+    expect(isReadOnly(GOOGLE_AD_WINNER)).toBe(true);
+    expect(PLATFORM_CARD_TYPE.google_ad_winner).toBe('Creative');
+  });
+
+  it('quotes the texts Google rates Best', () => {
+    const card = PlatformCardSchema.parse({
+      ...GOOGLE_AD_WINNER,
+      best_assets: ['Alberca techada', 'Clases para toda la familia'],
+    });
+    const { getByTestId } = render(<PlatformCardBody card={card} />);
+    expect(getByTestId('platform-card-ad-winner').textContent).toBe(
+      '441.1 conversions in 30 days. Google rates these texts Best: "Alberca techada", "Clases para toda la familia". Write a new ad from it in Google Ads.',
+    );
+  });
+});
+
+describe('Google audience saturation (G23)', () => {
+  it('states the frequency against its cap and the cost per result before and now, read-only', () => {
+    const { getByRole, getByTestId, queryByRole } = render(
+      <PlatformCardBody card={GOOGLE_AUDIENCE_SATURATION} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'The same people saw VIVO 47-EKATAR 3.4 times in 7 days, and a result now costs $1,374 MXN against $1,080 MXN',
+    );
+    expect(getByTestId('platform-card-saturation').textContent).toBe(
+      'Display campaign · frequency 3.4 against a cap of 3 · 17,796 people. Widen or rotate the audience in Google Ads.',
+    );
+    expect(queryByRole('button')).toBeNull();
+    expect(isReadOnly(GOOGLE_AUDIENCE_SATURATION)).toBe(true);
+    expect(PLATFORM_CARD_TYPE.google_audience_saturation).toBe('Audience');
+  });
+});
+
+describe('Google PMax assets (G18)', () => {
+  it('lists each asset against the best of its kind, names the group once when it is the campaign', () => {
+    const { getByRole, getAllByTestId, getByTestId, queryByRole } = render(
+      <PlatformCardBody card={GOOGLE_PMAX_ASSETS} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      '2 assets in PMax | Octubre | Easy Fit | Leads cost more than the best of their kind',
+    );
+    const rows = getAllByTestId('platform-card-asset').map((row) => row.textContent);
+    expect(rows).toEqual([
+      'Description "Promociones mensuales para que aproveches al máximo tu entrenamiento." costs $894 MXN per conversion (1 conversion, $894 MXN spent); the best description, "Easy Fit: la manera de hacer ejercicio de manera cómoda y familiar.", converts at $47.97 MXN.',
+      'Headline "Clases de fitness" spent $230 MXN with no conversion; the best headline, "Easy Fit: Comodidad Familiar", converts at $58.06 MXN.',
+    ]);
+    expect(getByTestId('platform-card-assets-note').textContent).toBe(
+      'Add a replacement before removing one: Google needs enough assets of each kind.',
+    );
+    expect(queryByRole('button')).toBeNull();
+    expect(isReadOnly(GOOGLE_PMAX_ASSETS)).toBe(true);
+    expect(PLATFORM_CARD_TYPE.google_pmax_assets).toBe('Assets');
+  });
+
+  it('names the campaign too when the asset group has its own name, and counts one asset', () => {
+    const card = PlatformCardSchema.parse({
+      ...GOOGLE_PMAX_ASSETS,
+      campaign_name: 'Necesidades SLP',
+      asset_group_name: 'TANGASSI',
+      assets:
+        GOOGLE_PMAX_ASSETS.variant === 'google_pmax_assets'
+          ? GOOGLE_PMAX_ASSETS.assets.slice(0, 1)
+          : [],
+    });
+    const { getByRole } = render(<PlatformCardBody card={card} />);
+    expect(getByRole('heading').textContent).toBe(
+      '1 asset in TANGASSI (Necesidades SLP) costs more than the best of its kind',
+    );
   });
 });

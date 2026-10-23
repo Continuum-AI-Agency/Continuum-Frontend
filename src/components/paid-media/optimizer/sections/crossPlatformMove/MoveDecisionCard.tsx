@@ -3,29 +3,19 @@
 // A cross-platform move in Activity: ONE decision, its legs as sub-rows with their own platform
 // receipt, and the move's state in words (prototipo.html Activity; escenarios 18 and 19).
 //
-// "Undo both" reverts every leg through the same audited revert edge a single write uses, in
-// reverse leg order — the increase comes off before the decrease is put back, so an undo that
-// stops halfway leaves the client spending less, never more. It is offered only when the
-// server marked every applied leg reversible (moveDecisionModel.moveUndo).
+// Each leg carries its own Undo: the same check-first per-write undo a platform write has in
+// Activity (PlatformUndoControl → optimizer-apply-action-revert), in reverse leg order — every
+// increase first, a decrease only once every increase of the move is undone, so an undo that
+// stops halfway leaves the client spending less, never more (moveDecisionModel.legUndo).
 
-import { GavelIcon, Loader2Icon, Undo2Icon } from 'lucide-react';
+import { GavelIcon } from 'lucide-react';
 import * as React from 'react';
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import * as typeScale from '../../typeScale';
-import { useRevertApply } from '../../useOptimizerData';
 import { ActionMeta } from '../actionCardParts';
+import { readActionChange } from '../actionRows';
 import { ReceiptToken } from '../feedChrome';
+import { PlatformUndoControl } from '../platformCards/PlatformCardActionControl';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { MoveLegLine } from './MoveLegLine';
 import type { MoveDecision, MoveDecisionLeg, MoveState } from './moveDecisionModel';
@@ -57,7 +47,7 @@ function legStateText(leg: MoveDecisionLeg, currency: string | null): string {
   const money = (minor: number | null) => (minor == null ? '—' : formatMinorExact(minor, currency));
   switch (leg.state) {
     case 'applied':
-      return 'applied';
+      return leg.row.reverted_by ? 'applied, then undone' : 'applied';
     case 'scheduled':
       return 'scheduled: the platform takes it from midnight';
     case 'refused':
@@ -83,100 +73,38 @@ function stateExplainer(move: MoveDecision, currency: string | null): string | n
   return null;
 }
 
-function UndoMove({
-  move,
-  brandId,
-}: {
-  move: MoveDecision & { undo: { kind: 'available' } };
-  brandId: string;
-}) {
-  const revert = useRevertApply();
+/** One leg's Undo. The dialog that is undoing it stays mounted until it is closed: the feed
+ *  re-reads the leg as undone as soon as the undo lands (ActionRevertControl, G4). */
+function LegUndo({ leg, currency }: { leg: MoveDecisionLeg; currency: string | null }) {
   const [open, setOpen] = React.useState(false);
-  const [phase, setPhase] = React.useState<'confirm' | 'running' | 'done' | 'error'>('confirm');
-  const [note, setNote] = React.useState<string | null>(null);
-
-  const run = async () => {
-    setPhase('running');
-    setNote(null);
-    let done = 0;
-    for (const step of move.undo.steps) {
-      try {
-        const result = await revert.mutateAsync({
-          audit_id: step.auditId,
-          portfolio_id: step.portfolioId,
-          brandId,
-          dryRun: false,
-        });
-        if (!result?.ok) {
-          setPhase('error');
-          setNote(
-            `Stopped after ${done} of ${move.undo.steps.length}: ${result?.error?.trim() || result?.reason || 'the revert was refused'}.`,
-          );
-          return;
-        }
-        done += 1;
-      } catch (error) {
-        setPhase('error');
-        setNote(
-          `Stopped after ${done} of ${move.undo.steps.length}: ${error instanceof Error ? error.message : 'revert failed'}.`,
-        );
-        return;
-      }
-    }
-    setPhase('done');
-    setNote(`Reverted ${done} of ${move.undo.steps.length}.`);
-  };
-
-  return (
-    <AlertDialog
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) {
-          setPhase('confirm');
-          setNote(null);
-        }
-      }}
-      open={open}
-    >
-      <AlertDialogTrigger render={<Button className="text-xs" size="sm" variant="outline" />}>
-        <Undo2Icon aria-hidden="true" className="size-3.5" />
-        {move.undo.label}
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{move.undo.label}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Every leg goes back to its budget before the move. The increases come off first, so if
-            the undo stops halfway the client spends less, never more.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {note ? (
-          <p className="text-sm" role="status">
-            {note}
-          </p>
-        ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel>Close</AlertDialogCancel>
-          {phase === 'done' ? null : (
-            <Button disabled={phase === 'running'} onClick={() => void run()}>
-              {phase === 'running' ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-              {move.undo.label}
-            </Button>
-          )}
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+  const portfolioId = leg.row.portfolio_id;
+  if ((leg.undo === 'available' || open) && portfolioId) {
+    return (
+      <PlatformUndoControl
+        auditId={leg.row.id}
+        currency={currency}
+        onOpenChange={setOpen}
+        portfolioId={portfolioId}
+        title={`${readActionChange(leg.row).label} on ${PLATFORM_NAMES[leg.platform]}`}
+      />
+    );
+  }
+  if (leg.undo === 'after_increases') {
+    return (
+      <span className="text-muted-foreground text-xs" data-testid="move-leg-undo-waiting">
+        Undo after the increase
+      </span>
+    );
+  }
+  return null;
 }
 
 export function MoveDecisionCard({
   move,
-  brandId,
   currency,
   className,
 }: {
   move: MoveDecision;
-  brandId: string;
   currency: string | null;
   className?: string;
 }) {
@@ -244,14 +172,10 @@ export function MoveDecisionCard({
             {leg.receipt ? (
               <ReceiptToken className="mt-0 text-xs" platform={leg.platform} value={leg.receipt} />
             ) : null}
+            <LegUndo currency={currency} leg={leg} />
           </MoveLegLine>
         ))}
       </ul>
-      {move.undo.kind === 'available' ? (
-        <div className="flex justify-end">
-          <UndoMove brandId={brandId} move={{ ...move, undo: move.undo }} />
-        </div>
-      ) : null}
     </li>
   );
 }

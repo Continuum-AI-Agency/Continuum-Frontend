@@ -15,7 +15,7 @@ import {
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
-import { SlashMenu, useSlashTextarea } from '@/components/chat/slash-menu';
+import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from '@/components/chat/slash-menu';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -110,7 +110,8 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
     [commitDraft],
   );
   const { all: brandSkills } = useBrandSkills(brandId);
-  const slash = useSlashTextarea(brandId ? brandSkills : undefined, commitDraft);
+  const slashOptions = useSkillSlashOptions(brandId ? brandSkills : undefined);
+  const slash = useSlashTextarea(slashOptions, commitDraft);
 
   const handleFocus = useCallback(() => {
     isEditingRef.current = true;

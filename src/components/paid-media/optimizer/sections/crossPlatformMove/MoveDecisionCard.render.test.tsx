@@ -3,25 +3,41 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 
 // Spread the real module: mock.module replaces it for the whole process.
 const realOptimizerData = await import('../../useOptimizerData');
-let reverts: Array<{ audit_id: string; dryRun?: boolean }> = [];
-let revertAnswer: (auditId: string) => { ok: boolean; reason?: string } = () => ({ ok: true });
+type UndoSent = { portfolio_id: string; audit_id: string; dryRun?: boolean };
+let undoSent: UndoSent[] = [];
+// optimizer-apply-action-revert's envelope (contracts action-revert.ts), as the service answers.
+const undoEnvelope = (request: UndoSent) => {
+  const status = request.dryRun ? 'would_revert' : 'reverted';
+  return {
+    ok: true,
+    dryRun: request.dryRun ?? true,
+    runId: '0c0c0c0c-0000-4000-8000-000000000001',
+    result: {
+      status,
+      audit_id: request.audit_id,
+      revert_audit_id: null,
+      kind: 'set_budget',
+      ref: null,
+      restores: { minor: 70_000, currency: 'MXN' },
+    },
+  };
+};
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
-  useRevertApply: () => ({
-    mutateAsync: async (request: { audit_id: string; dryRun?: boolean }) => {
-      reverts.push(request);
-      return revertAnswer(request.audit_id);
+  useRevertOptimizerAction: () => ({
+    mutateAsync: async (request: UndoSent) => {
+      undoSent.push(request);
+      return undoEnvelope(request);
     },
   }),
 }));
 
 const { MoveDecisionCard } = await import('./MoveDecisionCard');
-const { readMoveDecision } = await import('./moveDecisionModel');
+const { groupActionFeed, readMoveDecision } = await import('./moveDecisionModel');
 const { feedRow, MOVE_ID } = await import('./moveFixtures');
 
 beforeEach(() => {
-  reverts = [];
-  revertAnswer = () => ({ ok: true });
+  undoSent = [];
 });
 afterEach(cleanup);
 
@@ -57,14 +73,14 @@ function renderMove(rows: ReturnType<typeof feedRow>[]) {
   if (!move) throw new Error('rows must make a move');
   render(
     <ul>
-      <MoveDecisionCard brandId="brand-1" currency="MXN" move={move} />
+      <MoveDecisionCard currency="MXN" move={move} />
     </ul>,
   );
   return screen.getByTestId('move-decision');
 }
 
 describe('MoveDecisionCard', () => {
-  it('one Decision, its legs as sub-rows with each platform’s receipt, and Undo both', () => {
+  it('one Decision, its legs as sub-rows with each platform’s receipt', () => {
     const card = renderMove([googleUp(), tiktokDown()]);
     expect(card.textContent).toContain('Decision');
     expect(card.textContent).toContain('Move $100.00 MXN/day from TikTok to Google');
@@ -83,36 +99,87 @@ describe('MoveDecisionCard', () => {
     expect(within(legs[1] as HTMLElement).getByTestId('receipt-token').textContent).toContain(
       'g-req-1',
     );
-    expect(within(card).getByRole('button', { name: /Undo both/ })).toBeTruthy();
   });
 
-  it('Undo both reverts the increase first, then the decrease, for real', async () => {
-    renderMove([googleUp(), tiktokDown()]);
-    fireEvent.click(screen.getByRole('button', { name: /Undo both/ }));
-    const confirm = await screen.findAllByRole('button', { name: /Undo both/ });
-    await act(async () => {
-      fireEvent.click(confirm[confirm.length - 1] as HTMLElement);
-    });
-    await waitFor(() => expect(screen.getByText('Reverted 2 of 2.')).toBeTruthy());
-    expect(reverts.map((r) => [r.audit_id, r.dryRun])).toEqual([
-      ['leg-1', false],
-      ['leg-0', false],
-    ]);
-  });
+  it('Meta → Google from the feed: ONE card, both legs, the increase undone before the decrease', async () => {
+    const metaDown = (over: Record<string, unknown> = {}) =>
+      feedRow({
+        id: 'leg-1',
+        move_id: MOVE_ID,
+        leg: 1,
+        platform: 'meta',
+        entity_id: '120252366877000236',
+        before: { minor: 50_000 },
+        after: { minor: 40_000 },
+        outcome: 'applied',
+        ...over,
+      });
+    const googleIncrease = (over: Record<string, unknown> = {}) =>
+      feedRow({
+        id: 'leg-2',
+        move_id: MOVE_ID,
+        leg: 2,
+        platform: 'google_ads',
+        entity_id: '24274603133',
+        before: { minor: 70_000 },
+        after: { minor: 80_000 },
+        outcome: 'applied',
+        ...over,
+      });
+    const cardFor = (rows: ReturnType<typeof feedRow>[]) => {
+      const items = groupActionFeed(rows);
+      expect(items).toHaveLength(1);
+      const [item] = items;
+      if (item?.kind !== 'move') throw new Error('the legs must fold into one move');
+      return (
+        <ul>
+          <MoveDecisionCard currency="MXN" move={item.move} />
+        </ul>
+      );
+    };
+    const legsNow = () =>
+      within(screen.getByTestId('move-decision')).getAllByTestId('move-decision-leg');
 
-  it('Undo stops at the first refusal and says where', async () => {
-    revertAnswer = (auditId) =>
-      auditId === 'leg-1' ? { ok: false, reason: 'unsupported_scope' } : { ok: true };
-    renderMove([googleUp(), tiktokDown()]);
-    fireEvent.click(screen.getByRole('button', { name: /Undo both/ }));
-    const confirm = await screen.findAllByRole('button', { name: /Undo both/ });
-    await act(async () => {
-      fireEvent.click(confirm[confirm.length - 1] as HTMLElement);
-    });
-    await waitFor(() =>
-      expect(screen.getByText('Stopped after 0 of 2: unsupported_scope.')).toBeTruthy(),
+    const { rerender } = render(cardFor([googleIncrease(), metaDown()]));
+    expect(screen.getAllByTestId('move-decision')).toHaveLength(1);
+    const [meta, google] = legsNow() as [HTMLElement, HTMLElement];
+    expect(meta.getAttribute('data-platform')).toBe('meta');
+    expect(meta.textContent).toContain('120252366877000236');
+    expect(meta.textContent).toContain('$500.00 MXN');
+    expect(meta.textContent).toContain('$400.00 MXN');
+    expect(google.getAttribute('data-platform')).toBe('google_ads');
+    expect(google.textContent).toContain('24274603133');
+    expect(google.textContent).toContain('$700.00 MXN');
+    expect(google.textContent).toContain('$800.00 MXN');
+    // The decrease waits; only the increase can be undone.
+    expect(within(meta).queryByTestId('activity-platform-undo')).toBeNull();
+    expect(within(meta).getByTestId('move-leg-undo-waiting').textContent).toBe(
+      'Undo after the increase',
     );
-    expect(reverts.map((r) => r.audit_id)).toEqual(['leg-1']);
+
+    fireEvent.click(within(google).getByTestId('activity-platform-undo'));
+    const dialog = await screen.findByTestId('activity-platform-undo-dialog');
+    const confirm = within(dialog).getByTestId(
+      'activity-platform-undo-confirm',
+    ) as HTMLButtonElement;
+    await waitFor(() => expect(confirm.disabled).toBe(false));
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    await within(dialog).findByTestId('platform-card-undo-result');
+    // optimizer-apply-action-revert for the increase's own audit: checked first, then written.
+    expect(undoSent).toEqual([
+      { portfolio_id: 'p-1', audit_id: 'leg-2', dryRun: true },
+      { portfolio_id: 'p-1', audit_id: 'leg-2', dryRun: false },
+    ]);
+
+    // The feed re-reads the increase as undone. Its dialog stays up with the result (G4), and
+    // only now is the decrease offered.
+    rerender(cardFor([googleIncrease({ reverted_by: 'undo-2' }), metaDown()]));
+    expect(screen.getByTestId('platform-card-undo-result')).toBeTruthy();
+    const [metaAfter] = legsNow() as [HTMLElement];
+    expect(within(metaAfter).getByTestId('activity-platform-undo')).toBeTruthy();
+    expect(within(metaAfter).queryByTestId('move-leg-undo-waiting')).toBeNull();
   });
 
   it('compensated: reverted automatically, with the reason, and no undo', () => {
@@ -145,6 +212,7 @@ describe('MoveDecisionCard', () => {
       'refused: BUDGET_BELOW_PER_DAY_MINIMUM',
     ]);
     expect(within(card).queryByRole('button', { name: /Undo/ })).toBeNull();
+    expect(within(card).queryByTestId('move-leg-undo-waiting')).toBeNull();
   });
 
   it('stranded: stuck — autopilot paused, both refusals named, no undo', () => {
@@ -196,6 +264,11 @@ describe('MoveDecisionCard', () => {
   it('a move already undone says so and offers nothing', () => {
     const card = renderMove([tiktokDown({ reverted_by: 'u-0' }), googleUp({ reverted_by: 'u-1' })]);
     expect(within(card).getByTestId('move-state').textContent).toBe('undone');
+    expect(
+      within(card)
+        .getAllByTestId('move-leg-state')
+        .map((el) => el.textContent),
+    ).toEqual(['applied, then undone', 'applied, then undone']);
     expect(within(card).queryByRole('button', { name: /Undo/ })).toBeNull();
   });
 });

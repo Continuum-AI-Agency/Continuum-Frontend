@@ -442,6 +442,9 @@ export function AuthoredTemplateLayerPreview({
   sourceChecksum = null,
   artboard,
   selectedNodeId,
+  selectedText = null,
+  onTextChange,
+  onTextCommit,
 }: {
   markup: string;
   previewEdits?: PreviewEdits;
@@ -479,6 +482,10 @@ export function AuthoredTemplateLayerPreview({
   sourceChecksum?: string | null;
   artboard?: { width: number | null; height: number | null };
   selectedNodeId?: string | null;
+  /** The selected layer's text when it may be edited: double-click edits it on the canvas. */
+  selectedText?: { nodeId: string; text: string } | null;
+  onTextChange?: (text: string) => void;
+  onTextCommit?: () => void;
 }) {
   // The private canvas retains Position for its geometry math. Only this view adapter
   // creates tuples; native edits crossing the editor boundary remain canonical x/y.
@@ -514,6 +521,9 @@ export function AuthoredTemplateLayerPreview({
   const [selectionIds, setSelectionIds] = useState<number[]>(layer ? [layer.layerId] : []);
   const [shadowEdits, setShadowEdits] = useState<Record<number, TemplateLayerEdit>>({});
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
+  const [inlineText, setInlineText] = useState(false);
+  const inlineNodeId = selectedText?.nodeId ?? null;
+  useEffect(() => setInlineText(false), [inlineNodeId]);
   const authoredHandle = useRef<AuthoredHandleGesture | null>(null);
   const authoredBodyGesture = useRef<SVGGElement | null>(null);
   const [authoredGestureRevision, setAuthoredGestureRevision] = useState(0);
@@ -1870,6 +1880,9 @@ export function AuthoredTemplateLayerPreview({
                   onSelect(target.layerId);
                 }
               }}
+              onDoubleClick={() => {
+                if (selectedText && onTextChange && !disabled) setInlineText(true);
+              }}
               onWheel={onWheel}
               onKeyDown={onKeyDown}
               onKeyUp={onKeyUp}
@@ -1900,6 +1913,36 @@ export function AuthoredTemplateLayerPreview({
                     : undefined
                 }
               />
+              {inlineText && selectionBox && selectedText ? (
+                <textarea
+                  aria-label="Edit layer text"
+                  // biome-ignore lint/a11y/noAutofocus: opened by a double-click on the layer itself.
+                  autoFocus
+                  className="absolute z-10 resize-none rounded border border-primary bg-background/95 p-1 text-sm text-foreground shadow-sm outline-none"
+                  style={{
+                    left: selectionBox.left,
+                    top: selectionBox.top,
+                    width: Math.max(selectionBox.width, 160),
+                    height: Math.max(selectionBox.height, 40),
+                  }}
+                  value={selectedText.text}
+                  onChange={(event) => onTextChange?.(event.target.value)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Escape' || (event.key === 'Enter' && !event.shiftKey)) {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  onBlur={() => {
+                    setInlineText(false);
+                    onTextCommit?.();
+                  }}
+                  data-testid="canvas-inline-text"
+                />
+              ) : null}
               {selectionBox && liveCount > 0 ? (
                 <div
                   aria-hidden="false"

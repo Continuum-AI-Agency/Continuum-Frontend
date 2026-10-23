@@ -2315,6 +2315,14 @@ export const OptimizerActionRowSchema = z
     reverted_by: z.string().nullable().optional(),
     /** The Meta write receipt (fbtrace_id / entity id) on a money row; null elsewhere. */
     receipt: z.record(z.string(), z.unknown()).nullable().optional(),
+    /** A leg of a cross-platform budget move (optimizer.apply_audits): the move it belongs to
+     *  and its place in it, decreases first. Activity folds rows sharing a move_id into one
+     *  decision. Null on a single write and on settings/decision rows. */
+    move_id: z.string().nullable().optional(),
+    leg: z.number().int().nullable().optional(),
+    /** The platform the money row wrote to ('meta', 'google_ads', 'tiktok_ads'); null on
+     *  settings/decision rows. */
+    platform: z.string().nullable().optional(),
   })
   .loose();
 export type OptimizerActionRow = z.infer<typeof OptimizerActionRowSchema>;

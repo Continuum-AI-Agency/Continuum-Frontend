@@ -157,7 +157,8 @@ describe('ForgeTabs', () => {
     renderTabs();
 
     expect(screen.getByRole('tab', { name: 'Templates' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Web components' })).toBeTruthy();
+    // Web components are imported like any template, so they have no tab of their own.
+    expect(screen.queryByRole('tab', { name: 'Web components' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'Render' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Render ledger' })).toBeTruthy();
     expect(screen.queryByTestId('render-grid')).toBeNull();

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import type { Skill } from '@continuum/contracts';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { SlashMenu, useSlashTextarea } from './slash-menu';
+import { SlashMenu, useSkillSlashOptions, useSlashTextarea } from './slash-menu';
 
 const shortcut = (slug: string, category: string): Skill => ({
   id: `id-${slug}`,
@@ -24,7 +24,7 @@ const SKILLS = [shortcut('goldenhour', 'light'), shortcut('noir', 'genre')];
 
 function Host({ off = false }: { off?: boolean }) {
   const [value, setValue] = useState('');
-  const slash = useSlashTextarea(off ? undefined : SKILLS, setValue);
+  const slash = useSlashTextarea(useSkillSlashOptions(off ? undefined : SKILLS), setValue);
   return (
     <div className="relative">
       {slash.menuProps ? <SlashMenu {...slash.menuProps} /> : null}

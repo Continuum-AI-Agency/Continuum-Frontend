@@ -2,6 +2,7 @@ import { afterEach, expect, mock, test } from 'bun:test';
 import {
   type ApiRenderTemplateSummary,
   apiRenderTemplateSummarySchema,
+  WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { TemplatePicker } from './RenderToolbar';
@@ -130,4 +131,30 @@ test('once the registry answers, rows group by what each was authored in, and th
   expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
     expect.stringContaining('Artboard 1'),
   ]);
+});
+
+test('a web component groups as one by its key, before the registry knows its upload', async () => {
+  const web = '88888888-8888-4888-8888-888888888888';
+  const motion = '77777777-7777-4777-8777-777777777777';
+  render(
+    <TemplatePicker
+      templates={[
+        template(`web:${web}`, 'Hello card', WEB_COMPONENT_BINDING_ID, web),
+        template('301', 'Promo motion', undefined, motion),
+      ]}
+      currentRef=""
+      placeholder="Choose a template"
+      onChange={mock()}
+      sourceKinds={new Map([[motion, 'after_effects']])}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Template' }));
+  await screen.findAllByRole('option');
+  const rowsIn = (name: string) =>
+    within(screen.getByRole('group', { name }))
+      .getAllByRole('option')
+      .map((option) => option.querySelector('.truncate')?.textContent);
+  expect(rowsIn('Web component')).toEqual(['Hello card']);
+  expect(rowsIn('After Effects')).toEqual(['Promo motion']);
+  expect(screen.queryByRole('group', { name: 'Other' })).toBeNull();
 });

@@ -1,12 +1,17 @@
 // ---------------------------------------------------------------------------
 // The Google rules the engine has no Meta twin for: G03 (raise a budget-limited campaign
 // that is under target), G12's account-wide collapse, G11 (low-quality keyword) and the
-// daily exposure a Google budget really allows.
+// daily exposure a Google budget really allows. And the Google equivalents of Meta's
+// creative and fatigue families (G7): G09 and G10 compare the ads of one ad group (C1, C2),
+// G18_pmax_assets the assets of one field type in one PMax asset group, and G23 reads a
+// campaign's 7-day frequency (F2).
 // Design: google-acciones.html §4, escenarios.html scenarios 03, 07, 08, 20.
 // ---------------------------------------------------------------------------
 
 import type { MultiPlatformSnapshot } from '@continuum/contracts';
 import { currencyMinorOffset, formatMoney } from '@continuum/contracts';
+import { DEFAULT_CONFIG } from '../config';
+import { DRAG_SPEND_SHARE, LAGGARD_COST_MULTIPLE } from '../creative';
 import type { OptimizationObjective, WindowMetrics } from '../types';
 import { isGoogleBidLearning, platformCaps } from './learning';
 
@@ -313,5 +318,168 @@ export function g11LowQualityKeyword(
     rule: 'G11',
     keywordId: k.id,
     reason: `"${k.text}" has Quality Score ${k.qualityScore} and spent ${formatMoney(k.spend, currency)} (${k.window}) with no conversions.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// G7: creatives measured against their siblings, and audience saturation.
+// ---------------------------------------------------------------------------
+
+/** An ad of one ad group, or an asset of one field type in one asset group: the only fair
+ *  comparison, because everything else (audience, keywords, budget, bidding) is shared. */
+export type CreativeSibling = {
+  id: string;
+  label: string;
+  spend: number;
+  conversions: number;
+};
+
+/** A sibling needs this many results before the others are measured against it. */
+export const CREATIVE_WINNER_MIN_RESULTS = 3;
+/** PMax shows several assets of a kind in every ad, so no asset holds a majority of the spend
+ *  and C1's share test cannot apply; G17's multiple at asset-group level is the bar instead. */
+export const PMAX_ASSET_COST_MULTIPLE = 2.5;
+/** G23 is F2: a frequency cap and a cost per result rising past the fatigue drift. Google does
+ *  not tell this read a remarketing list from a prospecting audience, so it holds every
+ *  campaign to the prospecting cap. */
+export const G23_FREQUENCY_CAP = DEFAULT_CONFIG.fatigueFreqProspecting;
+export const G23_COST_RISE = DEFAULT_CONFIG.fatigueCpaDriftPct;
+/** Channels whose ads are pushed to an audience. A Search ad answers a query, and the same
+ *  person searching twice is demand, not saturation. */
+export const G23_CHANNELS: ReadonlySet<string> = new Set(['DISPLAY', 'VIDEO', 'DEMAND_GEN']);
+
+export type PricedSibling = CreativeSibling & { costPerResult: number };
+
+const priced = (s: CreativeSibling): PricedSibling | null =>
+  s.conversions > 0 && s.spend > 0 ? { ...s, costPerResult: s.spend / s.conversions } : null;
+
+/** The cheapest sibling with enough results to be measured against; null when none has. */
+export function siblingWinner(siblings: readonly CreativeSibling[]): PricedSibling | null {
+  return (
+    siblings
+      .filter((s) => s.conversions >= CREATIVE_WINNER_MIN_RESULTS)
+      .map(priced)
+      .filter((s): s is PricedSibling => s !== null)
+      .sort((a, b) => a.costPerResult - b.costPerResult || a.id.localeCompare(b.id))[0] ?? null
+  );
+}
+
+export type DragVerdict = {
+  sibling: CreativeSibling;
+  /** Null when it bought nothing. */
+  costPerResult: number | null;
+  spendShare: number;
+  winner: PricedSibling;
+};
+
+/**
+ * C1 over one sibling set: a sibling that spent past `floor` without one result, or one priced
+ * at `multiple` × the winner or more while holding at least `minShare` of the set's spend.
+ * Zero-result siblings come first, the biggest fire first; then the priced ones, the most
+ * wasteful first. Silent without a winner: a sibling is only ever judged against one.
+ */
+export function draggingSiblings(
+  siblings: readonly CreativeSibling[],
+  opts: { floor: number; multiple: number; minShare: number },
+): DragVerdict[] {
+  const winner = siblingWinner(siblings);
+  if (!winner) return [];
+  const total = siblings.reduce((acc, s) => acc + s.spend, 0);
+  const share = (s: CreativeSibling) => (total > 0 ? s.spend / total : 0);
+  const zero = siblings
+    .filter((s) => s.conversions === 0 && s.spend > opts.floor)
+    .sort((a, b) => b.spend - a.spend || a.id.localeCompare(b.id))
+    .map((s) => ({ sibling: s, costPerResult: null, spendShare: share(s), winner }));
+  const dear = siblings
+    .map(priced)
+    .filter(
+      (s): s is PricedSibling =>
+        s !== null &&
+        s.id !== winner.id &&
+        s.spend > opts.floor &&
+        s.costPerResult >= opts.multiple * winner.costPerResult &&
+        share(s) >= opts.minShare,
+    )
+    .sort((a, b) => b.costPerResult - a.costPerResult || b.spend - a.spend)
+    .map((s) => ({
+      sibling: s,
+      costPerResult: s.costPerResult,
+      spendShare: share(s),
+      winner,
+    }));
+  return [...zero, ...dear];
+}
+
+/** G09's bar: C1 as Meta runs it, the floor being the target cost per result. */
+export const g09Thresholds = (floor: number) => ({
+  floor,
+  multiple: LAGGARD_COST_MULTIPLE,
+  minShare: DRAG_SPEND_SHARE,
+});
+
+/** G18_pmax_assets' bar: the floor as G09's, no share test, G17's multiple. */
+export const pmaxAssetThresholds = (floor: number) => ({
+  floor,
+  multiple: PMAX_ASSET_COST_MULTIPLE,
+  minShare: 0,
+});
+
+/** G10 (C2): the winner and the dearest priced sibling at LAGGARD_COST_MULTIPLE × or more.
+ *  Null without either: a winner nothing is measured against is not a finding. */
+export function winnerToVary(
+  siblings: readonly CreativeSibling[],
+): { winner: PricedSibling; comparator: PricedSibling } | null {
+  const winner = siblingWinner(siblings);
+  if (!winner) return null;
+  const comparator = siblings
+    .map(priced)
+    .filter(
+      (s): s is PricedSibling =>
+        s !== null &&
+        s.id !== winner.id &&
+        s.costPerResult >= LAGGARD_COST_MULTIPLE * winner.costPerResult,
+    )
+    .sort((a, b) => b.costPerResult - a.costPerResult || b.spend - a.spend)[0];
+  return comparator ? { winner, comparator } : null;
+}
+
+export type G23Result =
+  | {
+      fires: true;
+      frequency: number;
+      costPerResultNow: number;
+      costPerResultBefore: number;
+    }
+  | {
+      fires: false;
+      because: 'channel' | 'no_frequency' | 'under_cap' | 'no_results' | 'cost_not_rising';
+    };
+
+/** G23 (F2): a campaign pushed to an audience that sees it G23_FREQUENCY_CAP times a week or
+ *  more while its cost per result over the last 3 days is more than G23_COST_RISE above its
+ *  14-day cost. Both windows must hold results: a rise from nothing is not a price. */
+export function g23Saturation(
+  audience: { channel_type: string; frequency_7d: number | null },
+  windows: { d3: WindowMetrics; d14: WindowMetrics },
+  kpiField: keyof WindowMetrics,
+): G23Result {
+  if (!G23_CHANNELS.has(audience.channel_type)) return { fires: false, because: 'channel' };
+  if (audience.frequency_7d === null) return { fires: false, because: 'no_frequency' };
+  if (audience.frequency_7d < G23_FREQUENCY_CAP) return { fires: false, because: 'under_cap' };
+  const now = results(windows.d3, kpiField);
+  const before = results(windows.d14, kpiField);
+  if (now <= 0 || before <= 0 || windows.d3.spend <= 0) {
+    return { fires: false, because: 'no_results' };
+  }
+  const costNow = windows.d3.spend / now;
+  const costBefore = windows.d14.spend / before;
+  if (!(costNow > (1 + G23_COST_RISE) * costBefore)) {
+    return { fires: false, because: 'cost_not_rising' };
+  }
+  return {
+    fires: true,
+    frequency: audience.frequency_7d,
+    costPerResultNow: costNow,
+    costPerResultBefore: costBefore,
   };
 }

@@ -2,8 +2,9 @@
 // platform, every leg of the platform that gives goes down by the same percentage and every leg
 // of the one that receives goes up by the same percentage, decreases first.
 //
-// The recommendation row carries the move as the contract's BudgetMoveAction under `action`
-// (RecommendationRowSchema is loose, so the key survives the parse). It is read through
+// The daily cycle records the move as the contract's BudgetMoveAction under `seed.action`
+// (G6: recommendations have no action column; the performance read returns to_jsonb(r)). A
+// top-level `action` is read first, for a row that carries one. Either way it is read through
 // BudgetMoveActionSchema, so a move that would create money, mix currencies or raise before it
 // lowers never reaches the screen — the contract refuses it here exactly as the executor does.
 
@@ -11,9 +12,12 @@ import {
   type BudgetMoveAction,
   BudgetMoveActionSchema,
   currencyMinorOffset,
+  type PortfolioListItem,
   type RecommendationRow,
 } from '@continuum/contracts';
+import { platformName } from '../../entityNoun';
 import { formatCurrencyExact } from '../../format';
+import { platformWritable } from '../../platformWrites';
 import { minorToMajor } from '../actionRows';
 import type { AdPlatform } from '../platforms/platformTabsModel';
 
@@ -37,6 +41,8 @@ export type QueuedMoveLeg = {
 };
 
 export type QueuedMove = {
+  /** The move as the contract parsed it: what Approve sends to /apply/actions, unchanged. */
+  action: BudgetMoveAction;
   moveId: string;
   currency: string;
   /** What comes off the donors, which is what goes on the receivers, to the minor unit. */
@@ -65,7 +71,7 @@ function distinct<T>(values: T[]): T[] {
 
 export function readQueuedMove(rec: RecommendationRow): QueuedMove | null {
   if (!isBudgetMoveRecommendation(rec)) return null;
-  const parsed = BudgetMoveActionSchema.safeParse(rec.action);
+  const parsed = BudgetMoveActionSchema.safeParse(rec.action ?? rec.seed?.action);
   if (!parsed.success) return null;
   const move = parsed.data;
   const decreases = move.legs.filter((leg) => leg.targetMinor < leg.expectedMinor);
@@ -73,6 +79,7 @@ export function readQueuedMove(rec: RecommendationRow): QueuedMove | null {
   const decreasePct = sidePct(decreases);
   const increasePct = sidePct(increases);
   return {
+    action: move,
     moveId: move.moveId,
     currency: move.currency,
     amountMinor: decreases.reduce((sum, leg) => sum + leg.expectedMinor - leg.targetMinor, 0),
@@ -94,6 +101,21 @@ export function readQueuedMove(rec: RecommendationRow): QueuedMove | null {
       };
     }),
   };
+}
+
+/** G5 for a move: approvable only when every platform among its legs may be written here
+ *  (platformWrites.platformWritable). Otherwise the one line that says which writes are off;
+ *  null when the move can be approved. */
+export function moveWritesOffNote(
+  portfolio: Pick<PortfolioListItem, 'platform_writes'>,
+  move: Pick<QueuedMove, 'legs'>,
+): string | null {
+  const held = distinct(move.legs.map((leg) => leg.platform)).filter(
+    (platform) => !platformWritable(portfolio, platform),
+  );
+  if (held.length === 0) return null;
+  const names = held.map((platform) => platformName({ platform, level: null })).join(' and ');
+  return `This move is a proposal only — writes to ${names} are switched off for this portfolio.`;
 }
 
 function minorDigits(currency: string | null): number {

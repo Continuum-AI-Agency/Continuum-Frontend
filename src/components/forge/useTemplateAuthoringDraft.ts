@@ -59,6 +59,8 @@ type DraftState = LayerDraftAutosaveView & {
   persistedDraft: TemplateAuthoringDraft | null;
   sourceDocument: TemplateAuthoringDocument | null;
   adoptServerDraft: () => Promise<boolean>;
+  /** The agent wrote the server draft: take it as saved, and return it for one history step. */
+  adoptAgentDraft: () => Promise<TemplateAuthoringDraft | null>;
   retry: () => Promise<boolean>;
   refresh: () => void;
   save: () => Promise<boolean>;
@@ -762,6 +764,17 @@ export function useTemplateAuthoringDraft({
     recoveryKeyRef.current = key;
     return true;
   }, [scope, serverDraft]);
+  const adoptAgentDraft = useCallback(async () => {
+    if (!scope || !loaded) return null;
+    const remote = await fetchTemplateAuthoringDraft(scope.assetId, scope.brandId, scope.baseVersionId);
+    if (!remote || !autosaverRef.current) return null;
+    autosaverRef.current.adoptServerDraft(remote.revision, remote.commands);
+    hydratedCommands.current = structuredClone(remote.commands);
+    skipNextCommandsUpdate.current = true;
+    setPersistedDraft(remote);
+    tabChannel.current?.postMessage({ tabId: tabId.current, revision: remote.revision });
+    return remote;
+  }, [scope, loaded]);
   const retry = useCallback(async () => {
     if (!loaded) return false;
     await recoveryQueue.current;
@@ -864,6 +877,7 @@ export function useTemplateAuthoringDraft({
     persistedDraft,
     sourceDocument,
     adoptServerDraft,
+    adoptAgentDraft,
     recoveries,
     restoreRecovery,
   };

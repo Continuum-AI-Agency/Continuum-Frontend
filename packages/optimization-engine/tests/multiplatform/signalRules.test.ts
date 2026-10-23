@@ -1183,3 +1183,267 @@ describe('T11 TikTok delivery issue', () => {
     expect(r.abstentions.some((a) => a.rule === 'T11' && a.entityId === 'ag3')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// G7: the creative and fatigue families on Google
+// ---------------------------------------------------------------------------
+
+type AdOver = { status?: 'ENABLED' | 'PAUSED'; best?: string[] };
+const ad = (id: string, spend: number, conversions: number, over: AdOver = {}) => ({
+  ad_id: id,
+  ad_group_id: 'ag1',
+  ad_group_name: 'Leads',
+  campaign_id: 'c1',
+  type: 'RESPONSIVE_SEARCH_AD',
+  status: over.status ?? 'ENABLED',
+  ad_strength: 'GOOD' as const,
+  label: `Ad ${id}`,
+  best_assets: over.best ?? [],
+  totals: totals(spend, conversions),
+});
+
+describe('G09 an ad that drags its ad group (C1)', () => {
+  test('zero conversions past the target beside a priced winner: pause it, the group keeps one', () => {
+    const r = evaluate(google({ ads: [ad('a1', 150, 3), ad('a2', 100.01, 0)] }));
+    const g09 = r.recommendations.filter((x) => x.rule === 'G09');
+    expect(g09).toHaveLength(1);
+    expect(g09[0]!.subject_key).toBe('a2');
+    expect(g09[0]!.action).toMatchObject({
+      kind: 'set_status',
+      ref: { level: 'ad', nativeLevel: 'ad', id: 'ag1~a2' },
+      expected: 'active',
+      target: 'paused',
+    });
+    expect(g09[0]!.platform_card).toMatchObject({
+      variant: 'google_ad_drag',
+      cost_per_result: null,
+      winner: { label: 'Ad a1', cost_per_result: 50 },
+      ads_remaining: 1,
+    });
+    expect(g09[0]!.reason).toContain('with no conversion in the last 14 days');
+  });
+
+  test('at the target exactly it has not passed the floor', () => {
+    expect(rules(evaluate(google({ ads: [ad('a1', 150, 3), ad('a2', 100, 0)] })))).not.toContain(
+      'G09',
+    );
+  });
+
+  test('a priced ad holding most of the spend at 1.25× the winner fires; 1.24× or under half does not', () => {
+    // winner 100 / 4 = 25 per conversion
+    const at = (cost: number, spend: number) =>
+      rules(evaluate(google({ ads: [ad('a1', 100, 4), ad('a2', spend, spend / cost)] })));
+    expect(at(31.25, 500)).toContain('G09');
+    expect(at(31, 500)).not.toContain('G09');
+    expect(at(31.25, 99)).not.toContain('G09');
+  });
+
+  test('never the only enabled ad, and a paused sibling does not count', () => {
+    const r = evaluate(google({ ads: [ad('a1', 150, 3, { status: 'PAUSED' }), ad('a2', 500, 0)] }));
+    expect(rules(r)).not.toContain('G09');
+  });
+
+  test('silent without a winner of at least 3 conversions', () => {
+    expect(rules(evaluate(google({ ads: [ad('a1', 150, 2), ad('a2', 500, 0)] })))).not.toContain(
+      'G09',
+    );
+  });
+
+  test('one pause per group per cycle: the biggest fire', () => {
+    const r = evaluate(google({ ads: [ad('a1', 150, 3), ad('a2', 300, 0), ad('a3', 400, 0)] }));
+    const g09 = r.recommendations.filter((x) => x.rule === 'G09');
+    expect(g09.map((x) => x.subject_key)).toEqual(['a3']);
+    expect(g09[0]!.platform_card).toMatchObject({ ads_remaining: 2 });
+  });
+
+  test('without a target, or for a campaign this cycle did not read, it abstains by name', () => {
+    const noTarget = evaluate(
+      google({ ads: [ad('a1', 150, 3), ad('a2', 500, 0)] }),
+      ctx({ cpaTarget: null }),
+    );
+    expect(noTarget.abstentions.some((a) => a.rule === 'G09')).toBe(true);
+    const elsewhere = evaluate(
+      google({ ads: [ad('a1', 150, 3), ad('a2', 500, 0)] }),
+      ctx({ snapshots: [campaign('c2')] }),
+    );
+    expect(rules(elsewhere)).not.toContain('G09');
+    expect(elsewhere.abstentions.some((a) => a.rule === 'G09' && a.entityId === 'ag1')).toBe(true);
+  });
+});
+
+describe('G10 a winning ad worth a variation (C2)', () => {
+  test('the winner beats a priced sibling by 1.25×: the card names it and what Google rates BEST', () => {
+    const r = evaluate(
+      google({ ads: [ad('a1', 150, 3, { best: ['Gym 24h'] }), ad('a2', 62.5, 1)] }),
+    );
+    const g10 = r.recommendations.find((x) => x.rule === 'G10')!;
+    expect(g10.action).toBeNull();
+    expect(g10.platform_card).toMatchObject({
+      variant: 'google_ad_winner',
+      winner: { label: 'Ad a1', cost_per_result: 50, conversions: 3 },
+      comparator: { label: 'Ad a2', cost_per_result: 62.5 },
+      best_assets: ['Gym 24h'],
+    });
+    expect(g10.reason).toContain('"Gym 24h"');
+  });
+
+  test('1.24× is not a gap, and a winner under 3 conversions is not a winner', () => {
+    expect(rules(evaluate(google({ ads: [ad('a1', 150, 3), ad('a2', 62, 1)] })))).not.toContain(
+      'G10',
+    );
+    expect(rules(evaluate(google({ ads: [ad('a1', 100, 2), ad('a2', 300, 1)] })))).not.toContain(
+      'G10',
+    );
+  });
+});
+
+const asset = (
+  id: string,
+  fieldType: string,
+  spend: number,
+  conversions: number,
+  text: string | null = `Text ${id}`,
+) => ({
+  asset_id: id,
+  asset_group_id: 'g1',
+  asset_group_name: 'Leads group',
+  campaign_id: 'c1',
+  field_type: fieldType,
+  text,
+  primary_status: 'ELIGIBLE',
+  totals: totals(spend, conversions),
+});
+
+describe('G18_pmax_assets assets that drag their asset group', () => {
+  test('a headline past the target with no conversion, beside a converting headline', () => {
+    const r = evaluate(
+      google({
+        pmax_assets: [
+          asset('h1', 'HEADLINE', 120, 4),
+          asset('h2', 'HEADLINE', 120, 0),
+          asset('i1', 'MARKETING_IMAGE', 500, 0, null),
+        ],
+      }),
+    );
+    const card = r.recommendations.find((x) => x.rule === 'G18_pmax_assets')!;
+    expect(card.action).toBeNull();
+    expect(card.entity).toMatchObject({ level: 'group', nativeLevel: 'asset_group', id: 'g1' });
+    expect(card.platform_card).toMatchObject({
+      variant: 'google_pmax_assets',
+      assets: [
+        {
+          field_type: 'HEADLINE',
+          label: 'Text h2',
+          cost_per_result: null,
+          best_of_kind: { label: 'Text h1', cost_per_result: 30 },
+        },
+      ],
+    });
+  });
+
+  test('a priced asset at 2.5× the best of its kind drags; 2.49× does not', () => {
+    // best 100 / 4 = 25; 2.5× = 62.5
+    const at = (cost: number) =>
+      rules(
+        evaluate(
+          google({
+            pmax_assets: [
+              asset('d1', 'DESCRIPTION', 100, 4),
+              asset('d2', 'DESCRIPTION', 250, 250 / cost),
+            ],
+          }),
+        ),
+      );
+    expect(at(62.5)).toContain('G18_pmax_assets');
+    expect(at(62.25)).not.toContain('G18_pmax_assets');
+  });
+
+  test('one card per group, at most 5 assets, the most wasteful first', () => {
+    const r = evaluate(
+      google({
+        pmax_assets: [
+          asset('h0', 'HEADLINE', 100, 4),
+          ...[1, 2, 3, 4, 5, 6].map((n) => asset(`h${n}`, 'HEADLINE', 100 + n * 10, 0)),
+        ],
+      }),
+    );
+    const cards = r.recommendations.filter((x) => x.rule === 'G18_pmax_assets');
+    expect(cards).toHaveLength(1);
+    const card = cards[0]!.platform_card as { assets: { label: string }[] };
+    expect(card.assets.map((a) => a.label)).toEqual([
+      'Text h6',
+      'Text h5',
+      'Text h4',
+      'Text h3',
+      'Text h2',
+    ]);
+  });
+
+  test('a field type with one asset is compared with nothing; no target abstains', () => {
+    expect(
+      rules(
+        evaluate(
+          google({ pmax_assets: [asset('h1', 'HEADLINE', 100, 4), asset('i1', 'LOGO', 900, 0)] }),
+        ),
+      ),
+    ).not.toContain('G18_pmax_assets');
+    const r = evaluate(
+      google({ pmax_assets: [asset('h1', 'HEADLINE', 120, 4), asset('h2', 'HEADLINE', 120, 0)] }),
+      ctx({ cpaTarget: null }),
+    );
+    expect(r.abstentions.some((a) => a.rule === 'G18_pmax_assets')).toBe(true);
+  });
+});
+
+function displayCampaign(
+  id: string,
+  d3: { spend: number; leads: number },
+  d14: { spend: number; leads: number },
+) {
+  const base = campaign(id);
+  const w = (x: { spend: number; leads: number }) => ({
+    ...base.windows.d3,
+    spend: x.spend,
+    leads: x.leads,
+  });
+  return MultiPlatformSnapshotSchema.parse({
+    ...base,
+    windows: { d3: w(d3), d7: w(d14), d14: w(d14) },
+  });
+}
+
+describe('G23 audience saturation (F2)', () => {
+  const audience = (frequency: number | null, channel = 'DISPLAY') => ({
+    campaign_id: 'c1',
+    channel_type: channel,
+    frequency_7d: frequency,
+    unique_users_7d: 12_000,
+  });
+  // d14: 400 / 10 = 40 per lead.
+  const run = (frequency: number | null, d3Spend: number, channel = 'DISPLAY') =>
+    evaluate(
+      google({ audience: [audience(frequency, channel)] }),
+      ctx({
+        snapshots: [displayCampaign('c1', { spend: d3Spend, leads: 1 }, { spend: 400, leads: 10 })],
+      }),
+    );
+
+  test('frequency at the cap and cost up more than 20%: a read-only card', () => {
+    const g23 = run(3, 48.1).recommendations.find((x) => x.rule === 'G23')!;
+    expect(g23.action).toBeNull();
+    expect(g23.platform_card).toMatchObject({
+      variant: 'google_audience_saturation',
+      frequency: 3,
+      frequency_cap: 3,
+      cost_per_result_now: 48.1,
+      cost_per_result_before: 40,
+    });
+  });
+
+  test('under the cap, a 20% rise exactly, a Search campaign or no frequency: silent', () => {
+    expect(rules(run(2.9, 60))).not.toContain('G23');
+    expect(rules(run(3, 48))).not.toContain('G23');
+    expect(rules(run(5, 60, 'SEARCH'))).not.toContain('G23');
+    expect(rules(run(null, 60))).not.toContain('G23');
+  });
+});

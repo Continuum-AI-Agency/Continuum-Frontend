@@ -21,6 +21,11 @@ export type SolverItem = {
   floor: number; // budget floor (lower bound from BR-floor)
   velocityDown: number; // current * (1 - downCap)  -> velocity/learning lower bound
   velocityUp: number; // current * (1 + V)          -> velocity upper bound
+  /** A hold no relaxation lifts. 'down': never below velocityDown (a PMax inside its learning
+   *  protection may receive, never lose). 'both': pinned at its box both ways (a graced entity
+   *  with no active peer has no score to move it by). The caller refuses a pool the held lower
+   *  bounds alone exceed, so conservation never has to break one. */
+  hold?: 'down' | 'both';
 };
 
 export type SolverAllocation = {
@@ -77,19 +82,24 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
   // ---- Feasibility relaxation ------------------------------------------
   if (underflow) {
     // Lower bounds demand more than the pool. Velocity cap yields first:
-    // drop the velocity-down limit (allow bigger cuts), keeping only floors.
-    for (const it of items) lo.set(it.id, it.floor);
+    // drop the velocity-down limit (allow bigger cuts), keeping only floors — except on a
+    // held item, whose limit is its protection, not a velocity preference.
+    for (const it of items) if (!it.hold) lo.set(it.id, it.floor);
     sumLo = sum([...lo.values()]);
     notes.push('underflow: relaxed velocity down-cap (allowed deeper cuts)');
 
     if (pool < sumLo - EPS) {
-      // Floors alone still exceed the pool. Floor yields next: scale floors.
-      const scale = pool / sumLo;
-      for (const it of items) {
+      // Floors alone still exceed the pool. Floor yields next: scale the floors of the items
+      // that are not held, into what the held ones leave.
+      const loose = items.filter((it) => !it.hold);
+      const heldLo = sum(items.filter((it) => it.hold).map((it) => lo.get(it.id)!));
+      const looseFloors = sum(loose.map((it) => it.floor));
+      const scale = looseFloors > 0 ? Math.max(0, pool - heldLo) / looseFloors : 0;
+      for (const it of loose) {
         lo.set(it.id, it.floor * scale);
         floorRelaxed.set(it.id, true);
       }
-      sumLo = pool;
+      sumLo = sum([...lo.values()]);
       notes.push(`underflow: floors exceed pool, scaled floors by ${scale.toFixed(4)}`);
     }
   }
@@ -97,16 +107,21 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
   let residual = 0;
   if (overflow) {
     residual = pool - sumHi;
+    const pinnedHi = sum(items.filter((it) => it.hold === 'both').map((it) => hi.get(it.id)!));
     if (cfg.overflowMode === 'relax_uniform') {
-      // Raise every cap by the same factor until it fits.
-      const scale = pool / sumHi;
-      for (const it of items) {
-        hi.set(it.id, hi.get(it.id)! * scale);
-        capBreached.set(it.id, true);
+      // Raise every cap by the same factor until it fits — a pinned item's cap stays. With
+      // nothing but pinned items there is no cap to raise, and the residual is reported.
+      if (sumHi - pinnedHi > EPS) {
+        const scale = (pool - pinnedHi) / (sumHi - pinnedHi);
+        for (const it of items) {
+          if (it.hold === 'both') continue;
+          hi.set(it.id, hi.get(it.id)! * scale);
+          capBreached.set(it.id, true);
+        }
+        sumHi = pool;
+        residual = 0;
+        notes.push(`overflow: relaxed all caps uniformly x${scale.toFixed(4)}`);
       }
-      sumHi = pool;
-      residual = 0;
-      notes.push(`overflow: relaxed all caps uniformly x${scale.toFixed(4)}`);
     } else if (cfg.overflowMode === 'underspend') {
       // Respect the cap; the residual stays unallocated.
       notes.push(`overflow: underspend, ${residual.toFixed(2)} left unallocated`);
@@ -129,7 +144,12 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
   // best performers beyond their cap.
   if (overflow && cfg.overflowMode === 'breach_best') {
     for (const it of items) amount.set(it.id, hi.get(it.id)!);
-    distributeByScore(items, residual, capBreached, amount);
+    distributeByScore(
+      items.filter((it) => it.hold !== 'both'),
+      residual,
+      capBreached,
+      amount,
+    );
     return finalize(
       items,
       amount,

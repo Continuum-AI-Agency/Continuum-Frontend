@@ -46,6 +46,9 @@ const THREE = {
     'Mover 300 MXN al día de ITESO a Cañadas deja el costo del mes en 35.2 MXN, dentro del objetivo.',
 };
 
+/** The body the Backend ships beside the three fields: the same three paragraphs. */
+const THREE_BLOCK = { ...THREE, body: [THREE.what, THREE.so_what, THREE.now_what].join('\n\n') };
+
 const renderIn = (language: AnswerLanguage, block: NarrativeBlockV2) =>
   render(
     <AnswerLanguageProvider language={language}>
@@ -62,7 +65,7 @@ const boxesOnScreen = () =>
 
 describe('NarrativeBlock — three boxes when the block carries the three fields', () => {
   it('draws Qué pasó · Qué significa · Qué hacer, in that order, for a Spanish answer', () => {
-    renderIn('es', narrative(THREE));
+    renderIn('es', narrative(THREE_BLOCK));
     expect(screen.getByTestId('narrative-three')).toBeTruthy();
     expect(boxesOnScreen()).toEqual([
       { key: 'what', label: 'Qué pasó', text: THREE.what },
@@ -72,12 +75,12 @@ describe('NarrativeBlock — three boxes when the block carries the three fields
   });
 
   it('draws What · So what · Now what for an English answer', () => {
-    renderIn('en', narrative(THREE));
+    renderIn('en', narrative(THREE_BLOCK));
     expect(boxesOnScreen().map((box) => box.label)).toEqual(['What', 'So what', 'Now what']);
   });
 
   it('does not print the body beside the boxes — the three fields ARE the reading', () => {
-    renderIn('es', narrative(THREE));
+    renderIn('es', narrative(THREE_BLOCK));
     const texts = Array.from(document.querySelectorAll('[data-testid="md"]')).map(
       (node) => node.textContent,
     );
@@ -85,7 +88,7 @@ describe('NarrativeBlock — three boxes when the block carries the three fields
   });
 
   it('sets each box label at the 12px caps step and each text at body size in the ink colour', () => {
-    renderIn('es', narrative(THREE));
+    renderIn('es', narrative(THREE_BLOCK));
     for (const label of document.querySelectorAll('[data-narrative-box] h5')) {
       expect(label.className).toContain('text-xs');
       expect(label.className).toContain('uppercase');
@@ -94,6 +97,25 @@ describe('NarrativeBlock — three boxes when the block carries the three fields
       expect(text.className).toContain('text-md');
       expect(text.className).toContain('text-foreground');
     }
+  });
+});
+
+// Decision 4 (Phase 3): the three boxes never replace the body. A diagnostic that closed seven
+// hypotheses writes one paragraph per finding, and the sentence-position split squeezed them into
+// three boxes the reader then saw INSTEAD of the findings.
+describe('NarrativeBlock — the body whenever the boxes do not hold all of it', () => {
+  const FINDINGS = [
+    THREE.what,
+    'El CPM bajó de 57.23 a 53.50 MXN: el precio del alcance no explica la caída.',
+    'El CTR subió de 0.95% a 1.06%: la respuesta al anuncio tampoco.',
+    THREE.so_what,
+    THREE.now_what,
+  ].join('\n\n');
+
+  it('draws the whole body and no boxes', () => {
+    renderIn('es', narrative({ ...THREE, body: FINDINGS }));
+    expect(screen.queryByTestId('narrative-three')).toBeNull();
+    expect(screen.getByTestId('md').textContent).toContain('El CPM bajó de 57.23 a 53.50 MXN');
   });
 });
 

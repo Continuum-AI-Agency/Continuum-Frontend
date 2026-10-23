@@ -13,6 +13,8 @@ import { forgeImportMappingSchema } from './forge-render-imports';
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
+/** Opt-in for audit fields that older strict job clients cannot read. */
+export const API_RENDER_FONT_OVERRIDE_PROFILE = 'render-font-override-v1';
 export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
 export const apiRenderMasterDownloadRequestSchema = z
   .object({
@@ -557,7 +559,9 @@ export const apiRenderTemplateFontSchema = z
      * whole contract and the template stops rendering rather than reporting a swap.
      */
     via: z.enum(['direct', 'substitute', 'package']).optional(),
-    issue: z.enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required']).optional(),
+    issue: z
+      .enum(['ambiguous_package', 'package_inventory_pending', 'exact_face_required'])
+      .optional(),
     substitutedBy: z
       .object({
         fontId: z.string().uuid(),
@@ -954,6 +958,23 @@ export const apiRenderTemplateContractSchema = z
      * a picked asset in it before spending a render. Null when the template has no parsed source.
      */
     layout: apiRenderTemplateLayoutSchema.nullable().default(null),
+    /**
+     * Present only for a web component (`web:<assetId>`): what the preview iframe loads and how
+     * each render column maps back to the node property it overrides.
+     */
+    web: z
+      .object({
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        durationSec: z.number().positive(),
+        fps: z.number().int().positive(),
+        previewUrl: z.url(),
+        variables: z.array(
+          z.object({ key: z.string(), nodeId: z.string(), property: z.string() }).strict(),
+        ),
+      })
+      .strict()
+      .optional(),
     /** Live publish audit from the worker pointer and the displayed contract. Null means unchecked. */
     publishCheck: z
       .object({
@@ -1478,7 +1499,7 @@ export const apiRenderJobSchema = z
      * Which engine rendered (or is rendering) the job: `fleet` (After Effects), `paint` (the PSD
      * still painter) or `micro` (the Experimental Renderer on Cloud Run).
      */
-    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
+    engine: z.enum(['fleet', 'paint', 'micro', 'web']).default('fleet'),
     /**
      * Why the Experimental Renderer handed this job to After Effects — the refusal it named
      * (`text:raster:arithmetic-underived`, `binding:color`, ...). Null when it was never asked,
@@ -1538,6 +1559,8 @@ export const apiRenderJobSchema = z
      * Null for a job whose input was not recorded.
      */
     renderInput: apiRenderVariableMapSchema.nullable().default(null),
+    /** Explicit per-render consent to let the worker substitute missing fonts. */
+    acceptMissingFonts: z.boolean().optional(),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),
@@ -1682,7 +1705,7 @@ export const apiRenderPreflightResponseSchema = z
      * a caller that must not spend a fleet render (an organic draft wearing a template) can refuse
      * before confirming. Defaulted: a server too old to say is the fleet.
      */
-    engine: z.enum(['fleet', 'paint', 'micro']).default('fleet'),
+    engine: z.enum(['fleet', 'paint', 'micro', 'web']).default('fleet'),
   })
   .strict();
 export type ApiRenderPreflightResponse = z.infer<typeof apiRenderPreflightResponseSchema>;

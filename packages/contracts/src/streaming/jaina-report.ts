@@ -117,7 +117,7 @@ export type BlockCategory = z.infer<typeof blockCategorySchema>;
  * Where a block sits on the page: in the answer itself, or under the
  * justification that holds the figures the answer rests on. A presentation
  * grouping only — it never reorders `report.blocks`, whose order the backend
- * emits (`J2_BLOCK_ORDER`) and grades (`data_scope_not_first`) and each section keeps.
+ * emits (`PRISM_BLOCK_ORDER`) and grades (`data_scope_not_first`) and each section keeps.
  *
  * The J2 card (docs/performance-plus-redesign/jaina.html, "Ficha Prism") reads: the
  * sentence, the window line under it (`data_scope`), the tiles (`metric_grid`), the three
@@ -160,51 +160,54 @@ export function sectionOfBlock(block: {
 }
 
 /**
- * The order a finished report's blocks are emitted in — the J2 card top to bottom. The
- * Backend sorts by it at the emit boundary (`withJ2BlockOrder`) and the Frontend renders
- * `report.blocks` as given, never re-sorting; two blocks of one category keep their order.
- * `survey` (the reading chosen for an ambiguous word) is evidence, so it closes the card.
+ * The order a finished report's blocks are emitted in: the Prism order (jaina-prism PRD §3.7,
+ * Phase 3 — it replaced the J2 card's). The answer (a templated one) and the requested format
+ * open; then the scope; the tables and figures, each with its prior period; the findings and the
+ * justification; best and worst; the actions; a survey last. "Tables before prose. Context
+ * before verdict." The Backend sorts by it at the emit boundary (`withPrismBlockOrder`) and the
+ * Frontend renders `report.blocks` as given, never re-sorting; two blocks of one category keep
+ * their order.
  */
-export const J2_BLOCK_ORDER: ReadonlyArray<BlockCategory> = [
-  'data_scope',
+export const PRISM_BLOCK_ORDER: ReadonlyArray<BlockCategory> = [
   'answer_template',
+  'data_scope',
   'metric_grid',
-  'narrative',
-  'insight_list',
-  'steps',
-  'actions',
-  'goal_pacing',
-  'comparison',
-  'chart',
   'data_table',
+  'chart',
+  'goal_pacing',
+  'insight_list',
+  'narrative',
+  'comparison',
+  'actions',
+  'steps',
   'survey',
 ];
 
-const J2_RANK: ReadonlyMap<BlockCategory, number> = new Map(
-  J2_BLOCK_ORDER.map((category, index) => [category, index]),
+const PRISM_RANK: ReadonlyMap<BlockCategory, number> = new Map(
+  PRISM_BLOCK_ORDER.map((category, index) => [category, index]),
 );
 
-/** Where a category sits in the J2 order; an unknown category sorts last. */
-export const j2RankOf = (category: string): number =>
-  J2_RANK.get(category as BlockCategory) ?? J2_BLOCK_ORDER.length;
+/** Where a category sits in the Prism order; an unknown category sorts last. */
+export const prismRankOf = (category: string): number =>
+  PRISM_RANK.get(category as BlockCategory) ?? PRISM_BLOCK_ORDER.length;
 
 /**
- * The block that IS the format the ask requested sits right after the frame (and a templated
- * answer): the requested format comes right after the one-sentence answer, ahead of the tiles,
- * the justification and every other block.
+ * The block that IS the format the ask requested comes right after the answer — after a
+ * templated answer, ahead of the scope and every other block (Prism: the answer, then the
+ * requested format, then the scope).
  */
-const ANSWER_FORMAT_RANK = (J2_RANK.get('answer_template') ?? 1) + 0.5;
+const ANSWER_FORMAT_RANK = (PRISM_RANK.get('answer_template') ?? 0) + 0.5;
 
 const blockRankOf = (block: { category: string; answer_format?: boolean }): number =>
-  block.answer_format === true ? ANSWER_FORMAT_RANK : j2RankOf(block.category);
+  block.answer_format === true ? ANSWER_FORMAT_RANK : prismRankOf(block.category);
 
 /**
- * The blocks in J2 order. A stable sort by category rank only: nothing is added, dropped
+ * The blocks in Prism order. A stable sort by category rank only: nothing is added, dropped
  * or rewritten, and blocks of one category keep the order they came in. A block marked
- * `answer_format` ranks right after the frame. Returns the SAME array when it is already in
+ * `answer_format` ranks right after the answer. Returns the SAME array when it is already in
  * order, so a caller can tell whether anything moved.
  */
-export function withJ2BlockOrder<B extends { category: string; answer_format?: boolean }>(
+export function withPrismBlockOrder<B extends { category: string; answer_format?: boolean }>(
   blocks: ReadonlyArray<B>,
 ): ReadonlyArray<B> {
   const sorted = blocks
@@ -2363,11 +2366,21 @@ export function validateReport(
       block_id: null,
       message: 'Every report opens with a data_scope block: dates, timezone, source.',
     });
-  } else if (scopeIndex !== 0) {
+  } else if (
+    // Prism (PRD §3.7): the answer and the requested format open, the scope follows them.
+    blocks
+      .slice(0, scopeIndex)
+      .some(
+        (b) =>
+          b.category !== 'answer_template' &&
+          (b as { answer_format?: boolean }).answer_format !== true,
+      )
+  ) {
     out.push({
       code: 'data_scope_not_first',
       block_id: blocks[scopeIndex].block_id,
-      message: 'The data_scope block must be the first block.',
+      message:
+        'Only the answer and the requested format come before the data_scope block; it opens the evidence.',
     });
   }
 

@@ -113,8 +113,9 @@ export const entityOf = (s: Pick<AdSetSnapshot, 'id' | 'name'>): string => s.nam
  * saving that used to open the sentence — and null when the action prices nothing.
  */
 export function action(
-  // A platform_signal recommendation carries its own card (platform_card), never a title verb.
-  verb: Exclude<RecommendationKind, 'platform_signal'>,
+  // A platform_signal recommendation carries its own card (platform_card), and a budget_move its
+  // own action (seed.action): neither has a title verb.
+  verb: Exclude<RecommendationKind, 'platform_signal' | 'budget_move'>,
   cfg: Pick<EngineConfig, 'currency'>,
   sizing: Partial<Pick<ActionSizing, 'perDay' | 'from' | 'to'>> | null = null,
 ): RecommendationAction {

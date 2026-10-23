@@ -1,0 +1,727 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "platform": "google",
+    "api": "Google Ads API v25 googleAds:search (read-only GAQL)",
+    "customerId": "9343596627",
+    "customerName": "Grupo Tangassi",
+    "via": "user_integrations 969c4213 (Ramiro's Google login), login-customer-id 9343596627",
+    "recordedAt": "2026-10-20T20:22:25.812Z",
+    "query": "SELECT campaign.id, asset_group.id, asset_group.name, asset_group_asset.field_type, asset_group_asset.primary_status, asset.id, asset.text_asset.text, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM asset_group_asset WHERE segments.date BETWEEN '2026-09-20' AND '2026-10-19' AND campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED' AND asset_group_asset.status = 'ENABLED'",
+    "rows": 26
+  },
+  "data": [
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "22",
+        "conversions": 1,
+        "costMicros": "37139432",
+        "impressions": "201"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/201102587193",
+        "id": "201102587193"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~201102587193~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "155",
+        "conversions": 0,
+        "costMicros": "122871038",
+        "impressions": "2328"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/284355994075",
+        "textAsset": {
+          "text": "40 Años De Experiencia"
+        },
+        "id": "284355994075"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~284355994075~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "111",
+        "conversions": 0,
+        "costMicros": "76694672",
+        "impressions": "1227"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/284355994078",
+        "textAsset": {
+          "text": "Mejor Trato del Mercado"
+        },
+        "id": "284355994078"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~284355994078~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "190",
+        "conversions": 11.499207,
+        "costMicros": "1304481318",
+        "impressions": "2094"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/284355994081",
+        "textAsset": {
+          "text": "Atención Inmediata"
+        },
+        "id": "284355994081"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~284355994081~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "142",
+        "conversions": 0,
+        "costMicros": "116640836",
+        "impressions": "1679"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/284355994087",
+        "textAsset": {
+          "text": "Trato humano y profesional, las 24 horas"
+        },
+        "id": "284355994087"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~284355994087~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "8",
+        "conversions": 0,
+        "costMicros": "3030948",
+        "impressions": "150"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/298122214322",
+        "id": "298122214322"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~298122214322~PORTRAIT_MARKETING_IMAGE",
+        "fieldType": "PORTRAIT_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "24",
+        "conversions": 1,
+        "costMicros": "67281179",
+        "impressions": "574"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/298122218804",
+        "id": "298122218804"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~298122218804~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "33",
+        "conversions": 2,
+        "costMicros": "102759262",
+        "impressions": "356"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/298200606253",
+        "id": "298200606253"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~298200606253~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "443",
+        "conversions": 0,
+        "costMicros": "351540571",
+        "impressions": "6359"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/302783788906",
+        "id": "302783788906"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~302783788906~CALL_TO_ACTION_SELECTION",
+        "fieldType": "CALL_TO_ACTION_SELECTION",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "4",
+        "conversions": 0,
+        "costMicros": "1315817",
+        "impressions": "68"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/362293775917",
+        "id": "362293775917"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~362293775917~MARKETING_IMAGE",
+        "fieldType": "MARKETING_IMAGE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "28",
+        "conversions": 0,
+        "costMicros": "14155326",
+        "impressions": "203"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/362293776295",
+        "id": "362293776295"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~362293776295~TALL_PORTRAIT_MARKETING_IMAGE",
+        "fieldType": "TALL_PORTRAIT_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "45",
+        "conversions": 0,
+        "costMicros": "27387795",
+        "impressions": "890"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/362376928839",
+        "id": "362376928839"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~362376928839~PORTRAIT_MARKETING_IMAGE",
+        "fieldType": "PORTRAIT_MARKETING_IMAGE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "395",
+        "conversions": 0,
+        "costMicros": "299856534",
+        "impressions": "6061"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/362816101500",
+        "id": "362816101500"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~362816101500~SQUARE_MARKETING_IMAGE",
+        "fieldType": "SQUARE_MARKETING_IMAGE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "7",
+        "conversions": 0,
+        "costMicros": "4028663",
+        "impressions": "84"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/363590779772",
+        "id": "363590779772"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~363590779772~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "2",
+        "conversions": 0,
+        "costMicros": "3165513",
+        "impressions": "97"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/363590779829",
+        "id": "363590779829"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~363590779829~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "60",
+        "conversions": 0,
+        "costMicros": "36620882",
+        "impressions": "881"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/363755785872",
+        "id": "363755785872"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~363755785872~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "111",
+        "conversions": 0,
+        "costMicros": "87726650",
+        "impressions": "1291"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/363755795892",
+        "id": "363755795892"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~363755795892~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "178",
+        "conversions": 13.999207,
+        "costMicros": "1580839619",
+        "impressions": "2475"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610856",
+        "textAsset": {
+          "text": "Tangassi San Luis Potosí"
+        },
+        "id": "364856610856"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610856~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "93",
+        "conversions": 3,
+        "costMicros": "404271231",
+        "impressions": "1207"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610859",
+        "textAsset": {
+          "text": "Grupo Tangassi 24 Horas"
+        },
+        "id": "364856610859"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610859~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "156",
+        "conversions": 11.499207,
+        "costMicros": "1412755032",
+        "impressions": "1144"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610862",
+        "textAsset": {
+          "text": "Atención Personalizada en SLP"
+        },
+        "id": "364856610862"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610862~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "240",
+        "conversions": 11.999207,
+        "costMicros": "1822327911",
+        "impressions": "2324"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610865",
+        "textAsset": {
+          "text": "Servicios Funerarios San Luis"
+        },
+        "id": "364856610865"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610865~HEADLINE",
+        "fieldType": "HEADLINE",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "150",
+        "conversions": 2,
+        "costMicros": "884790380",
+        "impressions": "1593"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610868",
+        "textAsset": {
+          "text": "Trato humano y profesional. Servicio los 7 días de la semana."
+        },
+        "id": "364856610868"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610868~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "301",
+        "conversions": 4,
+        "costMicros": "1062349819",
+        "impressions": "4718"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610871",
+        "textAsset": {
+          "text": "Con el respaldo de 40 años de experiencia en San Luis Potosí."
+        },
+        "id": "364856610871"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610871~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "323",
+        "conversions": 12.999207,
+        "costMicros": "1520639882",
+        "impressions": "3832"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610874",
+        "textAsset": {
+          "text": "Grupo Tangassi, 40 años de experiencia en San Luis Potosí."
+        },
+        "id": "364856610874"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610874~DESCRIPTION",
+        "fieldType": "DESCRIPTION",
+        "primaryStatus": "LIMITED"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "186",
+        "conversions": 0,
+        "costMicros": "129696480",
+        "impressions": "2127"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364856610877",
+        "textAsset": {
+          "text": "Servicio con el respaldo de Tangassi en San Luis Potosí"
+        },
+        "id": "364856610877"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364856610877~LONG_HEADLINE",
+        "fieldType": "LONG_HEADLINE",
+        "primaryStatus": "ELIGIBLE"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/9343596627/campaigns/22980224558",
+        "id": "22980224558"
+      },
+      "metrics": {
+        "clicks": "122",
+        "conversions": 0,
+        "costMicros": "102124376",
+        "impressions": "1504"
+      },
+      "asset": {
+        "resourceName": "customers/9343596627/assets/364858665205",
+        "id": "364858665205"
+      },
+      "assetGroup": {
+        "resourceName": "customers/9343596627/assetGroups/6607382367",
+        "name": "TANGASSI",
+        "id": "6607382367"
+      },
+      "assetGroupAsset": {
+        "resourceName": "customers/9343596627/assetGroupAssets/6607382367~364858665205~YOUTUBE_VIDEO",
+        "fieldType": "YOUTUBE_VIDEO",
+        "primaryStatus": "ELIGIBLE"
+      }
+    }
+  ]
+}

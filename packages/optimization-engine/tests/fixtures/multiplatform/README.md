@@ -102,6 +102,26 @@ delivery statements — the scenario bench fails if they drift) and written by
 | `tiktok-delivery-report-ad-daily-14d.json` | DOC — AUCTION_AD by ad × day; 309 stops serving after 28 Sep |
 | `tiktok-delivery-review-info.json` | DOC — `/ad/review_info/` for 307: `is_approved=false`, reason and suggestion |
 
+### G7 — ads, PMax assets, weekly frequency, the b9cebbcf campaigns (escenarios 45–49)
+
+Recorded 20 Oct 2026 by `record-google-signals.mjs --g7`: the `google_signals` scope's own G7
+statements (`paid-media-metrics/google/signals.ts`), 30 days for ads and assets, the last 7 for
+frequency, all ending 19 Oct; plus Easy Fit 2026's ENABLED campaigns and their 14 days, because
+the b9cebbcf campaigns started 6 Oct, after the 1 Oct campaign recording.
+
+| File | Read |
+|---|---|
+| `google-vivo47-adCatalog.json` | EKATAR's 4 ads in 4 ad groups, 2 ENABLED: one enabled ad per group |
+| `google-vivo47-adMetrics30d.json` | spend and conversions per ad: "Gimnasio Familiar" 31,366 MXN / 1,123, "Gimnasio con alberca" 4,076 / 441 |
+| `google-vivo47-audience7d.json` | EKATAR (SEARCH) and the PMax: average frequency per user and unique users |
+| `google-easyfit2026-adCatalog.json` | one RSA in "Search \| Octubre \| Easy Fit" |
+| `google-easyfit2026-adMetrics30d.json` | that ad: 2,329.93 MXN / 3 |
+| `google-easyfit2026-pmaxAssets30d.json` | "PMax \| Octubre \| Easy Fit \| Leads": 49 asset rows with cost and conversions per asset |
+| `google-easyfit2026-audience7d.json` | the two Octubre campaigns (SEARCH, PERFORMANCE_MAX) |
+| `google-easyfit2026-g7Campaigns.json` | the two ENABLED campaigns: name, channel, bidding status (`PAUSED` on 20 Oct), start, budget (350 / 320 MXN) |
+| `google-easyfit2026-g7CampaignDaily14d.json` | spend and conversions per campaign per day, 6–19 Oct; nothing after 13 Oct |
+| `google-tangassi-pmaxAssets30d.json` | asset group "TANGASSI" in "Necesidades SLP": 26 asset rows |
+
 ## SYNTHETIC
 
 | File | Anchored to | Invented |

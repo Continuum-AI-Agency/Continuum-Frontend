@@ -167,6 +167,7 @@ export type {
   AdSetSnapshot,
   AdSetStatus,
   AudienceType,
+  BudgetMovePayload,
   Confidence,
   ConfidenceActionable,
   CpaInterval,

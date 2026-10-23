@@ -33,3 +33,19 @@ test('expands nested PSD/AI and fonts, skips macOS files, preserves AE packages 
     expandDesignArchives([zip('unsafe.zip', { '../escape.psd': bytes })]),
   ).rejects.toThrow();
 });
+
+test('a web component project stays one ZIP, even with a Photoshop file among its assets', async () => {
+  const bytes = new Uint8Array([1, 2, 3]);
+  const project = new File(
+    [
+      zipSync({
+        'hello/forge-component.json': bytes,
+        'hello/src/main.js': bytes,
+        'hello/assets/backdrop.psd': bytes,
+      }),
+    ],
+    'hello.zip',
+  );
+  const files = await expandDesignArchives([project]);
+  expect(files).toEqual([project]);
+});

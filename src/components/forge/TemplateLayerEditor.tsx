@@ -37,6 +37,7 @@ import {
   RectangleHorizontal,
   Redo2,
   RotateCcw,
+  Sparkles,
   Trash2,
   Type,
   Undo2,
@@ -52,7 +53,9 @@ import {
   commandsFromLayerSnapshot,
   type LayerDraftChange,
   type LayerDraftState,
+  layerSnapshotFromCommands,
 } from '@/components/forge/layerDraft';
+import { ForgeAgentPanel } from '@/components/forge/ForgeAgentPanel';
 import {
   createLayerHistory,
   endLayerHistoryGroup,
@@ -353,6 +356,15 @@ export function TemplateLayerEditor({
     });
   const [selected, setSelected] = useState<string | null>(null);
   const [groupSelectionIds, setGroupSelectionIds] = useState<string[]>([]);
+  const [agentOpen, setAgentOpen] = useState(false);
+  const [agentRunning, setAgentRunning] = useState(false);
+  const agentRunningRef = useRef(false);
+  agentRunningRef.current = agentRunning;
+  /** What the person picked: the agent's "this" and "these". Never the editor's fallback layer. */
+  const agentSelection = useMemo(
+    () => [...new Set([selected, ...groupSelectionIds].filter((id): id is string => !!id))],
+    [selected, groupSelectionIds],
+  );
   const [compId, setCompId] = useState<number | null>(null);
   const [draftArtboardId, setDraftArtboardId] = useState<string | null>(null);
   const [newArtboardName, setNewArtboardName] = useState('New composition');
@@ -541,6 +553,24 @@ export function TemplateLayerEditor({
   });
   flushDraftRef.current = authoringDraft.save;
   updateDraftRef.current = authoringDraft.update;
+  const agentDraftRef = useRef(authoringDraft);
+  agentDraftRef.current = authoringDraft;
+  const pushSnapshotRef = useRef(pushSnapshot);
+  pushSnapshotRef.current = pushSnapshot;
+  // The agent edits the SAVED draft: pending edits are flushed first, and a conflicted draft is
+  // reconciled by the person before the agent may write.
+  const prepareAgentTurn = useCallback(async () => {
+    const draftState = agentDraftRef.current;
+    if (!draftState.ready || draftState.status === 'conflict' || draftState.status === 'source-mismatch')
+      return null;
+    if (!(await draftState.save())) return null;
+    return agentDraftRef.current.persistedDraft?.revision ?? 0;
+  }, []);
+  // Each draft the agent saves becomes one undo step here.
+  const adoptAgentDraft = useCallback(async () => {
+    const remote = await agentDraftRef.current.adoptAgentDraft();
+    if (remote) pushSnapshotRef.current(layerSnapshotFromCommands(remote.commands));
+  }, []);
   const workspaceSeed =
     authoringDraft.persistedDraft?.seed ?? authoringDraft.serverDraft?.seed ?? null;
   useEffect(() => {
@@ -2213,6 +2243,7 @@ export function TemplateLayerEditor({
   useEffect(() => {
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (agentRunningRef.current) return;
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       const target = event.target;
       if (
@@ -2330,6 +2361,15 @@ export function TemplateLayerEditor({
                 Retry draft save
               </Button>
             ) : null}
+            <Button
+              size="sm"
+              variant={agentOpen ? 'secondary' : 'ghost'}
+              aria-pressed={agentOpen}
+              onClick={() => setAgentOpen((open) => !open)}
+              data-testid="forge-agent-toggle"
+            >
+              <Sparkles data-icon="inline-start" aria-hidden /> Agent
+            </Button>
             <Button
               size="icon-sm"
               variant="ghost"
@@ -2602,7 +2642,7 @@ export function TemplateLayerEditor({
             minSize={wideWorkspace ? 180 : 220}
             maxSize={wideWorkspace ? '35%' : '45%'}
           >
-            <aside className="flex h-full min-h-0 flex-col" aria-label="Layer workspace">
+            <aside className="flex h-full min-h-0 flex-col" aria-label="Layer workspace" inert={agentRunning}>
               <div className="min-h-0 max-h-[55%] shrink overflow-y-auto flex flex-col gap-2 border-b border-border p-2">
                 <Select
                   value={draftArtboardId ? `draft:${draftArtboardId}` : `aep:${shownComp ?? ''}`}
@@ -3122,7 +3162,7 @@ export function TemplateLayerEditor({
             defaultSize={wideWorkspace ? '60%' : '45%'}
             minSize={wideWorkspace ? 280 : 320}
           >
-            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/40">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/40" inert={agentRunning}>
               <SectionHeader
                 title={compName ?? defaultComp?.name ?? 'Composition'}
                 action={
@@ -3176,6 +3216,16 @@ export function TemplateLayerEditor({
                     {markup ? (
                       <TemplateLayerPreview
                         markup={markup}
+                        selectedText={
+                          selectedNode?.capabilities.text && authoringDraft.ready && !staleSource
+                            ? { nodeId: selectedNode.nodeId, text: selectedNode.textContent ?? '' }
+                            : null
+                        }
+                        onTextChange={(text) => {
+                          if (selectedNode)
+                            editAuthoredNode(selectedNode, { text }, `text:${selectedNode.nodeId}`, false);
+                        }}
+                        onTextCommit={closeHistoryGroup}
                         controls={
                           layer?.compId === previewCompId ? inspectorFor(layer, 'preview') : null
                         }
@@ -3364,6 +3414,7 @@ export function TemplateLayerEditor({
             <aside
               className="h-full min-h-0 overflow-y-auto p-3"
               aria-label="Properties and repair"
+              inert={agentRunning}
             >
               {hasUncompiledLifecycle ? (
                 <Collapsible
@@ -3860,6 +3911,30 @@ export function TemplateLayerEditor({
               </Collapsible>
             </aside>
           </ResizablePanel>
+          {agentOpen ? (
+            <>
+              <ResizableHandle withHandle aria-label="Resize agent pane" />
+              <ResizablePanel
+                id="forge-agent"
+                defaultSize={wideWorkspace ? '24%' : '35%'}
+                minSize={wideWorkspace ? 260 : 300}
+                maxSize={wideWorkspace ? '45%' : '60%'}
+              >
+                <aside className="h-full min-h-0 border-l border-border" aria-label="Template agent">
+                  <ForgeAgentPanel
+                    assetId={assetId}
+                    brandId={brandId}
+                    baseVersionId={effectiveVersionId}
+                    compId={compId ?? inventoryData?.compId ?? undefined}
+                    selectedNodeIds={agentSelection}
+                    prepare={prepareAgentTurn}
+                    onDraft={adoptAgentDraft}
+                    onRunningChange={setAgentRunning}
+                  />
+                </aside>
+              </ResizablePanel>
+            </>
+          ) : null}
         </ResizablePanelGroup>
 
         <footer className="flex flex-col gap-2 border-t border-border px-3 py-2">

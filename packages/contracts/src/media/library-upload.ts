@@ -1,6 +1,22 @@
 import { z } from 'zod';
 import { assetIntegrityStateSchema } from './creative-operations';
 
+/** Frozen branch authority, registered atomically with a separately uploaded source. */
+export const nativeTemplateUploadVariantSchema = z
+  .object({
+    schemaVersion: z.literal('hyperframes.upload-variant/1'),
+    templateId: z.uuid(),
+    variantId: z.uuid(),
+    parentRevisionId: z.uuid(),
+    sourceAssetId: z.uuid(),
+    sourceVersionId: z.uuid(),
+    sourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    sceneSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    name: z.string().trim().min(1).max(120),
+  })
+  .strict();
+export type NativeTemplateUploadVariant = z.infer<typeof nativeTemplateUploadVariantSchema>;
+
 /**
  * Contracts for the `library-upload` edge function. A locally selected/dropped
  * image or video is uploaded straight from the browser to the `media-library`
@@ -52,8 +68,16 @@ export const registerMediaRequestSchema = z
     integrityState: assetIntegrityStateSchema.default('unknown'),
     // Reserve a separate authored AE upload for this template family.
     templateVariantOf: z.string().uuid().optional(),
+    nativeVariant: nativeTemplateUploadVariantSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      !value.nativeVariant || (!value.templateVariantOf && /\.(html?|zip)$/i.test(value.fileName)),
+    {
+      message: 'Native uploaded variants require an HTML/ZIP source and frozen native parent pins',
+    },
+  );
 
 /** Register success: carries a fresh signed download URL so the caller can show
  *  the asset immediately without a separate sign round-trip. */
@@ -63,6 +87,8 @@ export const registerMediaResponseSchema = z
     status: z.enum(['ready', 'exists']),
     assetId: z.string(),
     versionId: z.string().uuid(),
+    /** Native source ingestion is independently tracked until parse and compile finish. */
+    ingestJobId: z.string().uuid().optional(),
     storagePath: z.string(),
     signedUrl: z.string().min(1),
   })
@@ -73,6 +99,7 @@ export const registerMediaErrorSchema = z
     ok: z.literal(false),
     status: z.literal('error'),
     message: z.string(),
+    code: z.string().min(1).max(120).optional(),
   })
   .strict();
 
