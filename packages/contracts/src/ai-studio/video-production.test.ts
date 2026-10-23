@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  canvasNodeBindingId,
   createEditorGenerationBatchRequestSchema,
   editorProductionSummarySchema,
+  parseCanvasNodeBindingId,
   restoreEditorTimelineRevisionRequestSchema,
 } from './index';
 
@@ -59,4 +61,22 @@ describe('video production API', () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test('canvas node bindings name their room and still read the bare ids made before', () => {
+  const room = 'd25d8fae-bdcc-4e6e-a1fe-e355f38daf76';
+  expect(parseCanvasNodeBindingId(canvasNodeBindingId(room, 'editor'))).toEqual({
+    roomId: room,
+    nodeId: 'editor',
+  });
+  expect(parseCanvasNodeBindingId(canvasNodeBindingId(room, 'a/b'))).toEqual({
+    roomId: room,
+    nodeId: 'a/b',
+  });
+  for (const legacy of [
+    'editor',
+    'planner-composition:33d18308-d120-4e72-85db-6273be8c6c55:timeline',
+  ]) {
+    expect(parseCanvasNodeBindingId(legacy)).toEqual({ nodeId: legacy });
+  }
 });

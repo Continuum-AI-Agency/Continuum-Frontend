@@ -15,7 +15,7 @@ import type { CSSProperties } from 'react';
 import { create } from 'zustand';
 import { toast } from '@/components/ui/toast-imperative';
 import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
-import type { StudioNode } from '../types';
+import type { StudioNode, StudioNodeData } from '../types';
 import { type EdgeSourceNode, resolveEdgeDataType } from '../utils/handleResolution';
 import {
   getAllowedSourceHandles,
@@ -185,6 +185,29 @@ const remapLegacyTargetHandle = (handle: string, targetNode: StudioNode): string
 // Edges with BOTH endpoints inside the selection. A dangling edge (one endpoint
 // left behind on the canvas) has no counterpart to remap onto, so it is not
 // carried — pasting it would either re-wire the original or drop silently.
+/**
+ * A Video Editor node owns its durable project. A copy (duplicate, copy-paste) whose project
+ * another node on this canvas already opens starts its own instead of silently editing the
+ * original's (#405); a cut-and-paste is a move and keeps it. The seed stays, so a copied
+ * production re-seeds its new project.
+ */
+const releaseSharedProject = (data: StudioNodeData, nodes: StudioNode[]): StudioNodeData => {
+  const projectId = (data as { videoProjectId?: unknown }).videoProjectId;
+  if (
+    typeof projectId !== 'string' ||
+    !nodes.some((node) => (node.data as { videoProjectId?: unknown }).videoProjectId === projectId)
+  ) {
+    return data;
+  }
+  const {
+    videoProjectId: _project,
+    videoProductionSummary: _summary,
+    videoProductionSeeded: _seeded,
+    ...rest
+  } = data as Record<string, unknown>;
+  return rest as StudioNodeData;
+};
+
 const edgesWithinSelection = (edges: Edge[], selectedIds: Set<string>): Edge[] =>
   edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
 
@@ -521,7 +544,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         x: nodeToDuplicate.position.x + 20,
         y: nodeToDuplicate.position.y + 20,
       },
-      data: { ...nodeToDuplicate.data },
+      data: releaseSharedProject({ ...nodeToDuplicate.data }, state.nodes),
       selected: false,
     };
 
@@ -716,7 +739,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   pasteNodes: () => {
-    const { clipboard, clipboardEdges } = get();
+    const { clipboard, clipboardEdges, nodes } = get();
     if (clipboard.length === 0) return;
 
     get().takeSnapshot();
@@ -732,7 +755,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           x: node.position.x + 20,
           y: node.position.y + 20,
         },
-        data: { ...node.data },
+        data: releaseSharedProject({ ...node.data }, nodes),
         selected: true,
       };
     });

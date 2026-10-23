@@ -89,6 +89,7 @@ import {
   addTrackDraft,
   addTrackEdit,
   type ClipRef,
+  canvasStartingCut,
   deleteClipsEdit,
   duplicateClipsEdit,
   findClip,
@@ -312,6 +313,28 @@ export function EditWorkspace({
     },
     [runOp, show, store],
   );
+
+  // The canvas node already counts what is wired into it ("4 inputs · 4 clips"), but those
+  // clips sat only in the Graph tab, so an edit opened from the canvas read as empty and
+  // people re-uploaded them (Airtable #405). An empty edit starts from them, once per open.
+  // ponytail: two tabs opening the same empty edit at once both lay them down; undo fixes it.
+  const seededFromCanvas = useRef(false);
+  useEffect(() => {
+    if (origin !== 'canvas' || seededFromCanvas.current) return;
+    seededFromCanvas.current = true;
+    void (async () => {
+      const { assets } = await runOp('get_pool', {});
+      for (const clip of canvasStartingCut(projectRef.current, assets)) {
+        await runOp('add_clip', clip);
+      }
+    })().catch((error) =>
+      show({
+        title: 'Could not add the clips wired on the canvas',
+        description: errorText(error),
+        variant: 'error',
+      }),
+    );
+  }, [origin, runOp, show]);
 
   const importFiles = useCallback(
     (files: readonly File[], at?: { atSec: number; trackId?: string }) => {
