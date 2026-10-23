@@ -155,15 +155,17 @@ function LayerRow({
       )}
     >
       {movable ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           aria-label={`Drag ${row.label}`}
-          className="flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          className="h-6 w-4 shrink-0 cursor-grab touch-none p-0 text-muted-foreground hover:text-foreground active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="size-3.5" aria-hidden />
-        </button>
+        </Button>
       ) : null}
       {row.groupable && onToggleGroupSelection ? (
         <input
@@ -176,14 +178,16 @@ function LayerRow({
       ) : null}
       <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {onSelect ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           aria-pressed={selected}
-          className="min-w-0 flex-1 py-1 text-left outline-none focus-visible:underline"
+          className="h-auto min-w-0 flex-1 justify-start px-1.5 py-1 text-left font-normal hover:bg-transparent focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => onSelect(row.id)}
         >
           {name}
-        </button>
+        </Button>
       ) : (
         <span className="min-w-0 flex-1 py-1">{name}</span>
       )}
