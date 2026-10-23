@@ -24,10 +24,29 @@ const YOUTUBE_SORT_OPTIONS: Array<{ id: InspirationSort; label: string }> = [
   { id: 'views', label: 'Most viewed' },
 ];
 
+// Graph gives Facebook Page posts no view count, and only Instagram posts are analysed.
+const FACEBOOK_SORT_OPTIONS: Array<{ id: InspirationSort; label: string }> = [
+  { id: 'recent', label: 'Recent' },
+  { id: 'outlier', label: 'Outlier' },
+];
+
+const PLATFORM_SORTS: Record<OrganicPostPlatform, Array<{ id: InspirationSort; label: string }>> = {
+  instagram: SORT_OPTIONS,
+  youtube: YOUTUBE_SORT_OPTIONS,
+  facebook: FACEBOOK_SORT_OPTIONS,
+};
+
 const PLATFORM_OPTIONS: Array<{ id: OrganicPostPlatform; label: string }> = [
   { id: 'instagram', label: 'Instagram' },
+  { id: 'facebook', label: 'Facebook' },
   { id: 'youtube', label: 'YouTube' },
 ];
+
+const EMPTY_FEED_TEXT: Record<OrganicPostPlatform, string> = {
+  instagram: 'No competitor posts yet — tag competitors in Brand Spy.',
+  facebook: "No Facebook posts yet — tag a competitor's Facebook Page in Brand Spy.",
+  youtube: 'No YouTube videos yet — add a YouTube channel to a competitor in Brand Spy.',
+};
 
 // Copy mirrors the shared Instagram lookup taxonomy (see instagramLookupErrorKind),
 // phrased for competitor search. The 503 "reduce data" case is folded into
@@ -51,8 +70,8 @@ const SEARCH_ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
 // sorts), filtered by post type and format. Looking up any public handle (Graph
 // business_discovery, the same path as the AI Studio unfurl) temporarily replaces
 // the feed; those posts are unscored for the brand, so only Recent/Outlier apply.
-// The YouTube platform is its own grid, never interleaved with Instagram, and has
-// no handle lookup.
+// YouTube and Facebook are each their own grid, never interleaved with Instagram,
+// and have no handle lookup.
 export function CompetitorOrganicExplorer({
   brandId,
   competitorId,
@@ -75,9 +94,9 @@ export function CompetitorOrganicExplorer({
   const [sort, setSort] = useState<InspirationSort>('recent');
   const [platform, setPlatform] = useState<OrganicPostPlatform>('instagram');
 
-  const youtube = platform === 'youtube';
-  const isSearching = !youtube && activeQuery !== null;
-  const platformSorts = youtube ? YOUTUBE_SORT_OPTIONS : SORT_OPTIONS;
+  const instagram = platform === 'instagram';
+  const isSearching = instagram && activeQuery !== null;
+  const platformSorts = PLATFORM_SORTS[platform];
   // A sort picked on the other platform falls back to newest instead of a 400.
   const feedSort = platformSorts.some((option) => option.id === sort) ? sort : 'recent';
   const feed = useInstagramPosts({
@@ -102,7 +121,7 @@ export function CompetitorOrganicExplorer({
   // Tracked-feed staleness: the rows are served for metrics, but their IG CDN
   // preview URLs expired because the last sync failed. Banner the connection
   // fault so a dead tile reads as actionable, not broken.
-  const syncFaults = youtube ? [] : (feed.data?.syncFaults ?? []);
+  const syncFaults = instagram ? (feed.data?.syncFaults ?? []) : [];
   const firstFault = syncFaults[0];
   const syncFaultNotice =
     !isSearching && !feed.isLoading && firstFault
@@ -130,7 +149,7 @@ export function CompetitorOrganicExplorer({
           onChange={setPlatform}
           size={compact ? 'sm' : 'md'}
         />
-        {youtube ? null : (
+        {instagram ? (
           <CompetitorSearchBar
             value={input}
             onChange={setInput}
@@ -139,7 +158,7 @@ export function CompetitorOrganicExplorer({
             active={isSearching}
             className="min-w-0 flex-1"
           />
-        )}
+        ) : null}
         <Segmented
           label="Sort posts"
           value={isSearching && feedSort === 'relevance' ? 'recent' : feedSort}
@@ -178,13 +197,7 @@ export function CompetitorOrganicExplorer({
           isError={isSearching ? false : feed.isError}
           gridClassName={gridClassName}
           renderActions={renderActions}
-          emptyText={
-            isSearching
-              ? 'No posts found for that account.'
-              : youtube
-                ? 'No YouTube videos yet — add a YouTube channel to a competitor in Brand Spy.'
-                : 'No competitor posts yet — tag competitors in Brand Spy.'
-          }
+          emptyText={isSearching ? 'No posts found for that account.' : EMPTY_FEED_TEXT[platform]}
         />
       )}
     </div>

@@ -137,6 +137,30 @@ describe('CompetitorPostHoverTile face', () => {
     expect(link.getAttribute('target')).toBe('_blank');
   });
 
+  it('keeps the format and multiplier on a Facebook post but opens it on Facebook', () => {
+    const { getByTestId, queryByTestId, getByRole, queryByRole } = wrap(
+      <CompetitorPostHoverTile
+        brandId="b1"
+        view={view(
+          { format: 'photo' },
+          {
+            kind: 'post',
+            permalink: 'https://www.facebook.com/duchess/posts/1',
+            viewCount: null,
+            items: [{ kind: 'image', url: 'https://scontent.xx.fbcdn.net/a.jpg' }],
+            platform: 'facebook',
+            capturedAt: new Date().toISOString(),
+          },
+        )}
+      />,
+    );
+    expect(getByTestId('format-label')).toBeDefined();
+    expect(queryByTestId('platform-badge')).toBeNull();
+    const link = getByRole('link', { name: 'Open The Duchess on Facebook' });
+    expect(link.getAttribute('href')).toBe('https://www.facebook.com/duchess/posts/1');
+    expect(queryByRole('button', { name: /^Analyse/ })).toBeNull();
+  });
+
   it('labels a YouTube Short as a Short', () => {
     const { getByTestId } = wrap(
       <CompetitorPostHoverTile

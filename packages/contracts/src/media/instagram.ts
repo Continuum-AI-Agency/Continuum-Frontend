@@ -18,7 +18,8 @@ export type InstagramPostKind = z.infer<typeof instagramPostKindSchema>;
 // Platforms whose competitor posts share this shape (competitor_ad_spy.organic_posts).
 // On YouTube: a Short is "reel" and a long-form video is "post", per the API's own
 // Shorts playlist. TikTok is official-only and has no per-account feed (owner, 2026-09-21).
-export const organicPostPlatformSchema = z.enum(["instagram", "youtube"]);
+// On Facebook: a multi-photo album is "carousel", anything else is "post".
+export const organicPostPlatformSchema = z.enum(["instagram", "youtube", "facebook"]);
 export type OrganicPostPlatform = z.infer<typeof organicPostPlatformSchema>;
 
 export const instagramTopMediaRequestSchema = z
