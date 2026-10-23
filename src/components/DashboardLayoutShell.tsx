@@ -3,9 +3,11 @@
 import type { ProductCode } from '@continuum/contracts';
 import dynamic from 'next/dynamic';
 import type React from 'react';
+import { useRef } from 'react';
 import { ActiveProjectProvider } from '@/components/projects';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { useDitherReveal } from '@/components/ui/use-dither-reveal';
 import { DashboardHeader } from './dashboard-header';
 import { AppSidebar } from './navigation/AppSidebar';
 import { CommandPaletteProvider } from './navigation/CommandPaletteProvider';
@@ -103,6 +105,12 @@ export default function DashboardLayoutShell({
   lockedProducts,
   billing,
 }: DashboardLayoutShellProps) {
+  // The inset, not the page: it is viewport-sized and keeps its size while content loads in,
+  // which the reveal engine needs (it lands in-flight reveals early when its root resizes).
+  // It is already `relative`, so hosting the engine's overlay moves nothing.
+  const insetRef = useRef<HTMLDivElement>(null);
+  useDitherReveal(insetRef);
+
   return (
     <ActiveBrandProvider
       activeBrandId={activeBrandId}
@@ -131,7 +139,10 @@ export default function DashboardLayoutShell({
                     lockedProducts={lockedProducts}
                     billing={billing}
                   />
-                  <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
+                  <SidebarInset
+                    ref={insetRef}
+                    className="flex h-dvh flex-col overflow-hidden bg-transparent"
+                  >
                     <DashboardHeader changelogEntries={changelogEntries} />
                     {/* No inline gutter: surfaces are full-bleed panes and the
                         sidebar's own border-r is the separation. */}

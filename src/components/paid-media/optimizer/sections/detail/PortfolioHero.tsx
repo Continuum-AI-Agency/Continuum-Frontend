@@ -26,6 +26,7 @@ import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { TEXT_DISCLOSURE } from '../../components/disclosure';
 import { asOfLine } from '../recQueueModel';
@@ -148,7 +149,7 @@ export function PortfolioHero({
       <section className={cn(NEWS_PANE, 'flex flex-col gap-6')} data-testid="portfolio-hero">
         <div className={MODULE} data-testid="portfolio-module">
           {facts}
-          <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+          <Skeleton className="h-24 rounded-md" />
           <p className="text-muted-foreground text-xs">
             Jaina writes her first read after the first cycle.
           </p>

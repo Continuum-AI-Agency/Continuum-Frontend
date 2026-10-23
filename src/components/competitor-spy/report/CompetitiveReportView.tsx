@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { MetricStrip } from '@/components/shared/MetricStrip';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCompetitiveReport } from '@/lib/api/competitorSpy';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { CompetitorAngleMatrix } from './CompetitorAngleMatrix';
@@ -84,9 +85,9 @@ export function CompetitiveReportView({
   if (!data && isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-8 w-1/3 animate-pulse rounded-md bg-muted/70" />
-        <div className="h-48 animate-pulse rounded-xl bg-muted/70" />
-        <div className="h-48 animate-pulse rounded-xl bg-muted/70" />
+        <Skeleton className="h-8 w-1/3 rounded-md" />
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-48 rounded-xl" />
       </div>
     );
   }

@@ -25,6 +25,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
@@ -1543,10 +1544,10 @@ function OrganicCalendarWorkspaceInner({
             aria-busy="true"
             aria-label="Loading post preview"
           >
-            <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
-            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
-            <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
+            <Skeleton className="h-24 w-full rounded-md" />
+            <Skeleton className="h-4 w-2/3 rounded" />
+            <Skeleton className="h-4 w-1/2 rounded" />
+            <Skeleton className="mt-auto h-9 w-full rounded-md" />
           </div>
         )}
       </div>

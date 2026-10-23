@@ -480,8 +480,8 @@ export function ForgeWorkbench({
       ) : null}
       {workspaceQuery.isPending ? (
         <div aria-label="Loading shared templates" className="flex flex-col gap-2" role="status">
-          <span aria-hidden className="h-4 w-40 animate-pulse rounded-md bg-muted/70" />
-          <span aria-hidden className="h-10 w-full animate-pulse rounded-md bg-muted/70" />
+          <Skeleton aria-hidden className="h-4 w-40 rounded-md" />
+          <Skeleton aria-hidden className="h-10 w-full rounded-md" />
         </div>
       ) : null}
       {authoringHandoff ? (

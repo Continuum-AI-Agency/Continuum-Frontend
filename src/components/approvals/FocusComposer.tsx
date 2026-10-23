@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { RuleAction } from '@/lib/approvals/types';
 import { cn } from '@/lib/utils';
@@ -212,15 +213,15 @@ function ComposerSkeleton() {
   return (
     <Card>
       <CardHeader className="space-y-2">
-        <div className="skeleton-shimmer h-5 w-32 rounded-md" />
-        <div className="skeleton-shimmer h-7 w-2/3 rounded-md" />
+        <Skeleton className="h-5 w-32 rounded-md" />
+        <Skeleton className="h-7 w-2/3 rounded-md" />
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="skeleton-shimmer h-16 w-full rounded-md" />
-        <div className="skeleton-shimmer h-3 w-1/3 rounded-md" />
+        <Skeleton className="h-16 w-full rounded-md" />
+        <Skeleton className="h-3 w-1/3 rounded-md" />
       </CardContent>
       <CardFooter className="justify-end">
-        <div className="skeleton-shimmer h-11 w-40 rounded-md" />
+        <Skeleton className="h-11 w-40 rounded-md" />
       </CardFooter>
     </Card>
   );

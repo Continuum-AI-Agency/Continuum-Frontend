@@ -53,6 +53,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   COMMENT_EXPORT_FORMATS,
@@ -294,7 +295,7 @@ function CommentAttachments({ brandId, comment }: { brandId?: string; comment: M
 
   if (!ids) return null;
   if (previews === null) {
-    return <div className="mt-1.5 h-16 w-28 animate-pulse rounded-md bg-muted/70" />;
+    return <Skeleton className="mt-1.5 h-16 w-28 rounded-md" />;
   }
   return <AttachmentPreviewList previews={previews} />;
 }
@@ -649,7 +650,7 @@ export function CommentThreads({
     return (
       <div className="flex flex-col gap-2 p-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded-lg bg-muted/70" />
+          <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
     );

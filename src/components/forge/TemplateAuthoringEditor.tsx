@@ -94,6 +94,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -225,9 +226,6 @@ export function applyLayerChange(
 }
 
 const nameSchema = z.object({ name: z.string().trim().min(1, 'Name your variant').max(120) });
-const Skeleton = ({ className }: { className: string }) => (
-  <span aria-hidden className={`block animate-pulse rounded-md bg-muted/70 ${className}`} />
-);
 
 export function TemplateAuthoringEditor({
   brandId,

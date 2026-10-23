@@ -379,14 +379,16 @@ export const ERROR_STATE_HEADLINES: readonly string[] = [
 ];
 
 /** LOADING markers the page must leave before its state counts: `aria-busy` (the Optimizer
- *  skeleton, the Campaigns table), the `Skeleton` primitive (`data-slot="skeleton"`), a
- *  `role="status"` that SAYS it is loading, and hand-rolled skeleton pulses (JainaChatSurface).
- *  A pulse only counts when it is a BAR, not a dot: the Jaina header's live indicator is a 6px
- *  `animate-pulse` circle that never leaves (JainaHeader.tsx), so a pulse narrower than
- *  `PULSE_MIN_WIDTH_PX` is an indicator, not a skeleton. */
+ *  skeleton, the Campaigns table), the skeleton primitives (`data-slot="skeleton"` and
+ *  `"skeleton-text"`, which no longer pulse), a `role="status"` that SAYS it is loading, and
+ *  any hand-rolled skeleton pulse left. A pulse only counts when it is a BAR, not a dot: the
+ *  Jaina header's live indicator is a 6px `animate-pulse` circle that never leaves
+ *  (JainaHeader.tsx), so a pulse narrower than `PULSE_MIN_WIDTH_PX` is an indicator, not a
+ *  skeleton. */
 export const LOADING_SELECTORS: readonly string[] = [
   '[aria-busy="true"]',
   '[data-slot="skeleton"]',
+  '[data-slot="skeleton-text"]',
 ];
 export const LOADING_STATUS_TEXT = /loading|cargando/i;
 export const PULSE_SELECTOR = '.animate-pulse';

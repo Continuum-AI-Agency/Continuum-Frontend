@@ -21,6 +21,9 @@ export function Canvas<NodeType extends Node = Node, EdgeType extends Edge = Edg
 }: CanvasProps<NodeType, EdgeType>) {
   return (
     <ReactFlow
+      // The dither reveal (useDitherReveal) sizes its glyphs from the computed font, which the
+      // canvas's zoom transform does not scale; decoding here would land beside the text.
+      data-ascii="skip"
       deleteKeyCode={deleteKeyCode}
       fitView
       panOnDrag={false}

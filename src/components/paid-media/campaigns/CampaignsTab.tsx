@@ -12,7 +12,7 @@ import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import { Button } from '@/components/ui/button';
-import { SkeletonText } from '@/components/ui/skeleton';
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -702,20 +702,19 @@ function MessageRow({ depth, children }: { depth: number; children: React.ReactN
 }
 
 function SkeletonRow({ depth }: { depth: number }) {
-  const bar = 'rounded-md bg-muted/70 motion-safe:animate-pulse';
   return (
     <TableRow aria-hidden="true" className="border-border/60 hover:bg-transparent">
       <TableCell className={cn('py-3', INDENT[depth])}>
         <div className="flex items-center gap-2">
-          <div className={cn('size-5', bar)} />
-          <div className={cn('h-4 w-1/2', bar)} />
+          <Skeleton className="size-5" />
+          <Skeleton className="h-4 w-1/2" />
         </div>
       </TableCell>
       <TableCell className="hidden py-3 @md/campaigns:table-cell">
-        <div className={cn('h-4 w-14', bar)} />
+        <Skeleton className="h-4 w-14" />
       </TableCell>
       <TableCell className="py-3">
-        <div className={cn('ml-auto h-4 w-16', bar)} />
+        <Skeleton className="ml-auto h-4 w-16" />
       </TableCell>
       <TableCell className="py-3 pr-1" />
     </TableRow>

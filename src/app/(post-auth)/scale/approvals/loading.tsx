@@ -25,12 +25,12 @@ export default function ApprovalsLoading() {
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <div className="skeleton-shimmer h-5 w-32 rounded-md" />
-            <div className="skeleton-shimmer h-7 w-2/3 rounded-md" />
+            <Skeleton className="h-5 w-32 rounded-md" />
+            <Skeleton className="h-7 w-2/3 rounded-md" />
           </div>
-          <div className="skeleton-shimmer h-16 w-full rounded-md" />
+          <Skeleton className="h-16 w-full rounded-md" />
           <div className="flex justify-end pt-2">
-            <div className="skeleton-shimmer h-11 w-40 rounded-md" />
+            <Skeleton className="h-11 w-40 rounded-md" />
           </div>
         </div>
       </div>

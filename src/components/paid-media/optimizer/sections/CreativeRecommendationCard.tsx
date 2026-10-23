@@ -24,6 +24,7 @@ import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { signLibraryAsset, useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
@@ -474,7 +475,7 @@ export function CreativeRecommendationCard({
           )}
           {wearOut ? <WearOutBars chart={wearOut} currency={currency} /> : null}
           {adsLoading && subjects.length === 0 ? (
-            <div className="size-20 animate-pulse rounded-lg bg-muted/40" />
+            <Skeleton className="size-20 rounded-lg" />
           ) : subjects.length === 0 ? (
             <p className="flex items-center gap-2 text-muted-foreground text-xs">
               <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
