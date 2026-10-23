@@ -7,6 +7,7 @@ import {
   type EditorProjectV2,
   type EditorTrack,
   type EditorVideoClip,
+  editorClipIsRetimed,
   motionRecipeFromClip,
   parseMotionRecipe,
 } from '@continuum/contracts';
@@ -180,6 +181,17 @@ export function EditorProjectV2Assembly({
         url: urls.get(clip.id),
         trimStartSec: clip.sourceInSec,
         speed: clip.playbackRate,
+        ...(editorClipIsRetimed(clip)
+          ? {
+              clock: {
+                durationSec: clip.durationSec,
+                sourceInSec: clip.sourceInSec,
+                playbackRate: clip.playbackRate,
+                reverse: clip.reverse,
+                timeRemap: clip.timeRemap,
+              },
+            }
+          : {}),
       };
     },
     [clipById, urls],

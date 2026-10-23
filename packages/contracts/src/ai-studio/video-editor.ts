@@ -843,7 +843,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'The only way to add or remove a transition. Joins fromClipId to the next clip on the main video track (crossfade, dip to black or white, wipe, slide, zoom); type cut removes it. blur is not available yet. all=true joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "a clean transition between the clips" is one call with all=true and no fromClipId. Do not build one with apply_commands, and do not move clips to make it fit.',
+      'The only way to add or remove a transition. Joins fromClipId to the next clip on the main video track; type cut removes it. Types: crossfade; dip_to_black; dip_to_white; flash (a hard white flash on the cut - fast attack, quick decay, best at 0.15-0.3s); wipe and slide (direction left|right|up|down, default slide left, wipe right); blur (both shots defocus and cross-dissolve); whip (a whip pan: the outgoing shot streaks out and the incoming streaks in with directional motion blur - direction left|right|up|down, default left, content moves that way; best 0.2-0.4s); zoom (the next shot grows in); zoom_blur (zoom-through: the outgoing shot zooms towards the viewer through a radial blur while the next settles out of one); glitch (a hard cut with an RGB channel split and horizontal tearing around it, best 0.2-0.4s). crossfade, slide, wipe, zoom, blur, whip, zoom_blur and glitch overlap the two clips (the next one starts durationSec earlier and the sequence gets that much shorter); the dips, flash and cut do not. all=true joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "a clean transition between the clips" is one call with all=true and no fromClipId. Do not build one with apply_commands, and do not move clips to make it fit.',
     input: z
       .object({
         ...projectRef,
@@ -855,12 +855,18 @@ export const VIDEO_EDITOR_OPS = {
           'crossfade',
           'dip_to_black',
           'dip_to_white',
+          'flash',
           'wipe',
           'slide',
           'zoom',
           'blur',
+          'whip',
+          'zoom_blur',
+          'glitch',
         ]),
         durationSec: z.number().min(0.05).max(3).default(0.5),
+        /** slide, wipe and whip: which way the picture moves. Ignored by the others. */
+        direction: z.enum(['left', 'right', 'up', 'down']).optional(),
       })
       .strict(),
     output: committed({

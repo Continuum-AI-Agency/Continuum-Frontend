@@ -6,6 +6,7 @@ import {
   clampStereo,
   decodeClipPcm,
   mixInto,
+  resampleRetimed,
   resampleToStereo48k,
   silentStereo,
   stereoToPlanar,
@@ -262,4 +263,73 @@ it('retained fade PCM matches the original window while transition fades keep lo
       Math.min(manualOut, Math.max(0, Math.min(1, (2 - local - 1 / AUDIO_SAMPLE_RATE) / 0.5)));
     expect(transitioned.left[frame]).toBeCloseTo(expected, 6);
   }
+});
+
+describe('resampleRetimed', () => {
+  // A source whose sample value IS its time in milliseconds, so the output reads off the clock.
+  const rate = 48_000;
+  const ramp = (seconds: number) =>
+    Float32Array.from({ length: seconds * rate }, (_, index) => index / rate);
+
+  it('plays a reversed clip backwards at its rate', () => {
+    const pcm = resampleRetimed([ramp(2)], rate, 0, {
+      durationSec: 1,
+      sourceInSec: 0,
+      playbackRate: 2,
+      reverse: true,
+    });
+    expect(pcm.left).toHaveLength(48_000);
+    // Output 0 is the end of the 2 s span, output 0.5 s is its middle.
+    expect(pcm.left[0]).toBeCloseTo(2, 3);
+    expect(pcm.left[24_000]).toBeCloseTo(1, 3);
+    expect(pcm.left[47_000]).toBeCloseTo(0.04, 2);
+    expect(pcm.right[24_000]).toBeCloseTo(1, 3);
+  });
+
+  it('follows the speed curve (varispeed) instead of a constant rate', () => {
+    const pcm = resampleRetimed([ramp(2)], rate, 0, {
+      durationSec: 2.5,
+      timeRemap: [
+        { timeSec: 0, sourceSec: 0, interpolation: 'linear' },
+        { timeSec: 1, sourceSec: 1, interpolation: 'linear' },
+        { timeSec: 2, sourceSec: 1.2, interpolation: 'linear' },
+        { timeSec: 2.5, sourceSec: 1.7, interpolation: 'linear' },
+      ],
+    });
+    expect(pcm.left[48_000]).toBeCloseTo(1, 3);
+    expect(pcm.left[96_000]).toBeCloseTo(1.2, 3);
+    // Slow stretch: a whole output second moves the source only 0.2 s.
+    expect(pcm.left[72_000]).toBeCloseTo(1.1, 3);
+  });
+
+  it('is silent while the picture is frozen and opens and closes without a click', () => {
+    const tone = Float32Array.from({ length: 3 * rate }, () => 0.5);
+    const pcm = resampleRetimed([tone], rate, 0, {
+      durationSec: 3,
+      timeRemap: [
+        { timeSec: 0, sourceSec: 0, interpolation: 'linear' },
+        { timeSec: 1, sourceSec: 1, interpolation: 'linear' },
+        { timeSec: 2, sourceSec: 1, interpolation: 'linear' },
+        { timeSec: 3, sourceSec: 2, interpolation: 'linear' },
+      ],
+    });
+    expect(pcm.left[24_000]).toBeCloseTo(0.5, 6);
+    expect(pcm.left[72_000]).toBe(0);
+    expect(pcm.left[143_000]).toBeCloseTo(0.5, 6);
+    // The gate closes over ~5 ms: a sample just inside the freeze is part-way, never a step.
+    const closing = Array.from(pcm.left.slice(48_000, 48_300));
+    expect(closing[0]).toBeGreaterThan(0.4);
+    expect(closing.at(-1)).toBe(0);
+    for (let i = 1; i < closing.length; i += 1)
+      expect(Math.abs(closing[i] - closing[i - 1])).toBeLessThan(0.01);
+  });
+
+  it('is silent outside the decoded span rather than smearing the edge sample', () => {
+    const pcm = resampleRetimed([ramp(1)], rate, 5, {
+      durationSec: 1,
+      sourceInSec: 4,
+      playbackRate: 1,
+    });
+    expect(pcm.left.every((value) => value === 0)).toBe(true);
+  });
 });

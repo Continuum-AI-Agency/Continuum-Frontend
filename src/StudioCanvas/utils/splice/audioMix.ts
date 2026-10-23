@@ -1,6 +1,9 @@
 import {
   type EditorAudioFadeClock,
+  type EditorClipTiming,
   editorAudioFadeGainAt,
+  editorClipRateAt,
+  editorClipSourceAt,
   type NumericKeyframe,
 } from '@continuum/contracts';
 import { throwIfAborted } from './appendRange';
@@ -63,6 +66,51 @@ export function resampleToStereo48k(
     const i1 = Math.min(i0 + 1, srcFrames - 1);
     left[i] = sampleAt(srcL, i0, i1, frac);
     right[i] = sampleAt(srcR, i0, i1, frac);
+  }
+  return { left, right };
+}
+
+/** Below this source rate (source seconds per output second) a retimed clip is held still. */
+export const FROZEN_RATE = 0.02;
+/** A freeze opens and closes its silence over this long, so the gate never clicks. */
+const FROZEN_GATE_RAMP_SEC = 0.005;
+
+/**
+ * Resample decoded audio along a retimed clip's source clock: varispeed, so the pitch follows
+ * the speed (a slow-motion ramp drops like a tape slowing), a reversed clip plays backwards,
+ * and a freeze — where the clock stands still — is silent rather than a held-sample buzz.
+ * `decodedStartSec` is the source second the first decoded frame sits at. The result is the
+ * clip's whole output length (`clock.durationSec`).
+ */
+export function resampleRetimed(
+  channels: Float32Array[],
+  srcRate: number,
+  decodedStartSec: number,
+  clock: EditorClipTiming,
+): StereoPcm {
+  const srcL = channels[0] ?? new Float32Array(0);
+  const srcR = channels[1] ?? srcL;
+  const srcFrames = srcL.length;
+  const safeRate = srcRate > 0 ? srcRate : AUDIO_SAMPLE_RATE;
+  const outFrames = Math.max(0, Math.round(clock.durationSec * AUDIO_SAMPLE_RATE));
+  const left = new Float32Array(outFrames);
+  const right = new Float32Array(outFrames);
+  const slew = 1 / (FROZEN_GATE_RAMP_SEC * AUDIO_SAMPLE_RATE);
+  const audibleAt = (sec: number) => (Math.abs(editorClipRateAt(clock, sec)) < FROZEN_RATE ? 0 : 1);
+  let gate = audibleAt(0);
+  for (let i = 0; i < outFrames; i += 1) {
+    const sec = i / AUDIO_SAMPLE_RATE;
+    const target = audibleAt(sec);
+    gate += Math.max(-slew, Math.min(slew, target - gate));
+    if (gate <= 0) continue;
+    const srcPos = (editorClipSourceAt(clock, sec) - decodedStartSec) * safeRate;
+    // One frame of slack: a reverse starts exactly on the end of the decoded span.
+    if (srcPos < 0 || srcPos > srcFrames) continue;
+    const i0 = Math.min(Math.floor(srcPos), srcFrames - 1);
+    const frac = Math.min(1, srcPos - i0);
+    const i1 = Math.min(i0 + 1, srcFrames - 1);
+    left[i] = sampleAt(srcL, i0, i1, frac) * gate;
+    right[i] = sampleAt(srcR, i0, i1, frac) * gate;
   }
   return { left, right };
 }
@@ -182,6 +230,8 @@ export interface AudioPlanItem {
   sourceStartSec: number;
   sourceEndSec: number;
   speed: number;
+  /** A reversed or speed-ramped clip: its source clock replaces `speed`. */
+  clock?: EditorClipTiming;
   outputStartSec: number;
   gain: number;
   audioFadeClock?: EditorAudioFadeClock;
@@ -274,7 +324,9 @@ export async function mixdownTimelineAudio(
       signal,
     );
     if (!decoded) continue;
-    const pcm = resampleToStereo48k(decoded.channels, decoded.sampleRate, item.speed);
+    const pcm = item.clock
+      ? resampleRetimed(decoded.channels, decoded.sampleRate, item.sourceStartSec, item.clock)
+      : resampleToStereo48k(decoded.channels, decoded.sampleRate, item.speed);
     applyEnvelope(pcm, {
       gain: item.gain,
       audioFadeClock: item.audioFadeClock,

@@ -1,3 +1,4 @@
+import type { EditorClipTiming } from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type ClipEffectSpec,
@@ -11,6 +12,7 @@ import { type CaptionCue, findActiveCues } from './captionCues';
 import { drawActiveCaption } from './drawCaptions';
 import { drawFrameComposition } from './frameComposition';
 import { drawClipFrame, drawFadeOverlay } from './frameDraw';
+import { framesAtSourceTimes, RETIME_FALLBACK_FPS, sourceSecAt } from './sourceClock';
 
 // Shared per-range concat mechanics for the mediabunny splice engines. Both
 // spliceClips (multi-input) and spliceSingleSource (one input, N ranges) append
@@ -66,6 +68,10 @@ export type AppendRangeParams = {
     ctx: OffscreenCanvasRenderingContext2D,
     outputTimestampSec: number,
   ) => Promise<void>;
+  // A reversed or speed-ramped clip: its source clock replaces range-and-speed. `range` is then
+  // the source SPAN the clock stays inside, `localStartSec` where this solo segment begins in
+  // the clip's own output time (past a head overlap) and `durationSec` how long it runs.
+  retime?: { clock: EditorClipTiming; localStartSec: number; durationSec: number };
   // When true, this range emits NO audio (no inline samples, no silence fill): the
   // Video Editor render handles all audio in a single PCM mixdown pass (audioMix).
   // Other compositor callers leave this false and keep inline per-range audio.
@@ -95,6 +101,7 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
     headFade,
     tailFade,
     compositeOverlays,
+    retime,
     skipAudio,
     signal,
   } = params;
@@ -110,26 +117,38 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
   // frame with half the output duration at half the output timestamp spacing.
   const speed = speedFor(effects);
   const sourceSpan = range.endSec - range.startSec;
-  const outputDurationSec = sourceSpan / speed;
+  const outputDurationSec = retime ? retime.durationSec : sourceSpan / speed;
   const overlays = resolveTextOverlays(effects);
   let nextCadenceFrame = 0;
   if (frameRate !== undefined && (!Number.isFinite(frameRate) || frameRate <= 0))
     throw new Error('Output frame rate must be finite and positive.');
+  // A retimed clip is always sampled per output tick: its source time is not a ramp from
+  // the clip start, so there is no sequential decode to fall back on.
+  const cadenceRate = frameRate ?? (retime ? RETIME_FALLBACK_FPS : undefined);
 
   const canvasSink = new mb.CanvasSink(videoTrack);
   const snapshotLocal =
     params.frameTimeSec === undefined ? undefined : params.frameTimeSec - cumulativeOffset;
   if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= outputDurationSec))
     return;
-  const cadenceDuration = snapshotLocal === undefined && frameRate ? 1 / frameRate : undefined;
+  const cadenceDuration = snapshotLocal === undefined && cadenceRate ? 1 / cadenceRate : undefined;
   function* sourceTimestamps() {
     if (snapshotLocal !== undefined) yield range.startSec + snapshotLocal * speed;
     else if (cadenceDuration)
       for (let frame = 0; frame * cadenceDuration < outputDurationSec - 1e-9; frame++)
         yield range.startSec + frame * cadenceDuration * speed;
   }
-  const frames =
-    snapshotLocal !== undefined || cadenceDuration
+  const retimedTimestamps = (clock: EditorClipTiming, localStartSec: number): number[] => {
+    const at = (localOut: number) => sourceSecAt(clock, localStartSec + localOut, range);
+    if (snapshotLocal !== undefined) return [at(snapshotLocal)];
+    const times: number[] = [];
+    for (let frame = 0; frame * (cadenceDuration ?? 1) < outputDurationSec - 1e-9; frame++)
+      times.push(at(frame * (cadenceDuration ?? 1)));
+    return times;
+  };
+  const frames = retime
+    ? framesAtSourceTimes(canvasSink, retimedTimestamps(retime.clock, retime.localStartSec))
+    : snapshotLocal !== undefined || cadenceDuration
       ? canvasSink.canvasesAtTimestamps(sourceTimestamps())
       : canvasSink.canvases(range.startSec, range.endSec);
   for await (const wrapped of frames) {

@@ -86,8 +86,23 @@ export const MOTION_PROPERTIES = [
 export type MotionProperty = (typeof MOTION_PROPERTIES)[number];
 export const motionPropertySchema = z.enum(MOTION_PROPERTIES, {
   error: (issue) =>
-    `${String(issue.input)} cannot be animated: motion supports ${MOTION_PROPERTIES.join(', ')} (effect.parameter is blur only)`,
+    `${String(issue.input)} cannot be animated: motion supports ${MOTION_PROPERTIES.join(', ')} (effect.parameter is blur or stroke.draw)`,
 });
+
+/**
+ * What an op may name: the stored properties plus `stroke.draw`, an SVG stroke drawn from 0
+ * (none) to 1 (the whole path) — a trim path. The editor keyframe enum has no stroke property,
+ * so it is stored as an effect.parameter track whose keys carry parameterName "draw", and
+ * compiles to stroke-dashoffset on a target that declares pathLength="1".
+ */
+export const MOTION_OP_PROPERTIES = [...MOTION_PROPERTIES, 'stroke.draw'] as const;
+export type MotionOpProperty = (typeof MOTION_OP_PROPERTIES)[number];
+const motionOpPropertySchema = z.enum(MOTION_OP_PROPERTIES, {
+  error: (issue) =>
+    `${String(issue.input)} cannot be animated: motion supports ${MOTION_OP_PROPERTIES.join(', ')} (effect.parameter is blur only)`,
+});
+const storedProperty = (property: MotionOpProperty): MotionProperty =>
+  property === 'stroke.draw' ? 'effect.parameter' : property;
 
 export const MOTIONMAXXING_EASE_NAMES = Object.keys(MOTIONMAXXING_EASES) as MotionmaxxingEase[];
 const motionmaxxingEaseSchema = z.enum(
@@ -151,8 +166,16 @@ export const motionTrackSchema = z
     track.keyframes.forEach((key, index) => {
       if (key.property !== track.property)
         issue(index, `a ${track.property} track holds only ${track.property} keys`);
-      if (track.property === 'effect.parameter' && key.parameterName !== 'blur')
-        issue(index, 'effect.parameter motion animates blur only (parameterName "blur")');
+      if (
+        track.property === 'effect.parameter' &&
+        key.parameterName !== 'blur' &&
+        key.parameterName !== 'draw'
+      )
+        issue(index, 'effect.parameter motion animates blur (parameterName "blur") or stroke.draw');
+      if (key.parameterName !== track.keyframes[0]?.parameterName)
+        issue(index, 'one track animates blur or stroke.draw, never both');
+      if (key.parameterName === 'draw' && Number(key.value) > 1)
+        issue(index, 'stroke.draw keys lie between 0 and 1');
       if (track.property !== 'effect.parameter' && key.parameterName !== undefined)
         issue(index, 'parameterName belongs to effect.parameter keys only');
       if (key.expression !== undefined) issue(index, 'motion keys cannot carry expressions');
@@ -280,7 +303,7 @@ const motionKeyInputSchema = z
   .strict();
 export type MotionKeyInput = z.infer<typeof motionKeyInputSchema>;
 const motionTrackInputSchema = z
-  .object({ property: motionPropertySchema, keys: z.array(motionKeyInputSchema).min(2).max(500) })
+  .object({ property: motionOpPropertySchema, keys: z.array(motionKeyInputSchema).min(2).max(500) })
   .strict();
 const animationRef = { animationId: motionIdSchema };
 
@@ -335,7 +358,7 @@ export const motionOpSchema = z.discriminatedUnion('type', [
       type: z.literal('ease'),
       ...animationRef,
       /** Omit to ease every track of the animation. */
-      property: motionPropertySchema.optional(),
+      property: motionOpPropertySchema.optional(),
       ease: motionEaseSchema,
     })
     .strict(),
@@ -343,7 +366,7 @@ export const motionOpSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('set_keyframes'),
       ...animationRef,
-      property: motionPropertySchema,
+      property: motionOpPropertySchema,
       keys: z.array(motionKeyInputSchema).min(2).max(500),
     })
     .strict(),
@@ -351,7 +374,7 @@ export const motionOpSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('upsert_keyframe'),
       ...animationRef,
-      property: motionPropertySchema,
+      property: motionOpPropertySchema,
       /** Replaces the key within half a frame of `t`, else inserts one. */
       key: motionKeyInputSchema,
     })
@@ -360,12 +383,21 @@ export const motionOpSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('remove_keyframes'),
       ...animationRef,
-      property: motionPropertySchema,
+      property: motionOpPropertySchema,
       keyIds: z.array(keyIdSchema).min(1).max(500),
     })
     .strict(),
-  /** Wraps each word of a text-only element in an inline-block span `<hfId>-w<n>`. */
-  z.object({ type: z.literal('split_text'), hfId: hfIdSchema }).strict(),
+  /**
+   * Wraps each word of a text-only element in an inline-block span `<hfId>-w<n>`, or with
+   * `by: char` each character in `<hfId>-c<n>` (words kept unbreakable) for per-letter motion.
+   */
+  z
+    .object({
+      type: z.literal('split_text'),
+      hfId: hfIdSchema,
+      by: z.enum(['word', 'char']).default('word'),
+    })
+    .strict(),
 ]);
 export type MotionOp = z.infer<typeof motionOpSchema>;
 export type MotionOpInput = z.input<typeof motionOpSchema>;
@@ -520,15 +552,16 @@ const IDENTITY_TRANSFORM: EditorTransform = {
 };
 
 function keyFromInput(
-  property: MotionProperty,
+  property: MotionOpProperty,
   key: MotionKeyInput,
   id: string,
   timing: KeyTiming,
 ) {
   return {
     id,
-    property,
+    property: storedProperty(property),
     ...(property === 'effect.parameter' ? { parameterName: 'blur' } : {}),
+    ...(property === 'stroke.draw' ? { parameterName: 'draw' } : {}),
     timeSec: key.t,
     value: key.v,
     ...timing,
@@ -536,10 +569,10 @@ function keyFromInput(
 }
 
 const trackFromInput = (
-  property: MotionProperty,
+  property: MotionOpProperty,
   keys: readonly MotionKeyInput[],
 ): MotionTrack => ({
-  property,
+  property: storedProperty(property),
   keyframes: keys
     .toSorted((left, right) => left.t - right.t)
     .map((key, index) =>
@@ -605,10 +638,10 @@ function mapAnimation(
 
 function mapTrack(
   animation: MotionAnimation,
-  property: MotionProperty,
+  property: MotionOpProperty,
   update: (track: MotionTrack | undefined) => MotionTrack,
 ): MotionAnimation {
-  const index = animation.tracks.findIndex((track) => track.property === property);
+  const index = animation.tracks.findIndex((track) => track.property === storedProperty(property));
   const next = update(animation.tracks[index]);
   return {
     ...animation,
@@ -676,16 +709,17 @@ function applyToAnimations(
       });
     case 'ease':
       return mapAnimation(animations, op.animationId, (animation) => {
+        const property = op.property && storedProperty(op.property);
         if (op.property !== undefined)
           requireTrack(
-            animation.tracks.find((track) => track.property === op.property),
+            animation.tracks.find((track) => track.property === property),
             animation.id,
             op.property,
           );
         return {
           ...animation,
           tracks: animation.tracks.map((track) =>
-            op.property === undefined || track.property === op.property
+            property === undefined || track.property === property
               ? { ...track, keyframes: easeKeyframes(track.keyframes, op.ease) }
               : track,
           ),
@@ -769,7 +803,8 @@ export function applyMotionOp(
 
 // ── Compiling to CSS ──────────────────────────────────────────────────────────────────
 
-const CSS_CHANNELS = ['translate', 'scale', 'rotate', 'opacity', 'filter'] as const;
+/** Appended only: an animation's CSS name carries its channel's index. */
+const CSS_CHANNELS = ['translate', 'scale', 'rotate', 'opacity', 'filter', 'draw'] as const;
 type CssChannel = (typeof CSS_CHANNELS)[number];
 
 /** One CSS keyframe: its time, the key whose outgoing ease it carries, its component values. */
@@ -787,6 +822,8 @@ function channelKeys(animation: MotionAnimation): { channel: CssChannel; keys: C
   const scaleX = track('transform.scaleX');
   const scaleY = track('transform.scaleY');
   const scaleTiming = scaleX ?? scaleY;
+  const effect = track('effect.parameter');
+  const drawn = effect?.[0]?.parameterName === 'draw';
   const channels: Record<CssChannel, ChannelKey[] | undefined> = {
     translate: position?.map((key) => ({
       timeSec: key.timeSec,
@@ -800,7 +837,8 @@ function channelKeys(animation: MotionAnimation): { channel: CssChannel; keys: C
     })),
     rotate: single(track('transform.rotationDeg')),
     opacity: single(track('transform.opacity')),
-    filter: single(track('effect.parameter')),
+    filter: drawn ? undefined : single(effect),
+    draw: drawn ? single(effect) : undefined,
   };
   return CSS_CHANNELS.flatMap((channel) => {
     const keys = channels[channel];
@@ -844,6 +882,9 @@ const cssValue = (channel: CssChannel, [a = 0, b = 0]: number[]): string => {
       return `opacity:${css(a)}`;
     case 'filter':
       return `filter:blur(${css(a)}px)`;
+    // With pathLength="1" a dash of 1 then a gap of 1, offset 1 − v, shows the path's first v.
+    case 'draw':
+      return `stroke-dasharray:1 1;stroke-dashoffset:${css(round6(1 - a))}`;
   }
 };
 
@@ -994,7 +1035,7 @@ export function sampleMotion(doc: MotionDoc, hfId: string, tSec: number): Motion
     else if (channel === 'scale') sample.scale = [a, b];
     else if (channel === 'rotate') sample.rotateDeg = a;
     else if (channel === 'opacity') sample.opacity = Math.min(1, Math.max(0, a));
-    else sample.blurPx = Math.max(0, a);
+    else if (channel === 'filter') sample.blurPx = Math.max(0, a);
   }
   return sample;
 }
@@ -1049,9 +1090,11 @@ export function writeMotionToHtml(html: string, doc: MotionDoc): string {
 
 /**
  * Wrap each word of the text-only element `hfId` in
- * `<span data-hf-id="<hfId>-w<n>" style="display:inline-block">`, keeping the spaces.
+ * `<span data-hf-id="<hfId>-w<n>" style="display:inline-block">`, keeping the spaces. `by: char`
+ * wraps each character in `<hfId>-c<n>` instead, inside a nowrap span per word so a line still
+ * breaks only between words; an entity (`&amp;`) is one character.
  */
-export function splitTextInHtml(html: string, hfId: string): string {
+export function splitTextInHtml(html: string, hfId: string, by: 'word' | 'char' = 'word'): string {
   const id = hfIdSchema.parse(hfId);
   const opening = new RegExp(
     `<([A-Za-z][\\w-]*)\\b[^>]*?\\sdata-hf-id=(["'])${id.replace(/[.]/g, '\\.')}\\2[^>]*>`,
@@ -1068,17 +1111,27 @@ export function splitTextInHtml(html: string, hfId: string): string {
   const end = html.indexOf('<', start);
   if (end < 0 || html.slice(end, end + closing.length).toLowerCase() !== closing)
     throw new MotionTimelineError(`${id} is not a text-only element: only its words can be split`);
-  if (html.includes(`data-hf-id="${id}-w1"`))
-    throw new MotionTimelineError(`${id} is already split into words`);
+  if (html.includes(`data-hf-id="${id}-w1"`) || html.includes(`data-hf-id="${id}-c1"`))
+    throw new MotionTimelineError(`${id} is already split`);
   let words = 0;
+  let chars = 0;
+  const wrapChars = (word: string) =>
+    `<span style="display:inline-block;white-space:nowrap">${(word.match(/&[#\w]+;|[\s\S]/gu) ?? [])
+      .map(
+        (char) =>
+          `<span data-hf-id="${id}-c${++chars}" style="display:inline-block">${char}</span>`,
+      )
+      .join('')}</span>`;
   const split = html
     .slice(start, end)
     .split(/(\s+)/)
-    .map((part) =>
-      part === '' || /^\s+$/.test(part)
-        ? part
-        : `<span data-hf-id="${id}-w${++words}" style="display:inline-block">${part}</span>`,
-    )
+    .map((part) => {
+      if (part === '' || /^\s+$/.test(part)) return part;
+      words += 1;
+      return by === 'char'
+        ? wrapChars(part)
+        : `<span data-hf-id="${id}-w${words}" style="display:inline-block">${part}</span>`;
+    })
     .join('');
   if (words === 0) throw new MotionTimelineError(`${id} has no words to split`);
   return `${html.slice(0, start)}${split}${html.slice(end)}`;
@@ -1094,7 +1147,7 @@ export function applyMotionOpsToHtml(
   let body = stripMotionBlocks(html);
   for (const input of ops) {
     const op = parseMotionOp(input);
-    if (op.type === 'split_text') body = splitTextInHtml(body, op.hfId);
+    if (op.type === 'split_text') body = splitTextInHtml(body, op.hfId, op.by);
     else doc = applyMotionOp(doc, op, context);
   }
   return { html: writeMotionToHtml(body, doc), doc };
@@ -1328,6 +1381,48 @@ export const addHyperframesClipOutputSchema = z
     trackId: z.string(),
     assetId: z.string(),
     versionId: z.string(),
+  })
+  .strict();
+
+// A HyperFrames edit the agent authors over a talking head: its graphics, captions and card
+// states keyed to the words the speaker says, then rendered and placed like add_hyperframes_clip.
+export const HYPERFRAMES_EDIT_MODES = ['overlay', 'composition'] as const;
+export const addHyperframesEditInputSchema = z
+  .object({
+    brief: z
+      .string()
+      .trim()
+      .min(1)
+      .max(4_000)
+      .describe(
+        'What the edit shows on which spoken words: captions, lists, pills, charts, card switches, punch-ins. Name the words; the agent times every graphic to them from the transcript.',
+      ),
+    mode: z
+      .enum(HYPERFRAMES_EDIT_MODES)
+      .default('overlay')
+      .describe(
+        'overlay: a transparent film of graphics and captions over the footage, on its own track. composition: the whole edit as one film with the footage inside it (split screens, cards, a tilted raw copy), laid over the main clip, which keeps the sound.',
+      ),
+    atSec: secondsSchema
+      .optional()
+      .describe('Timeline second the edit starts, inside one main-track clip; default its start'),
+    durationSec: z
+      .number()
+      .min(5)
+      .max(60)
+      .optional()
+      .describe('How long it runs; default to the end of that clip, at most 60 s'),
+    energy: z.enum(['calm', 'balanced', 'high-energy']).default('high-energy'),
+    trackId: z.string().optional(),
+    newTrack: z.boolean().default(false),
+  })
+  .strict();
+export type AddHyperframesEditInput = z.infer<typeof addHyperframesEditInputSchema>;
+export const addHyperframesEditOutputSchema = addHyperframesClipOutputSchema
+  .extend({
+    revisionId: z.string(),
+    /** Spoken words the edit was timed to. */
+    words: z.number().int().nonnegative(),
   })
   .strict();
 

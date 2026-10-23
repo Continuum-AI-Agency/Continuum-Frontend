@@ -1328,3 +1328,181 @@ it('serializes separate parent curves into the same transform used by preview an
     }
   }
 });
+
+describe('retimed clips and the new transitions in the render plan', () => {
+  const ramp = [
+    { timeSec: 0, sourceSec: 10, interpolation: 'linear' as const },
+    { timeSec: 1, sourceSec: 11, interpolation: 'linear' as const },
+    { timeSec: 3, sourceSec: 11.4, interpolation: 'linear' as const },
+    { timeSec: 4, sourceSec: 12.4, interpolation: 'linear' as const },
+  ];
+  const planFor = async (
+    clips: Record<string, unknown>[],
+    transitions: Record<string, unknown>[] = [],
+    overlayClips: Record<string, unknown>[] = [],
+  ) => {
+    globalThis.fetch = (async () =>
+      new Response(new Blob(['video-bytes'], { type: 'video/mp4' }), {
+        status: 200,
+      })) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000777',
+      title: 'Retime',
+      width: 1080,
+      height: 1920,
+      now: '2026-10-22T12:00:00.000Z',
+    });
+    const end = Math.max(
+      ...clips.map((clip) => (clip.timelineStartSec as number) + (clip.durationSec as number)),
+    );
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: end,
+      tracks: [
+        {
+          id: 'main',
+          name: 'Main',
+          order: 0,
+          kind: 'video',
+          clips: clips.map((clip, index) => ({
+            kind: 'video',
+            source: {
+              sourceType: 'library_asset',
+              assetId: `asset-${index}`,
+              renditionId: `v${index}`,
+            },
+            ...clip,
+          })),
+        },
+        ...(overlayClips.length
+          ? [{ id: 'above', name: 'Above', order: 1, kind: 'video', clips: overlayClips }]
+          : []),
+      ],
+      transitions,
+    });
+    return buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: clips.map((_, index) => ({
+        sourceId: clips[index].id as string,
+        sourceAssetId: `asset-${index}`,
+        sourceRevision: `v${index}`,
+        storage: { bucket: 'media-library', path: `brand/${index}.mp4` },
+      })),
+      signedUrls: new Map(
+        clips.map((_, index) => [
+          `media-library\nbrand/${index}.mp4`,
+          `https://signed.example/${index}.mp4`,
+        ]),
+      ),
+      signal: new AbortController().signal,
+    });
+  };
+
+  it('hands a speed-ramped clip to the renderer as its curve, span and timeline length', async () => {
+    const plan = await planFor([
+      { id: 'ramped', timelineStartSec: 0, durationSec: 4, sourceInSec: 10, timeRemap: ramp },
+    ]);
+    expect(plan.items[0]).toMatchObject({
+      itemId: 'ramped',
+      durationSec: 4,
+      trimStartSec: 10,
+      trimEndSec: 12.4,
+      timeRemap: ramp,
+    });
+    expect(plan.items[0]).not.toHaveProperty('reverse');
+    expect(plan.items[0]?.effects?.speed).toBeUndefined();
+  });
+
+  it('hands a reversed clip over with its span and rate, and a plain clip with nothing extra', async () => {
+    const plan = await planFor([
+      {
+        id: 'back',
+        timelineStartSec: 0,
+        durationSec: 2,
+        sourceInSec: 5,
+        playbackRate: 2,
+        reverse: true,
+      },
+      { id: 'plain', timelineStartSec: 2, durationSec: 3, sourceInSec: 1 },
+    ]);
+    expect(plan.items[0]).toMatchObject({
+      reverse: true,
+      trimStartSec: 5,
+      trimEndSec: 9,
+      durationSec: 2,
+    });
+    expect(plan.items[0]?.effects?.speed).toBe(2);
+    expect(plan.items[0]).not.toHaveProperty('timeRemap');
+    expect(plan.items[1]).toMatchObject({ trimStartSec: 1, trimEndSec: 4 });
+    expect(plan.items[1]).not.toHaveProperty('reverse');
+    expect(plan.items[1]).not.toHaveProperty('timeRemap');
+  });
+
+  it('refuses a retimed clip on a lane above the main track instead of exporting it at plain speed', async () => {
+    await expect(
+      planFor(
+        [{ id: 'base', timelineStartSec: 0, durationSec: 4, sourceInSec: 0 }],
+        [],
+        [
+          {
+            id: 'inset',
+            kind: 'video',
+            timelineStartSec: 0,
+            durationSec: 2,
+            reverse: true,
+            source: { sourceType: 'library_asset', assetId: 'asset-0', renditionId: 'v0' },
+          },
+        ],
+      ),
+    ).rejects.toThrow('only the main track can render that');
+  });
+
+  it.each([
+    ['blur', {}, 'blur', 0.5],
+    ['whip', {}, 'whipLeft', 0.5],
+    ['whip', { direction: 'right' }, 'whipRight', 0.5],
+    ['whip', { direction: 'up' }, 'whipUp', 0.5],
+    ['whip', { direction: 'down' }, 'whipDown', 0.5],
+    ['zoom_blur', {}, 'zoomBlur', 0.5],
+    ['glitch', {}, 'glitch', 0.5],
+  ] as const)('maps a %s transition %j to %s and overlaps the clips by its length', async (transitionType, parameters, expected, durationSec) => {
+    const plan = await planFor(
+      [
+        { id: 'a', timelineStartSec: 0, durationSec: 4 },
+        { id: 'b', timelineStartSec: 4 - durationSec, durationSec: 4 },
+      ],
+      [
+        {
+          id: 't',
+          trackId: 'main',
+          fromClipId: 'a',
+          toClipId: 'b',
+          transitionType,
+          durationSec,
+          parameters,
+        },
+      ],
+    );
+    expect(plan.items[1]?.transition).toEqual({ type: expected, durationSec });
+  });
+
+  it('maps flash to a colour ramp on the cut, which keeps the clips butted', async () => {
+    const plan = await planFor(
+      [
+        { id: 'a', timelineStartSec: 0, durationSec: 4 },
+        { id: 'b', timelineStartSec: 4, durationSec: 4 },
+      ],
+      [
+        {
+          id: 't',
+          trackId: 'main',
+          fromClipId: 'a',
+          toClipId: 'b',
+          transitionType: 'flash',
+          durationSec: 0.4,
+        },
+      ],
+    );
+    expect(plan.items[1]?.transition).toEqual({ type: 'flash', durationSec: 0.4 });
+  });
+});

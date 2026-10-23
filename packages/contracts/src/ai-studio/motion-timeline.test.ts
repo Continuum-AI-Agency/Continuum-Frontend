@@ -175,6 +175,71 @@ describe('add_animation', () => {
     expect(animation(doc, 'focus').tracks[0]?.keyframes[0]?.parameterName).toBe('blur');
   });
 
+  test('a stroke.draw track is effect.parameter "draw", 0 to 1, never mixed with blur', () => {
+    const draw = (keys: { t: number; v: number }[]): MotionOpInput => ({
+      type: 'add_animation',
+      label: 'Wire',
+      targets: ['line'],
+      tracks: [{ property: 'stroke.draw', keys }],
+    });
+    const doc = apply(
+      EMPTY_MOTION_DOC,
+      draw([
+        { t: 0, v: 0 },
+        { t: 1, v: 1 },
+      ]),
+    );
+    const track = animation(doc, 'wire').tracks[0];
+    expect(track?.property).toBe('effect.parameter');
+    expect(track?.keyframes.map((key) => key.parameterName)).toEqual(['draw', 'draw']);
+    refusal(
+      () =>
+        apply(
+          EMPTY_MOTION_DOC,
+          draw([
+            { t: 0, v: 0 },
+            { t: 1, v: 1.5 },
+          ]),
+        ),
+      /draw/,
+    );
+    // A later op names the track by its alias.
+    const eased = apply(doc, {
+      type: 'ease',
+      animationId: 'wire',
+      property: 'stroke.draw',
+      ease: 'easeOut',
+    });
+    expect(animation(eased, 'wire').tracks[0]?.keyframes[0]?.interpolation).not.toBe(
+      track?.keyframes[0]?.interpolation,
+    );
+    refusal(
+      () =>
+        apply(EMPTY_MOTION_DOC, {
+          type: 'add_animation',
+          label: 'Both',
+          targets: ['line'],
+          tracks: [
+            {
+              property: 'stroke.draw',
+              keys: [
+                { t: 0, v: 0 },
+                { t: 1, v: 1 },
+              ],
+            },
+            {
+              property: 'effect.parameter',
+              keys: [
+                { t: 0, v: 4 },
+                { t: 1, v: 0 },
+              ],
+            },
+          ],
+        }),
+      /./,
+    );
+  });
+
   test('ids are slugged from the label and never collide', () => {
     const doc = apply(EMPTY_MOTION_DOC, fadeKeys, { ...fadeKeys, id: undefined, label: 'Fade' });
     expect(doc.animations.map((candidate) => candidate.id)).toEqual(['fade', 'fade-2']);
@@ -537,6 +602,17 @@ describe('split_text', () => {
     refusal(() => splitTextInHtml('<p data-hf-id="x">  </p>', 'x'), /no words/);
   });
 
+  test('by char wraps each letter, words kept unbroken, an entity one letter', () => {
+    const out = splitTextInHtml('<p data-hf-id="t">Go &amp; win</p>', 't', 'char');
+    expect(out).toBe(
+      '<p data-hf-id="t">' +
+        '<span style="display:inline-block;white-space:nowrap"><span data-hf-id="t-c1" style="display:inline-block">G</span><span data-hf-id="t-c2" style="display:inline-block">o</span></span> ' +
+        '<span style="display:inline-block;white-space:nowrap"><span data-hf-id="t-c3" style="display:inline-block">&amp;</span></span> ' +
+        '<span style="display:inline-block;white-space:nowrap"><span data-hf-id="t-c4" style="display:inline-block">w</span><span data-hf-id="t-c5" style="display:inline-block">i</span><span data-hf-id="t-c6" style="display:inline-block">n</span></span></p>',
+    );
+    refusal(() => splitTextInHtml(out, 't'), /already split|not a text-only/);
+  });
+
   test('applyMotionOpsToHtml splits, then staggers the words in one batch', () => {
     const { html: out, doc } = applyMotionOpsToHtml(
       html,
@@ -762,6 +838,31 @@ describe('compileMotionCss', () => {
     expect(sampleMotion(doc, 'a', 3.25).blurPx).toBe(4);
     expect(sampleMotion(doc, 'a', 3.6)).toMatchObject({ opacity: 0, blurPx: 8, rotateDeg: -15 });
     expect(sampleMotion(doc, 'nobody', 1)).toEqual(sampleMotion(EMPTY_MOTION_DOC, 'a', 1));
+  });
+
+  test('a draw track compiles to the dash offset of a pathLength="1" stroke', () => {
+    const drawn = apply(EMPTY_MOTION_DOC, {
+      type: 'add_animation',
+      id: 'wire',
+      label: 'Wire',
+      targets: ['line'],
+      startSec: 1,
+      tracks: [
+        {
+          property: 'stroke.draw',
+          keys: [
+            { t: 0, v: 0 },
+            { t: 0.5, v: 1 },
+          ],
+        },
+      ],
+    });
+    const css = compileMotionCss(drawn);
+    expect(css).toContain('stroke-dasharray:1 1;stroke-dashoffset:1;');
+    expect(css).toContain('stroke-dashoffset:0}');
+    expect(css).not.toContain('filter');
+    // Drawing is not one of the sampled transform channels.
+    expect(sampleMotion(drawn, 'line', 1.25)).toEqual(sampleMotion(EMPTY_MOTION_DOC, 'line', 1.25));
   });
 
   test('sampled opacity clamps overshoot the way CSS does', () => {
@@ -1032,7 +1133,7 @@ describe('wire schemas', () => {
 describe('wave 2 seams', () => {
   test('parseMotionOpsJson names the bad op and refuses an empty or oversized list', () => {
     expect(parseMotionOpsJson('[{"type":"split_text","hfId":"headline"}]')).toEqual([
-      { type: 'split_text', hfId: 'headline' },
+      { type: 'split_text', hfId: 'headline', by: 'word' },
     ]);
     expect(() => parseMotionOpsJson('[]')).toThrow(/1 to 50/);
     expect(() => parseMotionOpsJson('{')).toThrow(MotionTimelineError);

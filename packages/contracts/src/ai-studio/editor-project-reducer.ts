@@ -1,10 +1,14 @@
 import {
   editorClipAtSourceIn,
+  editorClipIsRetimed,
+  editorClipWindow,
   editorClipWithRetainedFades,
   editorTextWithRetainedAnimation,
 } from './editor-clip-edits';
 import {
+  EDITOR_OVERLAP_TRANSITION_TYPES,
   type EditorActorRef,
+  type EditorAudioClip,
   type EditorClip,
   type EditorCommand,
   type EditorCommandBatch,
@@ -13,6 +17,7 @@ import {
   type EditorShot,
   type EditorSourceBinding,
   type EditorTake,
+  type EditorVideoClip,
   editorCommandBatchSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
@@ -517,12 +522,51 @@ const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip =>
   return keyframed;
 };
 
+/**
+ * A trim of a reversed or speed-ramped clip keeps the frames the new window shows: the head trim
+ * is the timeline-start shift, the new length is the window's end. Growing such a clip would
+ * need frames its curve never defined, so that is refused rather than guessed.
+ */
+const trimRetimedClip = (
+  clip: EditorVideoClip | EditorAudioClip,
+  timelineStartSec: number | undefined,
+  durationSec: number,
+): EditorClip => {
+  const headSec = (timelineStartSec ?? clip.timelineStartSec) - clip.timelineStartSec;
+  if (headSec < -1e-6 || headSec + durationSec > clip.durationSec + 1e-6) {
+    throw new EditorProjectConflictError(
+      'A reversed or speed-ramped clip can be trimmed shorter but not extended; change its speed instead.',
+      'invalid_command',
+    );
+  }
+  const { sourceInSec, timeRemap } = editorClipWindow(clip, headSec, headSec + durationSec);
+  return trimClipInternals(
+    {
+      ...(headSec > 0 ? editorClipWithRetainedFades(clip, headSec) : clip),
+      ...(clip.keyframes.length && headSec > 0
+        ? { keyframeOffsetSec: (clip.keyframeOffsetSec ?? 0) + headSec }
+        : {}),
+      sourceInSec,
+      ...(timeRemap ? { timeRemap } : {}),
+      timelineStartSec: timelineStartSec ?? clip.timelineStartSec,
+    } as EditorClip,
+    durationSec,
+  );
+};
+
 const splitClip = (
   clip: EditorClip,
   splitAtSec: number,
   rightClipId: string,
 ): [EditorClip, EditorClip] => {
   const rightDurationSec = clip.durationSec - splitAtSec;
+  const retimed = (clip.kind === 'video' || clip.kind === 'audio') && editorClipIsRetimed(clip);
+  // A reversed or ramped clip keeps showing exactly the frames it did: each half is a window of
+  // its source clock, not a rate-scaled offset.
+  const windowOf = (from: number, to: number) => {
+    const { sourceInSec, timeRemap } = editorClipWindow(clip as EditorVideoClip, from, to);
+    return { sourceInSec, ...(timeRemap ? { timeRemap } : {}) };
+  };
   const sourceOffset = splitAtSec * ('playbackRate' in clip ? clip.playbackRate : 1);
   const leftKeyframes = 'keyframes' in clip ? clip.keyframes : undefined;
   const rightKeyframes = leftKeyframes;
@@ -534,6 +578,7 @@ const splitClip = (
           ? editorTextWithRetainedAnimation(clip)
           : clip),
       durationSec: splitAtSec,
+      ...(retimed ? windowOf(0, splitAtSec) : {}),
       ...('keyframes' in clip ? { keyframes: leftKeyframes ?? [] } : {}),
     } as EditorClip,
     splitAtSec,
@@ -548,7 +593,10 @@ const splitClip = (
     timelineStartSec: clip.timelineStartSec + splitAtSec,
     durationSec: rightDurationSec,
 
-    ...('sourceInSec' in clip ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset } : {}),
+    ...('sourceInSec' in clip && !retimed
+      ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset }
+      : {}),
+    ...(retimed ? windowOf(splitAtSec, clip.durationSec) : {}),
     ...('keyframes' in clip ? { keyframes: rightKeyframes ?? [] } : {}),
     ...('keyframes' in clip && clip.keyframes.length
       ? { keyframeOffsetSec: (clip.keyframeOffsetSec ?? 0) + splitAtSec }
@@ -582,8 +630,6 @@ const GEOMETRY_COMMANDS = new Set<EditorCommand['commandType']>([
   'split_clip',
   'precompose_clips',
 ]);
-
-const OVERLAP_TRANSITION_TYPES = new Set(['crossfade', 'slide', 'wipe', 'zoom', 'custom']);
 
 const assertCanonicalTransitionGeometry = (project: EditorProjectV2): void => {
   const primary = project.tracks
@@ -634,7 +680,7 @@ const assertCanonicalTransitionGeometry = (project: EditorProjectV2): void => {
       );
     }
     const overlap =
-      transition && OVERLAP_TRANSITION_TYPES.has(transition.transitionType)
+      transition && EDITOR_OVERLAP_TRANSITION_TYPES.has(transition.transitionType)
         ? transition.durationSec
         : 0;
     const expectedStart = previous.timelineStartSec + previous.durationSec - overlap;
@@ -811,34 +857,38 @@ const applyTimelineCommand = (
           ({
             ...track,
             clips: track.clips.map((clip) =>
-              clip.id === command.clipId
-                ? trimClipInternals(
-                    {
-                      ...('sourceInSec' in clip && command.sourceInSec !== undefined
-                        ? editorClipAtSourceIn(clip, command.sourceInSec)
-                        : clip.kind === 'text' &&
-                            command.timelineStartSec !== undefined &&
-                            command.timelineStartSec !== clip.timelineStartSec
-                          ? {
-                              ...editorTextWithRetainedAnimation(
-                                clip,
-                                command.timelineStartSec - clip.timelineStartSec,
-                              ),
-                              ...(clip.keyframes.length
-                                ? {
-                                    keyframeOffsetSec:
-                                      (clip.keyframeOffsetSec ?? 0) +
-                                      command.timelineStartSec -
-                                      clip.timelineStartSec,
-                                  }
-                                : {}),
-                            }
-                          : clip),
-                      timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
-                    } as EditorClip,
-                    command.durationSec,
-                  )
-                : clip,
+              clip.id === command.clipId &&
+              (clip.kind === 'video' || clip.kind === 'audio') &&
+              editorClipIsRetimed(clip)
+                ? trimRetimedClip(clip, command.timelineStartSec, command.durationSec)
+                : clip.id === command.clipId
+                  ? trimClipInternals(
+                      {
+                        ...('sourceInSec' in clip && command.sourceInSec !== undefined
+                          ? editorClipAtSourceIn(clip, command.sourceInSec)
+                          : clip.kind === 'text' &&
+                              command.timelineStartSec !== undefined &&
+                              command.timelineStartSec !== clip.timelineStartSec
+                            ? {
+                                ...editorTextWithRetainedAnimation(
+                                  clip,
+                                  command.timelineStartSec - clip.timelineStartSec,
+                                ),
+                                ...(clip.keyframes.length
+                                  ? {
+                                      keyframeOffsetSec:
+                                        (clip.keyframeOffsetSec ?? 0) +
+                                        command.timelineStartSec -
+                                        clip.timelineStartSec,
+                                    }
+                                  : {}),
+                              }
+                            : clip),
+                        timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
+                      } as EditorClip,
+                      command.durationSec,
+                    )
+                  : clip,
             ),
           }) as typeof track,
       );

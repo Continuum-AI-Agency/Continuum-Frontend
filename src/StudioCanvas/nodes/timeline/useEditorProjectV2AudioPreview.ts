@@ -1,6 +1,6 @@
 'use client';
 
-import type { EditorProjectV2, EditorTrack } from '@continuum/contracts';
+import { type EditorProjectV2, type EditorTrack, editorClipIsRetimed } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
@@ -67,7 +67,9 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
     const placement = input.layout.clips[index];
     const clip = videoById.get(placement.item.id);
     const blob = input.blobsByClipId.get(placement.item.id);
-    if (!clip?.enabled || !clip.audioEnabled || !blob) continue;
+    // ponytail: the preview's Web Audio scheduler plays a clip at one constant rate, so a
+    // reversed or speed-ramped clip is silent here; the export mixes its varispeed audio.
+    if (!clip?.enabled || !clip.audioEnabled || !blob || editorClipIsRetimed(clip)) continue;
     const previous = input.layout.clips[index - 1];
     const next = input.layout.clips[index + 1];
     const inOverlapSec = previous

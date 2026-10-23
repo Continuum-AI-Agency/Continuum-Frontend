@@ -1,5 +1,7 @@
 import {
   type EditorAudioFadeClock,
+  type EditorClipTiming,
+  type EditorTimeRemapPoint,
   type NumericKeyframe,
   nestedChildTimeSec,
 } from '@continuum/contracts';
@@ -25,6 +27,7 @@ import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './caption
 import { appendOverlapTransition, type CrossDissolveClip } from './crossDissolve';
 import { drawActiveCaption } from './drawCaptions';
 import { drawEffectFrame } from './frameDraw';
+import { isRetimed, retimedClock } from './sourceClock';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
 
@@ -63,6 +66,12 @@ export type TimelineRenderItem = {
   effects?: ClipEffectSpec;
   // Transition into this clip from the previous one.
   transition?: ClipTransition;
+  // A reversed or speed-ramped clip (video items). `timeRemap` maps clip-local OUTPUT seconds
+  // to ABSOLUTE source seconds and wins over `reverse` and `effects.speed`; `trimStartSec` /
+  // `trimEndSec` are then the lowest / highest source second the clip reaches and `durationSec`
+  // is its length on the timeline. Plain data, so it crosses the worker boundary.
+  reverse?: boolean;
+  timeRemap?: EditorTimeRemapPoint[];
 };
 
 // An overlay-track placement, composited over the base track at its absolute
@@ -228,6 +237,8 @@ type PreparedItem = {
       outputDurationSec: number;
       muteAudio: boolean;
       effects?: ClipEffectSpec;
+      // Present only when the clip is reversed or speed-ramped.
+      clock?: EditorClipTiming;
     }
   | { kind: 'image'; bitmap: ImageBitmap; durationSec: number; effects?: ClipEffectSpec }
 );
@@ -491,17 +502,28 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       const trimStart = Math.max(0, item.trimStartSec ?? 0);
       const trimEnd =
         item.trimEndSec !== undefined ? Math.min(item.trimEndSec, fullDuration) : fullDuration;
-      if (trimEnd <= trimStart) {
+      const retimed = isRetimed(item);
+      // A frozen clip reaches one source second: its span is empty but it still has a length.
+      if (retimed ? trimEnd < trimStart : trimEnd <= trimStart) {
         throw new Error(`Item ${i + 1}: trim range produces zero duration`);
       }
       const speed = speedFor(item.effects);
+      const outputDurationSec =
+        retimed && item.durationSec && item.durationSec > 0
+          ? item.durationSec
+          : (trimEnd - trimStart) / speed;
+      const clock = retimedClock(item, { startSec: trimStart }, outputDurationSec, speed);
+      if (retimed && !(outputDurationSec > 0)) {
+        throw new Error(`Item ${i + 1}: a retimed clip needs a positive durationSec`);
+      }
       prepared.push({
         kind: 'video',
         input,
         range: { startSec: trimStart, endSec: trimEnd, durationSec: trimEnd - trimStart },
-        outputDurationSec: (trimEnd - trimStart) / speed,
+        outputDurationSec,
         muteAudio: Boolean(item.muteAudio),
         effects: item.effects,
+        ...(clock ? { clock } : {}),
         headFade,
         tailFade,
       });
@@ -640,6 +662,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             outputDurationSec: item.outputDurationSec,
             muteAudio: item.muteAudio,
             effects: item.effects,
+            ...(item.clock ? { clock: item.clock } : {}),
           };
 
     if (
@@ -698,7 +721,20 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
           await appendRange({
             mb,
             input: item.input,
-            range: { startSec: srcStart, endSec: srcEnd, durationSec: srcEnd - srcStart },
+            // A retimed clip keeps its whole source span: the clock, not the range, picks
+            // frames, and the overlaps are carved out of its OUTPUT time below.
+            range: item.clock
+              ? item.range
+              : { startSec: srcStart, endSec: srcEnd, durationSec: srcEnd - srcStart },
+            ...(item.clock
+              ? {
+                  retime: {
+                    clock: item.clock,
+                    localStartSec: place.inOverlapSec,
+                    durationSec: soloDuration,
+                  },
+                }
+              : {}),
             ctx,
             videoSource,
             audioSource,
@@ -789,6 +825,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         sourceStartSec: item.range.startSec,
         sourceEndSec: item.range.endSec,
         speed: item.range.durationSec / item.outputDurationSec,
+        ...(item.clock ? { clock: item.clock } : {}),
         outputStartSec: place.outputStartSec,
         volumeKeyframes: src.volumeKeyframes,
         keyframeOffsetSec: src.keyframeOffsetSec,

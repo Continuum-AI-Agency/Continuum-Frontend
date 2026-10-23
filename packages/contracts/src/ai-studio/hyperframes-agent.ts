@@ -237,6 +237,18 @@ export const hyperframesBriefRequestSchema = z
   .strict();
 export type HyperframesBriefRequest = z.infer<typeof hyperframesBriefRequestSchema>;
 
+/** A spoken word, in composition seconds (speech-to-text word offsets). */
+export const hyperframesSpokenWordSchema = z
+  .object({
+    text: z.string().trim().min(1).max(80),
+    startSec: z.number().min(0).max(90),
+    endSec: z.number().min(0).max(90),
+  })
+  .strict();
+export type HyperframesSpokenWord = z.infer<typeof hyperframesSpokenWordSchema>;
+/** ~3 words a second across the 90 s cap, with room. */
+export const HYPERFRAMES_SPOKEN_WORD_LIMIT = 400;
+
 export const hyperframesAgentTurnRequestSchema = z
   .object({
     sessionId: z.string().min(1).optional(),
@@ -266,6 +278,13 @@ export const hyperframesAgentTurnRequestSchema = z
     approvedStoryboard: hyperframesStoryboardSchema.optional(),
     /** Set on a report film run: the film is compiled from metrics, not drafted from `prompt`. */
     report: hyperframesReportRequestSchema.optional(),
+    /**
+     * What a source video's speaker says, in composition seconds. The agent keys graphics,
+     * captions and card states to these words with `@w<n>` tokens the server resolves.
+     */
+    words: z.array(hyperframesSpokenWordSchema).max(HYPERFRAMES_SPOKEN_WORD_LIMIT).optional(),
+    /** A transparent overlay for footage: no background, rendered with alpha. */
+    overlay: z.boolean().optional(),
     idempotencyKey: z.string().min(8).max(200).optional(),
   })
   .strict();
