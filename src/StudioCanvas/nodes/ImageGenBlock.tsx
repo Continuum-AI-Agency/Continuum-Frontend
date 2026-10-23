@@ -372,27 +372,30 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   );
 
   // Expiry recovery: a signed URL can expire while the canvas is open. On an image
-  // load error, re-sign this node once from its durable storage path/bucket.
+  // load error (single preview or any grid tile), re-sign this node once from its
+  // durable storage paths.
   const resignAttemptedRef = useRef(false);
   const handleImageError = useCallback(async () => {
     if (resignAttemptedRef.current) return;
-    if (!data.generatedImageStoragePath || !data.generatedImageBucket) return;
     resignAttemptedRef.current = true;
     try {
       const [resigned] = await resignCanvasNodes(
         [{ id, type: 'nanoGen', position: { x: 0, y: 0 }, data } as unknown as StudioNode],
         brandId,
       );
-      const url = (resigned?.data as Record<string, unknown> | undefined)?.generatedImageUrl;
-      if (typeof url === 'string' && url) {
-        useStudioStore
-          .getState()
-          .updateNodeData(id, { generatedImage: url, generatedImageUrl: url });
-      }
+      const next = resigned?.data as NanoGenNodeData | undefined;
+      if (!next || next === data) return;
+      const url = next.generatedImageUrl;
+      useStudioStore.getState().updateNodeData(id, {
+        ...(url ? { generatedImage: url, generatedImageUrl: url } : {}),
+        ...(next.generatedImages !== data.generatedImages
+          ? { generatedImages: next.generatedImages }
+          : {}),
+      });
     } catch (err) {
       console.warn('[studio] failed to re-sign expired image url', err);
     }
-  }, [data, id]);
+  }, [data, id, brandId]);
   // A node used to RE-SIZE ITSELF when a generation came back at a ratio other than the
   // one selected — the box moved under the user with no gesture behind it ("images
   // should be still unless you change the format", Airtable #232). The box is derived
@@ -576,6 +579,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                           src={variation.preview}
                           alt={`Generated variation ${index + 1}`}
                           className="h-full w-full object-cover"
+                          onError={handleImageError}
                         />
                         <Button
                           variant="secondary"

@@ -291,6 +291,42 @@ describe('resignCanvasNodes — asset + exact version references', () => {
     ]);
     expect((node.data as Record<string, unknown>).generatedImage).toBe('https://fresh/a.png');
   });
+
+  test('a reloaded 4-up generator gets a fresh preview on every variation', async () => {
+    const paths = ['brand/v0.png', 'brand/v1.png', 'brand/v2.png', 'brand/v3.png'];
+    backendItems = paths.map((path) => ({
+      bucket: 'media-library',
+      path,
+      signedUrl: `https://fresh/${path}`,
+    }));
+    // Persisted shape: coordinates survive, preview/url were stripped on save.
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'gen',
+          type: 'nanoGen',
+          position: { x: 0, y: 0 },
+          data: {
+            variationCount: 4,
+            generatedImageStoragePath: paths[0],
+            generatedImageBucket: 'media-library',
+            generatedImages: paths.map((path) => ({
+              storageBucket: 'media-library',
+              storagePath: path,
+            })),
+          },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    const variations = (node.data as { generatedImages: Array<{ preview?: string }> })
+      .generatedImages;
+    expect(variations.map((variation) => variation.preview)).toEqual(
+      paths.map((path) => `https://fresh/${path}`),
+    );
+    expect(backendCalls).toHaveLength(1);
+  });
 });
 
 describe('resignCanvasNodes — Library renditions and non-image references', () => {
