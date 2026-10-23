@@ -1740,7 +1740,15 @@ export const apiRenderBatchPreflightResponseSchema = z
     expiresAt: z.string(),
     template: apiRenderTemplateSummarySchema,
     target: resolvedRenderTargetSchema.nullable(),
-    records: z.array(z.object({ label: z.string(), inputKeys: z.array(z.string()) }).strict()),
+    records: z.array(
+      z
+        .object({
+          label: z.string(),
+          inputKeys: z.array(z.string()),
+          engine: z.enum(['fleet', 'paint', 'micro', 'web']).default('fleet'),
+        })
+        .strict(),
+    ),
     readiness: apiRenderBatchReadinessSchema.default({
       state: 'READY',
       totalRows: 0,

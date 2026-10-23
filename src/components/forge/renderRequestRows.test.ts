@@ -438,6 +438,24 @@ describe('CSV', () => {
     expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
   });
 
+  test('auto-maps accented spreadsheet headers to unaccented template variables', () => {
+    const title = variable({ key: 'title', label: 'Titre' });
+    const region = variable({ key: 'region', label: 'Region' });
+    expect(autoMapHeaders(['Titré', 'Région'], [title, region])).toEqual({
+      Titré: 'title',
+      Région: 'region',
+    });
+  });
+
+  test('an accent-folded label cannot take another variable exact header', () => {
+    const accented = variable({ key: 'accented', label: 'Région' });
+    const plain = variable({ key: 'plain', label: 'Region' });
+    expect(autoMapHeaders(['Region', 'Région'], [accented, plain])).toEqual({
+      Region: 'plain',
+      Région: 'accented',
+    });
+  });
+
   test('a media link column maps by detected type when it has one matching slot', () => {
     const image = variable({ key: 'hero', label: 'Hero asset', kind: 'image' });
     const video = variable({ key: 'clip', label: 'Motion asset', kind: 'video' });

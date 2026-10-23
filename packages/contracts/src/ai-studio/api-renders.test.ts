@@ -225,7 +225,7 @@ describe('API render contracts', () => {
   });
 
   // A server too old to say who draws the row is the fleet; a vendored client must still parse it.
-  it('reads the engine the preflight signed, and defaults an unsaid one to the fleet', () => {
+  it('reads engines from single and batch preflights, defaulting an unsaid one to the fleet', () => {
     const base = {
       confirmationToken: 'token',
       confirmationHash: 'a'.repeat(64),
@@ -254,6 +254,27 @@ describe('API render contracts', () => {
     expect(apiRenderPreflightResponseSchema.safeParse({ ...base, engine: 'crayon' }).success).toBe(
       false,
     );
+
+    const { inputKeys, ...batchBase } = base;
+    const record = { label: '1.1', inputKeys };
+    const batch = {
+      ...batchBase,
+      batchId: '00000000-0000-4000-8000-000000000001',
+      records: [record],
+    };
+    for (const engine of ['fleet', 'paint', 'micro', 'web']) {
+      const response = { ...batch, records: [{ ...record, engine }] };
+      expect(apiRenderBatchPreflightResponseSchema.parse(response).records[0]?.engine).toBe(engine);
+    }
+    expect(apiRenderBatchPreflightResponseSchema.parse(batch).records[0]?.engine).toBe('fleet');
+    for (const extra of [{ engine: 'crayon' }, { unexpected: true }]) {
+      expect(
+        apiRenderBatchPreflightResponseSchema.safeParse({
+          ...batch,
+          records: [{ ...record, ...extra }],
+        }).success,
+      ).toBe(false);
+    }
   });
 
   // A URL in the pin slot is the exact failure this feature exists to prevent: it

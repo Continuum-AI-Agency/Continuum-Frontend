@@ -3173,10 +3173,12 @@ export function RenderRequestsGrid({
                       aria-label="Fields"
                       className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
                     >
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         aria-expanded={fieldsOpen}
-                        className="flex h-8 shrink-0 items-center gap-1.5 px-[var(--card-pad)] text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        className="h-8 shrink-0 justify-start gap-1.5 rounded-none px-[var(--card-pad)] text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-transparent hover:text-foreground"
                         onClick={() => {
                           setFieldsOpen(!fieldsOpen);
                           writeStored(FIELDS_OPEN_KEY, !fieldsOpen);
@@ -3193,7 +3195,7 @@ export function RenderRequestsGrid({
                             ? (rows.find((row) => row.id === previewId)?.label ?? '')
                             : 'Pick a row'}
                         </span>
-                      </button>
+                      </Button>
                       {fieldsOpen && previewId ? (
                         <div className="min-h-0 overflow-y-auto px-[var(--card-pad)] pb-2">
                           <RowFields table={table} rowId={previewId} />
