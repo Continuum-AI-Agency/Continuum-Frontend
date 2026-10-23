@@ -1345,7 +1345,7 @@ test.describe('organic planner list + draft preview', () => {
 
       // Gating #10/#11: the account is known BEFORE the click. This brand connects no ${label}
       // account; the old panel let Publish reach the confirm dialog and the server then refused
-      // it (account_missing). Now the preview says so, makes it a fix, and offers no Publish now.
+      // it (account_missing). Now the preview says so, makes it a fix, and disables Publish now.
       const accountConnected = (planBody?.accounts?.length ?? 0) > 0;
       if (accountConnected) {
         await expect(
@@ -1357,9 +1357,9 @@ test.describe('organic planner list + draft preview', () => {
           timeout: 30_000,
         });
         await expect(preview.locator('[data-readiness-fix="account"]')).toBeVisible();
-        await expect(preview.getByRole('button', { name: 'Publish now', exact: true })).toHaveCount(
-          0,
-        );
+        await expect(
+          preview.getByRole('button', { name: 'Publish now', exact: true }),
+        ).toBeDisabled();
       }
       await page.screenshot({ path: `${SCREENSHOT_DIR}/publish-gate-${platform}.png` });
     });

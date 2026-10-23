@@ -932,13 +932,17 @@ describe('OrganicDraftPreview — readiness and the primary action', () => {
     expect(screen.queryByRole('button', { name: 'Publish now' })).toBeNull();
   });
 
-  // Gating #11: Publish now is the gated secondary, never an ungated menu item.
-  it('hides Publish now while anything blocks the post, and publishes once it is clear', async () => {
+  // Gating #11: Publish now is the gated secondary, never an ungated menu item. It stays in view
+  // while blocked, disabled with the same reason as approve, so it is never a hidden feature.
+  it('disables Publish now while anything blocks the post, and publishes once it is clear', async () => {
     publishMock.mockClear();
     render(
       <OrganicDraftPreview draft={baseDraft({ captionPreview: '' })} brandProfileId="brand-1" />,
     );
-    expect(screen.queryByRole('button', { name: 'Publish now' })).toBeNull();
+    const blockedPublish = screen.getByRole('button', { name: 'Publish now' });
+    expect(blockedPublish.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(blockedPublish);
+    expect(publishMock).not.toHaveBeenCalled();
     cleanup();
 
     render(
