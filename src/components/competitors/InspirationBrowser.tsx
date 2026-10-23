@@ -156,14 +156,24 @@ function AllFeed({
     () => buildInspirationFeed(posts.data?.items ?? [], timeline.data ?? []),
     [posts.data, timeline.data],
   );
+  // The feed still renders when only one source fails, so say which one did rather
+  // than letting organic posts hide a broken paid feed.
+  const paidOnlyFailed = timeline.isError && !posts.isError;
   return (
-    <InspirationFeedGrid
-      brandId={brandId}
-      items={items}
-      isLoading={(posts.isLoading || timeline.isLoading) && items.length === 0}
-      isError={posts.isError && timeline.isError}
-      gridClassName={gridClassName}
-    />
+    <>
+      {paidOnlyFailed ? (
+        <p className="pb-2 text-xs text-muted-foreground">
+          Competitor paid ads failed to load. Showing organic posts only.
+        </p>
+      ) : null}
+      <InspirationFeedGrid
+        brandId={brandId}
+        items={items}
+        isLoading={(posts.isLoading || timeline.isLoading) && items.length === 0}
+        isError={posts.isError && timeline.isError}
+        gridClassName={gridClassName}
+      />
+    </>
   );
 }
 
