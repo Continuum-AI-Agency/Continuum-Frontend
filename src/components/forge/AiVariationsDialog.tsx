@@ -708,8 +708,10 @@ export function AiDraftDialog({
                     {sheet.name} · read here ·{' '}
                     {sheet.tables.map((table) => `${table.name} (${table.rows.length})`).join(', ')}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={`Remove ${sheet.name}`}
                     disabled={busy}
                     onClick={() =>
@@ -717,7 +719,7 @@ export function AiDraftDialog({
                     }
                   >
                     <X className="size-3.5" aria-hidden />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -739,8 +741,10 @@ export function AiDraftDialog({
                           ? 'Reading file…'
                           : 'Uploading…'}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={`Remove ${file.name}`}
                     disabled={busy || uploading}
                     onClick={() =>
@@ -748,7 +752,7 @@ export function AiDraftDialog({
                     }
                   >
                     <X className="size-3.5" aria-hidden />
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -312,12 +312,14 @@ function MediaPicker({
           }
         }}
       />
-      <button
+      <Button
         type="button"
+        size="icon-xs"
+        variant="ghost"
         aria-label={`Upload ${variable.label}`}
         title="Upload a file here"
         disabled={uploading}
-        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        className="shrink-0 text-muted-foreground"
         onClick={() => fileInput.current?.click()}
       >
         {uploading ? (
@@ -325,7 +327,7 @@ function MediaPicker({
         ) : (
           <Upload className="size-3.5" aria-hidden />
         )}
-      </button>
+      </Button>
       {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
         // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
         <video
@@ -354,14 +356,16 @@ function MediaPicker({
         </Badge>
       ) : null}
       {pins.length ? (
-        <button
+        <Button
           type="button"
+          size="icon-xs"
+          variant="ghost"
           aria-label={`Clear ${variable.label}`}
-          className="shrink-0 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          className="shrink-0 text-muted-foreground"
           onClick={onClear}
         >
           <X className="size-3" aria-hidden />
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -463,38 +467,44 @@ function InheritanceAction({
     const canRestore = restore !== undefined || hasSavedDefault(variable);
     if (isMedia(variable) || !canRestore || isDefaultValue(variable, value)) return null;
     return (
-      <button
+      <Button
         type="button"
-        className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+        size="icon-xs"
+        variant="ghost"
+        className="text-muted-foreground"
         aria-label={`Reset ${variable.label} to default`}
         title="Reset to default"
         onClick={() => actions.setValue(row.id, variable.key, restore)}
       >
         <RotateCcw className="size-3" aria-hidden />
-      </button>
+      </Button>
     );
   }
   const changed = variable.key in row.values || row.clearedKeys.includes(variable.key);
   return changed ? (
-    <button
+    <Button
       type="button"
-      className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+      size="icon-xs"
+      variant="ghost"
+      className="text-muted-foreground"
       aria-label={`Reset ${variable.label} to inherited`}
       title="Reset to inherited"
       onClick={() => actions.resetValue(row.id, variable.key)}
     >
       <RotateCcw className="size-3" aria-hidden />
-    </button>
+    </Button>
   ) : (
-    <button
+    <Button
       type="button"
-      className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+      size="icon-xs"
+      variant="ghost"
+      className="text-muted-foreground"
       aria-label={`Clear inherited ${variable.label}`}
       title="Clear inherited value"
       onClick={() => actions.clearValue(row.id, variable.key)}
     >
       <X className="size-3" aria-hidden />
-    </button>
+    </Button>
   );
 }
 
@@ -905,9 +915,11 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
         />
       ))}
       {tableRow.getCanExpand() ? (
-        <button
+        <Button
           type="button"
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          size="icon-xs"
+          variant="ghost"
+          className="text-muted-foreground"
           aria-label={`${tableRow.getIsExpanded() ? 'Collapse' : 'Expand'} ${row.label}`}
           onClick={tableRow.getToggleExpandedHandler()}
         >
@@ -916,7 +928,7 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           ) : (
             <ChevronRight className="size-3" aria-hidden />
           )}
-        </button>
+        </Button>
       ) : (
         <span className="size-4" />
       )}
@@ -1118,14 +1130,16 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
         </DropdownMenuContent>
       </DropdownMenu>
       {row.parentId && row.outputIds.length ? (
-        <button
+        <Button
           type="button"
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          size="icon-xs"
+          variant="ghost"
+          className="text-muted-foreground"
           aria-label="Reset formats to inherited"
           onClick={() => actions.updateRow(row.id, (current) => ({ ...current, outputIds: [] }))}
         >
           <RotateCcw className="size-3" aria-hidden />
-        </button>
+        </Button>
       ) : null}
     </div>
   );

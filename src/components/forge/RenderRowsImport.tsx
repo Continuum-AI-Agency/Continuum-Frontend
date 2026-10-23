@@ -20,7 +20,7 @@ import {
   sheetTable,
 } from '@continuum/contracts';
 import { FileSpreadsheet, FolderOpen, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -236,6 +236,8 @@ export function RenderRowsImport({
   const kitsRef = useRef<HTMLInputElement>(null);
   const scopeRef = useRef(0);
   const [busy, setBusy] = useState(false);
+  const fileInputId = useId();
+  const [dragOver, setDragOver] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -800,6 +802,7 @@ export function RenderRowsImport({
             <FieldLabel>Spreadsheet</FieldLabel>
             <input
               ref={fileRef}
+              id={fileInputId}
               type="file"
               accept=".csv,.tsv,.txt,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
@@ -810,19 +813,55 @@ export function RenderRowsImport({
                 event.target.value = '';
               }}
             />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              {busy ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" />
-              ) : (
-                <FileSpreadsheet data-icon="inline-start" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+              >
+                {busy ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                ) : (
+                  <FileSpreadsheet data-icon="inline-start" />
+                )}
+                Choose XLSX or CSV
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={contract.variables.length === 0}
+                onClick={() => downloadTemplateCsv(contract, 'render-rows-template.csv')}
+              >
+                Download blank template
+              </Button>
+            </div>
+            {/* A drop takes the same review path as the picker. A label carries the drop and clicks
+                through to the hidden input; the buttons stay outside it, as a label cannot hold them. */}
+            <label
+              htmlFor={fileInputId}
+              data-dragover={dragOver || undefined}
+              className={cn(
+                'flex cursor-pointer flex-col items-start gap-1 rounded-lg border border-dashed border-border/70 p-3 text-xs transition-colors',
+                dragOver && 'border-primary bg-primary/5',
               )}
-              Choose XLSX or CSV
-            </Button>
+              onDragOver={(event) => {
+                if (busy) return;
+                event.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(event) => {
+                if (busy) return;
+                event.preventDefault();
+                setDragOver(false);
+                const file = event.dataTransfer.files?.[0];
+                if (file) void loadFile(file);
+              }}
+            >
+              <span className="font-medium text-foreground">Drop a file here or choose one</span>
+              <span className="text-muted-foreground">The file is read here, in your browser.</span>
+            </label>
             <FieldDescription>
               Title rows, notes and a colour legend around the data are fine. Colour names (Rojo,
               Blanco) and short hexes become full hex colours.

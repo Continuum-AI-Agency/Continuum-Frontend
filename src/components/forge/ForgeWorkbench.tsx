@@ -25,8 +25,6 @@ import {
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { TemplateDetail } from '@/components/forge/TemplateDetail';
-import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,6 +58,18 @@ import { useForgeExitGuard } from './useForgeExitGuard';
 const PresentationWorkspace = dynamic(
   () => import('@/components/forge/presentations/PresentationWorkspace'),
   { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> },
+);
+
+// The detail and the gallery are the heaviest panels behind the tab shell: load them on first use
+// so the shell paints first.
+const TemplateDetail = dynamic(
+  () => import('@/components/forge/TemplateDetail').then((module) => module.TemplateDetail),
+  { loading: () => <Skeleton className="h-40 w-full" /> },
+);
+
+const TemplateGallery = dynamic(
+  () => import('@/components/forge/TemplateGallery').then((module) => module.TemplateGallery),
+  { loading: () => <Skeleton className="h-40 w-full" /> },
 );
 
 const NativeHyperframesEditor = dynamic(
