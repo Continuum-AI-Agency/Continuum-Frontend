@@ -133,10 +133,11 @@ function fitText(
     : FLOOR_PX;
   const overBudget = variable.charBudget !== null && text.length > variable.charBudget;
   const tooSmall = size < floor;
+  // A warning, never a block: the render still runs, the type shrinks or the text clips.
   const overflow = overBudget
-    ? `${nameOf(variable)} overflows its box (${text.length}/${variable.charBudget} characters)`
+    ? `Will render · ${nameOf(variable)} may shrink or clip (${text.length}/${variable.charBudget})`
     : tooSmall
-      ? `${nameOf(variable)} overflows its box (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
+      ? `Will render · ${nameOf(variable)} may shrink or clip (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
       : null;
   // Drawn at the floor when it cannot shrink that far, so the spill is visible, not hidden.
   const drawSize = tooSmall ? floor : size;
@@ -899,7 +900,9 @@ function TemplatePreviewPanel({
         return {
           frame,
           warning:
-            livePaint.overflows.map((label) => `${label} overflows its box`).join(' · ') || null,
+            livePaint.overflows
+              .map((label) => `Will render · ${label} may shrink or clip`)
+              .join(' · ') || null,
         };
       }
       frame = drawing
@@ -969,7 +972,7 @@ function TemplatePreviewPanel({
         : []),
       ...(data
         ? [
-            ...data.overflows.map((label) => `${label} overflows its box`),
+            ...data.overflows.map((label) => `Will render · ${label} may shrink or clip`),
             ...(data.notPreviewed.length ? [`Not previewed: ${data.notPreviewed.join(', ')}`] : []),
           ]
         : (drawing?.overflows ?? [])),

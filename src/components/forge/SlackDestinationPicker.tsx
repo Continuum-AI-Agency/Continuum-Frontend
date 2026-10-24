@@ -34,7 +34,7 @@ const NO_ROOM = 'none';
 // lives in Settings → Integrations — this links there rather than embedding the install flow.
 
 // Room-wide copy and the failure map live in `slackRoomCopy`, shared with the Settings section;
-// re-exported here because this is where the review tray already reads them from.
+// re-exported here because this is where Forge's delivery code already reads them from.
 export { describeSlackFailure, isSlackDeliveryUnavailable } from '@/components/forge/slackRoomCopy';
 
 export type SlackPickerState =
@@ -85,7 +85,9 @@ export function SlackDestinationPicker({
     );
   const roomLabels: Record<string, string> = {
     [NO_ROOM]: 'Don’t post to Slack',
-    ...Object.fromEntries(destinations.map((destination) => [destination.id, roomLabel(destination)])),
+    ...Object.fromEntries(
+      destinations.map((destination) => [destination.id, roomLabel(destination)]),
+    ),
   };
   return (
     <div className="space-y-2">

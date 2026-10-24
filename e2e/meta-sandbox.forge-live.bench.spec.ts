@@ -188,12 +188,23 @@ const gridRow = (page: Page, label: string): Locator =>
     .getByRole('row')
     .filter({ has: page.getByRole('button', { name: `Drag ${label}`, exact: true }) });
 
-/** The tray's one way forward: the last button in its footer, named for the step it takes. */
-async function pressPrimary(tray: Locator, name: string | RegExp, timeout?: number) {
-  const primary = tray.locator('footer').getByRole('button').last();
-  await expect(primary).toHaveText(name, { timeout });
-  await expect(primary).toBeEnabled({ timeout });
-  await primary.click();
+/** A row's Destination cell, opened: the same per-row picker the confirmation reads back. */
+async function openDestination(page: Page, name: string): Promise<Locator> {
+  await gridRow(page, name)
+    .getByRole('button', { name: new RegExp(`^Destination for ${escapeRegExp(name)}:`) })
+    .click();
+  const popover = page.getByRole('dialog').filter({ has: metaRow(page.locator('body'), name) });
+  await expect(popover).toBeVisible();
+  return popover;
+}
+
+/** The open set's delivery settings, from its actions menu. */
+async function openSetSettings(page: Page, setName: string): Promise<Locator> {
+  await page.getByRole('button', { name: `Actions for ${setName}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Settings…', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: `Delivery for “${setName}”` });
+  await expect(settings).toBeVisible();
+  return settings;
 }
 
 /** A Base UI Select: open the trigger, press the first matching option; returns its text. */
@@ -205,10 +216,10 @@ async function chooseOption(scope: Locator, combobox: string, option: RegExp): P
   return text;
 }
 
-/** One row of the Deliver step's Meta list, however its target button is named right now. */
-const metaRow = (tray: Locator, name: string): Locator =>
-  tray.getByRole('listitem').filter({
-    has: tray.page().getByRole('button', {
+/** One row of the Meta target picker, however its target button is named right now. */
+const metaRow = (scope: Locator, name: string): Locator =>
+  scope.getByRole('listitem').filter({
+    has: scope.page().getByRole('button', {
       name: new RegExp(`^(Replace an ad|Change the ad) for ${escapeRegExp(name)}$`),
     }),
   });
@@ -278,7 +289,7 @@ async function findListed(
  */
 async function drillIntoAdset(
   page: Page,
-  tray: Locator,
+  scope: Locator,
   name: string,
 ): Promise<{
   drill: Locator;
@@ -286,7 +297,7 @@ async function drillIntoAdset(
   adset: PaidCanvasTarget;
   ads: Promise<Response>;
 }> {
-  const drill = metaRow(tray, name);
+  const drill = metaRow(scope, name);
   const campaigns = nextPaidPage(page, 'campaign');
   await drill.getByRole('button', { name: `Replace an ad for ${name}`, exact: true }).click();
   const campaign = await findListed(drill, 'campaign', CAMPAIGN_ID, campaigns);
@@ -353,7 +364,7 @@ async function selectTemplate(page: Page, template: ApiRenderTemplateSummary): P
   await expect(picker).toContainText(label);
 }
 
-/** The rail's Duplicate, then Rename, on the copy it opens. Returns the copy. */
+/** The set menu's Duplicate, then Rename, on the copy it opens. Returns the copy. */
 async function duplicateAndName(page: Page, source: ForgeRenderSet): Promise<ForgeRenderSet> {
   const show = page.getByRole('button', { name: 'Show render sets', exact: true });
   if (await show.isVisible()) await show.click();
@@ -380,20 +391,15 @@ async function duplicateAndName(page: Page, source: ForgeRenderSet): Promise<For
   const copy = forgeRenderSetSchema.parse(await response.json());
 
   const name = `${BENCH_SET_PREFIX} ${RUN_ID}`;
-  const active = page
-    .getByRole('list', { name: 'Render sets' })
-    .getByRole('listitem')
-    .filter({ has: page.locator('button[aria-current="true"]') });
-  await active.getByRole('button', { name: `Actions for ${copy.name}`, exact: true }).click();
+  // The copy opens as the selected tab; its actions sit beside the strip.
+  await page.getByRole('button', { name: `Actions for ${copy.name}`, exact: true }).click();
   await page.getByRole('menuitem', { name: 'Rename…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Rename render set' });
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
   await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
-  await expect(page.getByRole('button', { name: `Open ${name}`, exact: true })).toHaveAttribute(
-    'aria-current',
-    'true',
-    { timeout: 60_000 },
-  );
+  await expect(
+    page.getByRole('tablist', { name: 'Render sets' }).getByRole('tab').filter({ hasText: name }),
+  ).toHaveAttribute('aria-selected', 'true', { timeout: 60_000 });
   return { ...copy, name };
 }
 
@@ -426,8 +432,8 @@ async function oneProvenRow(page: Page, label: string): Promise<string> {
 }
 
 /** Exactly the one bench room, whatever the brand's defaults pre-selected. */
-async function onlyTheBenchRoom(tray: Locator): Promise<void> {
-  const rooms = tray.getByRole('list', { name: 'Approval rooms' });
+async function onlyTheBenchRoom(scope: Locator): Promise<void> {
+  const rooms = scope.getByRole('list', { name: 'Approval rooms' });
   // A room's accessible name leads with the room and goes on to its platform ("#room Slack #room").
   const named = new RegExp(`^${escapeRegExp(APPROVAL_ROOM.name)}\\b`);
   const room = rooms.getByRole('checkbox', { name: named });
@@ -547,61 +553,41 @@ test('confirm · a Forge render into the sandbox ad set is held for approval', a
   const creating = rows.at(-1)!;
   const rowWord = rows.length === 1 ? '1 row' : `${rows.length} rows`;
 
-  await page.getByRole('button', { name: new RegExp(`^Render ${rowWord} · \\d+ files?$`) }).click();
-  const tray = page.getByRole('region', { name: 'Review and render' });
-  await expect(tray.getByRole('heading', { name: `Render ${rowWord}` })).toBeVisible();
-  await pressPrimary(tray, 'Next: delivery', 180_000);
-  const change = tray.getByRole('button', { name: 'Change delivery', exact: true });
-  if (await change.isVisible()) await change.click();
-  await expect(
-    tray.getByRole('button', { name: `Replace an ad for ${rows[0]}`, exact: true }),
-    'StarCraft has a Meta ad account connected',
-  ).toBeVisible({ timeout: 60_000 });
-
-  // Row 1 (only with an ad to swap): campaign → ad set → the sandbox ad, then its one comp.
+  // Row 1 (only with an ad to swap): its Destination → campaign → ad set → the sandbox ad, then
+  // its one comp. Each pick is saved into the set, row by row.
   let replaced: { name: string; comp: string } | null = null;
   if (replacing) {
-    const first = await drillIntoAdset(page, tray, replacing);
+    const popover = await openDestination(page, replacing);
+    await expect(
+      popover.getByRole('button', { name: `Replace an ad for ${replacing}`, exact: true }),
+      'StarCraft has a Meta ad account connected',
+    ).toBeVisible({ timeout: 60_000 });
+    const first = await drillIntoAdset(page, popover, replacing);
     const ad = await findListed(first.drill, 'ad', AD_ID, first.ads, ADSET_ID);
     await ad.click();
-    await expect(metaRow(tray, replacing)).toContainText(ad.item.name || ad.item.id);
-    const square = await chooseOption(tray, `Format for ${replacing}`, /^1:1 · /);
+    await expect(metaRow(popover, replacing)).toContainText(ad.item.name || ad.item.id);
+    const square = await chooseOption(popover, `Format for ${replacing}`, /^1:1 · /);
     replaced = { name: ad.item.name || AD_ID, comp: square.replace(/^1:1 · /, '') };
+    await page.keyboard.press('Escape');
   }
 
-  // Row 2: campaign → the sandbox ad set, then a new paused ad in it.
-  const second = await drillIntoAdset(page, tray, creating);
+  // Row 2: its Destination → campaign → the sandbox ad set, then a new paused ad in it.
+  const popover = await openDestination(page, creating);
+  const second = await drillIntoAdset(page, popover, creating);
   expect((await second.ads).ok(), 'the ad set’s ads load').toBe(true);
   await second.drill.getByRole('button', { name: 'New paused ad in this ad set' }).click();
-  await expect(metaRow(tray, creating)).toContainText(
+  await expect(metaRow(popover, creating)).toContainText(
     `New paused ad in ${second.campaign.name || CAMPAIGN_ID} › ${second.adset.name || ADSET_ID}`,
   );
+  await page.keyboard.press('Escape');
 
-  await onlyTheBenchRoom(tray);
+  // The approval room is the set's: exactly the bench room, saved with the copy.
+  const settings = await openSetSettings(page, copy.name);
+  await onlyTheBenchRoom(settings);
+  await settings.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(settings).toBeHidden({ timeout: 60_000 });
 
-  // A delivery pick is saved into the set; a save that moves its revision sends the tray back to
-  // Review, which re-checks by itself — press on again once it has.
-  await expect(async () => {
-    const primary = tray.locator('footer').getByRole('button').last();
-    if ((await primary.textContent())?.includes('Next: delivery') && (await primary.isEnabled()))
-      await primary.click();
-    await expect(primary).toHaveText('Next: confirm', { timeout: 2_000 });
-    await expect(primary).toBeEnabled({ timeout: 2_000 });
-  }).toPass({ timeout: 180_000 });
-  await pressPrimary(tray, 'Next: confirm');
-
-  if (replaced) {
-    await expect(tray.getByText(/1 ad replacement held for approval/).first()).toBeVisible();
-    await expect(tray.getByText(`replaces ${replaced.name} · 1:1`)).toBeVisible();
-  }
-  await expect(tray.getByText(/1 new paused ad held for approval/).first()).toBeVisible();
-  await expect(
-    tray.getByText(`new paused ad in ${second.adset.name || ADSET_ID}`, { exact: true }),
-  ).toBeVisible();
-  await expect(
-    tray.getByText(/Nothing changes in Ads Manager until someone approves/).first(),
-  ).toBeVisible();
-
+  // One confirmation, checked once on open with every target and the room in it.
   const signed = page.waitForRequest(
     (request) =>
       request.method() === 'POST' &&
@@ -613,12 +599,29 @@ test('confirm · a Forge render into the sandbox ad set is held for approval', a
       ),
     { timeout: 180_000 },
   );
+  await page
+    .getByRole('toolbar', { name: 'Render' })
+    .getByRole('button', { name: new RegExp(`^Render ${rowWord} · \\d+ files?$`) })
+    .click();
+  const confirm = page.getByRole('dialog', { name: new RegExp(`^Render ${rowWord} · `) });
+  await expect(confirm).toBeVisible();
+  const ads = confirm.getByRole('list', { name: 'Meta ads' });
+  if (replaced) await expect(ads).toContainText(`replaces ${replaced.name}`);
+  await expect(ads).toContainText(
+    `new paused ad in ${second.campaign.name || CAMPAIGN_ID} › ${second.adset.name || ADSET_ID}`,
+  );
+  await expect(
+    confirm.getByText(/Nothing changes in Ads Manager until someone approves/).first(),
+  ).toBeVisible();
+
   const fired = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' && pathOf(response) === API_RENDER_BATCHES_ROUTE,
     { timeout: 180_000 },
   );
-  await pressPrimary(tray, /^Render \d+ files?$/);
+  const fire = confirm.getByRole('button', { name: /^Render \d+ files?$/ });
+  await expect(fire, 'the real batch preflight signed a token').toBeEnabled({ timeout: 180_000 });
+  await fire.click();
 
   // What the token signs: the sandbox account, the ad, the ad set, one comp, the one room.
   const request = apiRenderBatchPreflightRequestSchema.parse((await signed).postDataJSON());
@@ -661,9 +664,7 @@ test('confirm · a Forge render into the sandbox ad set is held for approval', a
     replaced ? ['create', 'replace'] : ['create'],
   );
   await expect(
-    tray.getByRole('heading', {
-      name: rows.length === 1 ? '1 render queued' : `${rows.length} renders queued`,
-    }),
+    page.getByText(rows.length === 1 ? '1 render queued' : `${rows.length} renders queued`),
   ).toBeVisible();
 
   writeOut({
