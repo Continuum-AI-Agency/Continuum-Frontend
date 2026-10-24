@@ -483,13 +483,13 @@ describe('RenderPreviewPanel', () => {
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText('Headline overflows its box (21/10 characters)')).toBeTruthy();
+    expect(screen.getByText('Will render · Headline may shrink or clip (21/10)')).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 
     expect(slot(container, 'headline')?.textContent).toContain('Hola');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
-    expect(screen.queryByText(/overflows its box/)).toBeNull();
+    expect(screen.queryByText(/may shrink or clip/)).toBeNull();
     expect(slot(container, 'logo')?.textContent).toContain('Continuum fills this');
   });
 
@@ -626,7 +626,9 @@ describe('RenderPreviewPanel', () => {
     expect(caption(container)).toBe(
       "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
     );
-    expect(warning(container)).toBe('Headline overflows its box · Not previewed: Background');
+    expect(warning(container)).toBe(
+      'Will render · Headline may shrink or clip · Not previewed: Background',
+    );
     // The second argument is the query's abort signal: a superseded composition is cancelled.
     expect(composePreviewMock).toHaveBeenCalledWith(
       {
@@ -1250,7 +1252,9 @@ describe('RenderPreviewPanel for a web component', () => {
   test('runs in a scripts-only sandbox at the row’s values, and the scrub renders that time', async () => {
     const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
       (async () =>
-        new Response('<!doctype html><html><head></head><body>Hello</body></html>')) as unknown as typeof fetch,
+        new Response(
+          '<!doctype html><html><head></head><body>Hello</body></html>',
+        )) as unknown as typeof fetch,
     );
     try {
       const { container } = render(

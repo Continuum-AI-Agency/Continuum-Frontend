@@ -227,22 +227,23 @@ try {
   );
   // Awaited below; a step failing first must not leave this rejection unhandled.
   void fired.catch(() => undefined);
-  await page.getByRole('button', { name: /^Render 1 row · \d+ files?$/ }).click();
-  const tray = page.getByRole('region', { name: 'Review and render' });
-  // The tray's one way forward is its footer's last button, named for the step it takes.
-  const primary = tray.locator('footer').getByRole('button').last();
-  for (const step of [/^Next: delivery$/, /^Render \d+ files?$/]) {
-    await primary.filter({ hasText: step }).waitFor({ timeout: 120_000 });
-    for (const deadline = Date.now() + 120_000; !(await primary.isEnabled()); ) {
-      assert(Date.now() < deadline, `${step} never enabled: ${await tray.innerText()}`);
-      await Bun.sleep(500);
-    }
-    await primary.click();
+  await page
+    .getByRole('toolbar', { name: 'Render' })
+    .getByRole('button', { name: /^Render 1 row · \d+ files?$/ })
+    .click();
+  // One confirmation, checked once on open; its Render button enables once the check signs.
+  const confirm = page.getByRole('dialog', { name: /^Render 1 row · \d+ files?$/ });
+  const fire = confirm.getByRole('button', { name: /^Render \d+ files?$/ });
+  await fire.waitFor({ timeout: 120_000 });
+  for (const deadline = Date.now() + 120_000; !(await fire.isEnabled()); ) {
+    assert(Date.now() < deadline, `Render never enabled: ${await confirm.innerText()}`);
+    await Bun.sleep(500);
   }
+  await fire.click();
   const batch = apiRenderBatchSchema.parse(await (await fired).json());
   assert.equal(batch.jobs.length, 1);
   jobs.push(...batch.jobs);
-  rec.record('Fired from the tray: Library only, one job', 'PASS', batch.jobs[0]!.id);
+  rec.record('Fired from the confirmation: Library only, one job', 'PASS', batch.jobs[0]!.id);
 
   let job: ApiRenderJob | undefined;
   for (const deadline = Date.now() + 600_000; ; ) {

@@ -6,27 +6,26 @@ import {
   type ForgeRenderSet,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { defaultFilter } from 'cmdk';
 import {
+  Check,
+  ChevronDown,
   Copy,
   Download,
   FolderOpen,
   History,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Plus,
   RefreshCw,
+  Settings2,
   Share2,
   Text,
   Trash2,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ActionMenuItems, type GridAction } from '@/components/forge/gridActions';
 import { NameDialog } from '@/components/forge/RenderSetMenu';
-import { InlineRename } from '@/components/forge/TemplateCard';
-import { Pill } from '@/components/kibo-ui/pill';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,6 +37,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
   DropdownMenu,
@@ -45,6 +51,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -54,9 +62,10 @@ import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
-// The template's render sets, always on screen beside the grid: which one the rows came from, what
-// each is for, and whether it has been rendered. Anything that replaces the rows on screen goes
-// through the grid's `confirmDiscard`, the one place that asks first when they hold unsaved edits.
+// The template's render sets as tabs over the grid: which one the rows came from, one click to
+// another, and — under the strip — what the open one is for, whether it has been rendered, and
+// where it delivers. Anything that replaces the rows on screen goes through the grid's
+// `confirmDiscard`, the one place that asks first when they hold unsaved edits.
 
 export type SetRenders = { count: number; lastAt: string };
 
@@ -93,11 +102,9 @@ export function rendersLine(
   return `${renders.count} ${noun} · ${formatRelativeTime(renders.lastAt, now)}`;
 }
 
-const rowCount = (count: number) => `${count} row${count === 1 ? '' : 's'}`;
-
 /**
  * The template's recent renders, read through the SAME cached query template detail owns (key,
- * fetcher and freshness identical), so the rail never costs a jobs read of its own.
+ * fetcher and freshness identical), so the tabs never cost a jobs read of their own.
  */
 export const templateJobsKey = (brandId: string, templateKey: string) =>
   ['forge-template-frame', brandId, templateKey] as const;
@@ -135,14 +142,13 @@ function SetDescription({
 
   if (draft !== null) {
     return (
-      <div className="pointer-events-auto relative z-10 flex flex-col gap-0.5">
+      <div className="flex min-w-64 flex-1 flex-col gap-0.5">
         <Textarea
-          // biome-ignore lint/a11y/noAutofocus: the person just asked to edit this description
           autoFocus
           aria-label={`Description of ${name}`}
           value={draft}
           maxLength={FORGE_RENDER_SET_MAX_DESCRIPTION}
-          rows={2}
+          rows={1}
           className="min-h-0 resize-none px-2 py-1 text-xs md:text-xs"
           // One line: a pasted line break reads as a space.
           onChange={(event) => setDraft(event.target.value.replace(/\s*[\r\n]+\s*/g, ' '))}
@@ -182,8 +188,7 @@ function SetDescription({
       disabled={sending !== null}
       onClick={() => setDraft(description ?? '')}
       className={cn(
-        // As wide as its text, so the rest of the line still opens the set.
-        'pointer-events-auto relative z-10 -mx-1 max-w-full self-start truncate rounded px-1 text-left text-2xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'min-w-0 max-w-[40ch] truncate rounded px-1 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         shown ? 'text-muted-foreground' : 'text-muted-foreground/60',
         sending && 'opacity-60',
       )}
@@ -236,23 +241,60 @@ async function shareRenderSet(brandId: string, set: ForgeRenderSet) {
   }
 }
 
-type RailDialog =
+type SetsDialog =
   | { kind: 'new' }
   | { kind: 'rename'; set: ForgeRenderSet }
   | { kind: 'delete'; set: ForgeRenderSet };
 
-export function RenderSetRail({
+const UNSAVED = '__unsaved__';
+
+/** A tab's name turned into a field by a double-click: Enter saves, Esc or leaving cancels. */
+function TabRename({
+  set,
+  onDone,
+  onRename,
+}: {
+  set: ForgeRenderSet;
+  onDone: () => void;
+  onRename: (name: string) => void;
+}) {
+  const [text, setText] = useState(set.name);
+  return (
+    <Input
+      autoFocus
+      value={text}
+      maxLength={200}
+      aria-label={`Rename ${set.name}`}
+      className="h-7 w-40 shrink-0 text-xs"
+      onChange={(event) => setText(event.target.value)}
+      onBlur={onDone}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          onDone();
+        }
+        if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+        event.preventDefault();
+        onDone();
+        const next = text.trim();
+        if (next && next !== set.name) onRename(next);
+      }}
+    />
+  );
+}
+
+export function RenderSetTabs({
   brandId,
   templateKey,
   contractHash,
   sets,
   activeSet,
   activeRows,
+  dirty,
   confirmDiscard,
   canCreate,
   draftAvailable,
-  collapsed,
-  onCollapsedChange,
+  delivery,
   onSwitch,
   onNew,
   onRename,
@@ -261,6 +303,7 @@ export function RenderSetRail({
   onDuplicate,
   onHistory,
   onUpdate,
+  onSettings,
   onImportDraft,
 }: {
   brandId: string;
@@ -271,13 +314,15 @@ export function RenderSetRail({
   activeSet: ForgeRenderSet | null;
   /** Rows on screen, which is what the active set's count means while it is being edited. */
   activeRows: number;
+  /** The rows on screen differ from what the open set saved. */
+  dirty: boolean;
   /** Runs `action` now, or after the person agrees to lose the unsaved edits on screen. */
   confirmDiscard: (action: () => void) => void;
   canCreate: boolean;
   /** An unsaved browser draft exists that is not on screen. */
   draftAvailable: boolean;
-  collapsed: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
+  /** Where the open set's renders go, said in one line beside it. */
+  delivery?: ReactNode;
   onSwitch: (set: ForgeRenderSet) => void;
   onNew: (name: string) => Promise<void>;
   onRename: (set: ForgeRenderSet, name: string) => Promise<void>;
@@ -287,15 +332,30 @@ export function RenderSetRail({
   onHistory: (set: ForgeRenderSet) => void;
   /** Saves the open set onto the current template; any other set opens first. */
   onUpdate: (set: ForgeRenderSet) => void;
+  /** Where this set's renders go: its default ad set, rooms, Proof or Final. */
+  onSettings: (set: ForgeRenderSet) => void;
   onImportDraft: () => void;
 }) {
-  const [dialog, setDialog] = useState<RailDialog | null>(null);
+  const [dialog, setDialog] = useState<SetsDialog | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [describing, setDescribing] = useState<{ id: string; request: number } | null>(null);
-  const [filter, setFilter] = useState('');
+  const [describing, setDescribing] = useState(0);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [jumpOpen, setJumpOpen] = useState(false);
   const renders = useSetRenders(brandId, templateKey);
+  const listRef = useRef<HTMLDivElement>(null);
+  const activeId = activeSet?.id ?? UNSAVED;
 
-  /** One set's actions, for its ⋯ button and a right-click on it alike. */
+  // The open set's tab is always in view, however many sets sit to either side of it.
+  useEffect(() => {
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-set-id="${activeId}"]`)
+      ?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
+  }, [activeId]);
+
+  const open = (set: ForgeRenderSet) =>
+    set.id === activeSet?.id ? undefined : confirmDiscard(() => onSwitch(set));
+
+  /** One set's actions, for the open set's ⋯ button and a right-click on any tab alike. */
   const setActions = (set: ForgeRenderSet): GridAction[][] => {
     const active = set.id === activeSet?.id;
     return [
@@ -305,7 +365,15 @@ export function RenderSetRail({
           label: 'Open',
           icon: FolderOpen,
           disabledReason: active ? 'Already open' : null,
-          run: () => confirmDiscard(() => onSwitch(set)),
+          run: () => open(set),
+        },
+        {
+          id: 'settings',
+          label: 'Settings…',
+          icon: Settings2,
+          hint: 'Where this set’s renders go: a default ad set, Slack, approval, Proof or Final',
+          disabledReason: active ? null : 'Open the set first',
+          run: () => onSettings(set),
         },
         {
           id: 'rename',
@@ -317,8 +385,8 @@ export function RenderSetRail({
           id: 'describe',
           label: 'Edit description',
           icon: Text,
-          run: () =>
-            setDescribing((current) => ({ id: set.id, request: (current?.request ?? 0) + 1 })),
+          disabledReason: active ? null : 'Open the set first',
+          run: () => setDescribing((current) => current + 1),
         },
         { id: 'duplicate', label: 'Duplicate', icon: Copy, run: () => onDuplicate(set) },
         {
@@ -358,13 +426,215 @@ export function RenderSetRail({
       ],
     ];
   };
-  const needle = filter.trim().toLowerCase();
-  const shown = needle
-    ? sets.filter((set) => `${set.name} ${set.description ?? ''}`.toLowerCase().includes(needle))
-    : sets;
 
-  const dialogs = (
-    <>
+  const rowsOf = (set: ForgeRenderSet) => (set.id === activeSet?.id ? activeRows : set.rows.length);
+
+  return (
+    <section aria-label="Render sets" className="flex shrink-0 flex-col gap-1">
+      <div className="flex min-w-0 items-end gap-1 border-b border-border">
+        <Tabs
+          value={activeId}
+          onValueChange={(value) => {
+            const set = sets.find((item) => item.id === value);
+            if (set) open(set);
+          }}
+          className="min-w-0 flex-1 gap-0"
+        >
+          <TabsList
+            ref={listRef}
+            variant="line"
+            aria-label="Render sets"
+            // Wider than the pane once there are enough sets: it scrolls sideways, never wraps.
+            className="h-9 w-full max-w-full justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:thin]"
+          >
+            {activeSet ? null : (
+              <TabsTrigger value={UNSAVED} data-set-id={UNSAVED} className="flex-none text-xs">
+                <span className="italic">Unsaved set</span>
+                <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                  {activeRows}
+                </span>
+              </TabsTrigger>
+            )}
+            {sets.map((set) => {
+              if (renaming === set.id)
+                return (
+                  <TabRename
+                    key={set.id}
+                    set={set}
+                    onDone={() => setRenaming(null)}
+                    onRename={(name) => void onRename(set, name)}
+                  />
+                );
+              const active = set.id === activeSet?.id;
+              const older = set.contractHash !== contractHash;
+              const unsaved = active && dirty;
+              return (
+                <ContextMenu key={set.id}>
+                  <ContextMenuTrigger
+                    render={
+                      <TabsTrigger
+                        value={set.id}
+                        data-set-id={set.id}
+                        title={[
+                          set.name,
+                          set.description,
+                          older ? 'Saved for an earlier version of this template' : null,
+                          unsaved ? 'Unsaved changes' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' — ')}
+                        className="max-w-56 flex-none text-xs"
+                        onDoubleClick={() => setRenaming(set.id)}
+                      />
+                    }
+                  >
+                    {older ? (
+                      <>
+                        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />
+                        <span className="sr-only">Older template</span>
+                      </>
+                    ) : null}
+                    <span className="truncate">{set.name}</span>
+                    <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                      {rowsOf(set)}
+                    </span>
+                    {unsaved ? (
+                      <>
+                        <span aria-hidden className="text-primary">
+                          •
+                        </span>
+                        <span className="sr-only">Unsaved changes</span>
+                      </>
+                    ) : null}
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="min-w-56">
+                    <ActionMenuItems kind="context" groups={setActions(set)} />
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })}
+          </TabsList>
+        </Tabs>
+        <div className="flex shrink-0 items-center gap-0.5 pb-1">
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            aria-label="New render set"
+            title="New render set"
+            disabled={!canCreate}
+            onClick={() => confirmDiscard(() => setDialog({ kind: 'new' }))}
+          >
+            <Plus aria-hidden />
+          </Button>
+          <Popover open={jumpOpen} onOpenChange={setJumpOpen}>
+            <PopoverTrigger
+              disabled={sets.length === 0}
+              render={
+                <Button type="button" size="xs" variant="ghost" className="gap-1">
+                  All sets <ChevronDown aria-hidden />
+                </Button>
+              }
+            />
+            <PopoverContent align="end" className="w-80 p-0">
+              <Command
+                filter={(_id, search, keywords = []) => defaultFilter(keywords.join(' '), search)}
+              >
+                <CommandInput placeholder="Filter sets" aria-label="Filter render sets" />
+                <CommandList>
+                  <CommandEmpty>No set matches.</CommandEmpty>
+                  {sets.map((set) => (
+                    <CommandItem
+                      key={set.id}
+                      value={set.id}
+                      keywords={[set.name, set.description ?? '']}
+                      onSelect={() => {
+                        setJumpOpen(false);
+                        open(set);
+                      }}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate">{set.name}</span>
+                        <span className="truncate text-2xs text-muted-foreground">
+                          {[
+                            `${rowsOf(set)} row${rowsOf(set) === 1 ? '' : 's'}`,
+                            renders.data
+                              ? rendersLine(renders.data.bySet.get(set.id), renders.data.complete)
+                              : null,
+                            set.description,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </span>
+                      {set.id === activeSet?.id ? <Check aria-hidden /> : null}
+                    </CommandItem>
+                  ))}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      {/* The open set in one line: what it is for, whether it has rendered, where it delivers. */}
+      <div className="flex min-h-6 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-2xs">
+        {activeSet ? (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={`Actions for ${activeSet.name}`}
+                    className="text-muted-foreground"
+                  >
+                    <MoreHorizontal aria-hidden />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="start" className="w-56">
+                <ActionMenuItems kind="dropdown" groups={setActions(activeSet)} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <SetDescription
+              name={activeSet.name}
+              description={activeSet.description}
+              editRequest={describing}
+              onSave={(description) => onDescribe(activeSet, description)}
+            />
+            <span aria-hidden className="text-muted-foreground/50">
+              ·
+            </span>
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {renders.data
+                ? rendersLine(renders.data.bySet.get(activeSet.id), renders.data.complete)
+                : renders.isError
+                  ? 'Renders unavailable'
+                  : ' '}
+            </span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">
+            Not saved yet — name the set with + to keep these rows.
+          </span>
+        )}
+        {delivery ? <span className="ml-auto flex min-w-0 items-center">{delivery}</span> : null}
+        {draftAvailable ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className={delivery ? undefined : 'ml-auto'}
+            onClick={() => confirmDiscard(onImportDraft)}
+          >
+            <History data-icon="inline-start" /> Import browser draft
+          </Button>
+        ) : null}
+      </div>
+
       <NameDialog
         open={dialog?.kind === 'new'}
         title="New render set"
@@ -422,193 +692,6 @@ export function RenderSetRail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
-  );
-
-  if (collapsed) {
-    return (
-      <aside className="flex h-full min-h-0 flex-col items-center gap-2 py-1.5">
-        <Button
-          type="button"
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Show render sets"
-          onClick={() => onCollapsedChange(false)}
-        >
-          <PanelLeftOpen aria-hidden />
-        </Button>
-        {/* Still says which set the rows are from, sideways, so folding the rail hides nothing. */}
-        <span className="min-h-0 rotate-180 truncate text-2xs text-muted-foreground [writing-mode:vertical-rl]">
-          {activeSet?.name ?? 'Unsaved set'}
-        </span>
-        {dialogs}
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="flex h-full min-h-0 flex-col">
-      <SectionHeader
-        title="Sets"
-        className="py-1"
-        action={
-          <div className="flex items-center gap-0.5">
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={!canCreate}
-              onClick={() => confirmDiscard(() => setDialog({ kind: 'new' }))}
-            >
-              <Plus data-icon="inline-start" /> New set
-            </Button>
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Hide render sets"
-              onClick={() => onCollapsedChange(true)}
-            >
-              <PanelLeftClose aria-hidden />
-            </Button>
-          </div>
-        }
-      />
-      {sets.length > 8 ? (
-        <div className="shrink-0 border-b border-border px-[var(--card-pad)] py-1">
-          <Input
-            type="search"
-            aria-label="Filter render sets"
-            placeholder="Filter sets"
-            className="h-7 text-xs"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          />
-        </div>
-      ) : null}
-      <ul
-        aria-label="Render sets"
-        className="min-h-0 flex-1 divide-y divide-border overflow-y-auto"
-      >
-        {activeSet ? null : (
-          <li className="relative flex flex-col gap-0.5 bg-muted/60 py-2 pr-2 pl-[var(--card-pad)]">
-            <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-primary" />
-            <p className="flex min-w-0 items-center gap-1.5 text-xs" aria-current="true">
-              <span className="truncate font-medium">Unsaved set</span>
-              <span className="ml-auto shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
-                {rowCount(activeRows)}
-              </span>
-            </p>
-            <p className="text-2xs text-muted-foreground">Save keeps these rows as a set.</p>
-          </li>
-        )}
-        {shown.map((set) => {
-          const active = set.id === activeSet?.id;
-          const open = () => (active ? undefined : confirmDiscard(() => onSwitch(set)));
-          return (
-            <ContextMenu key={set.id}>
-              <ContextMenuTrigger
-                render={
-                  // biome-ignore lint/a11y/useKeyWithClickEvents: a pointer shortcut over the row; the Open button under it is the keyboard path
-                  <li
-                    className={cn(
-                      'relative flex min-w-0 flex-col gap-0.5 py-1.5 pr-2 pl-[var(--card-pad)] select-text hover:bg-muted/40',
-                      active && 'bg-muted/60 hover:bg-muted/60',
-                    )}
-                    onClick={(event) => {
-                      // The name's own text opens the set too; only the controls keep their clicks.
-                      if (
-                        (event.target as Element).closest('button, input, textarea, [role="menu"]')
-                      )
-                        return;
-                      open();
-                    }}
-                  />
-                }
-              >
-                {active ? (
-                  <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-primary" />
-                ) : null}
-                {/* The whole row opens the set; its rename, description and menu controls sit above. */}
-                <button
-                  type="button"
-                  aria-label={`Open ${set.name}`}
-                  aria-current={active ? 'true' : undefined}
-                  onClick={open}
-                  className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                />
-                <div className="pointer-events-none relative flex min-w-0 items-center gap-1">
-                  <InlineRename
-                    value={set.name}
-                    onRename={(name) => void onRename(set, name)}
-                    className="h-6 min-w-0 text-xs font-medium"
-                  />
-                  {set.contractHash === contractHash ? null : (
-                    <Pill
-                      variant="warning"
-                      title="Saved for an earlier version of this template. Saving updates it."
-                      className="shrink-0 text-3xs"
-                    >
-                      Older template
-                    </Pill>
-                  )}
-                  <span className="ml-auto shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
-                    {rowCount(active ? activeRows : set.rows.length)}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          type="button"
-                          size="icon-xs"
-                          variant="ghost"
-                          aria-label={`Actions for ${set.name}`}
-                          className="pointer-events-auto relative z-10 shrink-0 text-muted-foreground"
-                        >
-                          <MoreHorizontal aria-hidden />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end" className="w-56">
-                      <ActionMenuItems kind="dropdown" groups={setActions(set)} />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <SetDescription
-                  name={set.name}
-                  description={set.description}
-                  editRequest={describing?.id === set.id ? describing.request : 0}
-                  onSave={(description) => onDescribe(set, description)}
-                />
-                <p className="pointer-events-none relative truncate font-mono text-3xs tabular-nums text-muted-foreground">
-                  {renders.data
-                    ? rendersLine(renders.data.bySet.get(set.id), renders.data.complete)
-                    : renders.isError
-                      ? 'Renders unavailable'
-                      : ' '}
-                </p>
-              </ContextMenuTrigger>
-              <ContextMenuContent className="min-w-56">
-                <ActionMenuItems kind="context" groups={setActions(set)} />
-              </ContextMenuContent>
-            </ContextMenu>
-          );
-        })}
-      </ul>
-      {draftAvailable ? (
-        <div className="shrink-0 border-t border-border px-[var(--card-pad)] py-1">
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            className="-mx-2"
-            onClick={() => confirmDiscard(onImportDraft)}
-          >
-            <History data-icon="inline-start" /> Import browser draft
-          </Button>
-        </div>
-      ) : null}
-      {dialogs}
-    </aside>
+    </section>
   );
 }
