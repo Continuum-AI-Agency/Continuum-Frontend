@@ -1,19 +1,19 @@
 /**
- * The render-sets rail on its own.
+ * The render-set tabs on their own.
  *
- * What this guards: every set is on screen with its row count and what its renders say — counted
- * from the template's cached jobs page, never a total that page cannot know; the open set is
- * marked; a description is written in place, Enter saves exactly the trimmed text and Esc sends
- * nothing; switching and New set go through the grid's discard guard; the rail folds to a strip
- * that still names the open set. Saving, conflicts and deleting through the API are the grid's,
- * and RenderGrids.test.tsx covers them.
+ * What this guards: every set is a tab with its row count, the open one selected; the open set's
+ * description and what its renders say — counted from the template's cached jobs page, never a
+ * total that page cannot know — sit under the strip; a description is written in place, Enter
+ * saves exactly the trimmed text and Esc sends nothing; switching and New set go through the
+ * grid's discard guard; a double-click renames; many sets are one filter away. Saving, conflicts
+ * and deleting through the API are the grid's, and RenderGrids.test.tsx covers them.
  */
 
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { ApiRenderJob, ApiRenderJobListResponse, ForgeRenderSet } from '@continuum/contracts';
 
 const listJobsMock = mock(async () => {
-  throw new Error('the rail must read the cached jobs page, not fetch its own');
+  throw new Error('the tabs must read the cached jobs page, not fetch its own');
 });
 const shareRenderSetMock = mock(async (_brandId: string, _setId: string) => ({
   shareLinkId: '66666666-6666-4666-8666-666666666661',
@@ -45,7 +45,7 @@ import type React from 'react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
-import { RenderSetRail, rendersBySet, rendersLine, templateJobsKey } from './RenderSetRail';
+import { RenderSetTabs, rendersBySet, rendersLine, templateJobsKey } from './RenderSetTabs';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
 // (a global shim in the shared setup drops other files' tests).
@@ -124,8 +124,8 @@ describe('rendersBySet / rendersLine', () => {
   });
 });
 
-describe('RenderSetRail', () => {
-  const setup = (over: Partial<React.ComponentProps<typeof RenderSetRail>> = {}) => {
+describe('RenderSetTabs', () => {
+  const setup = (over: Partial<React.ComponentProps<typeof RenderSetTabs>> = {}) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(
       templateJobsKey(BRAND, '133'),
@@ -134,113 +134,125 @@ describe('RenderSetRail', () => {
     const props = {
       brandId: BRAND,
       templateKey: '133',
+      contractHash: 'hash',
       sets: [LAUNCH, TEASER],
-      activeSet: LAUNCH,
+      activeSet: LAUNCH as ForgeRenderSet | null,
       activeRows: 6,
+      dirty: false,
       confirmDiscard: mock((action: () => void) => action()),
       canCreate: true,
       draftAvailable: false,
-      collapsed: false,
-      onCollapsedChange: mock((_collapsed: boolean) => undefined),
       onSwitch: mock((_set: ForgeRenderSet) => undefined),
       onNew: mock(async (_name: string) => undefined),
       onRename: mock(async (_set: ForgeRenderSet, _name: string) => undefined),
       onDescribe: mock(async (_set: ForgeRenderSet, _description: string | null) => undefined),
       onDelete: mock(async (_set: ForgeRenderSet) => undefined),
+      onDuplicate: mock((_set: ForgeRenderSet) => undefined),
+      onHistory: mock((_set: ForgeRenderSet) => undefined),
+      onUpdate: mock((_set: ForgeRenderSet) => undefined),
+      onSettings: mock((_set: ForgeRenderSet) => undefined),
       onImportDraft: mock(() => undefined),
       ...over,
     };
-    testingRender(<RenderSetRail {...props} />, {
+    testingRender(<RenderSetTabs {...props} />, {
       wrapper: ({ children }) => (
         <QueryClientProvider client={client}>{children}</QueryClientProvider>
       ),
     });
-    const item = (name: string) =>
-      within(screen.getByRole('list', { name: 'Render sets' }))
-        .getAllByRole('listitem')
-        .find((entry) => within(entry).queryByRole('button', { name: `Open ${name}` }))!;
-    return { props, item };
+    const tab = (name: string | RegExp) => screen.getByRole('tab', { name });
+    return { props, tab };
   };
 
-  test('lists every set with its rows, description and renders, and marks the open one', () => {
-    const { item } = setup();
-    const launch = item('Launch week');
-    expect(within(launch).getByText('6 rows')).toBeTruthy();
-    expect(within(launch).getByRole('button', { name: 'Spain first' })).toBeTruthy();
-    expect(within(launch).getByText('1 render · 2h ago')).toBeTruthy();
-    expect(
-      within(launch).getByRole('button', { name: 'Open Launch week' }).getAttribute('aria-current'),
-    ).toBe('true');
-
-    const teaser = item('Teaser');
-    expect(within(teaser).getByText('1 row')).toBeTruthy();
-    expect(within(teaser).getByRole('button', { name: 'Add a description' })).toBeTruthy();
-    expect(within(teaser).getByText('No renders yet')).toBeTruthy();
-    expect(
-      within(teaser).getByRole('button', { name: 'Open Teaser' }).getAttribute('aria-current'),
-    ).toBeNull();
+  test('every set is a tab with its rows; the open one is selected, and says what it is for', () => {
+    const { tab } = setup();
+    const launch = tab(/Launch week/);
+    expect(launch.textContent).toContain('6');
+    expect(launch.getAttribute('aria-selected')).toBe('true');
+    expect(tab(/Teaser/).getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByRole('tablist', { name: 'Render sets' })).toBeTruthy();
+    // Under the strip: the open set's description and its renders.
+    expect(screen.getByRole('button', { name: 'Spain first' })).toBeTruthy();
+    expect(screen.getByText('1 render · 2h ago')).toBeTruthy();
     expect(listJobsMock).not.toHaveBeenCalled();
   });
 
   test('Enter saves the trimmed description once; Esc and an unchanged Enter send nothing', () => {
-    const { props, item } = setup();
-    const teaser = item('Teaser');
-    fireEvent.click(within(teaser).getByRole('button', { name: 'Add a description' }));
-    const field = within(teaser).getByRole<HTMLTextAreaElement>('textbox', {
-      name: 'Description of Teaser',
+    const { props } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Description of Launch week' }), {
+      key: 'Enter',
+    });
+    expect(props.onDescribe).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
+    const field = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Description of Launch week',
     });
     expect(field.maxLength).toBe(500);
     fireEvent.change(field, { target: { value: 'Draft copy' } });
-    expect(within(teaser).getByText('10/500')).toBeTruthy();
+    expect(screen.getByText('10/500')).toBeTruthy();
     fireEvent.keyDown(field, { key: 'Escape' });
-    expect(within(teaser).queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     expect(props.onDescribe).not.toHaveBeenCalled();
 
-    const launch = item('Launch week');
-    fireEvent.click(within(launch).getByRole('button', { name: 'Spain first' }));
-    fireEvent.keyDown(within(launch).getByRole('textbox'), { key: 'Enter' });
-    expect(props.onDescribe).not.toHaveBeenCalled();
-
-    fireEvent.click(within(teaser).getByRole('button', { name: 'Add a description' }));
-    const again = within(teaser).getByRole('textbox');
+    fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
+    const again = screen.getByRole('textbox', { name: 'Description of Launch week' });
     fireEvent.change(again, { target: { value: '  Short cut\nfor stories  ' } });
     fireEvent.keyDown(again, { key: 'Enter' });
     expect(props.onDescribe).toHaveBeenCalledTimes(1);
-    expect(props.onDescribe.mock.calls[0]).toEqual([TEASER, 'Short cut for stories']);
+    expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, 'Short cut for stories']);
   });
 
   test('clearing a description saves null', () => {
-    const { props, item } = setup();
-    const launch = item('Launch week');
-    fireEvent.click(within(launch).getByRole('button', { name: 'Spain first' }));
-    const field = within(launch).getByRole('textbox');
+    const { props } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Spain first' }));
+    const field = screen.getByRole('textbox', { name: 'Description of Launch week' });
     fireEvent.change(field, { target: { value: '   ' } });
     fireEvent.keyDown(field, { key: 'Enter' });
     expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, null]);
   });
 
   test('switching and New set ask the grid first; the open set is not reopened', () => {
-    const { props } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Launch week' }));
+    const { props, tab } = setup();
+    fireEvent.click(tab(/Launch week/));
     expect(props.confirmDiscard).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Teaser' }));
+    fireEvent.click(tab(/Teaser/));
     expect(props.confirmDiscard).toHaveBeenCalledTimes(1);
     expect(props.onSwitch.mock.calls[0]).toEqual([TEASER]);
-    fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
     expect(props.confirmDiscard).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('dialog', { name: 'New render set' })).toBeTruthy();
   });
 
-  test('the name text opens its set; the description and menu keep their own clicks', () => {
-    const { props, item } = setup();
-    const teaser = item('Teaser');
-    fireEvent.click(within(teaser).getByRole('button', { name: 'Add a description' }));
-    fireEvent.click(within(teaser).getByRole('button', { name: 'Actions for Teaser' }));
-    expect(props.confirmDiscard).not.toHaveBeenCalled();
-    expect(within(teaser).getByRole('textbox', { name: 'Description of Teaser' })).toBeTruthy();
+  test('a double-click renames the tab in place: Enter sends the new name, Esc nothing', () => {
+    const { props, tab } = setup();
+    fireEvent.doubleClick(tab(/Teaser/));
+    const field = screen.getByRole('textbox', { name: 'Rename Teaser' });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(props.onRename).not.toHaveBeenCalled();
+    fireEvent.doubleClick(tab(/Teaser/));
+    const again = screen.getByRole('textbox', { name: 'Rename Teaser' });
+    fireEvent.change(again, { target: { value: 'Stories' } });
+    fireEvent.keyDown(again, { key: 'Enter' });
+    expect(props.onRename.mock.calls[0]).toEqual([TEASER, 'Stories']);
+  });
 
-    fireEvent.click(within(teaser).getByText('Teaser'));
-    expect(props.confirmDiscard).toHaveBeenCalledTimes(1);
+  test('the open set’s menu opens its delivery settings', async () => {
+    const { props } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch week' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Settings/ }));
+    expect(props.onSettings.mock.calls[0]).toEqual([LAUNCH]);
+  });
+
+  test('All sets filters every set and opens the one picked', async () => {
+    const { props } = setup();
+    fireEvent.click(screen.getByRole('button', { name: /All sets/ }));
+    const filter = await screen.findByLabelText('Filter render sets');
+    fireEvent.change(filter, { target: { value: 'tea' } });
+    await waitFor(() =>
+      expect(screen.queryAllByRole('option', { name: /Launch week/ })).toHaveLength(0),
+    );
+    fireEvent.click(screen.getByRole('option', { name: /Teaser/ }));
     expect(props.onSwitch.mock.calls[0]).toEqual([TEASER]);
   });
 
@@ -271,11 +283,11 @@ describe('RenderSetRail', () => {
 
     test('copies the Library link for the set and says how many renders it holds', async () => {
       setup();
-      await share('Teaser');
+      await share('Launch week');
       await waitFor(() =>
         expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/share/tok123`),
       );
-      expect(shareRenderSetMock.mock.calls[0]).toEqual([BRAND, TEASER.id]);
+      expect(shareRenderSetMock.mock.calls[0]).toEqual([BRAND, LAUNCH.id]);
       expect(toasts.at(-1)?.title).toBe('Link copied — 4 renders, revocable from the Library');
     });
 
@@ -286,10 +298,10 @@ describe('RenderSetRail', () => {
         });
       });
       setup();
-      await share('Teaser');
+      await share('Launch week');
       await waitFor(() => expect(toasts).toHaveLength(1));
       expect(toasts[0]?.title).toBe(
-        'Nothing from “Teaser” is in the Library yet. Render it first, then share.',
+        'Nothing from “Launch week” is in the Library yet. Render it first, then share.',
       );
       expect(writeText).not.toHaveBeenCalled();
     });
@@ -311,7 +323,7 @@ describe('RenderSetRail', () => {
       shareRenderSetZipMock.mockClear();
     });
     const download = async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Actions for Teaser' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Launch week' }));
       fireEvent.click(await screen.findByRole('menuitem', { name: /Download set/ }));
     };
 
@@ -319,7 +331,7 @@ describe('RenderSetRail', () => {
       setup();
       await download();
       await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
-      expect(shareRenderSetZipMock.mock.calls[0]).toEqual([BRAND, TEASER.id]);
+      expect(shareRenderSetZipMock.mock.calls[0]).toEqual([BRAND, LAUNCH.id]);
       expect(String(assign.mock.calls[0]?.[0])).toEndWith(
         '/api/ai-studio/renders/shared/teaser.zip?token=tok',
       );
@@ -334,7 +346,7 @@ describe('RenderSetRail', () => {
       setup();
       await download();
       await waitFor(() =>
-        expect(toasts).toEqual(['Nothing from “Teaser” has finished rendering yet.']),
+        expect(toasts).toEqual(['Nothing from “Launch week” has finished rendering yet.']),
       );
       expect(assign).not.toHaveBeenCalled();
     });
@@ -342,26 +354,9 @@ describe('RenderSetRail', () => {
 
   test('rows that are in no set read as the open, unsaved one', () => {
     setup({ activeSet: null, activeRows: 3, sets: [TEASER] });
-    const unsaved = within(screen.getByRole('list', { name: 'Render sets' })).getAllByRole(
-      'listitem',
-    )[0]!;
-    expect(within(unsaved).getByText('Unsaved set')).toBeTruthy();
-    expect(within(unsaved).getByText('3 rows')).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Open Teaser' }).getAttribute('aria-current'),
-    ).toBeNull();
-  });
-
-  test('folds to a strip that still names the open set, and unfolds', () => {
-    const { props } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide render sets' }));
-    expect(props.onCollapsedChange.mock.calls[0]).toEqual([true]);
-    cleanup();
-
-    const folded = setup({ collapsed: true });
-    expect(screen.queryAllByRole('list', { name: 'Render sets' })).toHaveLength(0);
-    expect(screen.getByText('Launch week')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Show render sets' }));
-    expect(folded.props.onCollapsedChange.mock.calls[0]).toEqual([false]);
+    const unsaved = screen.getByRole('tab', { name: /Unsaved set/ });
+    expect(unsaved.textContent).toContain('3');
+    expect(unsaved.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Teaser/ }).getAttribute('aria-selected')).toBe('false');
   });
 });

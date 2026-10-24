@@ -18,25 +18,31 @@ import { createClient } from '@supabase/supabase-js';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
   FORGE_FIXTURE,
+  type FixtureOverride,
   type ForgeFixtures,
   installForgeFixtures,
   STARCRAFT_BRAND_ID,
 } from './support/forge-studio-fixtures';
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
-// forge:studio:e2e:bench — the Render tab's review tray, round 2, in a real Chrome.
+// forge:studio:e2e:bench — the Render tab's confirmation, in a real Chrome.
 //
 // Same harness as render-grid.forge-studio.bench.spec.ts: a real minted StarCraft session, the
 // server-rendered /forge page and brand context (which is where the person's brand role comes
 // from), every /api/ai-studio/** call answered by contract-parsed fixtures, the backend a dead
 // port. This file adds one approval room through `context.route`, the brand's usual one.
 //
-// It proves, at 1280×800 and 1920×1200: the toolbar Render is the only way into the tray; the
-// tray is walked Review → Deliver → Render by pressing ONLY its one primary button at the bottom
-// right; Deliver reads its defaults as one line; a Final render is asked for there and reaches the
-// signed batch preflight's body (the review's preflight never carries it); no native <select> is
-// anywhere in the tray. And in the grid: a blank required field reads "Needs input", never
-// "Invalid", and "Continuum fills this" explains itself.
+// It proves:
+//   CONF1 (1280×800, 1920×1200) — the toolbar Render opens ONE dialog and opening it checks the
+//     batch ONCE; the set's (here: the brand's default) room and Proof/Final read back; asking for
+//     Final re-checks and reaches the signed batch preflight; Render files creates one batch from
+//     that token; no native <select>; the fired row's Status reads Rendering.
+//   CONF2 (1440×900) — the three refusals a person may render through (missing fonts, a split
+//     headline's line count, an off-palette colour) read "Needs your call" in the grid, never
+//     Rejected; in the dialog each is one "Render anyway" tick, and each tick re-sends the batch
+//     preflight with exactly its own `accept*` flag until the batch is ready and renders.
+//   CONF3 (1440×900) — a blank required field reads "Needs input"; an over-length headline reads
+//     as a warning that still renders ("Will render · may shrink or clip", "Ready · fit warning").
 //
 // It does NOT exercise the Fastify backend (its 403 on a Final for a non-admin), the fleet, Slack
 // or Meta — the envelope says so.
@@ -44,7 +50,7 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // Usage:
 //   cd Continuum-Frontend && FORGE_STUDIO_E2E_PORT=3413 \
 //     FORGE_STUDIO_DIST_DIR=.next/forge-studio-e2e-s3 \
-//     bun run forge:studio:e2e:bench -- e2e/tray-r2.forge-studio.bench.spec.ts
+//     bun run forge:studio:e2e:bench -- e2e/confirm-r2.forge-studio.bench.spec.ts
 
 const { publishableKey, serviceRoleKey } = loadProdSupabaseEnv();
 
@@ -52,6 +58,8 @@ const LIVE = process.env.FORGE_STUDIO_LIVE === '1';
 const OWNER_EMAIL = 'duane@continuumai.agency';
 const RUN_ID = process.env.FORGE_STUDIO_RUN_ID ?? String(Date.now());
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/forge-studio');
+// Verification screenshots the reviewer reads; FORGE_SHOTS_DIR overrides.
+const REVIEW_SHOTS_DIR = process.env.FORGE_SHOTS_DIR ?? '/tmp/forge-shots';
 // Shared with the other forge-studio specs: one run, one results file, one complete envelope.
 const RESULTS_PATH = join(tmpdir(), `forge-studio-bench-${RUN_ID}.jsonl`);
 
@@ -59,6 +67,7 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
   { width: 1920, height: 1200 },
 ] as const;
+const REVIEW_VIEWPORT = { width: 1440, height: 900 } as const;
 
 const ROWS = FORGE_FIXTURE.set.rows;
 const ROOM = {
@@ -69,6 +78,18 @@ const ROOM = {
   activeApprovers: 1,
   requestedApprovers: 0,
 };
+/** The order the backend checks them in, which is the order the fixtures refuse them in. */
+const OVERRIDES: Array<{ flag: FixtureOverride; label: RegExp }> = [
+  { flag: 'acceptMissingFonts', label: /^Render anyway — a typeface isn’t held$/ },
+  {
+    flag: 'acceptLinkedLineMismatch',
+    label: /^Render anyway — a split headline has the wrong number of lines$/,
+  },
+  {
+    flag: 'acceptOffPaletteColor',
+    label: /^Render anyway — a colour is outside the brand palette$/,
+  },
+];
 
 let session: MintedSession | null = null;
 const opened: BrowserContext[] = [];
@@ -78,13 +99,13 @@ const activeFixtures: ForgeFixtures[] = [];
 
 function claimsOf(accessToken: string): { sub: string; session_id: string } {
   const payload = accessToken.split('.')[1];
-  if (!payload) throw new Error('[tray-r2-bench] access token has no payload');
+  if (!payload) throw new Error('[confirm-r2-bench] access token has no payload');
   const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
     sub?: string;
     session_id?: string;
   };
   if (!claims.sub || !claims.session_id) {
-    throw new Error('[tray-r2-bench] access token carries no sub or session_id claim');
+    throw new Error('[confirm-r2-bench] access token carries no sub or session_id claim');
   }
   return { sub: claims.sub, session_id: claims.session_id };
 }
@@ -105,13 +126,13 @@ async function pinSessionToStarCraft(accessToken: string): Promise<void> {
     },
     { onConflict: 'user_id,session_id' },
   );
-  if (error) throw new Error(`[tray-r2-bench] session brand pin failed: ${error.message}`);
+  if (error) throw new Error(`[confirm-r2-bench] session brand pin failed: ${error.message}`);
   const { data, error: resolveError } = await member
     .schema('brand_profiles')
     .rpc('resolve_active_brand_for_session');
   if (resolveError || data !== STARCRAFT_BRAND_ID) {
     throw new Error(
-      `[tray-r2-bench] the session resolves to ${String(data)} (${resolveError?.message ?? 'no error'}), not StarCraft`,
+      `[confirm-r2-bench] the session resolves to ${String(data)} (${resolveError?.message ?? 'no error'}), not StarCraft`,
     );
   }
 }
@@ -158,7 +179,7 @@ function printEnvelope(): void {
       durationMs: Number.isFinite(startedMs) ? Date.now() - startedMs : 0,
       results,
       notes: [
-        'FIXTURES: every /api/ai-studio/** call was answered in the browser by fixtures parsed through the real contracts, plus one approval room added by tray-r2.forge-studio.bench.spec.ts; the backend URL is a dead port.',
+        'FIXTURES: every /api/ai-studio/** call was answered in the browser by fixtures parsed through the real contracts, plus one approval room added by confirm-r2.forge-studio.bench.spec.ts; the backend URL is a dead port.',
         'NOT exercised: the Fastify backend (including its owner/admin refusal of a Final), the render fleet, Slack and Meta. Real: Chrome, the minted StarCraft session, the server-rendered brand context and role, and every Render-tab component.',
       ],
       counts,
@@ -215,11 +236,12 @@ async function answerApprovalRooms(context: BrowserContext) {
 async function openRenderTab(
   browser: Browser,
   viewport: { width: number; height: number },
+  refuse: FixtureOverride[] = [],
 ): Promise<{ page: Page; fixtures: ForgeFixtures }> {
-  if (!session) throw new Error('[tray-r2-bench] no minted session');
+  if (!session) throw new Error('[confirm-r2-bench] no minted session');
   const context = await browser.newContext({ storageState: session.state, viewport });
   opened.push(context);
-  const fixtures = await installForgeFixtures(context);
+  const fixtures = await installForgeFixtures(context, { refuse });
   activeFixtures.push(fixtures);
   // Registered after the fixtures, so it answers first.
   await answerApprovalRooms(context);
@@ -243,35 +265,28 @@ const gridRow = (page: Page, label: string): Locator =>
     .getByRole('row')
     .filter({ has: page.getByRole('button', { name: `Drag ${label}`, exact: true }) });
 
+const batchPreflights = (fixtures: ForgeFixtures) =>
+  fixtures
+    .calls('POST', /\/renders\/batch-preflight$/)
+    .map((call) => call.body as ApiRenderBatchPreflightRequest);
+
 async function shoot(page: Page, name: string): Promise<void> {
   mkdirSync(SHOTS_DIR, { recursive: true });
-  await page.screenshot({ path: resolve(SHOTS_DIR, `tray-r2-${name}.png`) }).catch(() => undefined);
+  await page
+    .screenshot({ path: resolve(SHOTS_DIR, `confirm-r2-${name}.png`) })
+    .catch(() => undefined);
 }
 
-const stepNames = (tray: Locator) =>
-  tray.getByRole('list', { name: 'Pre-flight steps' }).getByRole('listitem').allTextContents();
+/** Scrolls the grid's own sideways scroller to one end, so a shot shows those columns. */
+const scrollGrid = (page: Page, to: 'start' | 'end') =>
+  page.getByTestId('render-grid').evaluate((grid, end) => {
+    const scroller = grid.querySelector('table')?.closest('.overflow-auto');
+    scroller?.scrollTo({ left: end ? scroller.scrollWidth : 0 });
+  }, to === 'end');
 
-/**
- * The tray's one way forward: the last button in its footer. Checked to be the named, enabled,
- * full-size button at the bottom right, then pressed — the only click that moves the tray on.
- */
-async function pressPrimary(tray: Locator, name: string): Promise<void> {
-  const footer = tray.locator('footer');
-  const primary = footer.getByRole('button').last();
-  await expect(primary).toHaveText(name);
-  await expect(primary).toBeEnabled();
-  const [trayBox, box] = await Promise.all([tray.boundingBox(), primary.boundingBox()]);
-  expect(trayBox && box, 'the tray and its primary button are laid out').toBeTruthy();
-  if (trayBox && box) {
-    expect(trayBox.x + trayBox.width - (box.x + box.width), 'at the right edge').toBeLessThan(40);
-    expect(trayBox.y + trayBox.height - (box.y + box.height), 'at the bottom').toBeLessThan(24);
-    // Default size (2rem), not the old `xs` (1.5rem). The root font steps with the viewport.
-    const rem = await tray
-      .page()
-      .evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize));
-    expect(box.height / rem).toBeGreaterThanOrEqual(1.95);
-  }
-  await primary.click();
+async function review(page: Page, name: string): Promise<void> {
+  mkdirSync(REVIEW_SHOTS_DIR, { recursive: true });
+  await page.screenshot({ path: resolve(REVIEW_SHOTS_DIR, `${name}.png`) });
 }
 
 // --- the run -------------------------------------------------------------------------------
@@ -293,8 +308,8 @@ test.afterAll(async () => {
   printEnvelope();
 });
 
-test.describe('Review tray, round 2 — fixtures', () => {
-  test.skip(LIVE, 'the tray bench runs on fixtures only');
+test.describe('Render confirmation, round 2 — fixtures', () => {
+  test.skip(LIVE, 'the confirmation bench runs on fixtures only');
 
   // biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
   test.afterEach(async ({}, testInfo) => {
@@ -312,7 +327,7 @@ test.describe('Review tray, round 2 — fixtures', () => {
   for (const viewport of VIEWPORTS) {
     const size = `${viewport.width}x${viewport.height}`;
 
-    test(`TRAY1 · ${size} · one primary button walks Review → Deliver → a Final render`, async ({
+    test(`CONF1 · ${size} · one dialog, one check on open, a Final that reaches the signed preflight`, async ({
       browser,
     }) => {
       const { page, fixtures } = await openRenderTab(browser, viewport);
@@ -320,58 +335,46 @@ test.describe('Review tray, round 2 — fixtures', () => {
       await expect(root.getByText('Ready', { exact: true })).toBeVisible();
       await root.getByRole('checkbox', { name: 'Select row' }).click();
 
-      // One way in: the toolbar. The folded strip under the grid only reports.
-      const readiness = page.getByRole('region', { name: 'Readiness' });
-      await expect(readiness).toBeVisible();
-      await expect(readiness.getByRole('button')).toHaveCount(0);
-      await page.getByRole('button', { name: 'Render 1 row · 2 files', exact: true }).click();
-
-      const tray = page.getByRole('region', { name: 'Review and render' });
-      await expect(tray).toBeVisible();
-      await expect(page.locator('[role="dialog"], [role="alertdialog"]')).toHaveCount(0);
-      await expect(tray.getByText('Ready · 1 of 1 row checked')).toBeVisible();
-      // The header holds the title, the steps and ✕ — nothing that moves the tray on.
-      await expect(tray.locator('header').getByRole('button')).toHaveCount(1);
-      await expect(
-        tray.locator('header').getByRole('button', { name: 'Close review' }),
-      ).toBeVisible();
-      await expect(tray.locator('select')).toHaveCount(0);
-      await shoot(page, `${size}-review`);
-      await pressPrimary(tray, 'Next: delivery');
-
-      // Deliver: the defaults as one line, the brand's room already chosen. No Meta target, so
-      // there is no Confirm step — Proof or Final and each row's output are read here.
-      await expect.poll(() => stepNames(tray)).toEqual(['Review', 'Deliver', 'Running']);
-      const line = tray.getByRole('button', { name: 'Change delivery' }).locator('xpath=..');
-      await expect(line).toContainText(`Library · #${ROOM.name} approval · 1 approver`);
-      await expect(tray.locator('select')).toHaveCount(0);
-      const outputs = tray.getByRole('list', { name: 'Output per row' });
+      await page
+        .getByRole('toolbar', { name: 'Render' })
+        .getByRole('button', { name: 'Render 1 row · 2 files', exact: true })
+        .click();
+      const confirm = page.getByRole('dialog', { name: 'Render 1 row · 2 files' });
+      await expect(confirm).toBeVisible();
+      // Where it goes reads back as one line: the Library and the brand's room.
+      await expect(confirm.getByText(`· #${ROOM.name} approval`)).toBeVisible();
+      await expect(confirm.getByRole('list', { name: 'Meta ads' })).toHaveCount(0);
+      const fire = confirm.getByRole('button', { name: 'Render 2 files', exact: true });
+      await expect(fire).toBeEnabled();
+      // Opening checked the batch once — no separate review pass first.
+      expect(batchPreflights(fixtures)).toHaveLength(1);
+      expect(batchPreflights(fixtures)[0]?.final).toBeUndefined();
+      expect(batchPreflights(fixtures)[0]?.approvalDestinationIds).toEqual([ROOM.id]);
+      await expect(confirm.locator('select')).toHaveCount(0);
+      const outputs = confirm.getByRole('list', { name: 'Output per row' });
       await expect(outputs.getByRole('listitem')).toHaveCount(1);
       await expect(outputs).toContainText('Still image');
-      const final = tray.getByRole('radio', { name: 'Final', exact: true });
+      const final = confirm.getByRole('radio', { name: 'Final', exact: true });
       await expect(final, 'the StarCraft owner may render a Final').toBeEnabled();
-      await expect(tray.getByRole('radio', { name: 'Proof', exact: true })).toBeChecked();
+      await expect(confirm.getByRole('radio', { name: 'Proof', exact: true })).toBeChecked();
+      await shoot(page, `${size}-open`);
+
+      // Final changes what would be signed, so it is checked again — once.
       await final.click();
       await expect(final).toBeChecked();
-      await shoot(page, `${size}-deliver`);
-
-      const reviews = fixtures.calls('POST', /\/renders\/batch-preflight$/).length;
-      await pressPrimary(tray, 'Render 2 files');
+      await expect.poll(() => batchPreflights(fixtures).length).toBe(2);
+      await expect(fire).toBeEnabled();
+      await fire.click();
       await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
+      const signed = batchPreflights(fixtures).at(-1);
+      expect(signed?.final, 'Final is in the preflight the token is signed from').toBe(true);
+      expect(signed?.approvalDestinationIds).toEqual([ROOM.id]);
+      expect(signed?.records.map((record) => record.label)).toEqual([ROWS.root]);
+      expect(batchPreflights(fixtures)).toHaveLength(2);
 
-      const preflights = fixtures.calls('POST', /\/renders\/batch-preflight$/);
-      expect(preflights).toHaveLength(reviews + 1);
-      const signed = preflights.at(-1)?.body as ApiRenderBatchPreflightRequest;
-      expect(signed.final, 'Final is in the preflight the token is signed from').toBe(true);
-      expect(signed.approvalDestinationIds).toEqual([ROOM.id]);
-      expect(signed.records.map((record) => record.label)).toEqual([ROWS.root]);
-      for (const review of preflights.slice(0, -1)) {
-        expect((review.body as ApiRenderBatchPreflightRequest).final).toBeUndefined();
-      }
-
-      // Running follows the fired job, still on the Render tab.
-      const fired = tray.getByRole('list', { name: 'Fired renders' });
-      await expect(fired.getByRole('listitem')).toHaveCount(1);
+      // The dialog closes; the fired row's Status follows it, still on the Render tab.
+      await expect(confirm).toBeHidden();
+      await expect(root.getByText('Rendering', { exact: true })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'Render', exact: true })).toHaveAttribute(
         'aria-selected',
         'true',
@@ -380,10 +383,61 @@ test.describe('Review tray, round 2 — fixtures', () => {
     });
   }
 
-  test('TRAY2 · 1280x800 · a blank required field reads Needs input; the logo slot explains itself', async ({
+  test('CONF2 · 1440x900 · refusals a person may render through are calls, one tick each', async ({
     browser,
   }) => {
-    const { page } = await openRenderTab(browser, VIEWPORTS[0]);
+    const { page, fixtures } = await openRenderTab(
+      browser,
+      REVIEW_VIEWPORT,
+      OVERRIDES.map(({ flag }) => flag),
+    );
+    const root = gridRow(page, ROWS.root);
+    // The grid's own check is refused for a font: a question for Render, not a rejected row.
+    await expect(root.getByText('Needs your call', { exact: true })).toBeVisible();
+    await expect(root.getByText('Rejected', { exact: true })).toHaveCount(0);
+    await scrollGrid(page, 'end');
+    await review(page, 'needs-your-call');
+
+    await root.getByRole('checkbox', { name: 'Select row' }).click();
+    const render = page
+      .getByRole('toolbar', { name: 'Render' })
+      .getByRole('button', { name: 'Render 1 row · 2 files', exact: true });
+    await expect(render, 'a row that needs a call still goes to the confirmation').toBeEnabled();
+    await render.click();
+    const confirm = page.getByRole('dialog', { name: 'Render 1 row · 2 files' });
+    await expect(confirm).toBeVisible();
+    const fire = confirm.getByRole('button', { name: 'Render 2 files', exact: true });
+
+    // Each refusal is one tick; each tick re-checks with exactly its flag added.
+    for (const [index, { flag, label }] of OVERRIDES.entries()) {
+      const tick = confirm.getByRole('checkbox', { name: label });
+      await expect(tick).toBeVisible();
+      await expect(tick).not.toBeChecked();
+      await expect(fire).toBeDisabled();
+      if (index === OVERRIDES.length - 1) await review(page, 'confirm-overrides');
+      const sent = batchPreflights(fixtures).length;
+      await tick.click();
+      await expect(tick).toBeChecked();
+      await expect.poll(() => batchPreflights(fixtures).length).toBe(sent + 1);
+      const body = batchPreflights(fixtures).at(-1);
+      for (const [other, { flag: otherFlag }] of OVERRIDES.entries()) {
+        expect(body?.[otherFlag], `${otherFlag} after ticking ${flag}`).toBe(
+          other <= index ? true : undefined,
+        );
+      }
+    }
+
+    // Every call made: the batch is ready, and renders.
+    await expect(fire).toBeEnabled();
+    await fire.click();
+    await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
+    await expect(confirm).toBeHidden();
+  });
+
+  test('CONF3 · 1440x900 · blank required reads Needs input; an over-length headline still renders', async ({
+    browser,
+  }) => {
+    const { page } = await openRenderTab(browser, REVIEW_VIEWPORT);
     const root = gridRow(page, ROWS.root);
     await expect(root.getByText('Ready', { exact: true })).toBeVisible();
 
@@ -393,14 +447,31 @@ test.describe('Review tray, round 2 — fixtures', () => {
       page.getByText('The brand’s logo, filled in automatically at render time.'),
     ).toBeVisible();
 
-    await root
-      .getByRole('textbox', { name: FORGE_FIXTURE.variables.headline, exact: true })
-      .fill('');
+    const headline = root.getByRole('textbox', {
+      name: FORGE_FIXTURE.variables.headline,
+      exact: true,
+    });
+    await headline.fill('');
     const status = root.getByText('Needs input', { exact: true });
     await expect(status).toBeVisible();
     await expect(status).toHaveAttribute('title', 'Fill in Headline');
     await expect(root.getByText('Invalid', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Readiness' })).toContainText('1 needs input');
     await shoot(page, 'needs-input');
+
+    // 40 characters into a 28-character headline: a warning that still renders, never a block.
+    await headline.fill('Build your army across the Koprulu now!!');
+    await expect(root.getByLabel('Will render · may shrink or clip')).toBeVisible();
+    await expect(root.getByText('Ready · fit warning', { exact: true })).toBeVisible();
+    await expect(root.getByText('40/28', { exact: true })).toBeVisible();
+    await root.getByRole('checkbox', { name: 'Select row' }).click();
+    await expect(
+      page
+        .getByRole('toolbar', { name: 'Render' })
+        .getByRole('button', { name: 'Render 1 row · 2 files', exact: true }),
+    ).toBeEnabled();
+    await scrollGrid(page, 'start');
+    await review(page, 'fit-warning');
+    await scrollGrid(page, 'end');
+    await review(page, 'fit-warning-status');
   });
 });

@@ -66,21 +66,64 @@ export type RequestRowCheck =
       message: string;
       code?: string;
       guardrails?: ApiRenderPreflightResponse['guardrails'];
+      /** The check never got an answer (network, 5xx, rate limit): a wait, not a refusal. */
+      transient?: boolean;
     };
 
-export function isFontPreflightRefusal(
+/**
+ * The refusals a person may render through on purpose, each by the flag that does it. Everything
+ * else a preflight refuses — a stale revision, an asset that is not the brand's, a Meta target that
+ * moved — is a thing to fix, never a thing to override.
+ */
+export type RenderOverride =
+  | 'acceptMissingFonts'
+  | 'acceptLinkedLineMismatch'
+  | 'acceptOffPaletteColor';
+
+export const RENDER_OVERRIDES: Record<RenderOverride, { title: string; consequence: string }> = {
+  acceptMissingFonts: {
+    title: 'A typeface isn’t held',
+    consequence:
+      'The worker may substitute missing fonts. To choose the fonts, use the template’s Fonts check.',
+  },
+  acceptLinkedLineMismatch: {
+    title: 'A split headline has the wrong number of lines',
+    consequence:
+      'Extra lines join onto the last layer; layers with no line of their own render empty.',
+  },
+  acceptOffPaletteColor: {
+    title: 'A colour is outside the brand palette',
+    consequence: 'The colour renders as typed, outside the palette.',
+  },
+};
+
+/** Which override, if any, would let this refusal through. */
+export function overrideFor(
   code?: string,
   findings: readonly { code: string; severity?: string }[] = [],
-): boolean {
+): RenderOverride | null {
+  if (code === 'render_fonts_missing') return 'acceptMissingFonts';
+  if (code === 'render_linked_line_count') return 'acceptLinkedLineMismatch';
+  if (code !== 'render_brand_guardrail_blocked') return null;
+  // Only a block refuses: an `unknown` or `warn` finding beside it never vetoes the override.
   const blocking = findings.filter(
     (finding) => finding.severity === undefined || finding.severity === 'block',
   );
-  if (blocking.some((finding) => finding.code !== 'TEMPLATE_FONT_MISSING')) return false;
-  return (
-    code === 'render_fonts_missing' ||
-    (code === 'render_brand_guardrail_blocked' && blocking.length > 0)
-  );
+  if (!blocking.length) return null;
+  if (blocking.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+    return 'acceptMissingFonts';
+  if (blocking.every((finding) => finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'))
+    return 'acceptOffPaletteColor';
+  return null;
 }
+
+/** A guardrail finding a person may render through: what keeps it from being a hard block. */
+export const overridableFinding = (finding: { code: string }): RenderOverride | null =>
+  finding.code === 'TEMPLATE_FONT_MISSING'
+    ? 'acceptMissingFonts'
+    : finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'
+      ? 'acceptOffPaletteColor'
+      : null;
 
 export type RequestRowMedia = {
   w?: number;
