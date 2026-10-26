@@ -60,6 +60,7 @@
     "forge:publish-status:e2e:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-publish-status.bench.ts",
     "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1",
     "forge:caliente:ui:bench": "playwright test --config playwright.forge-caliente.config.ts --workers=1",
+    "forge:caliente:text-limits:bench": "bun e2e/caliente-text-limits.bench.ts",
     "forge:ingest-heal:live:bench": "FORGE_STUDIO_LIVE=1 playwright test --config playwright.forge-studio.config.ts e2e/ingest-heal.forge-studio.bench.spec.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
