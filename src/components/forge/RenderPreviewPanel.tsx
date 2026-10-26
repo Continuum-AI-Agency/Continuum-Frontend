@@ -131,13 +131,10 @@ function fitText(
   const floor = variable.sample
     ? fitSize(variable.sample, width, height) * SAMPLE_FLOOR_RATIO
     : FLOOR_PX;
-  const overBudget = variable.charBudget !== null && text.length > variable.charBudget;
   const tooSmall = size < floor;
-  const overflow = overBudget
-    ? `${nameOf(variable)} overflows its box (${text.length}/${variable.charBudget} characters)`
-    : tooSmall
-      ? `${nameOf(variable)} overflows its box (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
-      : null;
+  const overflow = tooSmall
+    ? `${nameOf(variable)} overflows its box (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
+    : null;
   // Drawn at the floor when it cannot shrink that far, so the spill is visible, not hidden.
   const drawSize = tooSmall ? floor : size;
   return {
