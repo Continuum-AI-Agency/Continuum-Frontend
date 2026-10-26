@@ -12,6 +12,16 @@ describe('settingLabel names the audited column in English', () => {
     expect(settingLabel('brand_new_knob')).toBe('Brand new knob');
   });
 
+  it('names the platform of a platform-scoped column in words', () => {
+    expect(settingLabel('apply_enabled:google_ads')).toBe('Auto-apply on Google');
+    expect(settingLabel('allowed_actions:tiktok_ads')).toBe('Allowed actions on TikTok');
+    expect(settingLabel('host_account')).toBe('Host account');
+  });
+
+  it('keeps a colon that does not name a platform as part of the column', () => {
+    expect(settingLabel('odd_knob:v2')).toBe('Odd knob:v2');
+  });
+
   it('says Setting when the row names no column', () => {
     expect(settingLabel(null)).toBe('Setting');
     expect(settingLabel('')).toBe('Setting');
@@ -47,6 +57,17 @@ describe('settingValue', () => {
     expect(settingValue('3500')).toBe('3500');
     expect(settingValue('2026-10-01')).toBe('2026-10-01');
     expect(settingValue(null)).toBeNull();
+  });
+
+  it('reads a JSON list of action kinds as words, and an empty one as None', () => {
+    expect(settingValue('["set_budget", "set_status"]')).toBe('Set budget, Set status');
+    expect(settingValue('[]')).toBe('None');
+    expect(settingValue('[1, 2]')).toBe('[1, 2]');
+  });
+
+  it('reads platform:account as the platform name and the account', () => {
+    expect(settingValue('google_ads:5251780631')).toBe('Google 5251780631');
+    expect(settingValue('12:30')).toBe('12:30');
   });
 
   it('humanizeSnakeCase', () => {

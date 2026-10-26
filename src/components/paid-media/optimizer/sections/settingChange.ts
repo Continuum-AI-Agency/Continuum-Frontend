@@ -7,9 +7,18 @@
 //
 // Unknown fields still render: a column the audit learns tomorrow is humanized from its
 // snake_case name rather than shown raw or dropped.
+//
+// Platform settings are audited per platform as `<column>:<platform>` (apply_enabled:google_ads,
+// allowed_actions:google_ads); the platform is named in words, never printed as its id. Their
+// values are a JSON array of action kinds (allowed_actions) or `<platform>:<account>`
+// (host_account), and read as words too.
+
+import { PLATFORM_NAMES, readAdPlatform } from './platforms/platformTabsModel';
 
 /** The audited portfolio columns (optimizer.portfolio_audits.field) by their English name. */
 const SETTING_LABELS: Record<string, string> = {
+  allowed_actions: 'Allowed actions',
+  apply_enabled: 'Auto-apply',
   apply_mode: 'Mode',
   autogen: 'Auto-generated recommendations',
   autopilot_paused: 'Autopilot',
@@ -20,6 +29,7 @@ const SETTING_LABELS: Record<string, string> = {
   currency: 'Currency',
   daily_total: 'Total daily budget',
   enrolled: 'Enrolled ad sets',
+  host_account: 'Host account',
   lookback_window: 'Lookback window',
   max_change_pct_per_cycle: 'Max change per cycle',
   max_daily_apply_minor: 'Max daily auto-apply',
@@ -47,9 +57,41 @@ export function humanizeSnakeCase(raw: string): string {
   return spaced === '' ? raw : spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/** 'apply_enabled:google_ads' → its column and the platform's name; a plain column has none. */
+function scopedField(field: string): { column: string; platform: string | null } {
+  const separator = field.lastIndexOf(':');
+  if (separator <= 0) return { column: field, platform: null };
+  const platform = readAdPlatform(field.slice(separator + 1));
+  return platform
+    ? { column: field.slice(0, separator), platform: PLATFORM_NAMES[platform] }
+    : { column: field, platform: null };
+}
+
 export function settingLabel(field: string | null | undefined): string {
   if (!field) return 'Setting';
-  return SETTING_LABELS[field] ?? humanizeSnakeCase(field);
+  const { column, platform } = scopedField(field);
+  const label = SETTING_LABELS[column] ?? humanizeSnakeCase(column);
+  return platform ? `${label} on ${platform}` : label;
+}
+
+/** '["set_budget","set_status"]' → 'Set budget, Set status'; null when not a JSON string array. */
+function listValue(value: string): string | null {
+  if (!value.trimStart().startsWith('[')) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) return null;
+    return parsed.length === 0 ? 'None' : parsed.map(humanizeSnakeCase).join(', ');
+  } catch {
+    return null;
+  }
+}
+
+/** 'google_ads:5251780631' → 'Google 5251780631'; null when the prefix is not a platform. */
+function accountValue(value: string): string | null {
+  const separator = value.indexOf(':');
+  if (separator <= 0) return null;
+  const platform = readAdPlatform(value.slice(0, separator));
+  return platform ? `${PLATFORM_NAMES[platform]} ${value.slice(separator + 1)}` : null;
 }
 
 /** An enum word ('recommend', 'observed') reads capitalised; numbers, dates and free text
@@ -58,6 +100,8 @@ export function settingValue(value: string | null): string | null {
   if (value == null) return null;
   const known = VALUE_LABELS[value];
   if (known) return known;
+  const words = listValue(value) ?? accountValue(value);
+  if (words) return words;
   return SNAKE_WORD.test(value) ? humanizeSnakeCase(value) : value;
 }
 

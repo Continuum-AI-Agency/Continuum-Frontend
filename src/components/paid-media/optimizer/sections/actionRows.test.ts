@@ -63,6 +63,70 @@ describe('readActionChange reads one row shape across four unit systems', () => 
     expect(change.sentence).toBeUndefined();
   });
 
+  it('reads an ad set moved between portfolios as a sentence, never the two ids', () => {
+    const moved = (portfolioId: string) =>
+      readActionChange(
+        action({
+          family: 'settings',
+          op: 'setting',
+          portfolio_id: portfolioId,
+          entity_id: 'member_moved',
+          before: { value: '120252387298200236' },
+          after: { value: '94ca5d79-77cd-4973-9d9d-4ae55ccd7ec4' },
+        }),
+      );
+    expect(moved('94ca5d79-77cd-4973-9d9d-4ae55ccd7ec4')).toEqual({
+      label: 'Ad set moved',
+      unit: 'text',
+      before: null,
+      after: null,
+      sentence: 'Ad set moved into this portfolio',
+    });
+    expect(moved(PORTFOLIO_ID).sentence).toBe('Ad set moved to another portfolio');
+  });
+
+  it('reads a platform-scoped setting in words (production rows of 2026-10-26)', () => {
+    const allowed = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'allowed_actions:google_ads',
+        before: { value: '["add_keyword", "add_negatives", "set_bid_target", "set_budget"]' },
+        after: { value: '[]' },
+      }),
+    );
+    expect(allowed).toEqual({
+      label: 'Allowed actions on Google',
+      unit: 'text',
+      before: 'Add keyword, Add negatives, Set bid target, Set budget',
+      after: 'None',
+    });
+    const host = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'host_account',
+        before: null,
+        after: { value: 'google_ads:3710693645' },
+      }),
+    );
+    expect([host.label, host.before, host.after]).toEqual([
+      'Host account',
+      null,
+      'Google 3710693645',
+    ]);
+    const autoApply = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'apply_enabled:google_ads',
+        before: { value: 'true' },
+        after: { value: 'false' },
+      }),
+    );
+    expect(autoApply.sentence).toBe('Auto-apply on Google turned off');
+  });
+
   it('reads a recommendation decision as its status transition', () => {
     const change = readActionChange(
       action({

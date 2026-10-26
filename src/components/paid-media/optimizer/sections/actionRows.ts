@@ -96,6 +96,21 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
     case 'setting': {
       // `entity_id` is the audited COLUMN here, and the values are the text the audit stored.
       const after = readKey(row.after, 'value');
+      // An ad set moved between portfolios is audited on BOTH (old value the ad set id, new
+      // value the receiving portfolio's id). Two ids say nothing to a reader; which side of the
+      // move this portfolio is on does.
+      if (row.entity_id === 'member_moved') {
+        return {
+          label: 'Ad set moved',
+          unit: 'text',
+          before: null,
+          after: null,
+          sentence:
+            after !== null && after === row.portfolio_id
+              ? 'Ad set moved into this portfolio'
+              : 'Ad set moved to another portfolio',
+        };
+      }
       const sentence = settingSentence(row.entity_id, after);
       return {
         label: settingLabel(row.entity_id),
