@@ -5,12 +5,13 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import type {
-  ApiRenderFitVerdict,
-  ApiRenderJob,
-  ApiRenderJudge,
-  ApiRenderJudgeFrame,
-  ApiRenderOutput,
+import {
+  type ApiRenderFitVerdict,
+  type ApiRenderJob,
+  type ApiRenderJudge,
+  type ApiRenderJudgeFrame,
+  type ApiRenderOutput,
+  apiRenderJobSchema,
 } from '@continuum/contracts';
 import { type JobCheck, jobSteps, renderJobChecks } from './renderJobChecks';
 
@@ -301,6 +302,27 @@ describe('renderJobChecks', () => {
       expect(judged.lines.slice(0, 2)).toEqual([
         '1:1: A glow bleeds around the logo',
         '1:1: glare',
+      ]);
+    });
+
+    test('a job whose judge names a new kind parses off the wire and reads in the ledger', () => {
+      const skewed = frame('1:1', 'fail', ['brand_new_kind', 'constructor']);
+      const [fresh] = skewed.verdict?.findings ?? [];
+      if (fresh) fresh.note = 'Something new the judge learned to see';
+      // What getJob/listJobs run on the response: a closed kind enum threw here, ledger and all.
+      const job = apiRenderJobSchema.parse({
+        ...JOB,
+        fit: fit([]),
+        judge: judge({ state: 'fail', frames: [skewed] }),
+      });
+      expect(job.judge?.frames?.[0]?.verdict?.findings.map((finding) => finding.kind)).toEqual([
+        'brand_new_kind',
+        'constructor',
+      ]);
+      // `constructor` is a kind like any other, never a prototype method.
+      expect(row(renderJobChecks(job, LABELS, NOW), 'Judge').lines.slice(0, 2)).toEqual([
+        '1:1: Something new the judge learned to see',
+        '1:1: constructor',
       ]);
     });
 
