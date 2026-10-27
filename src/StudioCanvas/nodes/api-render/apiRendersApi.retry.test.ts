@@ -51,14 +51,17 @@ test('a 503 carrying a backend code is a domain error, not retried', async () =>
   expect(request).toHaveBeenCalledTimes(1);
 });
 
-test('a 502 with no body, or only its status phrase, is retried', async () => {
+test('a 502/503 with no body, or any phrase that is not a backend code, is retried', async () => {
   fails(
     new ApiError('502 Bad Gateway', 502),
     new ApiError('Bad Gateway', 502, undefined, { error: 'Bad Gateway' }),
+    new ApiError('Service Temporarily Unavailable', 503, undefined, {
+      error: 'Service Temporarily Unavailable',
+    }),
   );
   request.mockImplementationOnce(async () => ({ ok: true }));
   await expect(apiRendersApi.preflight({} as never)).resolves.toEqual({ ok: true });
-  expect(request).toHaveBeenCalledTimes(3);
+  expect(request).toHaveBeenCalledTimes(4);
 });
 
 test('a 503 whose error is an object is the backend talking, not retried', async () => {

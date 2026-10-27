@@ -670,6 +670,19 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
       cleanup();
     }
+    // A 5xx that names a backend code is an answer too: its own words, not the job list.
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('The workers could not verify the template’s fonts.', 503, undefined, {
+        error: 'render_fonts_unverifiable',
+        message: 'The workers could not verify the template’s fonts.',
+      });
+    });
+    renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(await screen.findByText(/could not verify the template’s fonts/)).toBeTruthy();
+    expect(screen.queryByText(CONFIRM_UNKNOWN)).toBeNull();
+    cleanup();
     // A refusal is an answer: its own words still show.
     createBatchMock.mockImplementationOnce(async () => {
       throw new ApiError('This confirmation has expired. Review again.', 409, undefined, {

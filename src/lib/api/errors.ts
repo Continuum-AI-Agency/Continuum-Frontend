@@ -52,6 +52,19 @@ export async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(message, response.status, code, payload);
 }
 
+// A snake_case code in `payload.error` (`render_fonts_unverifiable`, `template_*`), which
+// `ApiError.code` does not read. A gateway, or Fastify closing during a deploy, puts a phrase there
+// ("Service Unavailable") or sends no body.
+const BACKEND_CODE = /^[a-z][a-z0-9_]*$/;
+
+/** The backend answered with its own error: a snake_case code, or a validation object. */
+export function hasBackendError(error: ApiError): boolean {
+  const said = error.payload?.error;
+  return typeof said === 'string'
+    ? BACKEND_CODE.test(said)
+    : typeof said === 'object' && said !== null;
+}
+
 const fetchFailures = new WeakSet<object>();
 
 /** Marks `fetch`'s own rejection (no answer at all), told apart from a TypeError thrown while

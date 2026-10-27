@@ -68,7 +68,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, hasBackendError } from '@/lib/api/errors';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
@@ -576,7 +576,10 @@ export function RenderReviewTray({
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
-      if (confirming && !(error instanceof ApiError && error.status < 500)) {
+      // No answer: a network failure, a timeout, a 5xx with no backend code. A 5xx that names one
+      // (503 `render_fonts_unverifiable` at dispatch) is an answer, and keeps its own words.
+      const answered = error instanceof ApiError && (error.status < 500 || hasBackendError(error));
+      if (confirming && !answered) {
         setProblem(CONFIRM_UNKNOWN);
         return;
       }
