@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, expect, mock, test } from 'bun:test';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, markFetchFailure } from '@/lib/api/errors';
 
 type Input = { path: string; body?: unknown };
 const request = mock(async (_input: Input): Promise<unknown> => ({}));
@@ -18,6 +18,8 @@ const closing503 = () =>
     message: 'Service Unavailable',
     statusCode: 503,
   });
+/** What `http.request` throws when `fetch` itself rejects: a refused connection, a dropped one. */
+const cut = () => markFetchFailure(new TypeError('Failed to fetch'));
 const fails = (...errors: unknown[]) => {
   for (const error of errors)
     request.mockImplementationOnce(async () => {
@@ -49,11 +51,23 @@ test('a 503 carrying a backend code is a domain error, not retried', async () =>
   expect(request).toHaveBeenCalledTimes(1);
 });
 
-test('a 502 with no body is retried', async () => {
-  fails(new ApiError('502 Bad Gateway', 502));
+test('a 502 with no body, or only its status phrase, is retried', async () => {
+  fails(
+    new ApiError('502 Bad Gateway', 502),
+    new ApiError('Bad Gateway', 502, undefined, { error: 'Bad Gateway' }),
+  );
   request.mockImplementationOnce(async () => ({ ok: true }));
   await expect(apiRendersApi.preflight({} as never)).resolves.toEqual({ ok: true });
-  expect(request).toHaveBeenCalledTimes(2);
+  expect(request).toHaveBeenCalledTimes(3);
+});
+
+test('a 503 whose error is an object is the backend talking, not retried', async () => {
+  const refused = new ApiError('Validation error', 503, undefined, {
+    error: { formErrors: ['not yet'], fieldErrors: {} },
+  });
+  fails(refused);
+  await expect(apiRendersApi.createJob({ confirmationToken: 'token' })).rejects.toBe(refused);
+  expect(request).toHaveBeenCalledTimes(1);
 });
 
 test('a 429 is retried', async () => {
@@ -63,11 +77,18 @@ test('a 429 is retried', async () => {
   expect(request).toHaveBeenCalledTimes(2);
 });
 
-test('a network TypeError is retried', async () => {
-  fails(new TypeError('Failed to fetch'));
+test('fetch failing is retried', async () => {
+  fails(cut());
   request.mockImplementationOnce(async () => ({ ok: true }));
   await expect(apiRendersApi.getRenderSet('brand', 'set')).resolves.toEqual({ ok: true });
   expect(request).toHaveBeenCalledTimes(2);
+});
+
+test('a TypeError thrown while building the request is a bug, not retried', async () => {
+  const bug = new TypeError('Converting circular structure to JSON');
+  fails(bug);
+  await expect(apiRendersApi.createBatch({ confirmationToken: 'token' })).rejects.toBe(bug);
+  expect(request).toHaveBeenCalledTimes(1);
 });
 
 test('a 504 is not retried: the request may still be running', async () => {
@@ -88,7 +109,7 @@ test('a timeout is not retried', async () => {
 });
 
 test('a GET poll survives a deploy cut: refused connections, then the closing 503', async () => {
-  fails(new TypeError('Failed to fetch'), new TypeError('Failed to fetch'), closing503());
+  fails(cut(), cut(), closing503());
   request.mockImplementationOnce(async () => ({ id: 'job', status: 'running' }));
   await expect(apiRendersApi.getJob('brand', 'job')).resolves.toEqual({
     id: 'job',
@@ -100,7 +121,7 @@ test('a GET poll survives a deploy cut: refused connections, then the closing 50
 
 test('a cut longer than the backoff fails with the last error', async () => {
   const last = closing503();
-  fails(new TypeError('Failed to fetch'), closing503(), closing503(), last);
+  fails(cut(), closing503(), closing503(), last);
   await expect(apiRendersApi.getJob('brand', 'job')).rejects.toBe(last);
   expect(request).toHaveBeenCalledTimes(4);
 });

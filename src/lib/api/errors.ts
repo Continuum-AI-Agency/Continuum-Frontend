@@ -52,6 +52,18 @@ export async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(message, response.status, code, payload);
 }
 
+const fetchFailures = new WeakSet<object>();
+
+/** Marks `fetch`'s own rejection (no answer at all), told apart from a TypeError thrown while
+ *  the request was being built. The error itself is untouched. */
+export function markFetchFailure(error: unknown): unknown {
+  if (error instanceof TypeError) fetchFailures.add(error);
+  return error;
+}
+
+export const isFetchFailure = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && fetchFailures.has(error);
+
 export async function assertOk(response: Response): Promise<void> {
   if (!response.ok) {
     throw await toApiError(response);

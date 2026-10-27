@@ -115,7 +115,7 @@ import {
   isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, isFetchFailure } from '@/lib/api/errors';
 import { http } from '@/lib/api/http';
 
 const query = (input: Record<string, string | number>) =>
@@ -124,19 +124,25 @@ const query = (input: Record<string, string | number>) =>
 /** Waits before each retry, sized to a backend deploy cut. Mutable so tests need not wait. */
 export const renderRetry = { delaysMs: [1_000, 3_000, 8_000] };
 
-// A backend domain code (`render_fonts_unverifiable`, `template_*`) sits in `payload.error`, which
-// `ApiError.code` does not read. Fastify's own closing 503 puts "Service Unavailable" there: no code.
-const BACKEND_CODE = /^[a-z][a-z0-9_]*$/;
+// The backend's own error sits in `payload.error` (`render_fonts_unverifiable`, a validation
+// object), which `ApiError.code` does not read. A gateway, or Fastify closing during a deploy, says
+// only its status phrase there, or sends no body at all.
+const GATEWAY_ERRORS: ReadonlySet<unknown> = new Set([
+  undefined,
+  null,
+  'Service Unavailable',
+  'Bad Gateway',
+]);
 
-/** 429, a gateway or closing 502/503 with no backend code, or fetch's network `TypeError`. A 504
- *  may still be running and a timeout already waited its bound, so neither is retried. */
+/** 429, a gateway or closing 502/503 that carries no backend error, or `fetch` itself failing. A
+ *  504 may still be running, a timeout already waited its bound, and a TypeError thrown while
+ *  building the request would only repeat, so none of those is retried. */
 export function isTransientRenderError(error: unknown): boolean {
-  if (error instanceof TypeError) return true;
+  if (isFetchFailure(error)) return true;
   if (!(error instanceof ApiError)) return false;
   if (error.status === 429) return true;
   if (error.status !== 502 && error.status !== 503) return false;
-  const code = error.payload?.error;
-  return !(typeof code === 'string' && BACKEND_CODE.test(code));
+  return GATEWAY_ERRORS.has(error.payload?.error);
 }
 
 /**
