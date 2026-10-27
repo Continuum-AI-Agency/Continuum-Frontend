@@ -408,7 +408,16 @@ describe('RenderReviewTray · Review', () => {
   test('font override is explicit, carries into confirmation, and resets for a new snapshot', async () => {
     batchPreflightMock.mockImplementation(async (input) => {
       if (!(input as { acceptMissingFonts?: boolean }).acceptMissingFonts)
-        throw new ApiError('Fonts unavailable.', 422, 'render_fonts_missing');
+        throw new ApiError('Fonts unavailable.', 422, 'render_brand_guardrail_blocked', {
+          guardrails: [
+            { code: 'TEMPLATE_FONT_MISSING', severity: 'block', message: 'A typeface is missing.' },
+            {
+              code: 'BRAND_PALETTE_UNKNOWN',
+              severity: 'unknown',
+              message: 'No palette to check against.',
+            },
+          ],
+        });
       return { confirmationToken: 'batch-token', readiness: READY };
     });
     try {

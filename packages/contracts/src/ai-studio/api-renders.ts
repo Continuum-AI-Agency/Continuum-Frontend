@@ -15,6 +15,7 @@ export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
 /** Opt-in for audit fields that older strict job clients cannot read. */
 export const API_RENDER_FONT_OVERRIDE_PROFILE = 'render-font-override-v1';
+export const API_RENDER_ADVISORIES_PROFILE = 'render-advisories-v1';
 export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
 export const apiRenderMasterDownloadRequestSchema = z
   .object({
@@ -1478,6 +1479,15 @@ export const apiRenderJobApprovalSchema = z
   .strict();
 export type ApiRenderJobApproval = z.infer<typeof apiRenderJobApprovalSchema>;
 
+export const apiRenderWarningSchema = z
+  .object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    variableKey: z.string().min(1).optional(),
+  })
+  .strict();
+export type ApiRenderWarning = z.infer<typeof apiRenderWarningSchema>;
+
 export const apiRenderJobSchema = z
   .object({
     id: z.string().uuid(),
@@ -1561,6 +1571,8 @@ export const apiRenderJobSchema = z
     renderInput: apiRenderVariableMapSchema.nullable().default(null),
     /** Explicit per-render consent to let the worker substitute missing fonts. */
     acceptMissingFonts: z.boolean().optional(),
+    /** Server-evaluated advisories frozen at review and recorded during submission. */
+    warnings: z.array(apiRenderWarningSchema).optional(),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),
@@ -1690,7 +1702,7 @@ export const apiRenderPreflightResponseSchema = z
               'TEMPLATE_FONT_MISSING',
               'FONT_INVENTORY_UNKNOWN',
             ]),
-            severity: z.enum(['block', 'unknown']),
+            severity: z.enum(['block', 'warn', 'unknown']),
             message: z.string().min(1),
             variableKey: z.string().min(1).optional(),
           })

@@ -16823,6 +16823,7 @@ export type Database = {
           template_source_version_id: string | null
           test: boolean | null
           updated_at: string
+          warnings: Json
         }
         Insert: {
           accept_missing_fonts?: boolean
@@ -16874,6 +16875,7 @@ export type Database = {
           template_source_version_id?: string | null
           test?: boolean | null
           updated_at?: string
+          warnings?: Json
         }
         Update: {
           accept_missing_fonts?: boolean
@@ -16925,6 +16927,7 @@ export type Database = {
           template_source_version_id?: string | null
           test?: boolean | null
           updated_at?: string
+          warnings?: Json
         }
         Relationships: [
           {
@@ -20226,6 +20229,7 @@ export type Database = {
           template_source_asset_id: string | null
           template_source_sha256: string | null
           template_source_version_id: string | null
+          warnings: Json
         }
         Insert: {
           accept_missing_fonts?: boolean
@@ -20255,6 +20259,7 @@ export type Database = {
           template_source_asset_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
+          warnings?: Json
         }
         Update: {
           accept_missing_fonts?: boolean
@@ -20284,6 +20289,7 @@ export type Database = {
           template_source_asset_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
+          warnings?: Json
         }
         Relationships: [
           {

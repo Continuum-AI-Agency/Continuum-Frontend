@@ -184,6 +184,13 @@ export function RenderJobCard({
         <StatusSteps job={job} />
         {delivery ? <span className="block truncate text-muted-foreground">{delivery}</span> : null}
       </button>
+      {job.warnings?.length ? (
+        <ul aria-label="Render warnings" className="mt-1 text-xs text-warning">
+          {job.warnings.map((warning, index) => (
+            <li key={`${index}:${warning.code}`}>{warning.message}</li>
+          ))}
+        </ul>
+      ) : null}
       <CheckSummary job={job} />
       {job.outputs.map((output) => (
         <div key={output.id} className="mt-1 space-y-1">
