@@ -225,16 +225,17 @@ export const apiRendersApi = {
       linkedFields: contract.variables.filter((variable) => variable.derivedFrom !== null),
     };
   },
-  preflight(input: ApiRenderPreflightRequest) {
-    return retryTransient(() =>
+  /** `retry: false` asks once: a check fanned out over many rows must not multiply its own retries. */
+  preflight(input: ApiRenderPreflightRequest, { retry = true }: { retry?: boolean } = {}) {
+    const ask = () =>
       http.request<ApiRenderPreflightResponse>({
         path: API_RENDER_PREFLIGHT_ROUTE,
         method: 'POST',
         body: input,
         headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
         schema: apiRenderPreflightResponseSchema,
-      }),
-    );
+      });
+    return retry ? retryTransient(ask) : ask();
   },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
   composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {

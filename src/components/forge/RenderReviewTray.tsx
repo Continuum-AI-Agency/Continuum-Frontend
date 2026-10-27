@@ -131,6 +131,8 @@ export type RenderReviewTrayProps = {
   onRecheck: () => void;
   /** Review was refused for something other than fonts; these rows' own checks can say which. */
   onRefused?: (rowIds: string[]) => void;
+  /** Review passed for these rows: whatever an earlier refusal said about them is out of date. */
+  onPassed?: (rowIds: string[]) => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onClose: () => void;
   onFired: (jobIds: string[]) => void;
@@ -260,6 +262,7 @@ export function RenderReviewTray({
   finalBlocked,
   onRecheck,
   onRefused,
+  onPassed,
   onDeliveryChange,
   onClose,
   onFired,
@@ -347,6 +350,8 @@ export function RenderReviewTray({
   const latestReview = useRef(0);
   const refused = useRef(onRefused);
   refused.current = onRefused;
+  const passed = useRef(onPassed);
+  passed.current = onPassed;
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
@@ -370,11 +375,13 @@ export function RenderReviewTray({
           record.encode ?? null,
         ]),
       );
-      const settle = () =>
+      const settle = () => {
         setReview({
           state: 'ready',
           readiness: readinessOf(keys.map((key) => verdicts.current.get(key) ?? [])),
         });
+        passed.current?.(records.flatMap((record) => record.renderSetRowId ?? []));
+      };
       const todo = records.flatMap((record, index) =>
         verdicts.current.has(keys[index]!) ? [] : [{ record, key: keys[index]! }],
       );

@@ -94,6 +94,13 @@ test('a TypeError thrown while building the request is a bug, not retried', asyn
   expect(request).toHaveBeenCalledTimes(1);
 });
 
+test('a preflight asked once is not retried, even through a cut', async () => {
+  const cutOff = closing503();
+  fails(cutOff);
+  await expect(apiRendersApi.preflight({} as never, { retry: false })).rejects.toBe(cutOff);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 test('a 504 is not retried: the request may still be running', async () => {
   const gatewayTimeout = new ApiError('504 Gateway Timeout', 504);
   fails(gatewayTimeout);

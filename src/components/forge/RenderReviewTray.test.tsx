@@ -308,6 +308,7 @@ const trayHandlers = () => ({
   onClose: mock(() => undefined),
   onRecheck: mock(() => undefined),
   onRefused: mock((_rowIds: string[]) => undefined),
+  onPassed: mock((_rowIds: string[]) => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
 });
@@ -424,8 +425,9 @@ describe('RenderReviewTray · Review', () => {
     try {
       const view = renderTray();
       await press('Render anyway');
-      // A font refusal has its own way past; no row needs finding.
+      // A font refusal has its own way past, so no row needs finding; accepted, both rows pass.
       expect(view.onRefused).not.toHaveBeenCalled();
+      await waitFor(() => expect(view.onPassed).toHaveBeenCalledWith(['root', 'spain']));
       await press('Next: delivery');
       await press('Render 3 files');
       expect(

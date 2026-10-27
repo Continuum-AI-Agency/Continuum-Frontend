@@ -45,7 +45,7 @@ const READY_RESPONSE = {
   fit: null,
 };
 
-const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
+const BATCH_READY = {
   confirmationToken: 'batch-token',
   readiness: {
     state: 'READY',
@@ -55,7 +55,10 @@ const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
     unknownRows: 0,
     findings: [],
   },
-}));
+};
+const batchPreflightMock = mock(
+  async (_input: { records: unknown[] }): Promise<unknown> => BATCH_READY,
+);
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
@@ -369,7 +372,8 @@ afterEach(() => {
   deleteRenderSetMock.mockClear();
   createInputSetMock.mockClear();
   suggestRowsMock.mockClear();
-  batchPreflightMock.mockClear();
+  batchPreflightMock.mockReset();
+  batchPreflightMock.mockImplementation(async () => BATCH_READY);
   extraTemplates = [];
   contractOverrides = {};
   pickedAsset = HERO_ASSET;
@@ -638,11 +642,23 @@ describe('RenderRequestsGrid', () => {
   test('a refused review asks each row once which one refuses; it reads Won’t render and is skipped', async () => {
     const palette = 'Use a permitted brand color.';
     const fonts = 'Card A requires Brand Sans. Upload it in Library → Typography.';
-    // Today's batch preflight refuses the whole batch and names no row.
-    batchPreflightMock.mockImplementationOnce(async () => {
-      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
-        guardrails: [{ code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: palette }],
-      });
+    // Today's batch preflight refuses the whole batch and names no row; without the off-palette
+    // row it refuses on the missing face alone, until the person accepts substitutes.
+    batchPreflightMock.mockImplementation(async (input) => {
+      const { records, acceptMissingFonts } = input as {
+        records: unknown[];
+        acceptMissingFonts?: boolean;
+      };
+      if (acceptMissingFonts) return BATCH_READY;
+      throw records.length === 3
+        ? new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+            guardrails: [
+              { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: palette },
+            ],
+          })
+        : new ApiError('render_fonts_missing', 422, undefined, {
+            guardrails: [{ code: 'TEMPLATE_FONT_MISSING', severity: 'block', message: fonts }],
+          });
     });
     preflightMock.mockImplementation(async (input) => {
       if (input.variables.headline === 'Off palette')
@@ -686,13 +702,87 @@ describe('RenderRequestsGrid', () => {
       (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
     ).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Review 2 ready rows' })).toBeTruthy();
+    // A font refusal names no row to find; the tray's own override is the way past it.
+    expect(preflightMock).toHaveBeenCalledTimes(3);
+    expect(within(headline(2).closest('tr')!).getByText('Fonts will be substituted')).toBeTruthy();
+    // Once a review passes for that row, what the pass found about it is out of date.
+    await press('Render anyway');
+    // Lengths, not toBeNull: a failing element assert inside waitFor pretty-prints the fiber graph.
+    await waitFor(
+      () =>
+        expect(
+          within(headline(2).closest('tr')!).queryAllByText('Fonts will be substituted'),
+        ).toHaveLength(0),
+      { timeout: 5000 },
+    );
 
     // An edit retires what was found about that row, and asks the server nothing.
     fireEvent.change(headline(1), { target: { value: 'On palette' } });
-    await waitFor(() => expect(within(offPalette()).queryByText(/Won’t render/)).toBeNull());
+    await waitFor(() =>
+      expect(within(offPalette()).queryAllByText(/Won’t render/)).toHaveLength(0),
+    );
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1000)));
     expect(preflightMock).toHaveBeenCalledTimes(3);
   }, 30_000);
+
+  describe('a refused review that its rows’ own checks cannot pin on a row', () => {
+    const palette = 'Use a permitted brand color.';
+    const setup = async (fontRefusedOnItsOwn: boolean) => {
+      // Refused whole, every time: the per-row pass can never make it pass.
+      batchPreflightMock.mockImplementation(async () => {
+        throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+          guardrails: [
+            { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: palette },
+          ],
+        });
+      });
+      preflightMock.mockImplementation(async (input) => {
+        if (fontRefusedOnItsOwn && input.variables.headline === 'Missing face')
+          throw new ApiError('render_fonts_missing', 422, undefined, {
+            detail: 'Card A requires Brand Sans.',
+          });
+        return READY_RESPONSE;
+      });
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Hola mundo');
+      await openMenu('Add', 'Blank row');
+      await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
+      await openMenu('Add', 'Blank row');
+      await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(3));
+      const headline = (index: number) => screen.getAllByLabelText('Headline')[index]!;
+      // A font row, and an invalid one the review skips.
+      fireEvent.change(headline(1), { target: { value: 'Missing face' } });
+      fireEvent.change(headline(2), { target: { value: '' } });
+      for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+      fireEvent.click(await screen.findByRole('button', { name: 'Review 2 ready rows' }));
+      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(2));
+      // Long enough for any reopen, re-review and second pass to have happened.
+      await act(async () => await new Promise((resolve) => setTimeout(resolve, 1500)));
+      return { tray, headline };
+    };
+
+    test('every row passes on its own: nothing is found, nothing reopens, the refusal stays', async () => {
+      const { tray, headline } = await setup(false);
+      expect(preflightMock).toHaveBeenCalledTimes(2);
+      expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+      expect(await within(tray).findByText(palette)).toBeTruthy();
+      expect(
+        within(headline(1).closest('tr')!).queryAllByText(/Fonts will be|Won’t render/),
+      ).toHaveLength(0);
+    }, 30_000);
+
+    test('a font row found on its own reopens nothing: the rows under review are the same', async () => {
+      const { tray, headline } = await setup(true);
+      expect(
+        await within(headline(1).closest('tr')!).findByText('Fonts will be substituted'),
+      ).toBeTruthy();
+      // One pass, one review: no loop of re-reviews and re-passes.
+      expect(preflightMock).toHaveBeenCalledTimes(2);
+      expect(batchPreflightMock.mock.calls.length).toBeLessThanOrEqual(2);
+      expect(await within(tray).findByText(palette)).toBeTruthy();
+    }, 30_000);
+  });
 
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
     contractOverrides = {
