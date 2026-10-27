@@ -110,15 +110,24 @@ export function portfolioWindow(
   portfolio: PortfolioListItem,
   series: readonly EfficiencySeriesPoint[],
 ): PortfolioWindow | null {
+  const figures = seriesWindowFigures(series);
+  return figures ? portfolioWindowOf(portfolio, figures) : null;
+}
+
+/** The latest cycle's 7-day window (and the 7 days before it) from an efficiency series,
+ *  oldest first. Null before the first cycle. */
+export function seriesWindowFigures(
+  series: readonly EfficiencySeriesPoint[],
+): WindowFigures | null {
   const latest = series.at(-1);
   if (!latest) return null;
-  return windowOf(portfolio, {
+  return {
     spend: latest.spend_d7,
     results: latest.conv_d7,
     priorSpend: Math.max(0, latest.spend_d14 - latest.spend_d7),
     priorResults: Math.max(0, latest.conv_d14 - latest.conv_d7),
     cycleTs: latest.cycle_ts,
-  });
+  };
 }
 
 /**
@@ -134,7 +143,7 @@ export function portfolioWindowFromMetrics(
 ): PortfolioWindow | null {
   const cycleTs = portfolio.last_actual_cycle_at;
   if (!cycleTs) return null;
-  return windowOf(portfolio, {
+  return portfolioWindowOf(portfolio, {
     spend: metrics.totals.spend,
     results: metrics.totals.results,
     priorSpend: metrics.prior_totals?.spend ?? 0,
@@ -143,9 +152,16 @@ export function portfolioWindowFromMetrics(
   });
 }
 
-function windowOf(
+/** The figures one window measured, before they are priced against the portfolio's target. */
+export type WindowFigures = Pick<
+  PortfolioWindow,
+  'spend' | 'results' | 'priorSpend' | 'priorResults' | 'cycleTs'
+>;
+
+/** A window's figures priced against the portfolio's own metric and target. */
+export function portfolioWindowOf(
   portfolio: PortfolioListItem,
-  figures: Pick<PortfolioWindow, 'spend' | 'results' | 'priorSpend' | 'priorResults' | 'cycleTs'>,
+  figures: WindowFigures,
 ): PortfolioWindow {
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
   const multiplier = metric.denominatorMultiplier;

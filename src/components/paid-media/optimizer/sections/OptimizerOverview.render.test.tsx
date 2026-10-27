@@ -139,6 +139,36 @@ mock.module('../useOptimizerData', () => ({
   useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
 }));
 
+// The rows' headline figures (usePortfolioFigures) read the account snapshots and each
+// roster through React Query. Here the cycle series stands in for the live read, priced by
+// the REAL `portfolioFigure()`, so the rows print what they printed before the live read
+// existed; `figuresLive = false` makes the live read miss so the snapshot fallback shows.
+const realPortfolioFigure = await import('./portfolioFigure');
+const realPortfolioFigures = await import('./usePortfolioFigures');
+const figuresLive = true;
+mock.module('./usePortfolioFigures', () => ({
+  ...realPortfolioFigures,
+  usePortfolioFigures: ({
+    portfolios,
+    series,
+  }: {
+    portfolios: readonly PortfolioListItem[];
+    series: readonly (readonly EfficiencySeriesPoint[])[];
+  }) => {
+    const figures = new Map<string, ReturnType<typeof realPortfolioFigure.portfolioFigure>>();
+    portfolios.forEach((row, index) => {
+      const cycle = realPortfolioFigure.seriesWindowFigures(series[index] ?? []);
+      const figure = realPortfolioFigure.portfolioFigure({
+        portfolio: row,
+        live: figuresLive ? cycle : null,
+        snapshot: cycle,
+      });
+      if (figure) figures.set(row.id, figure);
+    });
+    return { figures, pending: false };
+  },
+}));
+
 const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
 const { cardActionAvailability, cardActionLabel, cardActionsOf, cardWriteOf } = await import(
   './platformCards/platformCardActionModel'
@@ -395,7 +425,7 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   it('says it is still reading while no series has landed', () => {
     efficiency = { series: [], pending: true, failed: 0, retryFailed };
     const { getByTestId } = mount();
-    expect(getByTestId('overview-headline').textContent).toBe("Reading the account's cycles…");
+    expect(getByTestId('overview-headline').textContent).toBe("Reading the account's last 7 days…");
     expect(getByTestId('overview-headline').getAttribute('data-pending')).toBe('true');
   });
 

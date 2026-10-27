@@ -26,6 +26,7 @@ import { heroMinImpact, heroThresholdMet, rankCandidates } from '@continuum/cont
 import type { KpiTileState } from '../../components/KpiTile';
 import { type FigureUnit, type FigureWindow, formatCurrency } from '../../format';
 import { spendState, windowState } from '../account/overviewModel';
+import { figureAsOfText } from '../portfolioFigure';
 import type { BeforeAfter } from './beforeAfterModel';
 import type { HeroMismatch, HeroSetting } from './heroHeaderModel';
 import type { HeroView } from './heroModel';
@@ -699,6 +700,9 @@ export type PortfolioAnchor = {
   empty: string | null;
   /** The range the date picker selected and the one before it, newest first. */
   windows: AnchorWindow[];
+  /** Set when the figure is the last cycle's snapshot standing in for the live read:
+   *  "as of Oct 15", with its age once it is stale. Null for a live or a range figure. */
+  asOf: { text: string; stale: boolean } | null;
 };
 
 /**
@@ -726,8 +730,11 @@ export function anchorOf(args: {
   currency: string | null;
   days: number;
   beforeAfter: BeforeAfter | null;
+  /** Where the figure came from (HeroView.figure); absent for a range figure. */
+  figure?: HeroView['figure'];
 }): PortfolioAnchor {
   const { growth, words, currency, days } = args;
+  const asOfText = figureAsOfText(args.figure);
   const cost = growth.cost_per_result;
   const target = growth.target != null && growth.target > 0 ? growth.target : null;
   const pct = vsTargetPct(cost, target);
@@ -752,6 +759,7 @@ export function anchorOf(args: {
       pct == null ? null : pct === 0 ? 'on target' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,
     empty: cost == null ? `no ${words.many} in ${dayWords(days)}` : null,
     windows,
+    asOf: asOfText ? { text: asOfText, stale: Boolean(args.figure?.stale) } : null,
   };
 }
 

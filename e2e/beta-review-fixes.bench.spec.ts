@@ -39,6 +39,12 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      pending_recommendations + pending_budget_moves for that portfolio.
 //   5. Activity — ad sets are named where a roster names them, and setting rows read in
 //      English (no "true → false", no snake_case column names).
+//   6. One headline figure — for every Meta portfolio in view on the bench brands, the
+//      Portfolios list row, the Overview row and the portfolio hero at its default range print
+//      the SAME cost per result (raw provenance value), the same distance to target, the same
+//      7-day spend (Overview row vs hero tile), from the same source. A figure the live read
+//      could not supply is the last cycle's and must carry its date ("as of Oct 15") on both
+//      surfaces, and its age past two days; it is never shown as current.
 //
 // ── READ-ONLY ON PRODUCTION ──
 //   * Nothing here clicks Approve, Dismiss, Revert, Apply, Pause, Stop, Send, an offered
@@ -949,5 +955,162 @@ test.describe('beta-review fixes — live', () => {
         await context.close();
       }
     }
+  });
+
+  // ── 6. One headline figure ─────────────────────────────────────────────────────────
+  test('6 · the list, the Overview and the portfolio hero print one headline figure', async ({
+    browser,
+  }) => {
+    const vivo = members.get(VIVO_EMAIL) as Member;
+    /** Portfolio pages opened per brand: every "Tours" one, then the first few others. */
+    const DETAIL_CAP = 4;
+    const raw = (page: Page, key: string) =>
+      page
+        .locator(`[data-figure="${key}"]`)
+        .first()
+        .evaluate((el) => el.getAttribute('data-figure-raw') ?? '')
+        .catch(() => null);
+    const signedPct = (text: string | null): number | null => {
+      const row = /^(\d+)% (over|under)$/.exec(text ?? '');
+      if (row) return Number(row[1]) * (row[2] === 'over' ? 1 : -1);
+      const hero = /^([+−])(\d+)%$/.exec(text ?? '');
+      if (hero) return Number(hero[2]) * (hero[1] === '+' ? 1 : -1);
+      return text === 'on target' ? 0 : null;
+    };
+    let compared = 0;
+    for (const brandId of OPTIMIZER_BRANDS) {
+      const tag = brandId.slice(0, 8);
+      await selectBrand(vivo, brandId);
+      const account = await optimizerAccountFor(vivo, brandId);
+      if (!account) {
+        recorder.record(`figure.${tag}`, 'SKIP', 'no Meta account to open the optimizer on');
+        continue;
+      }
+      const inView = (await listPortfolios(vivo, brandId)).filter(
+        (p) =>
+          bare(p.ad_account_id) === bare(account) && (p.platforms ?? ['meta']).includes('meta'),
+      );
+      if (inView.length === 0) {
+        recorder.record(`figure.${tag}`, 'SKIP', `no Meta portfolio on ${account}`);
+        continue;
+      }
+      const context = await memberContext(browser, vivo);
+      const page = await context.newPage();
+      try {
+        const base = `/scale?tab=performance&adAccountId=${encodeURIComponent(account)}`;
+        // ── the Portfolios list ──
+        await page.goto(`${base}&optimizerView=portfolios`, { waitUntil: 'domcontentloaded' });
+        const table = page.getByTestId('portfolio-table');
+        await expect(table).toBeVisible({ timeout: 180_000 });
+        await expect(table).toHaveAttribute('data-figures-pending', 'false', { timeout: 180_000 });
+        type ListFigure = {
+          cost: string | null;
+          pct: number | null;
+          source: string | null;
+          asOf: string | null;
+          chip: string;
+        };
+        const list = new Map<string, ListFigure>();
+        for (const p of inView) {
+          const row = page.locator(`[data-portfolio-id="${p.id}"]`).first();
+          if ((await row.count()) === 0) continue;
+          const chip = (await row.getByTestId('portfolio-state-chip').innerText()).trim();
+          const asOf = row.getByTestId('portfolio-figure-as-of');
+          list.set(p.id, {
+            cost: await raw(page, `portfolios.${p.id}.cost`),
+            pct: signedPct(chip),
+            chip,
+            source: await row
+              .locator('[data-figure-source]')
+              .first()
+              .getAttribute('data-figure-source')
+              .catch(() => null),
+            asOf: (await asOf.count()) > 0 ? (await asOf.innerText()).trim() : null,
+          });
+        }
+        await shoot(page, `6-list-${tag}`);
+
+        // ── the Overview rows ──
+        await page.goto(`${base}&optimizerView=overview`, { waitUntil: 'domcontentloaded' });
+        await expect(page.getByTestId('portfolio-rows')).toBeVisible({ timeout: 180_000 });
+        const overview = new Map<string, { cost: string | null; spend: string | null }>();
+        for (const id of list.keys()) {
+          overview.set(id, {
+            cost: await raw(page, `portfolio-row.${id}.cost`),
+            spend: await raw(page, `portfolio-row.${id}.spend`),
+          });
+        }
+        await shoot(page, `6-overview-${tag}`);
+
+        const ordered = inView.filter((p) => list.has(p.id));
+        const toOpen = [
+          ...ordered.filter((p) => /tours/i.test(p.name)),
+          ...ordered.filter((p) => !/tours/i.test(p.name)),
+        ].slice(0, Math.max(DETAIL_CAP, ordered.filter((p) => /tours/i.test(p.name)).length));
+        for (const p of toOpen) {
+          const rowFigure = list.get(p.id) as ListFigure;
+          const overviewFigure = overview.get(p.id);
+          // ── the hero, at its default range (no `range` param) ──
+          await page.goto(`${base}&optimizerView=portfolios&portfolio=${p.id}`, {
+            waitUntil: 'domcontentloaded',
+          });
+          const anchor = page.getByTestId('portfolio-anchor');
+          const appeared = await anchor
+            .waitFor({ state: 'visible', timeout: 150_000 })
+            .then(() => true)
+            .catch(() => false);
+          if (!appeared) {
+            recorder.record(
+              `figure.${tag}.${p.name}`,
+              'SKIP',
+              `no hero anchor (first cycle or no headline) — list ${rowFigure.chip}`,
+            );
+            continue;
+          }
+          // The hero settles once its reads land: wait until the anchor holds still for 6s.
+          let last = '';
+          let stableSince = Date.now();
+          const deadline = Date.now() + 90_000;
+          while (Date.now() < deadline) {
+            const now = `${await raw(page, 'anchor.cost')}|${await raw(page, 'tiles.spend')}|${await page.getByTestId('anchor-as-of').count()}`;
+            if (now !== last) {
+              last = now;
+              stableSince = Date.now();
+            } else if (Date.now() - stableSince > 6_000) break;
+            await page.waitForTimeout(1_000);
+          }
+          const heroCost = await raw(page, 'anchor.cost');
+          const heroSpend = await raw(page, 'tiles.spend');
+          const vs = page.getByTestId('anchor-vs-target');
+          const heroPct = (await vs.count()) > 0 ? signedPct((await vs.innerText()).trim()) : null;
+          const heroAsOfNode = page.getByTestId('anchor-as-of');
+          const heroAsOf =
+            (await heroAsOfNode.count()) > 0 ? (await heroAsOfNode.innerText()).trim() : null;
+          const heroLine = `hero cost ${heroCost} spend ${heroSpend} vs ${heroPct}% ${heroAsOf ?? '(live)'}`;
+          const listLine =
+            `list cost ${rowFigure.cost} ${rowFigure.chip} [${rowFigure.source ?? 'none'}] ${rowFigure.asOf ?? ''}`.trim();
+          const overviewLine = `overview cost ${overviewFigure?.cost} spend ${overviewFigure?.spend}`;
+          const sameCost = heroCost === rowFigure.cost && overviewFigure?.cost === rowFigure.cost;
+          const sameSpend = heroSpend === overviewFigure?.spend;
+          const samePct = rowFigure.pct == null || heroPct === rowFigure.pct;
+          const sameDate = heroAsOf === rowFigure.asOf;
+          // A snapshot is never unlabelled: a snapshot row says its date, live rows say nothing.
+          const labelled =
+            rowFigure.source === 'snapshot'
+              ? /^as of [A-Z][a-z]{2} \d{1,2}( · \d+ days old)?$/.test(rowFigure.asOf ?? '')
+              : rowFigure.asOf == null;
+          compared += 1;
+          check(
+            `figure.${tag}.${p.name}`,
+            sameCost && sameSpend && samePct && sameDate && labelled,
+            `${listLine} | ${overviewLine} | ${heroLine}`,
+          );
+        }
+        await shoot(page, `6-hero-${tag}`);
+      } finally {
+        await context.close();
+      }
+    }
+    check('figure.compared', compared > 0, `${compared} portfolio(s) compared list ↔ hero`);
   });
 });

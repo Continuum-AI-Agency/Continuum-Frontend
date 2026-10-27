@@ -46,7 +46,6 @@ import {
   useOptimizerPortfolioPacing,
 } from '../useOptimizerData';
 import { headlineFigureUnit } from './account/candidateHeadline';
-import { type PortfolioWindow, portfolioWindow } from './account/overviewModel';
 import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
 import {
   CostVsTargetCell,
@@ -59,12 +58,14 @@ import {
   PortfolioTableHeader,
   portfolioLeads,
   portfolioTarget,
+  type RowFigure,
   StalenessNote,
   StatusCell,
 } from './PortfolioRowCard';
 import { portfolioPlatforms } from './platforms/platformTabsModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { pacingSideLabel, portfolioPacingLine } from './portfolioPacingLine';
+import { usePortfolioFigures } from './usePortfolioFigures';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
  *  every portfolio the brand owns, grouped by account. */
@@ -173,7 +174,7 @@ function PortfolioTableRow({
 }: {
   portfolio: PortfolioListItem;
   currency?: string | null;
-  window: PortfolioWindow | null;
+  window: RowFigure | null;
   /** The latest run's pacing block, when read: the row labels a verdict about an earlier flight,
    *  and under an account-wide pacing finding it is the verdict the row prints as its own. */
   pacing?: CycleRunPacing | null;
@@ -355,14 +356,13 @@ export function OptimizerPortfolios({
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
   const pacingById = useOptimizerPortfolioPacing(portfolios);
-  const windows = useMemo(() => {
-    const byId = new Map<string, PortfolioWindow>();
-    portfolios.forEach((portfolio, index) => {
-      const window = portfolioWindow(portfolio, efficiency.series[index] ?? []);
-      if (window) byId.set(portfolio.id, window);
-    });
-    return byId;
-  }, [portfolios, efficiency.series]);
+  // The same headline figure the Overview rows and the portfolio hero print (portfolioFigure.ts).
+  const { figures: windows, pending: figuresPending } = usePortfolioFigures({
+    brandId,
+    adAccountId,
+    portfolios,
+    series: efficiency.series,
+  });
   // Offering "All accounts" when it shows exactly the same rows is noise, so the toggle
   // appears only once the account filter is genuinely holding portfolios back.
   const hasOtherAccountPortfolios = brandPortfolioCount > portfolios.length;
@@ -409,7 +409,10 @@ export function OptimizerPortfolios({
         />
       ) : (
         <>
-          <div data-testid="portfolio-table">
+          <div
+            data-figures-pending={figuresPending || efficiency.pending ? 'true' : 'false'}
+            data-testid="portfolio-table"
+          >
             {portfolios.length > 0 ? <PortfolioTableHeader labels={TABLE_LABELS} /> : null}
             {portfolios.map((portfolio) => (
               <PortfolioTableRow

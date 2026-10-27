@@ -128,6 +128,7 @@ import {
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
 import { underManagement } from './portfolioStaleness';
+import { usePortfolioFigures } from './usePortfolioFigures';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
@@ -273,10 +274,16 @@ export function OptimizerOverview({
     };
   }, [adAccounts.data, adAccountId, platformMetrics]);
 
-  const windows = useMemo(
-    () => portfolioWindows(portfolios, efficiency.series),
-    [portfolios, efficiency.series],
-  );
+  // Each row's headline figure, from the ONE function the portfolio hero uses too
+  // (portfolioFigure.ts): the live 7 complete days first, the last cycle's window only when
+  // the live read cannot see the portfolio — and then dated.
+  const { figures: windows, pending: figuresPending } = usePortfolioFigures({
+    brandId,
+    adAccountId,
+    portfolios,
+    series: efficiency.series,
+  });
+  const readingFigures = efficiency.pending || figuresPending;
   const names = useMemo(
     () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
     [portfolios],
@@ -465,7 +472,7 @@ export function OptimizerOverview({
               Retry
             </button>
           </p>
-        ) : spend ? (
+        ) : spend && !readingFigures ? (
           <HeadlineSentence
             segments={accountHeadlineSegments({
               spends: [
@@ -481,11 +488,11 @@ export function OptimizerOverview({
         ) : (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
-            data-pending={efficiency.pending ? 'true' : undefined}
+            data-pending={readingFigures ? 'true' : undefined}
             data-testid="overview-headline"
           >
-            {efficiency.pending
-              ? "Reading the account's cycles…"
+            {readingFigures
+              ? "Reading the account's last 7 days…"
               : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
           </p>
         )}
@@ -673,7 +680,7 @@ export function OptimizerOverview({
        *  (no placeholder can know how many) and the cycles re-sort the rows, so rows painted
        *  earlier were pushed and reordered on every load (768 CLS 0.065 + 2 × 0.019). Arriving
        *  last, at the bottom, they move nothing. */}
-      {accountRead.isLoading || efficiency.pending ? null : (
+      {accountRead.isLoading || readingFigures ? null : (
         <PortfolioRows
           empty={<p className="text-xs text-muted-foreground">No portfolios yet.</p>}
           onPrefetchPortfolio={onPrefetchPortfolio}

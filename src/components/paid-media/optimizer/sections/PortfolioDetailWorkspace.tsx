@@ -96,7 +96,13 @@ import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { PortfolioHeaderBar } from './detail/PortfolioHeaderLine';
 import { PortfolioHero } from './detail/PortfolioHero';
-import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
+import {
+  DEFAULT_RANGE,
+  type RangeSpec,
+  resolveRange,
+  serializeRange,
+  todayIso,
+} from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
@@ -109,6 +115,7 @@ import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
 import { portfolioPlatforms } from './platforms/platformTabsModel';
+import { portfolioFigureFromReads } from './portfolioFigure';
 import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -314,9 +321,24 @@ export function PortfolioDetailWorkspace({
     metric,
     target: targetDisplay,
   });
+  // At the default range the hero prints the portfolio's headline figure — the same
+  // `portfolioFigure()` over the same reads (account snapshots, roster, cycle series) its list
+  // row prints — so opening a portfolio never changes its number. Any other range the reader
+  // picks keeps the hero's range read (buildHeroView without a figure).
+  const headlineFigure =
+    serializeRange(range) === serializeRange(DEFAULT_RANGE)
+      ? portfolioFigureFromReads({
+          portfolio,
+          snapshots: snapshotsQuery.isSuccess ? snapshotsQuery.data : null,
+          readAt: snapshotsQuery.fetchedAt,
+          memberIds: enrolledQuery.isSuccess ? enrolledIds : null,
+          series: cpaSeriesQuery.data,
+        })
+      : null;
   const heroView = buildHeroView({
     report: currentReport,
     recap,
+    figure: headlineFigure,
     flightPacing,
     metric,
     currency: currency ?? null,

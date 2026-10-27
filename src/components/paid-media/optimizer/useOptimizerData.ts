@@ -2188,6 +2188,24 @@ export function useOptimizerSuggestions(
   });
 }
 
+/** The account snapshot read as query options: one definition for every surface that reads
+ *  `optimizerQueryKeys.accountSnapshots`, so the portfolio detail and the portfolio lists
+ *  (whose headline figures sum it, see sections/portfolioFigure.ts) share one cache entry. */
+export function accountSnapshotsQuery(
+  brandId: string,
+  adAccountId: string,
+  level: PortfolioLevel = 'adset',
+) {
+  const scope = level === 'campaign' ? 'campaign_snapshots' : 'adset_snapshots';
+  return {
+    queryKey: optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
+    queryFn: () => withReadTimeout(fetchAccountSnapshots(brandId, adAccountId, scope, false)),
+    staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: retryUnlessTimeout(1),
+  };
+}
+
 /** The account's snapshots (engine input) — powers the client-side "what-if"
  *  preview. `level` selects ad sets (default) or campaigns; campaign mode reads
  *  the campaign_snapshots scope. Cached like every other read (30-min TTL).
@@ -2211,13 +2229,9 @@ export function useOptimizerAccountSnapshots(
   const enabled = Boolean(brandId && adAccountId);
 
   const query = useQuery({
+    ...accountSnapshotsQuery(brandId, adAccountId as string, level),
     queryKey,
-    queryFn: () =>
-      withReadTimeout(fetchAccountSnapshots(brandId, adAccountId as string, scope, false)),
     enabled,
-    staleTime: TEN_MINUTES,
-    gcTime: THIRTY_MINUTES,
-    retry: retryUnlessTimeout(1),
   });
 
   const [cooldownUntil, setCooldownUntil] = useState(0);

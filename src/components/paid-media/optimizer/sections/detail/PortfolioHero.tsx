@@ -198,6 +198,7 @@ export function PortfolioHero({
         currency,
         days: headline.days,
         beforeAfter: beforeAfter?.model ?? null,
+        figure: view.figure,
       })
     : null;
   const tiles = headline

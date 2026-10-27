@@ -15,6 +15,7 @@ import type {
 } from '@continuum/contracts';
 import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
+import type { PortfolioFigure } from '../portfolioFigure';
 import { impactPerDay } from '../recQueueModel';
 import { stripPaceClaim } from './paceClaim';
 import type { RecapDay, RecapModel } from './recapModel';
@@ -75,6 +76,12 @@ export type HeroView = {
   cta: HeroCta | null;
   observe: boolean;
   asOf: string | null;
+  /**
+   * Where the growth figures came from when the hero shows the portfolio's headline figure
+   * (the default range): `live` (the last 7 complete days) or `snapshot` (the last cycle's
+   * window, dated). Null at any other range, where the figures are the range's own.
+   */
+  figure?: Pick<PortfolioFigure, 'source' | 'asOfLabel' | 'ageDays' | 'stale'> | null;
   /**
    * The daily recap series, so the calm card can draw cost per result against the target
    * across the window. Absent reads as no priced days. See ./news/cardVisual.
@@ -174,6 +181,44 @@ function withPacingVerdict(
     ...stored,
     growth,
     growth_sentence: sentence === '' ? growthSentence(growth) : sentence,
+  };
+}
+
+const ratioOf = (current: number, previous: number): number | null =>
+  previous > 0 ? current / previous - 1 : null;
+
+/**
+ * The growth read from the portfolio's headline figure — the one `portfolioFigure()` prices
+ * for the list rows too. Spend and cost stay unrounded, so the hero and a row derive the same
+ * distance to target from the same number; formatting rounds at render.
+ */
+function growthFromFigure(args: {
+  figure: PortfolioFigure;
+  metric: OptimizationMetricDefinition;
+  currency: string | null;
+  latestRun: ParsedCycleRunReport['latest_run'];
+}): BriefGrowth {
+  const { figure } = args;
+  const priorCost = figure.priorCostPerResult;
+  return {
+    spend: figure.spend,
+    results: Math.round(figure.results),
+    cost_per_result: figure.costPerResult,
+    target: figure.target,
+    deltas: {
+      spend: ratioOf(figure.spend, figure.priorSpend),
+      results: ratioOf(figure.results, figure.priorResults),
+      cost_per_result:
+        figure.costPerResult != null && priorCost != null && priorCost > 0
+          ? figure.costPerResult / priorCost - 1
+          : null,
+    },
+    pacing: pacingVerdict(args.latestRun?.pacing),
+    scale: null,
+    window: 'd7',
+    as_of: figure.cycleTs,
+    currency: args.currency,
+    result_label: args.metric.resultLabel.toLowerCase(),
   };
 }
 
@@ -314,18 +359,32 @@ export function buildHeroView(args: {
   target: number | null;
   window: BriefGrowth['window'];
   firstCycle: boolean;
+  /**
+   * The portfolio's headline figure (portfolioFigure.ts), passed at the default range only.
+   * When present it IS the growth read — over the stored brief's cycle-time figures and over
+   * the recap — so the hero prints exactly what the portfolio's list row prints.
+   */
+  figure?: PortfolioFigure | null;
   now?: string;
 }): HeroView {
   const { report, recap, metric } = args;
   const observe = args.portfolio.apply_mode === 'observe';
-  const growth = growthFromRecap({
-    recap,
-    metric,
-    currency: args.currency,
-    target: args.target,
-    latestRun: report?.latest_run ?? null,
-    window: args.window,
-  });
+  const figure = args.figure ?? null;
+  const growth = figure
+    ? growthFromFigure({
+        figure,
+        metric,
+        currency: args.currency,
+        latestRun: report?.latest_run ?? null,
+      })
+    : growthFromRecap({
+        recap,
+        metric,
+        currency: args.currency,
+        target: args.target,
+        latestRun: report?.latest_run ?? null,
+        window: args.window,
+      });
   const pacing = pacingLineOf(args.flightPacing);
   const stored = report?.hero_brief ? readPortfolioBrief(report.hero_brief) : null;
   const latestRunId = report?.latest_run?.id ?? null;
@@ -333,9 +392,11 @@ export function buildHeroView(args: {
     stored != null &&
     (report?.hero_brief?.cycle_run_id === latestRunId ||
       Date.now() - Date.parse(stored.generated_at) < 24 * 3_600_000);
+  // A stored brief keeps its words and candidates; its figures were measured at cycle time,
+  // so under the headline figure they give way to it rather than pass as current.
   const brief =
     briefIsCurrent && stored
-      ? withPacingVerdict(stored, report?.latest_run?.pacing)
+      ? withPacingVerdict(figure ? { ...stored, growth } : stored, report?.latest_run?.pacing)
       : deterministicBrief({
           growth,
           candidates: report
@@ -354,6 +415,14 @@ export function buildHeroView(args: {
     cta: ctaFor(brief, observe),
     observe,
     asOf: report?.latest_run?.cycle_ts ?? null,
+    figure: figure
+      ? {
+          source: figure.source,
+          asOfLabel: figure.asOfLabel,
+          ageDays: figure.ageDays,
+          stale: figure.stale,
+        }
+      : null,
     series: recap.series,
     recommendations: report?.recommendations ?? [],
   };
