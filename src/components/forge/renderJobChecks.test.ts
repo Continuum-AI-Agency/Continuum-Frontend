@@ -289,6 +289,21 @@ describe('renderJobChecks', () => {
       ]);
     });
 
+    test('a finding kind this build does not know reads as its note, else its raw kind', () => {
+      const skewed = frame('1:1', 'fail', ['halo', 'glare']);
+      const [halo] = skewed.verdict?.findings ?? [];
+      if (halo) halo.note = 'A glow bleeds around the logo';
+      const judged = row(
+        checksOf({ fit: fit([]), judge: judge({ state: 'fail', frames: [skewed] }) }),
+        'Judge',
+      );
+      expect(judged.result).toBe('1:1 ✗ 2 problems');
+      expect(judged.lines.slice(0, 2)).toEqual([
+        '1:1: A glow bleeds around the logo',
+        '1:1: glare',
+      ]);
+    });
+
     test('an unknown verdict says why it could not judge', () => {
       expect(
         row(
