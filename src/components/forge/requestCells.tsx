@@ -12,10 +12,8 @@ import {
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   isLayerSwitch,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -68,7 +66,9 @@ import {
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
+  type RowStatus,
   rowBreadcrumb,
+  rowStatusOf,
   seededValue,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
@@ -397,55 +397,39 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
 }
 
 function StatusBadge({
-  row,
+  status,
   invalidReason,
   labelOf,
 }: {
-  row: RequestRow;
-  invalidReason?: string;
+  status: RowStatus;
+  invalidReason: string;
   labelOf: LabelOf;
 }) {
-  if (invalidReason)
-    return (
-      <Explained why={invalidReason}>
-        <Badge variant="destructive">Invalid</Badge>
-      </Explained>
-    );
-  switch (row.check.state) {
-    case 'checking':
+  switch (status.state) {
+    case 'invalid':
       return (
-        <Badge variant="muted">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
-        </Badge>
+        <Explained why={invalidReason}>
+          <Badge variant="destructive">Invalid</Badge>
+        </Explained>
       );
-    case 'error':
+    case 'review':
       return (
-        <Badge variant="destructive" title={row.check.message}>
-          Rejected
-        </Badge>
+        <Explained
+          why={[
+            ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+          ].join(' ')}
+        >
+          <Badge variant="warning">Needs review</Badge>
+        </Explained>
       );
-    case 'ready': {
-      if (row.check.guardrails?.some((finding) => finding.severity === 'block'))
-        return <Badge variant="destructive">Blocked</Badge>;
-      const review = readinessFindings(row.check).filter(leavesCheckIncomplete);
-      if (review.length)
-        return (
-          <Explained
-            why={[...new Set(review.map((finding) => explainFinding(finding, labelOf)))].join(' ')}
-          >
-            <Badge variant="warning">Needs review</Badge>
-          </Explained>
-        );
-      return row.check.fit?.escalate ? (
-        <Explained why={aiCheckWhy(row.check.fit)}>
+    case 'ai-check':
+      return (
+        <Explained why={aiCheckWhy(status.fit)}>
           <Badge variant="warning">AI check after render</Badge>
         </Explained>
-      ) : (
-        <Badge variant="success">Ready</Badge>
       );
-    }
     default:
-      return <Badge variant="muted">Draft</Badge>;
+      return <Badge variant="success">Ready</Badge>;
   }
 }
 
@@ -1138,7 +1122,7 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
@@ -1159,7 +1143,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
   };
   return (
     <StatusBadge
-      row={row}
+      status={rowStatusOf(errors, liveFit.get(row.id))}
       labelOf={labelOf}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {

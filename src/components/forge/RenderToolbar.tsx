@@ -247,7 +247,6 @@ export function RenderToolbar({
   fireHint,
   busy,
   onRender,
-  onReviewMissingFonts,
   onReviewReady,
   readyCount,
 }: {
@@ -303,7 +302,6 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
-  onReviewMissingFonts?: () => void;
   onReviewReady?: () => void;
   readyCount?: number;
 }) {
@@ -562,7 +560,6 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
-              onReviewMissingFonts={onReviewMissingFonts}
               onReviewReady={onReviewReady}
               readyCount={readyCount}
             />
@@ -661,7 +658,6 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
-  onReviewMissingFonts,
   onReviewReady,
   readyCount,
 }: {
@@ -671,7 +667,6 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
-  onReviewMissingFonts?: () => void;
   onReviewReady?: () => void;
   readyCount?: number;
 }) {
@@ -725,11 +720,6 @@ function RenderButton({
       {onReviewReady ? (
         <Button type="button" size="xs" variant="outline" disabled={firing} onClick={onReviewReady}>
           Review {readyCount} ready rows
-        </Button>
-      ) : null}
-      {onReviewMissingFonts ? (
-        <Button type="button" size="xs" variant="outline" onClick={onReviewMissingFonts}>
-          Review font override
         </Button>
       ) : null}
       {showHint ? (

@@ -246,7 +246,6 @@ const rowWith = (headline: string): RequestRow[] => [
     clearedKeys: [],
     outputIds: [],
     media: { hero: { w: 800, h: 800, thumbnailUrl: HERO_URL } },
-    check: { state: 'idle' },
   },
 ];
 

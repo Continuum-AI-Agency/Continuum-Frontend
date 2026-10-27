@@ -648,7 +648,6 @@ function TemplatePreviewPanel({
         isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate),
     ) &&
     Object.keys(validateRow(contract.variables, values)).length === 0 &&
-    (renderSetId === null || row?.check.state === 'ready') &&
     !row?.proposed;
   const proofStart = useQuery({
     queryKey: ['forge-motion-proof', proofSettled],

@@ -4,8 +4,9 @@ import {
   type ApiRenderDeliveryTarget,
   type ApiRenderEncodeOverride,
   type ApiRenderFitReport,
+  type ApiRenderFitVerdict,
   type ApiRenderInputValue,
-  type ApiRenderPreflightResponse,
+  type ApiRenderReadinessFinding,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
@@ -16,8 +17,11 @@ import {
   type ForgeRenderSetRow,
   type ForgeRowEvidence,
   inheritEncodeBlock,
+  leavesCheckIncomplete,
   type MediaAsset,
   type PinnedRenderAsset,
+  planFitCheck,
+  readinessFindings,
   resolveForgeRenderSetRows,
 } from '@continuum/contracts';
 
@@ -27,13 +31,13 @@ import {
 // `values` is exactly what `records[].variables` sends — keyed by `variable.key`, pins as
 // `{assetId, versionId}`. `media` is the local sidecar for those pins (pixel size for the fit
 // check, a thumbnail for the cell); `pinnedRenderAssetSchema` is strict, so it lives beside
-// the value rather than inside it. `check` is the server's last word on the row, or the lack
-// of one.
+// the value rather than inside it. An edit asks the server nothing: a row's status is what the
+// browser can tell (`rowStatusOf`), and Review is the one preflight.
 
 /** The largest batch the server signs in one token (`apiRenderBatchPreflightRequestSchema`). */
 export const MAX_BATCH_ROWS = 50;
 
-/** How long an edit settles before it is dry-run again — a row's preflight, a review's re-check. */
+/** How long an edit settles before an open review checks the rows again. */
 export const PREFLIGHT_DEBOUNCE_MS = 600;
 
 export const canImportRows = (existingRows: number, incomingRows: number): boolean =>
@@ -51,22 +55,6 @@ export function duplicateMappedVariable(
   }
   return null;
 }
-
-export type RequestRowCheck =
-  | { state: 'idle' }
-  | { state: 'checking' }
-  | {
-      state: 'ready';
-      fit: ApiRenderFitReport | null;
-      test: boolean;
-      guardrails?: ApiRenderPreflightResponse['guardrails'];
-    }
-  | {
-      state: 'error';
-      message: string;
-      code?: string;
-      guardrails?: ApiRenderPreflightResponse['guardrails'];
-    };
 
 export function isFontPreflightRefusal(
   code?: string,
@@ -171,7 +159,6 @@ export type RequestRow = {
    */
   proposed?: true;
   media: Record<string, RequestRowMedia>;
-  check: RequestRowCheck;
   subRows?: RequestRow[];
 };
 
@@ -265,7 +252,6 @@ export function seedRow(
     clearedKeys: [],
     outputIds: [],
     media: {},
-    check: { state: 'idle' },
   };
 }
 
@@ -536,6 +522,28 @@ export function validateRow(
       errors[variable.key] = 'Not a hex colour';
   }
   return errors;
+}
+
+/**
+ * A row's status from what the browser already has: its own errors (`validateRow` and what the
+ * render reads from the values) and the Live kit's fit per variable (`useLiveFit`). Nothing is
+ * asked of the server on an edit; Review runs the one preflight, with the same findings and words.
+ */
+export type RowStatus =
+  | { state: 'invalid'; errors: Record<string, string> }
+  | { state: 'review'; findings: ApiRenderReadinessFinding[] }
+  | { state: 'ai-check'; fit: ApiRenderFitReport }
+  | { state: 'ready' };
+
+export function rowStatusOf(
+  errors: Record<string, string>,
+  verdicts?: ReadonlyMap<string, ApiRenderFitVerdict>,
+): RowStatus {
+  if (Object.keys(errors).length) return { state: 'invalid', errors };
+  const fit = verdicts?.size ? planFitCheck({ comp: null, slots: [...verdicts.values()] }) : null;
+  const findings = readinessFindings({ fit }).filter(leavesCheckIncomplete);
+  if (findings.length) return { state: 'review', findings };
+  return fit?.escalate ? { state: 'ai-check', fit } : { state: 'ready' };
 }
 
 /** The values as the wire wants them: no blanks, no sidecar. */
@@ -948,13 +956,7 @@ export function moveRow(
   const block = rows
     .filter((row) => subtree.has(row.id))
     .map((row) =>
-      !reparented
-        ? row
-        : {
-            ...row,
-            ...(row.id === dragId ? { parentId, outputIds: outputIdsAfterMove() } : {}),
-            check: { state: 'idle' } as const,
-          },
+      reparented && row.id === dragId ? { ...row, parentId, outputIds: outputIdsAfterMove() } : row,
     );
   const rest = rows.filter((row) => !subtree.has(row.id));
   let index = rest.indexOf(target);
@@ -990,19 +992,10 @@ export function addSibling(
 
 const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
-/** Changed rows, and everything that inherits from them, dry-run again. */
-function idleFrom(rows: RequestRow[], changed: Set<string>): RequestRow[] {
-  if (changed.size === 0) return rows;
-  const affected = descendantsOf(rows, changed);
-  return rows.map((row) =>
-    affected.has(row.id) && row.check.state !== 'idle' ? { ...row, check: { state: 'idle' } } : row,
-  );
-}
-
 /**
  * One row's value for `key` given to other rows: "Apply to selected" and fill-down. A target that
  * already renders that value is left alone, so a variation that inherits it keeps inheriting;
- * untouched rows stay the same objects, so only the rows that changed are dry-run again.
+ * untouched rows stay the same objects.
  */
 export function applyValue(
   rows: RequestRow[],
@@ -1013,10 +1006,8 @@ export function applyValue(
   const value = effectiveValues(rows, fromId)[key];
   const media = effectiveMedia(rows, fromId)[key];
   const targets = new Set(toIds.filter((id) => id !== fromId));
-  const changed = new Set<string>();
-  const next = rows.map((row) => {
+  return rows.map((row) => {
     if (!targets.has(row.id) || sameValue(effectiveValues(rows, row.id)[key], value)) return row;
-    changed.add(row.id);
     const values = { ...row.values };
     const nextMedia = { ...row.media };
     const { [key]: _evidence, ...evidence } = row.evidence ?? {};
@@ -1039,7 +1030,6 @@ export function applyValue(
     }
     return { ...row, values, media: nextMedia, evidence, clearedKeys };
   });
-  return idleFrom(next, changed);
 }
 
 /** The formats one row renders, given to others. "Every format" is spelled out for a variation. */
@@ -1055,24 +1045,19 @@ export function applyFormats(
     const ids = effectiveOutputIds(rows, id);
     return ids.length ? ids : allOutputIds;
   };
-  const changed = new Set<string>();
-  const next = rows.map((row) => {
-    if (row.id === fromId || !toIds.includes(row.id) || sameValue(renders(row.id), picked))
-      return row;
-    changed.add(row.id);
-    return { ...row, outputIds: [...picked] };
-  });
-  return idleFrom(next, changed);
+  return rows.map((row) =>
+    row.id === fromId || !toIds.includes(row.id) || sameValue(renders(row.id), picked)
+      ? row
+      : { ...row, outputIds: [...picked] },
+  );
 }
 
 /** Blank `key` on each row: a root drops its value, a variation says it is blank on purpose. */
 export function clearKey(rows: RequestRow[], key: string, ids: string[]): RequestRow[] {
-  const changed = new Set<string>();
-  const next = rows.map((row) => {
+  return rows.map((row) => {
     if (!ids.includes(row.id)) return row;
     const cleared = row.parentId && !row.clearedKeys.includes(key);
     if (!(key in row.values) && !(key in row.media) && !cleared) return row;
-    changed.add(row.id);
     const { [key]: _value, ...values } = row.values;
     const { [key]: _media, ...media } = row.media;
     const { [key]: _evidence, ...evidence } = row.evidence ?? {};
@@ -1084,16 +1069,13 @@ export function clearKey(rows: RequestRow[], key: string, ids: string[]): Reques
       clearedKeys: cleared ? [...row.clearedKeys, key] : row.clearedKeys,
     };
   });
-  return idleFrom(next, changed);
 }
 
 /** Variations go back to what they inherit for `key`; roots have nothing to go back to. */
 export function resetKey(rows: RequestRow[], key: string, ids: string[]): RequestRow[] {
-  const changed = new Set<string>();
-  const next = rows.map((row) => {
+  return rows.map((row) => {
     if (!row.parentId || !ids.includes(row.id)) return row;
     if (!(key in row.values) && !row.clearedKeys.includes(key)) return row;
-    changed.add(row.id);
     const { [key]: _value, ...values } = row.values;
     const { [key]: _media, ...media } = row.media;
     const { [key]: _evidence, ...evidence } = row.evidence ?? {};
@@ -1105,14 +1087,12 @@ export function resetKey(rows: RequestRow[], key: string, ids: string[]): Reques
       clearedKeys: row.clearedKeys.filter((item) => item !== key),
     };
   });
-  return idleFrom(next, changed);
 }
 
 /**
  * The AI button's answer applied to the rows, as the person would have made it by hand: a set
- * value clears that field's evidence and blank, every changed row and what inherits from it is
- * dry-run again, a deleted row takes its variations with it. New rows are the person's own, not
- * proposals — the answer is one undo step. Returns which rows to leave selected: the ones the
+ * value clears that field's evidence and blank, a deleted row takes its variations with it. New
+ * rows are the person's own, not proposals — the answer is one undo step. Returns which rows to leave selected: the ones the
  * answer names, else the ones it added.
  */
 export function applyAssistOps(
@@ -1121,15 +1101,12 @@ export function applyAssistOps(
   allOutputIds: string[],
 ): { rows: RequestRow[]; added: string[]; selected: string[] | null } {
   let next = rows;
-  const changed = new Set<string>();
   const added: string[] = [];
   let selected: string[] | null = null;
   const touch = (ids: string[], change: (row: RequestRow) => RequestRow) => {
     const targets = new Set(ids);
     next = next.map((row) => {
-      if (!targets.has(row.id)) return row;
-      changed.add(row.id);
-      return change(row);
+      return targets.has(row.id) ? change(row) : row;
     });
   };
   for (const op of ops) {
@@ -1187,7 +1164,7 @@ export function applyAssistOps(
   }
   const present = new Set(next.map((row) => row.id));
   return {
-    rows: idleFrom(next, new Set([...changed].filter((id) => present.has(id)))),
+    rows: next,
     added,
     selected: (selected ?? (added.length ? added : null))?.filter((id) => present.has(id)) ?? null,
   };
@@ -1229,20 +1206,18 @@ export function pushHistory(
   };
 }
 
-const storedShape = ({ check: _check, media: _media, subRows: _subRows, ...row }: RequestRow) =>
+const storedShape = ({ media: _media, subRows: _subRows, ...row }: RequestRow) =>
   JSON.stringify(row);
 
 /**
- * A snapshot back on screen. A row the step did not change keeps its current object and its
- * dry-run verdict; only the rows that differ are checked again.
+ * A snapshot back on screen. A row the step did not change keeps its current object, and with it
+ * the media sidecar the snapshot does not store.
  */
 export function restoreRows(snapshot: RequestRow[], current: RequestRow[]): RequestRow[] {
   const byId = new Map(current.map((row) => [row.id, row]));
   return snapshot.map((row) => {
     const now = byId.get(row.id);
-    return now && storedShape(now) === storedShape(row)
-      ? now
-      : { ...row, check: { state: 'idle' } };
+    return now && storedShape(now) === storedShape(row) ? now : row;
   });
 }
 
@@ -1277,7 +1252,6 @@ export function rowsFromSuggestion(
       clearedKeys: [],
       outputIds: row.parentId === null ? [...allOutputIds] : [],
       media,
-      check: { state: 'idle' },
       proposed: true,
     };
   });
@@ -1346,7 +1320,7 @@ export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): For
 /**
  * What a review is a review OF: every row as the set stores it (a parent's edit changes what its
  * forks render), which rows render, and the set revision their records point at. Where a row
- * delivers is chosen during the review, and a check landing or a thumbnail loading is nothing
+ * delivers is chosen during the review, and a thumbnail loading is nothing
  * the server signs, so none of those make a review stale.
  */
 export const reviewSignature = (
@@ -1377,7 +1351,6 @@ export function fromRenderSetRows(rows: ForgeRenderSetRow[]): RequestRow[] {
     clearedEncodeKeys: row.clearedEncodeKeys,
     ...(row.delivery ? { delivery: row.delivery } : {}),
     media: {},
-    check: { state: 'idle' },
   }));
 }
 
@@ -1434,7 +1407,6 @@ export function rebaseRows(
       ...(row.clearedEncodeKeys
         ? { clearedEncodeKeys: { ...row.clearedEncodeKeys, outputs: clearedOutputs } }
         : {}),
-      check: { state: 'idle' } as const,
     };
   });
   return { rows: next, dropped: [...dropped] };

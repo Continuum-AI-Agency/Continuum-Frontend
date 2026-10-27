@@ -9,17 +9,14 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
-  apiRenderPreflightResponseSchema,
   effectiveRenderValues,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
   isWebTemplateKey,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
   type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
@@ -95,7 +92,6 @@ import {
   emptyHistory,
   forkLabel,
   fromRenderSetRows,
-  isFontPreflightRefusal,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -103,7 +99,6 @@ import {
   moveRow,
   nestRows,
   newRowId,
-  PREFLIGHT_DEBOUNCE_MS,
   parseDelimited,
   proposedIds,
   pushHistory,
@@ -119,6 +114,7 @@ import {
   rowDepth,
   rowFileCount,
   rowMediaOf,
+  rowStatusOf,
   rowsFromSuggestion,
   seedRow,
   toPreflightDelivery,
@@ -176,8 +172,8 @@ import {
 //
 // One row per render, one column per variable the template exposes. The canvas node fills ONE
 // of these per node; a campaign fills fifty, and fifty forms is what NocoBase offered. Every
-// cell validates as you type, every row is dry-run against the server the moment it is
-// complete, and the selection renders as one batch — the same `records[]` the node sends, so
+// cell validates as you type and an edit asks the server nothing: Render's review is the one
+// preflight, and the selection renders as one batch — the same `records[]` the node sends, so
 // there is one batching model and this is only a wider view of it.
 //
 // Named sets persist on the server; localStorage is only an unsaved-draft recovery copy.
@@ -222,15 +218,16 @@ function readDrafts(key: string): RequestRow[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Persisted;
     if (!Array.isArray(parsed.rows)) return null;
-    // The server's verdict does not survive a reload — tokens expire, contracts move.
-    return parsed.rows.map((row, index) => ({
-      ...row,
-      parentId: row.parentId ?? null,
-      clearedKeys: row.clearedKeys ?? [],
-      outputIds: row.outputIds ?? [],
-      label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
-      check: { state: 'idle' },
-    }));
+    // A draft saved by a build that kept a per-row dry-run still carries its `check`; drop it.
+    return parsed.rows.map(
+      ({ check: _check, ...row }: RequestRow & { check?: unknown }, index) => ({
+        ...row,
+        parentId: row.parentId ?? null,
+        clearedKeys: row.clearedKeys ?? [],
+        outputIds: row.outputIds ?? [],
+        label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
+      }),
+    );
   } catch {
     return null;
   }
@@ -247,14 +244,6 @@ const seededRows = (contract: ApiRenderTemplateContract): RequestRow[] => [
 /** What "saved" is compared against: the rows exactly as a render set would store them. */
 const signatureOf = (rows: RequestRow[], contract: ApiRenderTemplateContract | null) =>
   JSON.stringify(toRenderSetRows(rows, allOutputIdsOf(contract)));
-
-/** Inputs, not a render, so the snapshot is everything the dry-run is asked about. */
-const preflightSnapshot = (rows: RequestRow[], id: string) =>
-  JSON.stringify([
-    effectiveValues(rows, id),
-    effectiveEncode(rows, id) ?? null,
-    effectiveOutputIds(rows, id),
-  ]);
 
 const rowStepCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
   if (event.code === 'ArrowDown')
@@ -312,9 +301,9 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
   ];
 }
 
-/** "4 of 6 rows ready to render · 1 needs fixing · 1 still checking" — no state word to decode. */
+/** "4 of 6 rows ready to render · 1 needs fixing · 1 needs a review" — no state word to decode. */
 function readinessSummary(
-  counts: { ready: number; blocked: number; needsInput: number; review: number; checking: number },
+  counts: { ready: number; blocked: number; needsInput: number; review: number },
   total: number,
 ): string {
   const needs = (count: number, what: string) =>
@@ -328,7 +317,6 @@ function readinessSummary(
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
     needs(counts.review, 'a review'),
-    counts.checking ? `${counts.checking} still checking` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -471,14 +459,6 @@ export function RenderRequestsGrid({
     () => (lineage.data ? checkpointGraph(lineage.data) : null),
     [lineage.data],
   );
-  const pinCheckpoint = (ref: string | null) => {
-    setTemplateRef(ref);
-    setRows((current) =>
-      current.map((row) =>
-        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
-      ),
-    );
-  };
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
@@ -952,20 +932,18 @@ export function RenderRequestsGrid({
   const updateRow = useCallback(
     (id: string, patch: (row: RequestRow) => RequestRow, coalesce?: string) => {
       record(coalesce ?? null);
-      setRows((current) => {
-        const affected = descendantsOf(current, [id]);
-        return current.map((row) => {
-          if (row.id !== id)
-            return affected.has(row.id) ? { ...row, check: { state: 'idle' } } : row;
+      setRows((current) =>
+        current.map((row) => {
+          if (row.id !== id) return row;
           const next = patch(row);
           const evidence = Object.fromEntries(
             Object.entries(next.evidence ?? {}).filter(
               ([key]) => JSON.stringify(row.values[key]) === JSON.stringify(next.values[key]),
             ),
           );
-          return { ...next, evidence, check: { state: 'idle' } };
-        });
-      });
+          return { ...next, evidence };
+        }),
+      );
     },
     [],
   );
@@ -1060,14 +1038,7 @@ export function RenderRequestsGrid({
     [updateRow],
   );
 
-  // --- server preflight, per dirty row, debounced ---------------------------------------
-  // At most PREFLIGHT_CONCURRENCY at once: an imported sheet arms fifty rows in one go, and fifty
-  // simultaneous dry-runs queue behind each other on the server anyway.
-  const PREFLIGHT_CONCURRENCY = 3;
-  const checksInFlight = useRef(0);
-  const timers = useRef(
-    new Map<string, { timer: ReturnType<typeof setTimeout>; snapshot: string }>(),
-  );
+  // --- what the browser can tell about each row, with no request ------------------------
   const variables = contract?.variables;
   const clientErrors = useMemo(
     () =>
@@ -1081,175 +1052,11 @@ export function RenderRequestsGrid({
           );
           const errors = validateRow(variables ?? [], rendered.values);
           for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
-          if (row.check.state === 'ready' || row.check.state === 'error')
-            for (const finding of row.check.guardrails ?? []) {
-              if (
-                finding.severity === 'block' &&
-                !(
-                  row.check.state === 'error' &&
-                  isFontPreflightRefusal(row.check.code, row.check.guardrails)
-                )
-              )
-                errors[finding.variableKey ?? finding.code] = finding.message;
-            }
           return [row.id, errors] as const;
         }),
       ),
     [rows, variables, linkedFields],
   );
-  const readiness = useMemo(() => {
-    const findings = new Map<string, { message: string; rows: string[] }>();
-    let blocked = 0;
-    let needsInput = 0;
-    let review = 0;
-    let checking = 0;
-    let ready = 0;
-    const labelOf = (key: string | undefined) => {
-      const label = variables?.find((variable) => variable.key === key)?.label;
-      return label ? readableLayerName(label) : undefined;
-    };
-    for (const row of rows) {
-      const errors = clientErrors.get(row.id) ?? {};
-      // The same findings, and the same words, as the row's "Needs review" badge and the tray.
-      const unknown =
-        row.check.state === 'ready'
-          ? readinessFindings(row.check).filter(leavesCheckIncomplete)
-          : [];
-      for (const item of unknown) {
-        const key = `${item.code}:${item.variableKey ?? ''}`;
-        const finding = findings.get(key) ?? { message: explainFinding(item, labelOf), rows: [] };
-        finding.rows.push(row.label || 'Untitled');
-        findings.set(key, finding);
-      }
-      if (Object.keys(errors).length > 0 || row.check.state === 'error') {
-        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
-        const blank =
-          row.check.state !== 'error' && Object.keys(errors).every((key) => missing.includes(key));
-        if (blank) needsInput += 1;
-        else blocked += 1;
-        for (const [key, message] of Object.entries(errors)) {
-          const finding = findings.get(key) ?? { message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set(key, finding);
-        }
-        if (row.check.state === 'error') {
-          const finding = findings.get('server') ?? { message: row.check.message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set('server', finding);
-        }
-      } else if (unknown.length) review += 1;
-      else if (row.check.state === 'ready') ready += 1;
-      else checking += 1;
-    }
-    return { blocked, needsInput, review, checking, ready, findings: [...findings.entries()] };
-  }, [rows, clientErrors, variables]);
-
-  useEffect(() => {
-    if (!contract) return;
-    const { key, contractHash } = contract.template;
-    const pending = timers.current;
-    for (const row of rows) {
-      const snapshot = preflightSnapshot(rows, row.id);
-      const armedFor = `${snapshot}|${templateRef ?? ''}`;
-      const scheduled = pending.get(row.id);
-      // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === armedFor) continue;
-      if (scheduled) {
-        clearTimeout(scheduled.timer);
-        pending.delete(row.id);
-      }
-      if (row.check.state !== 'idle') continue;
-      if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
-      const resolved = effectiveValues(rows, row.id);
-      const encode = effectiveEncode(rows, row.id);
-      const outputIds = effectiveOutputIds(rows, row.id);
-      // Both updates return `current` untouched when the row moved on: a no-op must not be a new
-      // array, or every stale response re-renders the grid under the person typing in it.
-      const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
-        setRows((current) => {
-          const target = current.find((item) => item.id === row.id);
-          if (
-            !target ||
-            target.check.state !== from ||
-            preflightSnapshot(current, row.id) !== snapshot
-          )
-            return current;
-          return current.map((item) => (item === target ? { ...item, check: next } : item));
-        });
-      const run = async () => {
-        if (checksInFlight.current >= PREFLIGHT_CONCURRENCY) {
-          pending.set(row.id, { timer: setTimeout(run, 250), snapshot: armedFor });
-          return;
-        }
-        pending.delete(row.id);
-        checksInFlight.current += 1;
-        settle({ state: 'checking' }, 'idle');
-        let check: RequestRow['check'];
-        try {
-          const response = await apiRendersApi.preflight({
-            brandId,
-            ...(bindingId ? { bindingId } : {}),
-            templateKey: key,
-            contractHash,
-            variables: resolved,
-            ...(outputIds.length ? { outputIds } : {}),
-            ...(templateRevision ? { templateRevision } : {}),
-            ...(templateRef ? { templateRef } : {}),
-            ...(activeSet && signatureOf(rows, contract) === savedSignature
-              ? {
-                  renderSetId: activeSet.id,
-                  renderSetRowId: row.id,
-                  expectedRenderSetRevision: activeSet.revision,
-                }
-              : {}),
-            ...(encode ? { encode } : {}),
-          });
-          check = {
-            state: 'ready',
-            fit: response.fit,
-            test: response.test,
-            guardrails: response.guardrails ?? [],
-          };
-        } catch (error) {
-          const guardrails = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
-            error instanceof ApiError ? error.payload?.guardrails : undefined,
-          );
-          const detail =
-            error instanceof ApiError && typeof error.payload?.detail === 'string'
-              ? error.payload.detail
-              : null;
-          check = {
-            state: 'error',
-            code: error instanceof ApiError ? (error.code ?? error.message) : undefined,
-            message:
-              detail ?? describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
-            guardrails: guardrails.success ? guardrails.data : [],
-          };
-        }
-        checksInFlight.current -= 1;
-        settle(check, 'checking');
-      };
-      pending.set(row.id, { timer: setTimeout(run, PREFLIGHT_DEBOUNCE_MS), snapshot: armedFor });
-    }
-  }, [
-    rows,
-    contract,
-    clientErrors,
-    brandId,
-    bindingId,
-    templateRevision,
-    templateRef,
-    activeSet,
-    savedSignature,
-  ]);
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const { timer } of pending.values()) clearTimeout(timer);
-      pending.clear();
-    };
-  }, []);
 
   // --- row operations ---------------------------------------------------------------------
   // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
@@ -1358,7 +1165,6 @@ export function RenderRequestsGrid({
           ...structuredClone(row),
           id: newRowId(),
           label: duplicateLabel(row.label),
-          check: { state: 'idle' },
         })),
     );
 
@@ -2358,6 +2164,37 @@ export function RenderRequestsGrid({
       ),
     [fitOf, rows],
   );
+  // The status column's verdicts, counted: the same findings and words as each row's badge.
+  const readiness = useMemo(() => {
+    const findings = new Map<string, { message: string; rows: string[] }>();
+    let blocked = 0;
+    let needsInput = 0;
+    let review = 0;
+    let ready = 0;
+    const labelOf = (key: string | undefined) => {
+      const label = variables?.find((variable) => variable.key === key)?.label;
+      return label ? readableLayerName(label) : undefined;
+    };
+    const note = (key: string, message: string, row: RequestRow) => {
+      const finding = findings.get(key) ?? { message, rows: [] };
+      finding.rows.push(row.label || 'Untitled');
+      findings.set(key, finding);
+    };
+    for (const row of rows) {
+      const status = rowStatusOf(clientErrors.get(row.id) ?? {}, liveFit.get(row.id));
+      if (status.state === 'invalid') {
+        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
+        if (Object.keys(status.errors).every((key) => missing.includes(key))) needsInput += 1;
+        else blocked += 1;
+        for (const [key, message] of Object.entries(status.errors)) note(key, message, row);
+      } else if (status.state === 'review') {
+        review += 1;
+        for (const item of status.findings)
+          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), row);
+      } else ready += 1;
+    }
+    return { blocked, needsInput, review, ready, findings: [...findings.entries()] };
+  }, [rows, clientErrors, liveFit, variables]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -2420,42 +2257,24 @@ export function RenderRequestsGrid({
     rows.length < MAX_BATCH_ROWS &&
     selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
   const renderingProposed = selected.some((row) => proposed.has(row.id));
+  // Ready is the browser's word: no `validateRow` or render-reading errors. The review's batch
+  // preflight is the server's, and the only one.
+  const valid = (row: RequestRow) => Object.keys(clientErrors.get(row.id) ?? {}).length === 0;
   const readyToFire =
     !updateRequired &&
     !renderingProposed &&
     selected.length > 0 &&
     selected.length <= MAX_BATCH_ROWS &&
-    selected.every(
-      (row) =>
-        row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-    );
-  const selectedReady = selected.filter(
-    (row) =>
-      row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-  );
+    selected.every(valid);
+  const selectedReady = selected.filter(valid);
   const canReviewReady =
     !updateRequired &&
     !renderingProposed &&
     selected.length <= MAX_BATCH_ROWS &&
     selectedReady.length > 0 &&
     selectedReady.length < selected.length;
-  const canReviewMissingFonts =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length > 0 &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selected.some((row) => row.check.state === 'error') &&
-    selected.every(
-      (row) =>
-        Object.keys(clientErrors.get(row.id) ?? {}).length === 0 &&
-        (row.check.state === 'ready' ||
-          (row.check.state === 'error' &&
-            isFontPreflightRefusal(row.check.code, row.check.guardrails))),
-    );
   const selectedProblem = selected.flatMap((row) =>
-    row.check.state === 'error'
-      ? [row.check.message]
-      : Object.values(clientErrors.get(row.id) ?? {}),
+    Object.values(clientErrors.get(row.id) ?? {}),
   )[0];
   const fireHint = updateRequired
     ? 'Update this set to the current template first'
@@ -2468,12 +2287,6 @@ export function RenderRequestsGrid({
           : !readyToFire
             ? (selectedProblem ?? 'Every selected row has to be Ready')
             : null;
-  // A selected row still being dry-run is a wait, not a block: the tray re-checks once it lands.
-  const stillChecking = selected.some(
-    (row) =>
-      (row.check.state === 'idle' || row.check.state === 'checking') &&
-      Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-  );
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2543,14 +2356,8 @@ export function RenderRequestsGrid({
   // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async (reviewMissingFonts = false, readyOnly = false) => {
-    if (
-      !contract ||
-      (!readyToFire &&
-        !(reviewMissingFonts && canReviewMissingFonts) &&
-        !(readyOnly && canReviewReady))
-    )
-      return;
+  const openReview = async (readyOnly = false) => {
+    if (!contract || (!readyToFire && !(readyOnly && canReviewReady))) return;
     setBusy('firing');
     try {
       const submittedSet =
@@ -2572,12 +2379,10 @@ export function RenderRequestsGrid({
         .map((row) => ({
           label: row.label.trim() || 'Untitled',
           message:
-            row.check.state === 'error'
-              ? row.check.message
-              : (Object.entries(clientErrors.get(row.id) ?? {}).map(
-                  ([key, message]) =>
-                    `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
-                )[0] ?? 'Still checking. Recheck this row before rendering.'),
+            Object.entries(clientErrors.get(row.id) ?? {}).map(
+              ([key, message]) =>
+                `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
+            )[0] ?? 'Fix this row before rendering.',
         }));
       setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature, rowIds, skippedRows }));
     } finally {
@@ -2727,7 +2532,6 @@ export function RenderRequestsGrid({
   });
 
   // --- render -----------------------------------------------------------------------------
-  const ready = rows.filter((row) => row.check.state === 'ready').length;
   // The pinned revision's own file when the set pins one, else the template's source.
   const settingsAssetId =
     pinnedRevisionLabel?.revision.sourceAssetId ?? contract?.template.sourceAssetId ?? null;
@@ -2817,7 +2621,7 @@ export function RenderRequestsGrid({
         }}
         checkpoints={checkpoints}
         templateRef={templateRef}
-        onTemplateRefChange={pinCheckpoint}
+        onTemplateRefChange={setTemplateRef}
         ready={contract !== null}
         sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
@@ -2828,7 +2632,6 @@ export function RenderRequestsGrid({
             current.map((row) => ({
               ...row,
               outputIds: id ? [id] : allOutputIdsOf(contract),
-              check: { state: 'idle' },
             })),
           );
         }}
@@ -2884,8 +2687,7 @@ export function RenderRequestsGrid({
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
         readyCount={selectedReady.length}
-        onReviewReady={canReviewReady ? () => void openReview(false, true) : undefined}
-        onReviewMissingFonts={canReviewMissingFonts ? () => void openReview(true) : undefined}
+        onReviewReady={canReviewReady ? () => void openReview(true) : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3185,7 +2987,7 @@ export function RenderRequestsGrid({
                                   }
                                 : undefined
                             }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${ready} ready • ${selected.length} selected`}
+                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.ready} ready • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
                         </RowDropHintContext.Provider>
@@ -3276,12 +3078,10 @@ export function RenderRequestsGrid({
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={
-                    stillChecking || canReviewMissingFonts || canReviewReady ? null : fireHint
-                  }
-                  rechecking={busy === 'firing' || stillChecking}
+                  recheckBlocked={canReviewReady ? null : fireHint}
+                  rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
-                  onRecheck={() => void openReview(canReviewMissingFonts, canReviewReady)}
+                  onRecheck={() => void openReview(canReviewReady)}
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.

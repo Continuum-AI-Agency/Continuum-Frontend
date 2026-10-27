@@ -2,7 +2,7 @@
  * The render-requests grid against a mocked render API.
  *
  * What this guards is the wiring, not the pixels: a template is discovered and its contract
- * seeds a row from the designer's samples; the row's dry-run lands and the status reads Ready;
+ * seeds a row from the designer's samples; an edit asks the server nothing and the row reads Ready;
  * typing never loses focus; rows gain variations and rows below without touching the selection;
  * sets save through dialogs and render through the review tray docked under the grid. The pure
  * row logic has its own test, the tray its own, and the Render ledger (RenderJobsGrid) its own.
@@ -594,28 +594,6 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Other set');
   });
 
-  test('shows the font refusal beside Render and clears it after the row passes', async () => {
-    const reason = 'Card A requires Brand Sans. Upload it in Library → Typography.';
-    preflightMock.mockImplementation(async () => {
-      throw new ApiError('render_fonts_missing', 422, undefined, { detail: reason });
-    });
-    render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByText('Rejected');
-    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
-    const button = within(toolbar).getByRole<HTMLButtonElement>('button', { name: /Render 1/ });
-    expect(button.disabled).toBe(true);
-    expect(within(toolbar).getByText(reason)).toBeTruthy();
-    expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(
-      reason,
-    );
-    preflightMock.mockImplementation(async () => READY_RESPONSE);
-    fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'New copy' } });
-    await waitFor(() => expect(button.disabled).toBe(false));
-    expect(within(toolbar).queryByText(reason)).toBeNull();
-    expect(button.getAttribute('aria-describedby')).toBeNull();
-  });
-
   test('ready rows can be reviewed while selected invalid rows stay explicitly skipped', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
@@ -635,57 +613,6 @@ describe('RenderRequestsGrid', () => {
         .getAllByLabelText('Select row')
         .every((box) => box.getAttribute('aria-checked') === 'true'),
     ).toBe(true);
-  });
-
-  test('a rejected font row can open override review without accepting it or starting a render', async () => {
-    preflightMock.mockImplementation(async () => {
-      throw new ApiError('Missing fonts.', 422, 'render_brand_guardrail_blocked', {
-        detail: 'A typeface is missing.',
-        guardrails: [
-          { code: 'TEMPLATE_FONT_MISSING', severity: 'block', message: 'A typeface is missing.' },
-        ],
-      });
-    });
-    render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByText('0 of 1 row ready to render · 1 needs fixing');
-    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
-    fireEvent.click(within(toolbar).getByRole('button', { name: 'Review font override' }));
-    expect(await screen.findByRole('list', { name: 'Rows to render' })).toBeTruthy();
-    expect(
-      batchPreflightMock.mock.calls.every(
-        (call) => !(call[0] as { acceptMissingFonts?: boolean }).acceptMissingFonts,
-      ),
-    ).toBe(true);
-  });
-
-  test('associates an authoritative guardrail refusal with its row and cell', async () => {
-    preflightMock.mockImplementationOnce(async () => {
-      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
-        detail: 'Use a permitted brand color.',
-        guardrails: [
-          {
-            code: 'BRAND_COLOR_OUTSIDE_PALETTE',
-            severity: 'block',
-            variableKey: 'headline',
-            message: 'Use a permitted brand color.',
-          },
-        ],
-      });
-    });
-    render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByLabelText('Headline');
-    await waitFor(() =>
-      expect(screen.getByText('0 of 1 row ready to render · 1 needs fixing')).toBeTruthy(),
-    );
-    expect(
-      screen.getByLabelText('Headline').closest('[title="Use a permitted brand color."]'),
-    ).toBeTruthy();
-    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
-    expect(screen.queryByRole('button', { name: 'Review font override' })).toBeNull();
-    // A value the server refuses is wrong, not missing.
-    expect(screen.getByText('Invalid')).toBeTruthy();
   });
 
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
@@ -810,55 +737,6 @@ describe('RenderRequestsGrid', () => {
     expect(within(cell).getByText('Default')).toBeTruthy();
   });
 
-  test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
-    preflightMock.mockImplementation(async () => ({
-      ...READY_RESPONSE,
-      fit: {
-        comp: null,
-        escalate: true,
-        why: '1 slot could not be measured — the finished frame goes to the judge',
-        slots: [{ key: 'hero', state: 'unknown', why: 'placed by a rig' }],
-      },
-    }));
-    render(<RenderRequestsGrid brandId={BRAND} />);
-    const status = await screen.findByText('AI check after render', undefined, { timeout: 3000 });
-    expect(screen.queryAllByText('Needs judge')).toHaveLength(0);
-    const trigger = status.closest('button')!;
-    fireEvent.mouseEnter(trigger);
-    fireEvent.focus(trigger);
-    expect(
-      await screen.findByText(
-        'An AI model checks the finished frame after it renders, because where an image lands couldn’t be measured.',
-      ),
-    ).toBeTruthy();
-  });
-
-  test('a slot a re-parse would make measurable reads "Needs review", and the hover says what to do', async () => {
-    preflightMock.mockImplementation(async () => ({
-      ...READY_RESPONSE,
-      fit: {
-        comp: null,
-        escalate: true,
-        why: '1 slot could not be measured',
-        repairable: ['hero'],
-        slots: [
-          {
-            key: 'hero',
-            state: 'unknown',
-            unknownReason: 'unplaced',
-            why: 'this template has no measured placement for the slot',
-          },
-        ],
-      },
-    }));
-    render(<RenderRequestsGrid brandId={BRAND} />);
-    const status = await screen.findByText('Needs review', undefined, { timeout: 3000 });
-    const trigger = status.closest('button')!;
-    fireEvent.mouseEnter(trigger);
-    fireEvent.focus(trigger);
-    expect(await screen.findByText(/Re-parse the template to check it\.$/)).toBeTruthy();
-  });
-
   test('a paste onto the grid is reviewed like a sheet: its fields, its errors, its row cap', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
@@ -900,7 +778,7 @@ describe('RenderRequestsGrid', () => {
     expect(within(sale.closest('td')!).getByText('Spain')).toBeTruthy();
   });
 
-  test('discovers the one template, seeds a row from the samples, and dry-runs it to Ready', async () => {
+  test('discovers the one template, seeds a row from the samples, and reads Ready with no preflight', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     const cell = await screen.findByLabelText('Headline');
     expect((cell as HTMLInputElement).value).toBe('Hola mundo');
@@ -910,10 +788,8 @@ describe('RenderRequestsGrid', () => {
     );
     // Reference length must not look like an enforced character limit.
     expect(screen.queryByText('10/12')).toBeNull();
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
-    expect(preflightMock).toHaveBeenCalledTimes(1);
-    expect(preflightMock.mock.calls[0]?.[0].variables).toEqual({ headline: 'Hola mundo' });
-    expect(preflightMock.mock.calls[0]?.[0]).not.toHaveProperty('outputIds');
+    expect(screen.getByText('Ready')).toBeTruthy();
+    expect(preflightMock).not.toHaveBeenCalled();
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
   });
@@ -936,16 +812,11 @@ describe('RenderRequestsGrid', () => {
     }
   });
 
-  test('typing 20 characters keeps focus in text, number and name cells while dry-runs land', async () => {
-    const inFlight: Array<{ headline: unknown; resolve: (value: unknown) => void }> = [];
-    preflightMock.mockImplementation(
-      (input) =>
-        new Promise((resolve) => inFlight.push({ headline: input.variables.headline, resolve })),
-    );
+  test('typing 20 characters keeps focus in text, number and name cells while another row changes', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    // A second row, so a dry-run can land for REAL — a state update, a re-render — while the
-    // first row is being typed in.
+    // A second row, so a state update lands for REAL — a re-render — while the first row is being
+    // typed in.
     await openMenu('Add', 'Blank row');
     await waitFor(() => expect(screen.getAllByLabelText('Row name')).toHaveLength(2));
     const second = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
@@ -955,22 +826,17 @@ describe('RenderRequestsGrid', () => {
       text: string,
       tag: string,
     ) => {
-      fireEvent.change(second(), { target: { value: tag } });
-      await waitFor(() => expect(inFlight.some((call) => call.headline === tag)).toBe(true), {
-        timeout: 3000,
-      });
       input.focus();
       let typed = input.value;
       for (const [index, char] of [...text].entries()) {
         typed += char;
         fireEvent.change(input, { target: { value: typed } });
         if (index === 9) {
-          // Every pending dry-run resolves mid-word: the first row's is stale by now (a no-op),
-          // the second row's is current and flips it to Ready.
+          // The other row changes mid-word and the grid re-renders under the person typing.
           await act(async () => {
-            for (const call of inFlight.splice(0)) call.resolve(READY_RESPONSE);
+            fireEvent.change(second(), { target: { value: tag } });
           });
-          expect(within(input.closest('tbody')!).getAllByText('Ready').length).toBeGreaterThan(0);
+          expect(second().value).toBe(tag);
         }
         expect(document.activeElement).toBe(input);
         expect(input.isConnected).toBe(true);
@@ -2125,12 +1991,7 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryByText('(unsaved edits)')).toBeNull();
   });
 
-  test('the focused row’s own dry-run landing mid-word keeps focus and the typed text', async () => {
-    const inFlight: Array<{ headline: unknown; resolve: (value: unknown) => void }> = [];
-    preflightMock.mockImplementation(
-      (input) =>
-        new Promise((resolve) => inFlight.push({ headline: input.variables.headline, resolve })),
-    );
+  test('an edit makes no preflight call, and the row is Ready', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     const input = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
     input.focus();
@@ -2143,18 +2004,22 @@ describe('RenderRequestsGrid', () => {
       }
     };
     type(' otra');
-    // A pause long enough for this row's own debounce to fire for exactly what is on screen.
-    await waitFor(() => expect(inFlight.some((call) => call.headline === typed)).toBe(true), {
-      timeout: 3000,
-    });
-    await act(async () => {
-      for (const call of inFlight.splice(0)) call.resolve(READY_RESPONSE);
-    });
+    // Past the debounce the per-row dry-run used to fire on: still nothing asked of the server.
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1000)));
+    expect(preflightMock).not.toHaveBeenCalled();
+    expect(batchPreflightMock).not.toHaveBeenCalled();
     expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
+    expect(screen.getByText('The row is ready to render')).toBeTruthy();
     expect(document.activeElement).toBe(input);
     type(' vez');
     expect(input.isConnected).toBe(true);
     expect(input.value).toBe('Hola mundo otra vez');
+    // Ready is Render's word too: the row renders without waiting on any check.
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Render 1 row · 1 file' }).disabled,
+    ).toBe(false);
+    expect(preflightMock).not.toHaveBeenCalled();
   });
 
   test('Add variation and Row below add beside a row, take focus, and never touch the selection', async () => {
@@ -2388,11 +2253,11 @@ describe('RenderRequestsGrid', () => {
     fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Renamed row' } });
     expect(await within(tray).findByText('Rows changed since review')).toBeTruthy();
     expect(within(tray).queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
-    // Nothing to press: the row is still being checked, so the tray waits for it.
+    // Nothing to press: the tray checks the rows again by itself once the edit settles.
     expect(within(tray).queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
 
-    // The rename re-checks the row; once it is Ready the tray saves the edit and reviews again.
-    // A name is nothing a check reads, so the review settles on the verdict it already has.
+    // The tray saves the edit and reviews again. A name is nothing a check reads, so the review
+    // settles on the verdict it already has.
     await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 5000 });
     await waitFor(() => expect(within(tray).queryByText('Rows changed since review')).toBeNull());
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
