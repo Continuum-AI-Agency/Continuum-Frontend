@@ -115,10 +115,47 @@ import {
   isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
+import { ApiError } from '@/lib/api/errors';
 import { http } from '@/lib/api/http';
 
 const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
+
+/** Waits before each retry, sized to a backend deploy cut. Mutable so tests need not wait. */
+export const renderRetry = { delaysMs: [1_000, 3_000, 8_000] };
+
+// A backend domain code (`render_fonts_unverifiable`, `template_*`) sits in `payload.error`, which
+// `ApiError.code` does not read. Fastify's own closing 503 puts "Service Unavailable" there: no code.
+const BACKEND_CODE = /^[a-z][a-z0-9_]*$/;
+
+/** 429, a gateway or closing 502/503 with no backend code, or fetch's network `TypeError`. A 504
+ *  may still be running and a timeout already waited its bound, so neither is retried. */
+export function isTransientRenderError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 429) return true;
+  if (error.status !== 502 && error.status !== 503) return false;
+  const code = error.payload?.error;
+  return !(typeof code === 'string' && BACKEND_CODE.test(code));
+}
+
+/**
+ * Repeats `run` (same body, same confirmationToken) through a transient failure. Repeating a
+ * confirm is safe because of the backend's database row, not the fleet (which does not dedupe
+ * request_id): the same token's idempotency key returns the existing ad_render_jobs row before
+ * anything triggers, so the same token is the same job.
+ */
+export async function retryTransient<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const delay = renderRetry.delaysMs[attempt];
+      if (delay === undefined || !isTransientRenderError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
 
 export const apiRendersApi = {
   importMedia(input: ForgeRenderImportMediaRequest) {
@@ -193,13 +230,15 @@ export const apiRendersApi = {
     };
   },
   preflight(input: ApiRenderPreflightRequest) {
-    return http.request<ApiRenderPreflightResponse>({
-      path: API_RENDER_PREFLIGHT_ROUTE,
-      method: 'POST',
-      body: input,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      schema: apiRenderPreflightResponseSchema,
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderPreflightResponse>({
+        path: API_RENDER_PREFLIGHT_ROUTE,
+        method: 'POST',
+        body: input,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+        schema: apiRenderPreflightResponseSchema,
+      }),
+    );
   },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
   composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {
@@ -258,13 +297,15 @@ export const apiRendersApi = {
     });
   },
   createJob(input: ApiRenderCreateJobRequest) {
-    return http.request<ApiRenderJob>({
-      path: API_RENDER_JOBS_ROUTE,
-      method: 'POST',
-      body: input,
-      schema: apiRenderJobSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderJob>({
+        path: API_RENDER_JOBS_ROUTE,
+        method: 'POST',
+        body: input,
+        schema: apiRenderJobSchema,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+      }),
+    );
   },
   listJobs(
     brandId: string,
@@ -279,28 +320,32 @@ export const apiRendersApi = {
       variantId?: string;
     },
   ) {
-    return http.request<ApiRenderJobListResponse>({
-      path: `${API_RENDER_JOBS_ROUTE}?${query({
-        brandId,
-        limit,
-        ...(options?.cursor ? { cursor: options.cursor } : {}),
-        ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
-        ...(options?.renderSetRowId ? { renderSetRowId: options.renderSetRowId } : {}),
-        ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
-        ...(options?.status ? { status: options.status } : {}),
-        ...(options?.batchId ? { batchId: options.batchId } : {}),
-        ...(options?.variantId ? { variantId: options.variantId } : {}),
-      })}`,
-      schema: apiRenderJobListResponseSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderJobListResponse>({
+        path: `${API_RENDER_JOBS_ROUTE}?${query({
+          brandId,
+          limit,
+          ...(options?.cursor ? { cursor: options.cursor } : {}),
+          ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
+          ...(options?.renderSetRowId ? { renderSetRowId: options.renderSetRowId } : {}),
+          ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
+          ...(options?.status ? { status: options.status } : {}),
+          ...(options?.batchId ? { batchId: options.batchId } : {}),
+          ...(options?.variantId ? { variantId: options.variantId } : {}),
+        })}`,
+        schema: apiRenderJobListResponseSchema,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+      }),
+    );
   },
   getJob(brandId: string, jobId: string) {
-    return http.request<ApiRenderJob>({
-      path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
-      schema: apiRenderJobSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderJob>({
+        path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
+        schema: apiRenderJobSchema,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+      }),
+    );
   },
   prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
     return http.request<ApiRenderMasterDownloadResponse>({
@@ -359,18 +404,22 @@ export const apiRendersApi = {
   },
 
   listRenderSets(brandId: string, templateKey?: string) {
-    return http.request<{ items: ForgeRenderSet[]; nextCursor: null }>({
-      path: `${API_RENDER_SETS_ROUTE}?${query(
-        templateKey ? { brandId, templateKey } : { brandId },
-      )}`,
-      schema: forgeRenderSetListResponseSchema,
-    });
+    return retryTransient(() =>
+      http.request<{ items: ForgeRenderSet[]; nextCursor: null }>({
+        path: `${API_RENDER_SETS_ROUTE}?${query(
+          templateKey ? { brandId, templateKey } : { brandId },
+        )}`,
+        schema: forgeRenderSetListResponseSchema,
+      }),
+    );
   },
   getRenderSet(brandId: string, setId: string) {
-    return http.request<ForgeRenderSet>({
-      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
-      schema: forgeRenderSetSchema,
-    });
+    return retryTransient(() =>
+      http.request<ForgeRenderSet>({
+        path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
+        schema: forgeRenderSetSchema,
+      }),
+    );
   },
   createRenderSet(input: CreateForgeRenderSetRequest) {
     return http.request<ForgeRenderSet>({
@@ -398,10 +447,12 @@ export const apiRendersApi = {
   },
   /** The states the set was left in, newest first, for Version history. */
   listRenderSetRevisions(brandId: string, setId: string) {
-    return http.request<{ items: ForgeRenderSetRevision[] }>({
-      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}/revisions?${query({ brandId })}`,
-      schema: forgeRenderSetRevisionListResponseSchema,
-    });
+    return retryTransient(() =>
+      http.request<{ items: ForgeRenderSetRevision[] }>({
+        path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}/revisions?${query({ brandId })}`,
+        schema: forgeRenderSetRevisionListResponseSchema,
+      }),
+    );
   },
   deleteRenderSet(brandId: string, setId: string) {
     return http.request<void>({
@@ -452,13 +503,15 @@ export const apiRendersApi = {
   // Batches. One token wraps N per-record tokens; every job createBatch makes carries its
   // `batchId`, so `listJobs({ batchId })` reads the whole batch back later.
   batchPreflight(input: ApiRenderBatchPreflightRequest) {
-    return http.request<ApiRenderBatchPreflightResponse>({
-      path: API_RENDER_BATCH_PREFLIGHT_ROUTE,
-      method: 'POST',
-      body: input,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      schema: apiRenderBatchPreflightResponseSchema,
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderBatchPreflightResponse>({
+        path: API_RENDER_BATCH_PREFLIGHT_ROUTE,
+        method: 'POST',
+        body: input,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+        schema: apiRenderBatchPreflightResponseSchema,
+      }),
+    );
   },
   // AI fill for the requests grid. Proposals only — nothing is rendered or saved.
   suggestRows(input: ApiRenderSuggestRowsRequest) {
@@ -511,12 +564,14 @@ export const apiRendersApi = {
     });
   },
   createBatch(input: ApiRenderCreateJobRequest) {
-    return http.request<ApiRenderBatch>({
-      path: API_RENDER_BATCHES_ROUTE,
-      method: 'POST',
-      body: input,
-      schema: apiRenderBatchSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-    });
+    return retryTransient(() =>
+      http.request<ApiRenderBatch>({
+        path: API_RENDER_BATCHES_ROUTE,
+        method: 'POST',
+        body: input,
+        schema: apiRenderBatchSchema,
+        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
+      }),
+    );
   },
 };
