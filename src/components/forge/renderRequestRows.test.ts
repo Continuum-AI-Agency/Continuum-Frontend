@@ -24,6 +24,7 @@ import {
   HISTORY_LIMIT,
   IMPORT_SKIP,
   isDefaultValue,
+  isFontPreflightRefusal,
   keepProposed,
   mergeSetRows,
   missingInputs,
@@ -1246,5 +1247,30 @@ describe('applyAssistOps', () => {
     );
     expect(after.map((row) => row.id)).toEqual([A]);
     expect(selected).toEqual([A]);
+  });
+});
+
+describe('font override reachability', () => {
+  test('nonblocking findings do not conceal font consent', () => {
+    expect(isFontPreflightRefusal('render_fonts_missing')).toBe(true);
+    expect(
+      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+        { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
+        { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+      ]),
+    ).toBe(true);
+  });
+  test('another blocking finding must be corrected', () => {
+    expect(
+      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+        { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
+        { code: 'ASSET_UNREADABLE', severity: 'block' },
+      ]),
+    ).toBe(false);
+    expect(
+      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+        { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+      ]),
+    ).toBe(false);
   });
 });

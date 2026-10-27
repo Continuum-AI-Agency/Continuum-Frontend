@@ -1,11 +1,11 @@
 import {
+  API_RENDER_ADVISORIES_PROFILE,
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
   API_RENDER_DESTINATIONS_ROUTE,
   API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
-  API_RENDER_FONT_OVERRIDE_PROFILE,
   API_RENDER_IMPORT_MAPPING_ROUTE,
   API_RENDER_IMPORT_MEDIA_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
@@ -197,6 +197,7 @@ export const apiRendersApi = {
       path: API_RENDER_PREFLIGHT_ROUTE,
       method: 'POST',
       body: input,
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
       schema: apiRenderPreflightResponseSchema,
     });
   },
@@ -262,7 +263,7 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderJobSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
     });
   },
   listJobs(
@@ -291,14 +292,14 @@ export const apiRendersApi = {
         ...(options?.variantId ? { variantId: options.variantId } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
     });
   },
   getJob(brandId: string, jobId: string) {
     return http.request<ApiRenderJob>({
       path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
       schema: apiRenderJobSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
     });
   },
   prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
@@ -455,6 +456,7 @@ export const apiRendersApi = {
       path: API_RENDER_BATCH_PREFLIGHT_ROUTE,
       method: 'POST',
       body: input,
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
       schema: apiRenderBatchPreflightResponseSchema,
     });
   },
@@ -514,7 +516,7 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderBatchSchema,
-      headers: { Accept: `application/json; profile="${API_RENDER_FONT_OVERRIDE_PROFILE}"` },
+      headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
     });
   },
 };

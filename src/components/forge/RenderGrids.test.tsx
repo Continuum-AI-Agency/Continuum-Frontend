@@ -616,14 +616,38 @@ describe('RenderRequestsGrid', () => {
     expect(button.getAttribute('aria-describedby')).toBeNull();
   });
 
+  test('ready rows can be reviewed while selected invalid rows stay explicitly skipped', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    await openMenu('Add', 'Blank row');
+    await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
+    fireEvent.change(screen.getAllByLabelText('Headline')[1]!, { target: { value: '' } });
+    for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+    fireEvent.click(await screen.findByRole('button', { name: 'Review 1 ready rows' }));
+    const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
+    expect(skipped.textContent).toContain('Required');
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
+    expect(
+      (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
+    ).toHaveLength(1);
+    expect(
+      screen
+        .getAllByLabelText('Select row')
+        .every((box) => box.getAttribute('aria-checked') === 'true'),
+    ).toBe(true);
+  });
+
   test('a rejected font row can open override review without accepting it or starting a render', async () => {
     preflightMock.mockImplementation(async () => {
-      throw new ApiError('Missing fonts.', 422, 'render_fonts_missing', {
-        detail: 'Upload the missing font.',
+      throw new ApiError('Missing fonts.', 422, 'render_brand_guardrail_blocked', {
+        detail: 'A typeface is missing.',
+        guardrails: [
+          { code: 'TEMPLATE_FONT_MISSING', severity: 'block', message: 'A typeface is missing.' },
+        ],
       });
     });
     render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByText('Rejected');
+    await screen.findByText('0 of 1 row ready to render · 1 needs fixing');
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     const toolbar = screen.getByRole('toolbar', { name: 'Render' });
     fireEvent.click(within(toolbar).getByRole('button', { name: 'Review font override' }));
@@ -861,9 +885,7 @@ describe('RenderRequestsGrid', () => {
     dialog = await paste(
       'Name\tParent\tHeadline\tPrice\nSpain\t\tHola\tcheap\nSale\tSpain\tRebajas\t\n',
     );
-    expect(
-      within(dialog).getByText('Row 1 · Price: Not a number — imported empty'),
-    ).toBeTruthy();
+    expect(within(dialog).getByText('Row 1 · Price: Not a number — imported empty')).toBeTruthy();
     await waitFor(() => expect(importButton(dialog).disabled).toBe(false));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
@@ -886,8 +908,8 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole('button', { name: 'Template' }).textContent).toContain(
       'StarCraft Promo',
     );
-    // The counter reads against the designer's budget.
-    expect(screen.getByText('10/12')).toBeTruthy();
+    // Reference length must not look like an enforced character limit.
+    expect(screen.queryByText('10/12')).toBeNull();
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
     expect(preflightMock).toHaveBeenCalledTimes(1);
     expect(preflightMock.mock.calls[0]?.[0].variables).toEqual({ headline: 'Hola mundo' });
