@@ -469,6 +469,17 @@ export function renderJobChecks(
           },
         ]
       : []),
+    ...(job.warnings?.length
+      ? [
+          {
+            name: 'Warnings',
+            what: 'Advisories recorded for this render. Review these before delivery.',
+            state: 'warn' as const,
+            result: `${job.warnings.length} warning${job.warnings.length === 1 ? '' : 's'}`,
+            lines: job.warnings.map((warning) => warning.message),
+          },
+        ]
+      : []),
     {
       name: 'Inputs',
       what: 'Confirms every required variable is filled and every picked asset belongs to this brand.',
@@ -479,9 +490,9 @@ export function renderJobChecks(
     placementCheck(job, labelByKey),
     {
       name: 'Brand',
-      what: 'Checks colors are from the brand palette and every template font is uploaded. A failure stops the render before it starts.',
-      state: 'pass',
-      result: 'No blocking issues',
+      what: 'Checks brand colors and typefaces. Quality warnings can be accepted before rendering.',
+      state: job.warnings?.length ? 'warn' : 'pass',
+      result: job.warnings?.length ? 'Review recorded warnings' : 'No blocking issues',
       lines: [],
     },
     renderCheck(job),

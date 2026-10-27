@@ -70,13 +70,15 @@ export type RequestRowCheck =
 
 export function isFontPreflightRefusal(
   code?: string,
-  findings: readonly { code: string }[] = [],
+  findings: readonly { code: string; severity?: string }[] = [],
 ): boolean {
+  const blocking = findings.filter(
+    (finding) => finding.severity === undefined || finding.severity === 'block',
+  );
+  if (blocking.some((finding) => finding.code !== 'TEMPLATE_FONT_MISSING')) return false;
   return (
     code === 'render_fonts_missing' ||
-    (code === 'render_brand_guardrail_blocked' &&
-      findings.length > 0 &&
-      findings.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+    (code === 'render_brand_guardrail_blocked' && blocking.length > 0)
   );
 }
 
@@ -498,8 +500,8 @@ export function isDefaultValue(
 /**
  * What the server would refuse, said per cell before it is asked.
  *
- * The char budget is deliberately NOT here: past it the type shrinks or overflows, it does not
- * fail, and the counter in the cell already says so. Only things that cannot render are errors.
+ * The char budget is a reference text length, not an input limit or proof of overflow.
+ * Preview checks layout. Only things that cannot render are errors.
  */
 export function validateRow(
   variables: ApiRenderVariable[],

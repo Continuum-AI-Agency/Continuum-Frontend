@@ -248,6 +248,8 @@ export function RenderToolbar({
   busy,
   onRender,
   onReviewMissingFonts,
+  onReviewReady,
+  readyCount,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -302,6 +304,8 @@ export function RenderToolbar({
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
   onReviewMissingFonts?: () => void;
+  onReviewReady?: () => void;
+  readyCount?: number;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -559,6 +563,8 @@ export function RenderToolbar({
               firing={busy === 'firing'}
               onRender={onRender}
               onReviewMissingFonts={onReviewMissingFonts}
+              onReviewReady={onReviewReady}
+              readyCount={readyCount}
             />
           </Control>
         </>
@@ -656,6 +662,8 @@ function RenderButton({
   firing,
   onRender,
   onReviewMissingFonts,
+  onReviewReady,
+  readyCount,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -664,6 +672,8 @@ function RenderButton({
   firing: boolean;
   onRender: () => void;
   onReviewMissingFonts?: () => void;
+  onReviewReady?: () => void;
+  readyCount?: number;
 }) {
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
@@ -712,6 +722,11 @@ function RenderButton({
   return (
     <div className="flex max-w-md flex-col items-start gap-1">
       {content}
+      {onReviewReady ? (
+        <Button type="button" size="xs" variant="outline" disabled={firing} onClick={onReviewReady}>
+          Review {readyCount} ready rows
+        </Button>
+      ) : null}
       {onReviewMissingFonts ? (
         <Button type="button" size="xs" variant="outline" onClick={onReviewMissingFonts}>
           Review font override

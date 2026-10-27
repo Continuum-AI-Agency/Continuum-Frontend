@@ -63,6 +63,7 @@ import {
   type SlackPickerState,
 } from '@/components/forge/SlackDestinationPicker';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
@@ -116,6 +117,7 @@ export type RenderReviewTrayProps = {
   templateRevisionId?: string | null;
   contract: ApiRenderTemplateContract;
   rows: RenderPreflightRow[];
+  skippedRows?: { label: string; message: string }[];
   records: ApiRenderBatchRecord[];
   /** A new value is a new snapshot to review: the tray opening, or a re-check. */
   reviewKey: number;
@@ -174,7 +176,14 @@ function describeFailure(error: unknown): {
   const codes = Array.isArray(guardrails)
     ? guardrails.flatMap((item) =>
         item && typeof item === 'object' && 'code' in item && typeof item.code === 'string'
-          ? [{ code: item.code }]
+          ? [
+              {
+                code: item.code,
+                ...('severity' in item && typeof item.severity === 'string'
+                  ? { severity: item.severity }
+                  : {}),
+              },
+            ]
           : [],
       )
     : [];
@@ -234,6 +243,7 @@ export function RenderReviewTray({
   templateRevisionId,
   contract,
   rows,
+  skippedRows = [],
   records,
   reviewKey,
   stale,
@@ -579,6 +589,13 @@ export function RenderReviewTray({
   // What Confirm says, wherever Confirm is: Proof or Final, and what each row's files come out as.
   const confirmation = (
     <>
+      <Label className="px-[var(--card-pad)] py-2 text-xs">
+        <Checkbox
+          checked={acceptMissingFonts}
+          onCheckedChange={(checked) => setAcceptMissingFonts(checked === true)}
+        />
+        Allow font substitution for this batch
+      </Label>
       {acceptMissingFonts ? (
         <p role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
           Missing-font check bypassed for this batch. The worker may substitute fonts.
@@ -862,6 +879,21 @@ export function RenderReviewTray({
                     >
                       Retry
                     </Button>
+                  </div>
+                ) : null}
+                {skippedRows.length ? (
+                  <div role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
+                    <p>
+                      {skippedRows.length} selected row{skippedRows.length === 1 ? '' : 's'} will
+                      not render in this batch:
+                    </p>
+                    <ul aria-label="Rows skipped from this batch">
+                      {skippedRows.map((row, index) => (
+                        <li key={`${index}:${row.label}`}>
+                          {row.label}: {row.message}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ) : null}
                 <ul aria-label="Rows to render" className="divide-y divide-border">

@@ -23,8 +23,10 @@ import { Check, ChevronsUpDown, Clapperboard } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Command,
   CommandEmpty,
@@ -34,7 +36,9 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -52,7 +56,7 @@ import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { ApiRenderNodeData, StudioNode } from '../types';
 import { apiRendersApi } from './api-render/apiRendersApi';
-import { CanvasRenderPreview, type CanvasPreviewCase } from './api-render/CanvasRenderPreview';
+import { type CanvasPreviewCase, CanvasRenderPreview } from './api-render/CanvasRenderPreview';
 import { RenderFitMap } from './api-render/RenderFitMap';
 import { RenderVariableFields } from './api-render/RenderVariableFields';
 import { describeRenderDiscoveryFailure } from './api-render/renderDiscoveryCopy';
@@ -96,6 +100,12 @@ export function ApiRenderBlock({
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [busy, setBusy] = useState(false);
+  const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
+  const [final, setFinal] = useState(false);
+  const role = useActiveBrandContext().permissions.find(
+    (permission) => permission.brand_profile_id === brandId,
+  )?.role;
+  const mayRenderFinal = role === 'owner' || role === 'admin';
   // Separate from `error`: a workspace that the render fleet does not honour is
   // not a failed request, it is a working request with the wrong destination.
   // Showing it as an error would be wrong, and showing nothing is worse.
@@ -308,7 +318,7 @@ export function ApiRenderBlock({
     };
   }, [data.delivery, deliveryEnabled]);
 
-  const batchIds = data.batchInputSetIds ?? [];
+  const batchIds = useMemo(() => data.batchInputSetIds ?? [], [data.batchInputSetIds]);
   const variations = useMemo(
     () => resolveApiRenderVariations({ nodeId: id, data, nodes, edges }),
     [data, edges, id, nodes],
@@ -344,7 +354,11 @@ export function ApiRenderBlock({
           ];
   const syncPreviewContract = useCallback(
     (contract: ApiRenderTemplateContract) => {
-      if (contract.template.key !== data.templateKey || contract.template.contractHash !== data.contractHash) return;
+      if (
+        contract.template.key !== data.templateKey ||
+        contract.template.contractHash !== data.contractHash
+      )
+        return;
       const next = {
         variableDefinitions: contract.variables,
         templateLayout: contract.layout,
@@ -359,7 +373,8 @@ export function ApiRenderBlock({
           templateFonts: data.templateFonts,
           templateRatios: data.templateRatios,
         })
-      ) return;
+      )
+        return;
       patchData(next);
     },
     [data, patchData],
@@ -429,6 +444,21 @@ export function ApiRenderBlock({
     [data.assetDims, data.variables, patchData],
   );
 
+  // Consent belongs to these inputs; changing a template, selection or mode asks again.
+  useEffect(() => {
+    setAcceptMissingFonts(false);
+  }, [
+    brandId,
+    bindingId,
+    data.templateKey,
+    data.contractHash,
+    data.variables,
+    data.inputSetId,
+    batchIds,
+    final,
+    deliveryEnabled,
+  ]);
+
   const submitRender = useCallback(async () => {
     if (!brandId || !data.templateKey || !data.contractHash) return;
     const delivery = deliveryBlock();
@@ -452,6 +482,8 @@ export function ApiRenderBlock({
       templateKey: data.templateKey,
       contractHash: data.contractHash,
       ...(delivery ? { delivery } : {}),
+      ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
+      ...(final && mayRenderFinal ? { final: true } : {}),
     };
     setBusy(true);
     setError(null);
@@ -512,6 +544,9 @@ export function ApiRenderBlock({
       setBusy(false);
     }
   }, [
+    acceptMissingFonts,
+    final,
+    mayRenderFinal,
     batchIds,
     bindingId,
     brandId,
@@ -701,6 +736,40 @@ export function ApiRenderBlock({
             </Empty>
           ) : null}
 
+          {data.templateKey ? (
+            <section aria-label="Render options" className="nodrag flex flex-col gap-2 text-xs">
+              <RadioGroup
+                aria-label="Render as"
+                value={final ? 'final' : 'proof'}
+                onValueChange={(value) => setFinal(value === 'final')}
+                className="flex gap-4"
+              >
+                <Label>
+                  <RadioGroupItem value="proof" />
+                  Proof
+                </Label>
+                <Label>
+                  <RadioGroupItem value="final" disabled={!mayRenderFinal} />
+                  Final
+                </Label>
+              </RadioGroup>
+              {!mayRenderFinal ? (
+                <p className="text-muted-foreground">A brand owner or admin can render a Final.</p>
+              ) : null}
+              <Label className="text-xs">
+                <Checkbox
+                  checked={acceptMissingFonts}
+                  onCheckedChange={(checked) => setAcceptMissingFonts(checked === true)}
+                />
+                Allow font substitution for this render
+              </Label>
+              {acceptMissingFonts ? (
+                <p role="status" className="text-warning">
+                  The worker may substitute typefaces. Review the rendered text before delivery.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           {error ? (
             <p className="rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive">
               {error}

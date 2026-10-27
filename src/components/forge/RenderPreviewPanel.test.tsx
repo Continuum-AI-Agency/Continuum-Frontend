@@ -475,15 +475,34 @@ describe('RenderPreviewPanel', () => {
     expect(screen.queryByRole('note')).toBeNull();
   });
 
-  test('draws text in its box and flags overflow live from props', () => {
+  test('sample length is not evidence that decimal odds overflow', () => {
+    const contract = {
+      ...CONTRACT,
+      variables: [variable('headline', 'Draw Bet', 'text', { charBudget: 3, sample: '3.4' })],
+    } as ApiRenderTemplateContract;
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rowId={ROW}
+        renderSetId={null}
+        rows={rowWith('4.10')}
+      />,
+    );
+    expect(slot(container, 'headline')?.textContent).toContain('4.10');
+    expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
+    expect(screen.queryByText(/overflows its box/)).toBeNull();
+  });
+
+  test('draws text in its box and flags actual layout overflow live from props', () => {
     const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: null };
     const { container, rerender } = render(
-      <RenderPreviewPanel {...props} rows={rowWith('Una oferta enorme hoy')} />,
+      <RenderPreviewPanel {...props} rows={rowWith('Una oferta enorme hoy '.repeat(50))} />,
     );
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText('Headline overflows its box (21/10 characters)')).toBeTruthy();
+    expect(screen.getByText(/Headline overflows its box \(fits only at/)).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 
@@ -1250,7 +1269,9 @@ describe('RenderPreviewPanel for a web component', () => {
   test('runs in a scripts-only sandbox at the row’s values, and the scrub renders that time', async () => {
     const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
       (async () =>
-        new Response('<!doctype html><html><head></head><body>Hello</body></html>')) as unknown as typeof fetch,
+        new Response(
+          '<!doctype html><html><head></head><body>Hello</body></html>',
+        )) as unknown as typeof fetch,
     );
     try {
       const { container } = render(
