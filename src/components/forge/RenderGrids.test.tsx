@@ -59,8 +59,8 @@ const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
-// The Live kit: none by default, so the status column says Not checked. A kit with nothing to
-// place measures everything there is, and the row reads Ready.
+// The Live kit: none by default, so the readiness line says the fit isn't measured. A kit with
+// nothing to place measures everything there is, and the row reads Ready.
 const EMPTY_KIT = {
   scene: { ok: true, comp: { name: 'Main', width: 1080, height: 1080 }, at: 0, layers: [] },
   variables: [],
@@ -73,6 +73,8 @@ const noKit = async (): Promise<unknown> => {
   throw new Error('no live kit');
 };
 const livePreviewMock = mock(noKit);
+/** The readiness line's one note for a template no kit measures. */
+const FIT_NOTE = /Layout fit isn’t measured for this template — rows still render/;
 const listRenderSetsMock = mock(async (_brandId: string, _templateKey: string) => ({
   items: [] as unknown[],
   nextCursor: null,
@@ -334,7 +336,8 @@ import { RenderRequestsGrid } from './RenderRequestsGrid';
 
 const render = (
   ui: React.ReactNode,
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  // No wait between retries: the Live kit's read is retried twice before the grid says it is gone.
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } }),
 ) => {
   return testingRender(ui, {
     wrapper: ({ children }) => (
@@ -618,7 +621,7 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
     fireEvent.change(screen.getAllByLabelText('Headline')[1]!, { target: { value: '' } });
     for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
-    fireEvent.click(await screen.findByRole('button', { name: 'Review 1 ready rows' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review 1 ready row' }));
     const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
     expect(skipped.textContent).toContain('Required');
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
@@ -704,7 +707,7 @@ describe('RenderRequestsGrid', () => {
     // Raw After Effects layer names read as words in the header, never as the key.
     expect(screen.getByRole('columnheader', { name: 'Price text' })).toBeTruthy();
     expect(screen.getByText('Continuum fills this')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy(), { timeout: 3000 });
+    expect(await screen.findByText(FIT_NOTE, undefined, { timeout: 3000 })).toBeTruthy();
 
     fireEvent.change(headline, { target: { value: '' } });
     const status = await screen.findByText('Needs input');
@@ -712,7 +715,11 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryAllByText('Invalid')).toHaveLength(0);
     // The blank cell is not painted as an error; the row says what it waits for.
     expect(headline.classList.contains('border-destructive')).toBe(false);
-    expect(screen.getByText('0 of 1 row ready to render · 1 needs input')).toBeTruthy();
+    expect(
+      screen.getByText(
+        '0 of 1 row ready to render · 1 needs input · Layout fit isn’t measured for this template — rows still render',
+      ),
+    ).toBeTruthy();
   });
 
   // UTEC 2026-09-29: a switch read Off whether the file had the layer on or not, and said
@@ -864,9 +871,11 @@ describe('RenderRequestsGrid', () => {
     );
     // Reference length must not look like an enforced character limit.
     expect(screen.queryByText('10/12')).toBeNull();
-    // No Live kit here: nothing measured the fit, so it is not called Ready, and still renders.
-    expect(await screen.findByText('Not checked')).toBeTruthy();
+    // No Live kit here: nothing measured the fit, so no row is called Ready, and none wears a
+    // badge for it either: the readiness line says so once.
+    expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
     expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.queryByText('Not checked')).toBeNull();
     expect(preflightMock).not.toHaveBeenCalled();
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
@@ -1119,8 +1128,12 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
     expect(screen.getByText('1 selected')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
-    expect(screen.getByText('The row is ready to render · 1 not checked')).toBeTruthy();
+    expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
+    expect(
+      screen.getByText(
+        'The row is ready to render · Layout fit isn’t measured for this template — rows still render',
+      ),
+    ).toBeTruthy();
     expect(
       screen.getByText(
         'To add a field or change the layout, ask a designer to update the template.',
@@ -1180,7 +1193,7 @@ describe('RenderRequestsGrid', () => {
       );
       fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
       // A web component has no Live kit: never Ready, still renderable.
-      await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
+      expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
       const tray = await screen.findByRole('region', { name: 'Review and render' });
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
@@ -1226,7 +1239,7 @@ describe('RenderRequestsGrid', () => {
     try {
       render(<RenderRequestsGrid brandId={BRAND} />);
       await screen.findByDisplayValue('Newest row');
-      await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
+      expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
       fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
       const openThenCancel = async () => {
         await waitFor(() =>
@@ -2326,7 +2339,7 @@ describe('RenderRequestsGrid', () => {
     listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
-    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
+    expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
     const tray = await screen.findByRole('region', { name: 'Review and render' });

@@ -349,6 +349,7 @@ function readinessSummary(
     refused: number;
     warned: number;
     unchecked: number;
+    fitUnmeasured: boolean;
   },
   total: number,
 ): string {
@@ -365,6 +366,9 @@ function readinessSummary(
     counts.refused ? `${counts.refused} won’t render` : null,
     counts.warned ? `${counts.warned} with a warning` : null,
     counts.unchecked ? `${counts.unchecked} not checked` : null,
+    counts.fitUnmeasured && total
+      ? 'Layout fit isn’t measured for this template — rows still render'
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -2211,13 +2215,17 @@ export function RenderRequestsGrid({
         : [],
     [contract],
   );
-  const fitOf = useLiveFit({
+  const fit = useLiveFit({
     brandId,
     environment: contract?.template.environment ?? null,
     templateKey: templateKey || null,
     formats: fitFormats,
     enabled: Boolean(contract) && !web,
   });
+  const fitOf = fit.state === 'measured' ? fit.fitOf : null;
+  // Nothing to measure with — a web component, or a format's kit that failed — is said once for
+  // the template, not as a badge on every row.
+  const fitUnmeasured = contract !== null && fit.state === 'unmeasured';
   const liveFit = useMemo(
     () =>
       new Map(
@@ -2277,10 +2285,10 @@ export function RenderRequestsGrid({
         counts.warned += 1;
         for (const item of status.findings)
           note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), row);
-      } else if (status.state === 'unchecked') counts.unchecked += 1;
+      } else if (status.state === 'unchecked' && status.findings.length) counts.unchecked += 1;
     }
-    return { ...counts, findings: [...findings.entries()] };
-  }, [rows, clientErrors, liveFit, liveRefusals, variables]);
+    return { ...counts, fitUnmeasured, findings: [...findings.entries()] };
+  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,

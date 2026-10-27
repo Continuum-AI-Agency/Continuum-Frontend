@@ -284,7 +284,7 @@ const job = (
 
 /** Renders inside a fresh query cache, as the grid mounts it; rerender keeps the same cache. */
 function render(ui: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
   const wrap = (next: ReactElement) => (
     <QueryClientProvider client={client}>{next}</QueryClientProvider>
   );

@@ -719,7 +719,7 @@ function RenderButton({
       {content}
       {onReviewReady ? (
         <Button type="button" size="xs" variant="outline" disabled={firing} onClick={onReviewReady}>
-          Review {readyCount} ready rows
+          Review {plural(readyCount ?? 0, 'ready row')}
         </Button>
       ) : null}
       {showHint ? (

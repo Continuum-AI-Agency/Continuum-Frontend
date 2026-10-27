@@ -401,8 +401,6 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
 
 /** What the Live kit could not measure, without sending anyone to re-parse a template. */
 function uncheckedWhy(findings: Array<{ variableKey?: string | null }>, labelOf: LabelOf): string {
-  if (!findings.length)
-    return 'The live layout check isn’t available for this template, so fit isn’t measured before rendering. It still renders.';
   const names = [
     ...new Set(findings.map((finding) => labelOf(finding.variableKey ?? undefined) ?? 'A slot')),
   ];
@@ -456,12 +454,12 @@ function StatusBadge({
         </Explained>
       );
     case 'unchecked':
-      // A title, not a tooltip: with no kit every row reads this, and the cell re-renders per keystroke.
-      return (
-        <Badge variant="muted" title={uncheckedWhy(status.findings, labelOf)}>
-          Not checked
-        </Badge>
-      );
+      // No kit for the template (or not every format's yet): the grid says so once, not per row.
+      return status.findings.length ? (
+        <Explained why={uncheckedWhy(status.findings, labelOf)}>
+          <Badge variant="muted">Not checked</Badge>
+        </Explained>
+      ) : null;
     default:
       return <Badge variant="success">Ready</Badge>;
   }

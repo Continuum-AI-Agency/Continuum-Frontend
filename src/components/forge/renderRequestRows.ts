@@ -533,9 +533,10 @@ export type RowRefusal = {
 
 /**
  * A row's status from what the browser already has: its own errors (`validateRow` and what the
- * render reads from the values), the Live kit's fit per variable (`useLiveFit`; undefined when no
- * kit loaded) and a refusal a review found. Nothing is asked of the server on an edit. Ready only
- * when the fit was measured and lands; what was not measured says so, and still renders.
+ * render reads from the values), the Live kit's fit per variable (`useLiveFit`; undefined until
+ * every format's kit has landed) and a refusal a review found. A row's status is worked out in the
+ * browser; a server refusal shows only after a review. Ready only when the fit was measured in
+ * every format and lands; what was not measured says so, and still renders.
  */
 export type RowStatus =
   | { state: 'invalid'; errors: Record<string, string> }

@@ -230,10 +230,10 @@ describe('the status column, with no preflight', () => {
     expect(screen.getByText('Ready')).toBeTruthy();
   });
 
-  test('no Live kit reads Not checked, never Ready', () => {
+  test('with no Live kit for the template a row wears no badge: the grid says it once', () => {
     renderStatus(null);
     expect(screen.queryByText('Ready')).toBeNull();
-    expect(screen.getByText('Not checked').getAttribute('title')).toContain('It still renders.');
+    expect(screen.queryByText('Not checked')).toBeNull();
   });
 
   test('a wrong value reads Invalid, and says which field', async () => {
@@ -276,7 +276,7 @@ describe('the status column, with no preflight', () => {
     ).toBeTruthy();
   });
 
-  test('a slot with no measured placement reads Not checked, and sends no one to re-parse', () => {
+  test('a slot with no measured placement reads Not checked, and sends no one to re-parse', async () => {
     renderStatus([
       {
         state: 'unknown',
@@ -284,10 +284,12 @@ describe('the status column, with no preflight', () => {
         why: 'this template has no measured placement for the slot',
       },
     ]);
-    const status = screen.getByText('Not checked');
-    expect(status.getAttribute('title')).toBe(
-      'Where Hero lands isn’t measured before rendering. It still renders.',
-    );
+    hover('Not checked');
+    expect(
+      await screen.findByText(
+        'Where Hero lands isn’t measured before rendering. It still renders.',
+      ),
+    ).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Re-parse/);
     expect(screen.queryByText('Needs review')).toBeNull();
   });
