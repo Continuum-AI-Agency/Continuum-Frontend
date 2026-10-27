@@ -52,7 +52,7 @@ describe('liveWindowFigures', () => {
         snapshot('b', [650, 2], [1200, 4]),
         snapshot('not-a-member', [9999, 99], [9999, 99]),
       ],
-      memberIds: ['a', 'b', 'gone'],
+      memberIds: ['a', 'b'],
       portfolio: TOURS,
       readAt: '2026-10-26T09:00:00Z',
     });
@@ -63,6 +63,19 @@ describe('liveWindowFigures', () => {
       priorResults: 5,
       cycleTs: '2026-10-26T09:00:00Z',
     });
+  });
+
+  it('is null when the read misses even one member: a paused ad set drops out with its spend', () => {
+    // Conversaciones Whatsapp, 2026-10-26: 2 of 3 members active priced $883 live against
+    // $12,199 at the last cycle. A partial sum must not stand as the current figure.
+    expect(
+      liveWindowFigures({
+        snapshots: [snapshot('a', [500, 10], [900, 20]), snapshot('b', [383, 9], [700, 15])],
+        memberIds: ['a', 'b', 'paused-this-week'],
+        portfolio: TOURS,
+        readAt: '2026-10-26T09:00:00Z',
+      }),
+    ).toBeNull();
   });
 
   it('is null when the read cannot see a member, or carries no read time', () => {

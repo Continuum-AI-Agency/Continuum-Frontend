@@ -45,8 +45,10 @@ export type PortfolioFigure = PortfolioWindow & {
 };
 
 /** Sum the live read's 7-day (and the 7 days before it) over the portfolio's members.
- *  Null when the read is undated or holds none of the members: a portfolio the read cannot
- *  see has no live figure, and a zero would read as "spent nothing". */
+ *  Null when the read is undated or misses ANY member. The read lists only ad sets active on
+ *  Meta now, so a member paused inside the window drops out with all its spend: Conversaciones
+ *  Whatsapp priced $883 live against $12,199 at its last cycle. A partial sum would be a wrong
+ *  figure presented as current; the dated snapshot is the honest stand-in. */
 export function liveWindowFigures(args: {
   snapshots: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[];
   memberIds: Iterable<string>;
@@ -64,14 +66,14 @@ export function liveWindowFigures(args: {
     const value = window?.[field];
     return typeof value === 'number' && Number.isFinite(value) ? value : 0;
   };
-  let seen = 0;
+  const seen = new Set<string>();
   let spend = 0;
   let results = 0;
   let spend14 = 0;
   let results14 = 0;
   for (const snapshot of args.snapshots) {
     if (!members.has(snapshot.id)) continue;
-    seen += 1;
+    seen.add(snapshot.id);
     const d7 = snapshot.windows.d7 as Record<string, unknown> | undefined;
     const d14 = snapshot.windows.d14 as Record<string, unknown> | undefined;
     spend += count(d7, 'spend');
@@ -79,7 +81,7 @@ export function liveWindowFigures(args: {
     spend14 += count(d14, 'spend');
     results14 += count(d14, kpi);
   }
-  if (seen === 0) return null;
+  if (seen.size < members.size) return null;
   return {
     spend,
     results,
