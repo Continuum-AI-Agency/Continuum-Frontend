@@ -159,6 +159,12 @@ type Destinations =
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
+/** A confirm that failed with no answer (an outage, a cut, a timeout) after its retries may
+ *  still have made the jobs: the same token is the same batch, so this sends the person to the
+ *  ledger rather than to the button. */
+export const CONFIRM_UNKNOWN =
+  'Couldn’t confirm with the render service — check the job list before rendering again';
+
 function describeFailure(error: unknown): {
   message: string;
   details: string[];
@@ -513,6 +519,7 @@ export function RenderReviewTray({
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
+    let confirming = false;
     try {
       const preflight = await apiRendersApi.batchPreflight({
         brandId,
@@ -541,9 +548,11 @@ export function RenderReviewTray({
         ...(renderer === 'experimental' ? { renderer } : {}),
       });
       setApprovalWarning(preflight.approval?.warning ?? null);
+      confirming = true;
       const batch = await apiRendersApi.createBatch({
         confirmationToken: preflight.confirmationToken,
       });
+      confirming = false;
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -559,6 +568,10 @@ export function RenderReviewTray({
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
+      if (confirming && !(error instanceof ApiError && error.status < 500)) {
+        setProblem(CONFIRM_UNKNOWN);
+        return;
+      }
       const { message, details } = describeFailure(error);
       setProblem([message, ...details].join(' '));
     } finally {

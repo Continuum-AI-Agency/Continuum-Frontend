@@ -198,7 +198,7 @@ import {
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
-import { type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
+import { CONFIRM_UNKNOWN, type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
 // would swallow every other file's toasts.
@@ -649,6 +649,34 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
     expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({ records: [RECORDS[1]] });
     await waitFor(() => expect(screen.queryByText(/not sent/)).toBeNull());
+  }, 30_000);
+
+  test('a confirm that fails with no answer sends the person to the job list, not the button', async () => {
+    for (const failure of [
+      new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
+      new TypeError('Failed to fetch'),
+    ]) {
+      createBatchMock.mockImplementationOnce(async () => {
+        throw failure;
+      });
+      renderTray(null);
+      await press('Next: delivery');
+      await press('Render 3 files');
+      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+      cleanup();
+    }
+    // A refusal is an answer: its own words still show.
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('This confirmation has expired. Review again.', 409, undefined, {
+        error: 'render_confirmation_expired',
+        message: 'This confirmation has expired. Review again.',
+      });
+    });
+    renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(await screen.findByText(/This confirmation has expired/)).toBeTruthy();
+    expect(screen.queryByText(CONFIRM_UNKNOWN)).toBeNull();
   }, 30_000);
 
   test('Final is signed into the render’s preflight; the review never asks for one', async () => {
