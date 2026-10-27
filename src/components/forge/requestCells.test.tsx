@@ -73,17 +73,42 @@ function renderCell(item: ApiRenderVariable, row: RequestRow, actions: RequestRo
   );
 }
 
+describe('text values beyond the template sample', () => {
+  test.each([
+    ['Draw Bet', '4.10', 3],
+    ['Draw Bet', '3.65', 3],
+    ['Left Team', 'Alianza Atlético', 12],
+    ['Right Team', 'Deportivo Garcilaso', 12],
+  ] as const)('%s keeps %s without presenting a character limit', (label, value, charBudget) => {
+    const field = variable({ label, charBudget });
+    const row = { ...seedRow([field], 'Base'), values: { headline: value } };
+    const { actions, calls } = recordActions();
+    const { container } = renderCell(field, row, actions);
+    const input = screen.getByRole('textbox', { name: label }) as HTMLInputElement;
+
+    expect(input.value).toBe(value);
+    expect(input.hasAttribute('maxlength')).toBe(false);
+    expect(container.textContent).not.toContain(`${value.length}/${charBudget}`);
+    fireEvent.change(input, { target: { value: `${value}0` } });
+    expect(calls).toContainEqual({ name: 'setValue', args: [row.id, 'headline', `${value}0`] });
+  });
+});
+
 describe('defaults read apart from typed input', () => {
   test('the artboard copy a row was seeded with is muted and tagged; typed text is not', () => {
     const headline = variable({});
     const { actions } = recordActions();
     renderCell(headline, seedRow([headline], 'Base'), actions);
-    expect(screen.getByLabelText('Headline').classList.contains('text-muted-foreground')).toBe(true);
+    expect(screen.getByLabelText('Headline').classList.contains('text-muted-foreground')).toBe(
+      true,
+    );
     expect(screen.getByText('Default').title).toBe('From the design — type to replace');
     cleanup();
 
     renderCell(headline, { ...seedRow([headline], 'Base'), values: { headline: 'Mío' } }, actions);
-    expect(screen.getByLabelText('Headline').classList.contains('text-muted-foreground')).toBe(false);
+    expect(screen.getByLabelText('Headline').classList.contains('text-muted-foreground')).toBe(
+      false,
+    );
     expect(screen.queryByText('Default')).toBeNull();
   });
 

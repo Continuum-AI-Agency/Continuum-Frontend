@@ -498,8 +498,8 @@ export function isDefaultValue(
 /**
  * What the server would refuse, said per cell before it is asked.
  *
- * The char budget is deliberately NOT here: past it the type shrinks or overflows, it does not
- * fail, and the counter in the cell already says so. Only things that cannot render are errors.
+ * The char budget is a reference text length, not an input limit or proof of overflow.
+ * Preview checks layout. Only things that cannot render are errors.
  */
 export function validateRow(
   variables: ApiRenderVariable[],

@@ -745,24 +745,16 @@ export function VariableCell({
   const text = value === undefined ? '' : String(value);
   const onText = (next: string) =>
     actions.setValue(row.id, variable.key, next === '' ? undefined : next);
-  const used =
-    typeof value === 'string'
-      ? (lineFields.length ? (value.split(/\r?\n/)[0] ?? '') : value).length
-      : 0;
-  const budget = variable.charBudget;
-  const over = budget !== null && used > budget;
   const misfit = fit?.subject === 'text' && fit.state === 'clipped' ? fit.why : null;
   return (
     <div className="flex min-w-32 items-center gap-1.5">
-      {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
-      <div className="group/count relative min-w-0 flex-1">
+      <div className="min-w-0 flex-1">
         {lineFields.length ? (
           <Textarea
             rows={lineFields.length + 1}
             className={cn(
               'min-h-0 resize-none py-1 text-xs',
               isDefault && 'text-muted-foreground',
-              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
             )}
@@ -780,7 +772,6 @@ export function VariableCell({
             className={cn(
               'h-7 text-xs',
               isDefault && 'text-muted-foreground',
-              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
             )}
@@ -791,17 +782,6 @@ export function VariableCell({
             onChange={(event) => onText(event.target.value)}
           />
         )}
-        {budget !== null ? (
-          <span
-            className={cn(
-              'pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono tabular-nums text-2xs text-muted-foreground',
-              over ? 'text-warning' : 'invisible group-focus-within/count:visible',
-            )}
-            title={`${used} of ${budget} characters the design has room for${over ? ' — the type shrinks to fit, or overflows' : ''}`}
-          >
-            {used}/{budget}
-          </span>
-        ) : null}
       </div>
       {misfit ? (
         <Explained why={`Doesn’t fit the design: ${misfit}`}>
