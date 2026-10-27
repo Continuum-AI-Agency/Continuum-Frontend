@@ -63,6 +63,7 @@ import { attributeTransfers, type TransferAttribution } from '../charts/chartDat
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
+import { platformName } from '../entityNoun';
 import { figureProps, formatCurrency } from '../format';
 import { itemWritable, proposalsOnlyNote } from '../platformWrites';
 import {
@@ -364,10 +365,16 @@ export function buildActionQueue(
  */
 export function pauseBlockedNote(
   rec: Pick<RecommendationRow, 'kind' | 'adset_id'>,
-  portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason'>,
+  portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason' | 'platforms'>,
   movedNotes: ReadonlyMap<string, string>,
 ): string | null {
   if (actionRoute(rec.kind) !== 'pause') return null;
+  // This row's Approve drains into the Meta ad-set writer, and the engine's pause rules also
+  // fire on Google and TikTok entities: a portfolio with no Meta side cannot pause from here.
+  const platforms = portfolio.platforms ?? [];
+  if (platforms.length > 0 && !platforms.includes('meta')) {
+    return `Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in ${platformName({ platform: platforms[0], level: null })} if you agree.`;
+  }
   const moved = movedNotes.get(rec.adset_id);
   if (moved) return `Withdrawn: ${moved}.`;
   if (
