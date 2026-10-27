@@ -536,7 +536,12 @@ export function RenderRequestsGrid({
   const [nameRequest, setNameRequest] = useState<NameRequest | null>(null);
   const [dropHint, setDropHint] = useState<RowDrop | null>(null);
   // The open review: `key` is the snapshot the tray reviews, `signature` what it was taken of.
-  const [review, setReview] = useState<{ key: number; signature: string } | null>(null);
+  const [review, setReview] = useState<{
+    key: number;
+    signature: string;
+    rowIds: string[];
+    skippedRows: { label: string; message: string }[];
+  } | null>(null);
   const trayPanel = usePanelRef();
   const railPanel = usePanelRef();
   const [railCollapsed, setRailCollapsed] = useState(false);
@@ -1078,7 +1083,13 @@ export function RenderRequestsGrid({
           for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
           if (row.check.state === 'ready' || row.check.state === 'error')
             for (const finding of row.check.guardrails ?? []) {
-              if (finding.severity === 'block')
+              if (
+                finding.severity === 'block' &&
+                !(
+                  row.check.state === 'error' &&
+                  isFontPreflightRefusal(row.check.code, row.check.guardrails)
+                )
+              )
                 errors[finding.variableKey ?? finding.code] = finding.message;
             }
           return [row.id, errors] as const;
@@ -2418,6 +2429,16 @@ export function RenderRequestsGrid({
       (row) =>
         row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
     );
+  const selectedReady = selected.filter(
+    (row) =>
+      row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
+  );
+  const canReviewReady =
+    !updateRequired &&
+    !renderingProposed &&
+    selected.length <= MAX_BATCH_ROWS &&
+    selectedReady.length > 0 &&
+    selectedReady.length < selected.length;
   const canReviewMissingFonts =
     !updateRequired &&
     !renderingProposed &&
@@ -2522,8 +2543,14 @@ export function RenderRequestsGrid({
   // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async (reviewMissingFonts = false) => {
-    if (!contract || (!readyToFire && !(reviewMissingFonts && canReviewMissingFonts))) return;
+  const openReview = async (reviewMissingFonts = false, readyOnly = false) => {
+    if (
+      !contract ||
+      (!readyToFire &&
+        !(reviewMissingFonts && canReviewMissingFonts) &&
+        !(readyOnly && canReviewReady))
+    )
+      return;
     setBusy('firing');
     try {
       const submittedSet =
@@ -2538,7 +2565,21 @@ export function RenderRequestsGrid({
         submittedSet.revision,
         allOutputIdsOf(contract),
       );
-      setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature }));
+      const chosen = readyOnly ? selectedReady : selected;
+      const rowIds = chosen.map((row) => row.id);
+      const skippedRows = selected
+        .filter((row) => !rowIds.includes(row.id))
+        .map((row) => ({
+          label: row.label.trim() || 'Untitled',
+          message:
+            row.check.state === 'error'
+              ? row.check.message
+              : (Object.entries(clientErrors.get(row.id) ?? {}).map(
+                  ([key, message]) =>
+                    `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
+                )[0] ?? 'Still checking. Recheck this row before rendering.'),
+        }));
+      setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature, rowIds, skippedRows }));
     } finally {
       setBusy(null);
     }
@@ -2548,7 +2589,7 @@ export function RenderRequestsGrid({
   // opened: a stale review refuses to confirm, and a current one signs exactly these records.
   const batch = useMemo(() => {
     if (!review || !activeSet) return { rows: [], records: [] as ApiRenderBatchRecord[] };
-    const chosen = rows.filter((row) => rowSelection[row.id]);
+    const chosen = rows.filter((row) => review.rowIds.includes(row.id));
     return {
       rows: chosen.map((row) => ({
         rowId: row.id,
@@ -2842,6 +2883,8 @@ export function RenderRequestsGrid({
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
+        readyCount={selectedReady.length}
+        onReviewReady={canReviewReady ? () => void openReview(false, true) : undefined}
         onReviewMissingFonts={canReviewMissingFonts ? () => void openReview(true) : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
@@ -3229,13 +3272,16 @@ export function RenderRequestsGrid({
                   templateRevisionId={activeSet?.templateRevision?.revisionId ?? null}
                   contract={contract}
                   rows={batch.rows}
+                  skippedRows={review.skippedRows}
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={stillChecking || canReviewMissingFonts ? null : fireHint}
+                  recheckBlocked={
+                    stillChecking || canReviewMissingFonts || canReviewReady ? null : fireHint
+                  }
                   rechecking={busy === 'firing' || stillChecking}
                   finalBlocked={finalBlocked}
-                  onRecheck={() => void openReview(canReviewMissingFonts)}
+                  onRecheck={() => void openReview(canReviewMissingFonts, canReviewReady)}
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.

@@ -81,6 +81,7 @@ const SidebarProvider = React.forwardRef<
       '--sidebar-width'?: string;
       '--sidebar-width-icon'?: string;
     };
+    const providedSidebarWidth = cssVars['--sidebar-width'] ?? SIDEBAR_WIDTH;
     const providedSidebarWidthIcon = cssVars['--sidebar-width-icon'] ?? SIDEBAR_WIDTH_ICON;
 
     // Pinned open state: the explicit choice made by clicking the trigger or the
@@ -136,9 +137,9 @@ const SidebarProvider = React.forwardRef<
     const state = open ? 'expanded' : 'collapsed';
 
     React.useEffect(() => {
-      const nextWidth = isMobile ? '0px' : providedSidebarWidthIcon;
+      const nextWidth = isMobile ? '0px' : open ? providedSidebarWidth : providedSidebarWidthIcon;
       document.documentElement.style.setProperty('--app-sidebar-width', nextWidth);
-    }, [isMobile, providedSidebarWidthIcon]);
+    }, [isMobile, open, providedSidebarWidth, providedSidebarWidthIcon]);
 
     React.useEffect(() => {
       return () => {
@@ -308,7 +309,7 @@ const Sidebar = React.forwardRef<
             isIconCollapsible
               ? variant === 'floating' || variant === 'inset'
                 ? 'w-[calc(var(--sidebar-width-icon)+(--spacing(4)))] group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
-                : 'w-(--sidebar-width-icon)'
+                : 'w-(--sidebar-width-icon) group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
               : 'w-(--sidebar-width) transition-[width] duration-200 ease-linear',
             !isIconCollapsible && 'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',

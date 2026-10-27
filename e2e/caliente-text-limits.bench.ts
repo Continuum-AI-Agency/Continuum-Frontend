@@ -156,6 +156,16 @@ try {
   assert(names.every((name) => String(report.reviewTray).includes(name)));
   assert.deepEqual(await page.evaluate(() => Reflect.get(window, '__blockedSetWrites')), []);
   assert.deepEqual(pageErrors, [], 'The render flow must not throw browser errors');
+  await next.click();
+  await tray.getByRole('radio', { name: 'Final', exact: true }).click();
+  await expect(tray.getByRole('radio', { name: 'Final', exact: true })).toBeChecked();
+  await tray.getByRole('checkbox', { name: 'Allow font substitution for this batch' }).click();
+  await expect(
+    tray.getByRole('checkbox', { name: 'Allow font substitution for this batch' }),
+  ).toBeChecked();
+  await expect(tray.getByRole('button', { name: /^Render \d+ files?$/ })).toBeEnabled();
+  rec.record('Ordinary client pointer clicks reach Final and explicit font consent', 'PASS');
+  await page.screenshot({ path: `${output}.png` });
   report.status = 'PASS';
   rec.record('Real batch preflight reaches delivery without the engine schema error', 'PASS');
   console.log(

@@ -70,13 +70,15 @@ export type RequestRowCheck =
 
 export function isFontPreflightRefusal(
   code?: string,
-  findings: readonly { code: string }[] = [],
+  findings: readonly { code: string; severity?: string }[] = [],
 ): boolean {
+  const blocking = findings.filter(
+    (finding) => finding.severity === undefined || finding.severity === 'block',
+  );
+  if (blocking.some((finding) => finding.code !== 'TEMPLATE_FONT_MISSING')) return false;
   return (
     code === 'render_fonts_missing' ||
-    (code === 'render_brand_guardrail_blocked' &&
-      findings.length > 0 &&
-      findings.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+    (code === 'render_brand_guardrail_blocked' && blocking.length > 0)
   );
 }
 
