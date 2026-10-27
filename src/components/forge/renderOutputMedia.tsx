@@ -57,7 +57,11 @@ export function OutputVideo({
     const video = host.current?.querySelector('video');
     if (!video) return;
     // A 720p that will not load falls back to the original; only the original failing is broken.
-    const fail = () => (src === full ? onBroken?.() : setUpgraded(true));
+    const fail = () => {
+      if (src === full) return onBroken?.();
+      if (video.currentTime > 0) resumeAt.current = video.currentTime;
+      setUpgraded(true);
+    };
     if (video.error) fail();
     video.addEventListener('error', fail);
     return () => video.removeEventListener('error', fail);

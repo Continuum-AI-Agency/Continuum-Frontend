@@ -197,9 +197,10 @@ function ApprovalCard({
   onDecide: (id: string, decision: 'approve' | 'reject') => void;
 }) {
   const first = approval.files[0];
-  const assetId = outputs?.find((output) => output.assetId)?.assetId ?? undefined;
   // The ledger's copy of the file this approval shows: its poster and 480p, not the fleet's original.
   const rendered = first ? outputs?.find((output) => sameFile(output.url, first.url)) : undefined;
+  const assetId =
+    rendered?.assetId ?? outputs?.find((output) => output.assetId)?.assetId ?? undefined;
   const pending = approval.status === 'pending';
   const destination =
     approval.action === 'replace' && approval.adId
