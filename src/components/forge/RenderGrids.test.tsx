@@ -45,8 +45,10 @@ const READY_RESPONSE = {
   fit: null,
 };
 
-const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
+const BATCH_PREFLIGHT = {
   confirmationToken: 'batch-token',
+  // Far off: the confirmation spends the token it signed, never re-signs it before Render.
+  expiresAt: '2999-01-01T00:00:00.000Z',
   readiness: {
     state: 'READY',
     totalRows: 1,
@@ -55,7 +57,17 @@ const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
     unknownRows: 0,
     findings: [],
   },
-}));
+};
+const batchPreflightMock = mock(
+  async (_input: { records: unknown[] } & Record<string, unknown>): Promise<unknown> =>
+    BATCH_PREFLIGHT,
+);
+const createBatchMock = mock(async (..._args: unknown[]) => ({ jobs: [JOB] }));
+const NO_DESTINATIONS = {
+  slack: { state: 'not_connected', workspaceName: null, destinations: [] },
+  meta: { connected: false, adAccountId: null, adAccountName: null, adAccounts: [] },
+};
+const listDeliveryDestinationsMock = mock(async (): Promise<unknown> => NO_DESTINATIONS);
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
@@ -222,11 +234,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     saveImportMapping: async () => ({ mapping: null }),
     getRenderSet: async (_brandId: string, id: string) => SAVED_SETS.find((set) => set.id === id),
     batchPreflight: batchPreflightMock,
-    listDeliveryDestinations: async () => ({
-      slack: { state: 'not_connected', workspaceName: null, destinations: [] },
-      meta: { connected: false, adAccountId: null, adAccountName: null },
-    }),
-    createBatch: async () => ({ jobs: [JOB] }),
+    listDeliveryDestinations: listDeliveryDestinationsMock,
+    createBatch: (...args: unknown[]) => createBatchMock(...args),
     preflight: preflightMock,
     listJobs: async () => ({ items: [JOB], nextCursor: null }),
     getJob: async () => JOB,
@@ -349,7 +358,11 @@ afterEach(() => {
   deleteRenderSetMock.mockClear();
   createInputSetMock.mockClear();
   suggestRowsMock.mockClear();
-  batchPreflightMock.mockClear();
+  batchPreflightMock.mockReset();
+  batchPreflightMock.mockImplementation(async () => BATCH_PREFLIGHT);
+  createBatchMock.mockClear();
+  listDeliveryDestinationsMock.mockReset();
+  listDeliveryDestinationsMock.mockImplementation(async () => NO_DESTINATIONS);
   extraTemplates = [];
   contractOverrides = {};
   pickedAsset = HERO_ASSET;
@@ -391,13 +404,23 @@ const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
   fireEvent.click(await screen.findByRole('menuitem', { name: item }));
 };
 
-/** The set the rows on screen came from, as the sets rail marks it. */
-const openSetName = () =>
-  within(screen.getByRole('list', { name: 'Render sets' }))
-    .getAllByRole('button', { name: /^Open / })
-    .find((button) => button.getAttribute('aria-current') === 'true')
-    ?.getAttribute('aria-label')
-    ?.replace(/^Open /, '');
+/** The set the rows on screen came from, as the set tabs mark it. */
+const openSetName = () => {
+  const tab = within(screen.getByRole('tablist', { name: 'Render sets' }))
+    .getAllByRole('tab')
+    .find((item) => item.getAttribute('aria-selected') === 'true');
+  return tab?.getAttribute('data-set-id') === '__unsaved__'
+    ? undefined
+    : (tab?.querySelector('.truncate')?.textContent ?? undefined);
+};
+
+/** ⌘S: the one way to save now — autosave does the rest. */
+const saveNow = () => fireEvent.keyDown(document.body, { key: 's', metaKey: true });
+
+/** The toolbar's save status says the rows on screen are not saved yet. */
+const unsavedShown = () =>
+  screen.getByRole('status', { name: 'Save status' }).textContent?.includes('Unsaved changes') ??
+  false;
 
 describe('RenderRequestsGrid', () => {
   test('keeps outage edits when render-set and input-set lists fail, then retries without auto-creating Untitled', async () => {
@@ -433,7 +456,7 @@ describe('RenderRequestsGrid', () => {
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1700)));
     expect(createRenderSetMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
     await confirmDialog('Discard');
     const dialog = await screen.findByRole('dialog', { name: 'New render set' });
     fireEvent.change(within(dialog).getByLabelText('Name'), {
@@ -459,7 +482,7 @@ describe('RenderRequestsGrid', () => {
     const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
     await screen.findByText('Saved render sets could not be loaded');
     fireEvent.change(headline, { target: { value: 'Keep this draft' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved edits)' }));
+    saveNow();
     const dialog = await screen.findByRole('dialog', { name: 'Save render set' });
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Named draft' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save set' }));
@@ -532,7 +555,7 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     const alert = await screen.findByText('Saved render sets could not be loaded');
-    fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
     const dialog = await screen.findByRole('dialog', { name: 'New render set' });
     fireEvent.change(within(dialog).getByLabelText('Name'), {
       target: { value: 'Explicit while offline' },
@@ -594,26 +617,23 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Other set');
   });
 
-  test('shows the font refusal beside Render and clears it after the row passes', async () => {
+  test('a font refusal is the person’s call: the row reads Needs your call and Render stays open', async () => {
     const reason = 'Card A requires Brand Sans. Upload it in Library → Typography.';
     preflightMock.mockImplementation(async () => {
       throw new ApiError('render_fonts_missing', 422, undefined, { detail: reason });
     });
     render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByText('Rejected');
+    await screen.findByText('Needs your call');
+    expect(screen.queryAllByText('Rejected')).toHaveLength(0);
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     const toolbar = screen.getByRole('toolbar', { name: 'Render' });
     const button = within(toolbar).getByRole<HTMLButtonElement>('button', { name: /Render 1/ });
-    expect(button.disabled).toBe(true);
-    expect(within(toolbar).getByText(reason)).toBeTruthy();
-    expect(document.getElementById(button.getAttribute('aria-describedby')!)?.textContent).toBe(
-      reason,
-    );
+    // Overridable, so not a block: the decision is made in the confirmation.
+    expect(button.disabled).toBe(false);
+    expect(within(toolbar).queryByText(reason)).toBeNull();
     preflightMock.mockImplementation(async () => READY_RESPONSE);
     fireEvent.change(screen.getByLabelText('Headline'), { target: { value: 'New copy' } });
-    await waitFor(() => expect(button.disabled).toBe(false));
-    expect(within(toolbar).queryByText(reason)).toBeNull();
-    expect(button.getAttribute('aria-describedby')).toBeNull();
+    await waitFor(() => expect(screen.queryAllByText('Needs your call')).toHaveLength(0));
   });
 
   test('ready rows can be reviewed while selected invalid rows stay explicitly skipped', async () => {
@@ -637,7 +657,7 @@ describe('RenderRequestsGrid', () => {
     ).toBe(true);
   });
 
-  test('a rejected font row can open override review without accepting it or starting a render', async () => {
+  test('a font refusal is asked once, in the confirmation, and only a tick sends the override', async () => {
     preflightMock.mockImplementation(async () => {
       throw new ApiError('Missing fonts.', 422, 'render_brand_guardrail_blocked', {
         detail: 'A typeface is missing.',
@@ -646,20 +666,44 @@ describe('RenderRequestsGrid', () => {
         ],
       });
     });
+    batchPreflightMock.mockImplementation(async (request: { acceptMissingFonts?: boolean }) => {
+      if (!request.acceptMissingFonts)
+        throw new ApiError('Missing fonts.', 422, 'render_fonts_missing', {
+          detail: 'Upload the missing font.',
+        });
+      return BATCH_PREFLIGHT;
+    });
     render(<RenderRequestsGrid brandId={BRAND} />);
-    await screen.findByText('0 of 1 row ready to render · 1 needs fixing');
+    await screen.findByText('Needs your call');
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
-    fireEvent.click(within(toolbar).getByRole('button', { name: 'Review font override' }));
-    expect(await screen.findByRole('list', { name: 'Rows to render' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
+    const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
+    const tick = await within(dialog).findByRole('checkbox', {
+      name: /Render anyway — a typeface isn’t held/,
+    });
+    expect(tick.getAttribute('aria-checked')).toBe('false');
+    expect(
+      within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Render \d+ file/ }).disabled,
+    ).toBe(true);
     expect(
       batchPreflightMock.mock.calls.every(
         (call) => !(call[0] as { acceptMissingFonts?: boolean }).acceptMissingFonts,
       ),
     ).toBe(true);
-  });
+    expect(createBatchMock).not.toHaveBeenCalled();
 
-  test('associates an authoritative guardrail refusal with its row and cell', async () => {
+    fireEvent.click(tick);
+    await waitFor(() =>
+      expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({ acceptMissingFonts: true }),
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole<HTMLButtonElement>('button', { name: /^Render \d+ file/ })
+          .disabled,
+      ).toBe(false),
+    );
+  });
+  test('an off-palette colour is a call on its row and cell, never a block', async () => {
     preflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
         detail: 'Use a permitted brand color.',
@@ -676,18 +720,18 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByLabelText('Headline');
     await waitFor(() =>
-      expect(screen.getByText('0 of 1 row ready to render · 1 needs fixing')).toBeTruthy(),
+      expect(screen.getByText('0 of 1 row ready to render · 1 needs your call')).toBeTruthy(),
     );
     expect(
       screen.getByLabelText('Headline').closest('[title="Use a permitted brand color."]'),
     ).toBeTruthy();
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
-    expect(screen.queryByRole('button', { name: 'Review font override' })).toBeNull();
-    // A value the server refuses is wrong, not missing.
-    expect(screen.getByText('Invalid')).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(
+      false,
+    );
+    expect(screen.getByText('Needs your call')).toBeTruthy();
+    expect(screen.queryAllByText('Invalid')).toHaveLength(0);
   });
-
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
     contractOverrides = {
       variables: [
@@ -810,7 +854,7 @@ describe('RenderRequestsGrid', () => {
     expect(within(cell).getByText('Default')).toBeTruthy();
   });
 
-  test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
+  test('a frame placement cannot settle reads "Ready · fit warning", and says why', async () => {
     preflightMock.mockImplementation(async () => ({
       ...READY_RESPONSE,
       fit: {
@@ -821,7 +865,7 @@ describe('RenderRequestsGrid', () => {
       },
     }));
     render(<RenderRequestsGrid brandId={BRAND} />);
-    const status = await screen.findByText('AI check after render', undefined, { timeout: 3000 });
+    const status = await screen.findByText('Ready · fit warning', undefined, { timeout: 3000 });
     expect(screen.queryAllByText('Needs judge')).toHaveLength(0);
     const trigger = status.closest('button')!;
     fireEvent.mouseEnter(trigger);
@@ -1101,12 +1145,12 @@ describe('RenderRequestsGrid', () => {
     try {
       render(<RenderRequestsGrid brandId={BRAND} />);
       const headline = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
-      expect(screen.queryByText('(unsaved edits)')).toBeNull();
+      expect(unsavedShown()).toBe(false);
       fireEvent.change(headline, { target: { value: 'Edited' } });
-      expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+      expect(unsavedShown()).toBe(true);
 
       // Nothing is lost by moving on: the edits go into an "Untitled set" before the new one opens.
-      fireEvent.click(screen.getByRole('button', { name: 'New set' }));
+      fireEvent.click(screen.getByRole('button', { name: 'New render set' }));
       const dialog = await screen.findByRole('dialog', { name: 'New render set' });
       expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
@@ -1120,7 +1164,7 @@ describe('RenderRequestsGrid', () => {
       expect(createRenderSetMock.mock.calls[1]?.[0]).toMatchObject({ name: 'Summer' });
       await waitFor(() => expect(openSetName()).toBe('Summer'));
       expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
-      expect(screen.queryByText('(unsaved edits)')).toBeNull();
+      expect(unsavedShown()).toBe(false);
     } finally {
       window.prompt = originalPrompt;
     }
@@ -1176,37 +1220,26 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByText('1 selected')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
     expect(screen.getByText('The row is ready to render')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'To add a field or change the layout, ask a designer to update the template.',
-      ),
-    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
-    // No set yet: it is saved as "Untitled set" without a question, then reviewed under the grid.
-    const tray = await screen.findByRole('region', { name: 'Review and render' });
-    expect(screen.queryAllByRole('dialog')).toHaveLength(0);
-    expect(within(tray).getByText('Render 1 row')).toBeTruthy();
+    // No set yet: it is saved as "Untitled set" without a question, then confirmed in one dialog.
+    const dialog = await screen.findByRole('dialog', { name: 'Render 1 row · 1 file' });
     expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Untitled set' });
-    // The grid is still there to read and edit while the tray reviews it.
-    expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
-    // No Meta target: Deliver folds its defaults to one line and renders from there.
-    await press('Next: delivery');
-    expect(within(tray).getByRole('button', { name: 'Change delivery' })).toBeTruthy();
-    expect(within(tray).getByRole('radio', { name: 'Final' }).hasAttribute('data-disabled')).toBe(
+    // Where it goes, read back: the Library, and no Meta ad without a target.
+    expect(within(dialog).getByText('Library')).toBeTruthy();
+    expect(within(dialog).queryAllByRole('list', { name: 'Meta ads' })).toHaveLength(0);
+    expect(within(dialog).getByRole('radio', { name: 'Final' }).hasAttribute('data-disabled')).toBe(
       false,
     );
     await press('Render 1 file');
-    // Queued, the tray follows the job; only the ledger link leaves the Render tab.
-    const fired = await within(tray).findByRole('list', { name: 'Fired renders' });
-    expect(within(fired).getByText('Root / Spain')).toBeTruthy();
+    await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(1));
+    // One signing check, spent as signed: no review pass before it.
+    expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+    // Queued, the row's Status follows its render; the ledger is a link away, not a jump.
+    expect(await screen.findByText('Rendered')).toBeTruthy();
     expect(onFired).not.toHaveBeenCalled();
-    expect(batchPreflightMock).toHaveBeenCalledTimes(2);
-    fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
-    expect(onFired).toHaveBeenCalledWith([JOB.id]);
-    await waitFor(() => expect(screen.getByDisplayValue('Base')).toBeTruthy());
+    expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
   });
-
-  test('a web component saves and reviews its set on the nil binding, Library only, no renderer to pick', async () => {
+  test('a web component saves and confirms its set on the nil binding, Library only, no renderer to pick', async () => {
     const webKey = 'web:99999999-9999-4999-8999-999999999999';
     extraTemplates = [
       { ...TEMPLATE, key: webKey, bindingId: WEB_COMPONENT_BINDING_ID, displayName: 'Hello card' },
@@ -1221,7 +1254,7 @@ describe('RenderRequestsGrid', () => {
         variables: [{ key: 'headline', nodeId: 'title', property: 'text' }],
       },
     };
-    // The row's preview page never arrives; the set and the review are what is under test.
+    // The row's preview page never arrives; the set and the confirmation are what is under test.
     const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
       (() => new Promise<Response>(() => undefined)) as unknown as typeof fetch,
     );
@@ -1233,10 +1266,12 @@ describe('RenderRequestsGrid', () => {
           'Hello card',
         ),
       );
+      // Library only: a web component has no Destination column to pick from.
+      expect(screen.queryAllByRole('columnheader', { name: 'Destination' })).toHaveLength(0);
       fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
       await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
       fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
-      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
         name: 'Untitled set',
         templateKey: webKey,
@@ -1249,22 +1284,15 @@ describe('RenderRequestsGrid', () => {
       });
       // The row previews from the component's own page, not the After Effects kit.
       expect(fetchSpy.mock.calls.map(([url]) => url)).toContain('https://api.test/preview');
-
-      await press('Next: delivery');
-      fireEvent.click(within(tray).getByRole('button', { name: 'Change delivery' }));
-      const options = within(tray).getByRole('region', { name: 'Delivery options' });
-      expect(within(options).getByText('Library')).toBeTruthy();
-      expect(within(options).queryByText('Slack')).toBeNull();
-      expect(within(options).queryByText('Meta ads')).toBeNull();
-      expect(within(options).queryByText('Approval')).toBeNull();
-      expect(within(tray).queryByRole('radiogroup', { name: 'Renderer' })).toBeNull();
-      expect(within(tray).getByRole('radiogroup', { name: 'Render as' })).toBeTruthy();
+      expect(within(dialog).getByText('Library')).toBeTruthy();
+      expect(within(dialog).queryAllByRole('list', { name: 'Meta ads' })).toHaveLength(0);
+      expect(within(dialog).queryByRole('radiogroup', { name: 'Renderer' })).toBeNull();
+      expect(within(dialog).getByRole('radiogroup', { name: 'Render as' })).toBeTruthy();
     } finally {
       fetchSpy.mockRestore();
     }
   });
-
-  test('Render saves only a set with edits, and silently; Save is what says “Saved”, once', async () => {
+  test('Render saves only a set with edits, and silently; ⌘S is what says “Saved”, once', async () => {
     // The newest set, with the headline a row needs to be Ready.
     const renderable = {
       ...NEWEST,
@@ -1289,10 +1317,10 @@ describe('RenderRequestsGrid', () => {
           ),
         );
         fireEvent.click(screen.getByRole('button', { name: /Render 1/ }));
-        const tray = await screen.findByRole('region', { name: 'Review and render' });
-        fireEvent.click(within(tray).getByRole('button', { name: 'Close review' }));
+        const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
         await waitFor(() =>
-          expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0),
+          expect(screen.queryAllByRole('dialog', { name: /Render 1 row/ })).toHaveLength(0),
         );
       };
 
@@ -1309,7 +1337,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.change(screen.getByDisplayValue('Edited row'), {
         target: { value: 'Edited again' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved edits)' }));
+      saveNow();
       await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(saved).toEqual(['Saved “Newest”']));
     } finally {
@@ -1521,8 +1549,8 @@ describe('RenderRequestsGrid', () => {
       target: { value: 'Edited row' },
     });
 
-    // The rail lists every set at once: a switch is one click, never a menu.
-    fireEvent.click(screen.getByRole('button', { name: 'Open Older' }));
+    // The tabs list every set at once: a switch is one click, never a menu.
+    fireEvent.click(screen.getByRole('tab', { name: /Older/ }));
     expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
     expect(openSetName()).toBe('Older');
     expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
@@ -1617,7 +1645,7 @@ describe('RenderRequestsGrid', () => {
     ]);
     await waitFor(() => expect(openSetName()).toBe('Summer'));
     expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
-    expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+    expect(unsavedShown()).toBe(true);
 
     await openMenu('Actions for Summer', /Delete/);
     const confirm = await screen.findByRole('alertdialog');
@@ -1635,7 +1663,7 @@ describe('RenderRequestsGrid', () => {
       target: { value: 'Edited row' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Older' }));
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /Older/ }));
     const field = screen.getByRole('textbox', { name: 'Rename Older' });
     fireEvent.change(field, { target: { value: 'Autumn' } });
     fireEvent.keyDown(field, { key: 'Enter' });
@@ -1644,20 +1672,20 @@ describe('RenderRequestsGrid', () => {
       OLDER.id,
       { brandId: BRAND, expectedRevision: 1, name: 'Autumn' },
     ]);
-    expect(await screen.findByRole('button', { name: 'Open Autumn' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: /Autumn/ })).toBeTruthy();
     expect(openSetName()).toBe('Newest');
 
-    await openMenu('Actions for Autumn', /Delete/);
+    // A set that is not open keeps its actions on a right-click of its tab.
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Autumn/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Delete/ }));
     fireEvent.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
     );
     await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, OLDER.id));
-    await waitFor(() =>
-      expect(screen.queryAllByRole('button', { name: 'Open Autumn' })).toHaveLength(0),
-    );
+    await waitFor(() => expect(screen.queryAllByRole('tab', { name: /Autumn/ })).toHaveLength(0));
     expect(openSetName()).toBe('Newest');
     expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
-    expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+    expect(unsavedShown()).toBe(true);
   });
 
   test('a description saves alone at the revision its set was read at; a conflict says so and changes nothing', async () => {
@@ -1673,20 +1701,13 @@ describe('RenderRequestsGrid', () => {
       fireEvent.change(await screen.findByDisplayValue('Newest row'), {
         target: { value: 'Edited row' },
       });
-      const setItem = (name: string) =>
-        within(screen.getByRole('list', { name: 'Render sets' }))
-          .getAllByRole('listitem')
-          .find((item) => within(item).queryByRole('button', { name: `Open ${name}` }))!;
-
       updateRenderSetMock.mockImplementationOnce(async (_id, input) => ({
         ...NEWEST,
         description: input.description as string,
         revision: 2,
       }));
-      fireEvent.click(within(setItem('Newest')).getByRole('button', { name: 'Add a description' }));
-      const field = within(setItem('Newest')).getByRole('textbox', {
-        name: 'Description of Newest',
-      });
+      fireEvent.click(screen.getByRole('button', { name: 'Add a description' }));
+      const field = screen.getByRole('textbox', { name: 'Description of Newest' });
       fireEvent.change(field, { target: { value: '  Spain first, then Portugal  ' } });
       fireEvent.keyDown(field, { key: 'Enter' });
       await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
@@ -1694,33 +1715,29 @@ describe('RenderRequestsGrid', () => {
         NEWEST.id,
         { brandId: BRAND, expectedRevision: 1, description: 'Spain first, then Portugal' },
       ]);
-      expect(
-        await within(setItem('Newest')).findByRole('button', {
-          name: 'Spain first, then Portugal',
-        }),
-      ).toBeTruthy();
+      const saved = await screen.findByRole('button', { name: 'Spain first, then Portugal' });
       // Only the description moved: the rows on screen are still the unsaved edit.
       expect(screen.getByDisplayValue('Edited row')).toBeTruthy();
-      expect(screen.getByText('(unsaved edits)')).toBeTruthy();
+      expect(unsavedShown()).toBe(true);
 
       updateRenderSetMock.mockImplementationOnce(async () => {
         throw new Error('render_set_revision_conflict');
       });
-      fireEvent.click(within(setItem('Older')).getByRole('button', { name: 'Add a description' }));
-      const older = within(setItem('Older')).getByRole('textbox', { name: 'Description of Older' });
-      fireEvent.change(older, { target: { value: 'Autumn cut' } });
-      fireEvent.keyDown(older, { key: 'Enter' });
+      fireEvent.click(saved);
+      const again = screen.getByRole('textbox', { name: 'Description of Newest' });
+      fireEvent.change(again, { target: { value: 'Autumn cut' } });
+      fireEvent.keyDown(again, { key: 'Enter' });
       await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
       expect(updateRenderSetMock.mock.calls[1]?.[1]).toEqual({
         brandId: BRAND,
-        expectedRevision: 1,
+        expectedRevision: 2,
         description: 'Autumn cut',
       });
       await waitFor(() =>
         expect(toasts).toContain('This set changed elsewhere. Reload it before saving again.'),
       );
       expect(
-        await within(setItem('Older')).findByRole('button', { name: 'Add a description' }),
+        await screen.findByRole('button', { name: 'Spain first, then Portugal' }),
       ).toBeTruthy();
       expect(openSetName()).toBe('Newest');
     } finally {
@@ -1749,7 +1766,7 @@ describe('RenderRequestsGrid', () => {
     const banner = await screen.findByRole('region', { name: 'Older template' });
     expect(banner.textContent).toContain('subtitle field');
     expect(
-      within(screen.getByRole('list', { name: 'Render sets' })).getByText('Older template'),
+      within(screen.getByRole('tablist', { name: 'Render sets' })).getByText('Older template'),
     ).toBeTruthy();
     // The drop is the person's call: Render stays shut until the set is updated.
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
@@ -1782,7 +1799,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     expect(screen.queryAllByRole('region', { name: 'Older template' })).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved edits)' }));
+    saveNow();
     await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
     expect(updateRenderSetMock.mock.calls[0]![1]).toMatchObject({ contractHash: 'hash' });
   });
@@ -2122,7 +2139,7 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));
     await waitFor(() => expect(screen.queryAllByDisplayValue('Drafted')).toHaveLength(0));
     expect(screen.getAllByLabelText('Row name')).toHaveLength(1);
-    expect(screen.queryByText('(unsaved edits)')).toBeNull();
+    expect(unsavedShown()).toBe(false);
   });
 
   test('the focused row’s own dry-run landing mid-word keeps focus and the typed text', async () => {
@@ -2150,6 +2167,7 @@ describe('RenderRequestsGrid', () => {
     await act(async () => {
       for (const call of inFlight.splice(0)) call.resolve(READY_RESPONSE);
     });
+    // 15 characters past a 12-character reference length still reads Ready: only layout warns.
     expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
     expect(document.activeElement).toBe(input);
     type(' vez');
@@ -2347,7 +2365,7 @@ describe('RenderRequestsGrid', () => {
 
   // A two-line headline set on two layers: one box takes both lines, and a count that does not
   // fit is named on the field before any render is spent.
-  test('a field split across layers takes its lines in one box and names a count that does not fit', async () => {
+  test('a field split across layers takes its lines in one box; a count that does not fit is a call', async () => {
     contractOverrides = {
       linkedFields: [
         variable({
@@ -2364,40 +2382,73 @@ describe('RenderRequestsGrid', () => {
       'Headline — one line each for Headline, Front line',
     );
     expect(headline.tagName).toBe('TEXTAREA');
-    // The seeded sample is one line: the split cannot fill Front line.
+    // The seeded sample is one line: the split cannot fill Front line. Not an error — a call.
     await waitFor(() => expect(headline.getAttribute('title')).toContain('Headline needs 2 lines'));
+    expect(screen.getByText('Needs your call')).toBeTruthy();
+    expect(headline.classList.contains('border-destructive')).toBe(false);
+    // Its other checks still run: the dry-run is sent, with the line count left to the person.
+    await waitFor(() =>
+      expect(preflightMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        acceptLinkedLineMismatch: true,
+      }),
+    );
     fireEvent.change(headline, { target: { value: 'TRAIN HARD\nFEEL STRONG' } });
     await waitFor(() => expect(headline.getAttribute('title')).toBeNull());
+    expect(screen.queryAllByText('Needs your call')).toHaveLength(0);
   });
-
-  test('an edit after review sends the tray back to Review; Re-check saves it and reviews again', async () => {
+  test('the confirmation signs the set’s delivery: its default ad set rides as the batch delivery', async () => {
+    const adSet = {
+      action: 'create' as const,
+      adAccountId: 'act_1',
+      campaignId: 'c1',
+      campaignName: 'Summer launch',
+      adsetId: 's1',
+      adsetName: 'Spain 18–34',
+      adStatus: 'PAUSED' as const,
+    };
     const renderable = {
       ...NEWEST,
+      settings: {
+        metaTarget: adSet,
+        slackDestinationId: null,
+        approvalDestinationIds: [],
+        final: false,
+      },
       rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
     };
     listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
+    listDeliveryDestinationsMock.mockImplementation(async () => ({
+      ...NO_DESTINATIONS,
+      meta: {
+        connected: true,
+        adAccountId: 'act_1',
+        adAccountName: 'StarCraft Ads',
+        adAccounts: [{ id: 'act_1', name: 'StarCraft Ads' }],
+      },
+    }));
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
+    // The row has no ad of its own, so it says where the set sends it.
+    expect(
+      await screen.findByRole('button', {
+        name: 'Destination for Newest row: Set default · Summer launch › Spain 18–34',
+      }),
+    ).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
-    const tray = await screen.findByRole('region', { name: 'Review and render' });
-    await press('Next: delivery');
-    expect(within(tray).getByRole('button', { name: 'Render 1 file' })).toBeTruthy();
-
-    fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Renamed row' } });
-    expect(await within(tray).findByText('Rows changed since review')).toBeTruthy();
-    expect(within(tray).queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
-    // Nothing to press: the row is still being checked, so the tray waits for it.
-    expect(within(tray).queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
-
-    // The rename re-checks the row; once it is Ready the tray saves the edit and reviews again.
-    // A name is nothing a check reads, so the review settles on the verdict it already has.
-    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 5000 });
-    await waitFor(() => expect(within(tray).queryByText('Rows changed since review')).toBeNull());
-    expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+    const dialog = await screen.findByRole('dialog', { name: /Render 1 row/ });
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(1));
+    const sent = batchPreflightMock.mock.calls[0]?.[0] as {
+      delivery?: unknown;
+      records: Array<{ delivery?: unknown }>;
+    };
+    // Never written into the row: the set's default is the batch's, and a row's own would win.
+    expect(sent.delivery).toEqual(adSet);
+    expect(sent.records[0]?.delivery).toBeUndefined();
+    const ads = within(dialog).getByRole('list', { name: 'Meta ads' });
+    expect(ads.textContent).toContain('new paused ad in Summer launch › Spain 18–34 (set default)');
   });
-
   test('the per-row Output settings column exists only when the template publishes settings', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');

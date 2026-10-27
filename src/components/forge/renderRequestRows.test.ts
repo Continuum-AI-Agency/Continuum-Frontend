@@ -24,11 +24,11 @@ import {
   HISTORY_LIMIT,
   IMPORT_SKIP,
   isDefaultValue,
-  isFontPreflightRefusal,
   keepProposed,
   mergeSetRows,
   missingInputs,
   moveRow,
+  overrideFor,
   ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
@@ -1252,25 +1252,26 @@ describe('applyAssistOps', () => {
 
 describe('font override reachability', () => {
   test('nonblocking findings do not conceal font consent', () => {
-    expect(isFontPreflightRefusal('render_fonts_missing')).toBe(true);
+    expect(overrideFor('render_fonts_missing')).toBe('acceptMissingFonts');
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
         { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+        { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'warn' },
       ]),
-    ).toBe(true);
+    ).toBe('acceptMissingFonts');
   });
   test('another blocking finding must be corrected', () => {
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
         { code: 'ASSET_UNREADABLE', severity: 'block' },
       ]),
-    ).toBe(false);
+    ).toBeNull();
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
       ]),
-    ).toBe(false);
+    ).toBeNull();
   });
 });

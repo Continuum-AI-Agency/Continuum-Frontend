@@ -225,7 +225,7 @@ describe('API render contracts', () => {
   });
 
   // A server too old to say who draws the row is the fleet; a vendored client must still parse it.
-  it('reads engines from single and batch preflights, defaulting an unsaid one to the fleet', () => {
+  it('reads the engine the preflight signed, and defaults an unsaid one to the fleet', () => {
     const base = {
       confirmationToken: 'token',
       confirmationHash: 'a'.repeat(64),
@@ -254,27 +254,6 @@ describe('API render contracts', () => {
     expect(apiRenderPreflightResponseSchema.safeParse({ ...base, engine: 'crayon' }).success).toBe(
       false,
     );
-
-    const { inputKeys, ...batchBase } = base;
-    const record = { label: '1.1', inputKeys };
-    const batch = {
-      ...batchBase,
-      batchId: '00000000-0000-4000-8000-000000000001',
-      records: [record],
-    };
-    for (const engine of ['fleet', 'paint', 'micro', 'web']) {
-      const response = { ...batch, records: [{ ...record, engine }] };
-      expect(apiRenderBatchPreflightResponseSchema.parse(response).records[0]?.engine).toBe(engine);
-    }
-    expect(apiRenderBatchPreflightResponseSchema.parse(batch).records[0]?.engine).toBe('fleet');
-    for (const extra of [{ engine: 'crayon' }, { unexpected: true }]) {
-      expect(
-        apiRenderBatchPreflightResponseSchema.safeParse({
-          ...batch,
-          records: [{ ...record, ...extra }],
-        }).success,
-      ).toBe(false);
-    }
   });
 
   // A URL in the pin slot is the exact failure this feature exists to prevent: it
@@ -539,7 +518,34 @@ const batch = (extra: Record<string, unknown>) => ({
   ...extra,
 });
 
+describe('render-anyway overrides', () => {
+  it('parse on the single and the batch preflight, next to acceptMissingFonts', () => {
+    const flags = { acceptLinkedLineMismatch: true, acceptOffPaletteColor: true };
+    expect(
+      apiRenderBatchPreflightRequestSchema.parse(batch({ records: [record()], ...flags })),
+    ).toMatchObject(flags);
+    expect(
+      apiRenderPreflightRequestSchema.parse({
+        brandId: BRAND,
+        templateKey: '133',
+        contractHash: 'hash',
+        variables: {},
+        ...flags,
+      }),
+    ).toMatchObject(flags);
+  });
+});
+
 describe('delivery targets', () => {
+  it('pins explicit micro-only fallback behavior through batch preflight', () => {
+    expect(apiRenderBatchPreflightRequestSchema.parse(batch({
+      records: [record()], renderer: 'experimental', microFallbackPolicy: 'fail',
+    })).microFallbackPolicy).toBe('fail');
+    expect(apiRenderBatchPreflightRequestSchema.safeParse(batch({
+      records: [record()], microFallbackPolicy: 'fail',
+    })).success).toBe(false);
+  });
+
   it('still reads a pre-union create target and fills its defaults', () => {
     expect(apiRenderDeliveryTargetSchema.parse(createTarget)).toEqual({
       ...createTarget,
@@ -981,6 +987,29 @@ describe('linked fields take their value from their source', () => {
 
   it('leaves an unset source alone: the fields keep what the file says', () => {
     expect(expandLinkedValues([headline, outline, front], {}).values).toEqual({});
+  });
+
+  it('marks only the line-count problem as one a person may render through', () => {
+    const [problem] = expandLinkedValues([headline, front], { headline: 'ONE LINE' }).problems;
+    expect(problem?.overridable).toBe(true);
+    const gap = field('gap', { key: 'headline', line: 3 });
+    expect(expandLinkedValues([headline, gap], { headline: 'A\nB' }).problems[0]?.overridable)
+      .toBeUndefined();
+  });
+
+  it('with the override, joins extra lines onto the last layer and leaves missing ones empty', () => {
+    const lenient = { lenientLineCount: true };
+    const back = field('back', { key: 'headline', line: 3 });
+    expect(
+      expandLinkedValues([headline, front], { headline: 'TRAIN\nHARD\nFEEL STRONG' }, lenient),
+    ).toEqual({ values: { headline: 'TRAIN', front: 'HARD FEEL STRONG' }, problems: [] });
+    expect(expandLinkedValues([headline, front, back], { headline: 'TRAIN' }, lenient)).toEqual({
+      values: { headline: 'TRAIN', front: '', back: '' },
+      problems: [],
+    });
+    // A template that links wrongly is still refused: the override is about the text, not the file.
+    const gap = field('gap', { key: 'headline', line: 3 });
+    expect(expandLinkedValues([headline, gap], { headline: 'A' }, lenient).problems).toHaveLength(1);
   });
 });
 

@@ -14,7 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 
 // The one naming dialog the Render tab uses: a new or renamed render set, and "Save as inputs".
-// Which set is open, and every way to change that, lives in RenderSetRail.
+// Which set is open, and every way to change that, lives in RenderSetTabs.
 
 /** One text field in a dialog — what `window.prompt` was, without the browser chrome. */
 export function NameDialog({

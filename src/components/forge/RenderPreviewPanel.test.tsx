@@ -506,7 +506,7 @@ describe('RenderPreviewPanel', () => {
     );
     expect(slot(container, 'headline')?.textContent).toContain('4.10');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
-    expect(screen.queryByText(/overflows its box/)).toBeNull();
+    expect(screen.queryByText(/may shrink or clip/)).toBeNull();
   });
 
   test('draws text in its box and flags actual layout overflow live from props', () => {
@@ -517,13 +517,13 @@ describe('RenderPreviewPanel', () => {
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText(/Headline overflows its box \(fits only at/)).toBeTruthy();
+    expect(screen.getByText(/Will render · Headline may shrink or clip \(fits only at/)).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 
     expect(slot(container, 'headline')?.textContent).toContain('Hola');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
-    expect(screen.queryByText(/overflows its box/)).toBeNull();
+    expect(screen.queryByText(/may shrink or clip/)).toBeNull();
     expect(slot(container, 'logo')?.textContent).toContain('Continuum fills this');
   });
 
@@ -660,7 +660,9 @@ describe('RenderPreviewPanel', () => {
     expect(caption(container)).toBe(
       "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
     );
-    expect(warning(container)).toBe('Headline overflows its box · Not previewed: Background');
+    expect(warning(container)).toBe(
+      'Will render · Headline may shrink or clip · Not previewed: Background',
+    );
     // The second argument is the query's abort signal: a superseded composition is cancelled.
     expect(composePreviewMock).toHaveBeenCalledWith(
       {
