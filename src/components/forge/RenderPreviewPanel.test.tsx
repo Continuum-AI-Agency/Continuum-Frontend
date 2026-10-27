@@ -406,6 +406,24 @@ describe('RenderPreviewPanel', () => {
     );
   });
 
+  test('in a set, a row a refused review found refusing is not proofed until it would render', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      outputs: [],
+    } as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: SET, rows: rowWith('Hola') };
+    const { rerender } = render(
+      <RenderPreviewPanel {...props} refusal={{ message: 'Use a brand colour.', font: false }} />,
+    );
+    // Past the proof's own debounce: a row that will not render is never proofed.
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1800)));
+    expect(startMotionProofMock).not.toHaveBeenCalled();
+    // Substituted fonts still render, so that row is proofed.
+    rerender(<RenderPreviewPanel {...props} refusal={{ message: 'Brand Sans', font: true }} />);
+    await waitFor(() => expect(startMotionProofMock).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
   test('shows worker and canvas measurement findings on a render row', () => {
     const contract = {
       ...CONTRACT,

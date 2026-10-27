@@ -307,6 +307,7 @@ const trayHandlers = () => ({
   onFired: mock((_ids: string[]) => undefined),
   onClose: mock(() => undefined),
   onRecheck: mock(() => undefined),
+  onRefused: mock((_rowIds: string[]) => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
 });
@@ -423,6 +424,8 @@ describe('RenderReviewTray · Review', () => {
     try {
       const view = renderTray();
       await press('Render anyway');
+      // A font refusal has its own way past; no row needs finding.
+      expect(view.onRefused).not.toHaveBeenCalled();
       await press('Next: delivery');
       await press('Render 3 files');
       expect(
@@ -513,9 +516,11 @@ describe('RenderReviewTray · Review', () => {
         ],
       });
     });
-    renderTray();
+    const { onRefused } = renderTray();
     expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
     expect(primaryDisabled('Next: delivery')).toBe(true);
+    // The refusal names no row, so the grid is asked to find which rows refuse.
+    expect(onRefused).toHaveBeenCalledWith(['root', 'spain']);
   }, 30_000);
 
   test('closing — the button or Esc — fires nothing', async () => {

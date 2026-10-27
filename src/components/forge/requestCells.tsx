@@ -66,6 +66,7 @@ import {
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
+  type RowRefusal,
   type RowStatus,
   rowBreadcrumb,
   rowStatusOf,
@@ -156,6 +157,8 @@ export type RequestGridMeta = {
   generating: boolean;
   /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
+  /** What a refused review found each row's own preflight refusing, while the row is unchanged. */
+  refusals?: ReadonlyMap<string, RowRefusal>;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -396,6 +399,16 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
+/** What the Live kit could not measure, without sending anyone to re-parse a template. */
+function uncheckedWhy(findings: Array<{ variableKey?: string | null }>, labelOf: LabelOf): string {
+  if (!findings.length)
+    return 'The live layout check isn’t available for this template, so fit isn’t measured before rendering. It still renders.';
+  const names = [
+    ...new Set(findings.map((finding) => labelOf(finding.variableKey ?? undefined) ?? 'A slot')),
+  ];
+  return `Where ${names.join(', ')} ${names.length === 1 ? 'lands' : 'land'} isn’t measured before rendering. It still renders.`;
+}
+
 function StatusBadge({
   status,
   invalidReason,
@@ -412,14 +425,28 @@ function StatusBadge({
           <Badge variant="destructive">Invalid</Badge>
         </Explained>
       );
-    case 'review':
+    case 'refused':
+      return (
+        <Explained why={status.reason}>
+          <Badge variant="destructive" className="max-w-full">
+            <span className="truncate">Won’t render: {status.reason}</span>
+          </Badge>
+        </Explained>
+      );
+    case 'fonts':
+      return (
+        <Explained why={status.reason}>
+          <Badge variant="warning">Fonts will be substituted</Badge>
+        </Explained>
+      );
+    case 'warning':
       return (
         <Explained
           why={[
             ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
           ].join(' ')}
         >
-          <Badge variant="warning">Needs review</Badge>
+          <Badge variant="warning">Warning</Badge>
         </Explained>
       );
     case 'ai-check':
@@ -427,6 +454,13 @@ function StatusBadge({
         <Explained why={aiCheckWhy(status.fit)}>
           <Badge variant="warning">AI check after render</Badge>
         </Explained>
+      );
+    case 'unchecked':
+      // A title, not a tooltip: with no kit every row reads this, and the cell re-renders per keystroke.
+      return (
+        <Badge variant="muted" title={uncheckedWhy(status.findings, labelOf)}>
+          Not checked
+        </Badge>
       );
     default:
       return <Badge variant="success">Ready</Badge>;
@@ -1122,7 +1156,7 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors, liveFit } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit, refusals } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
@@ -1143,7 +1177,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
   };
   return (
     <StatusBadge
-      status={rowStatusOf(errors, liveFit.get(row.id))}
+      status={rowStatusOf(errors, liveFit.get(row.id), refusals?.get(row.id))}
       labelOf={labelOf}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {

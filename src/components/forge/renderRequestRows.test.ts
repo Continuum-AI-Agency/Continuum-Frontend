@@ -25,6 +25,7 @@ import {
   IMPORT_SKIP,
   isDefaultValue,
   isFontPreflightRefusal,
+  isRenderable,
   keepProposed,
   mergeSetRows,
   missingInputs,
@@ -1267,27 +1268,57 @@ describe('rowStatusOf: a row read with no request', () => {
     }) as ApiRenderFitVerdict;
   const fit = (...verdicts: ApiRenderFitVerdict[]) => new Map(verdicts.map((v) => [v.key, v]));
 
-  test('its own errors make it Invalid, whatever the fit says', () => {
-    expect(rowStatusOf({ headline: 'Required' }, fit(verdict({})))).toEqual({
-      state: 'invalid',
-      errors: { headline: 'Required' },
+  test('its own errors make it Invalid, whatever else is known', () => {
+    const status = rowStatusOf({ headline: 'Required' }, fit(verdict({})), {
+      message: 'Use a brand colour.',
+      font: false,
     });
+    expect(status).toEqual({ state: 'invalid', errors: { headline: 'Required' } });
+    expect(isRenderable(status)).toBe(false);
   });
 
-  test('no kit yet, or a fit that lands, is Ready', () => {
-    expect(rowStatusOf({})).toEqual({ state: 'ready' });
+  test('a refusal a review found will not render; missing fonts render in substitutes', () => {
+    const refused = rowStatusOf({}, fit(verdict({})), {
+      message: 'Use a brand colour.',
+      font: false,
+    });
+    expect(refused).toEqual({ state: 'refused', reason: 'Use a brand colour.' });
+    expect(isRenderable(refused)).toBe(false);
+    const fonts = rowStatusOf({}, undefined, { message: 'Brand Sans is missing.', font: true });
+    expect(fonts).toEqual({ state: 'fonts', reason: 'Brand Sans is missing.' });
+    expect(isRenderable(fonts)).toBe(true);
+  });
+
+  test('Ready only when the fit was measured and lands', () => {
     expect(rowStatusOf({}, fit(verdict({})))).toEqual({ state: 'ready' });
-    // An unpicked slot renders the authored picture: nothing to review or judge.
+    // A kit with nothing to place measured everything there is.
+    expect(rowStatusOf({}, new Map())).toEqual({ state: 'ready' });
+    // An unpicked slot renders the authored picture: nothing to measure.
     expect(rowStatusOf({}, fit(verdict({ state: 'unknown', unknownReason: 'unpinned' })))).toEqual({
       state: 'ready',
     });
   });
 
-  test('a slot a re-parse would make measurable Needs review', () => {
+  test('no Live kit, or one that failed, is Not checked, and still renders', () => {
+    const status = rowStatusOf({});
+    expect(status).toEqual({ state: 'unchecked', findings: [] });
+    expect(isRenderable(status)).toBe(true);
+  });
+
+  test('a slot with no measured placement is Not checked, not a review', () => {
     const status = rowStatusOf({}, fit(verdict({ state: 'unknown', unknownReason: 'unplaced' })));
-    expect(status.state).toBe('review');
-    if (status.state === 'review')
+    expect(status.state).toBe('unchecked');
+    if (status.state === 'unchecked')
       expect(status.findings.map((finding) => finding.code)).toEqual(['ASSET_FIT_UNKNOWN']);
+    expect(isRenderable(status)).toBe(true);
+  });
+
+  test('a clipped fit is a Warning that still renders, never Ready', () => {
+    const status = rowStatusOf({}, fit(verdict({ state: 'clipped', why: 'clips 40 px' })));
+    expect(status.state).toBe('warning');
+    if (status.state === 'warning')
+      expect(status.findings.map((finding) => finding.code)).toEqual(['ASSET_CLIPPED']);
+    expect(isRenderable(status)).toBe(true);
   });
 
   test('a rig-placed slot is checked by AI after the render', () => {

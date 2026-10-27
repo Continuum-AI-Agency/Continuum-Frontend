@@ -59,6 +59,20 @@ const batchPreflightMock = mock(async (_input: { records: unknown[] }) => ({
 const preflightMock = mock(
   async (_input: { variables: Record<string, unknown> }): Promise<unknown> => READY_RESPONSE,
 );
+// The Live kit: none by default, so the status column says Not checked. A kit with nothing to
+// place measures everything there is, and the row reads Ready.
+const EMPTY_KIT = {
+  scene: { ok: true, comp: { name: 'Main', width: 1080, height: 1080 }, at: 0, layers: [] },
+  variables: [],
+  brandMark: null,
+  comp: 'Main',
+  at: 0,
+  notes: [],
+};
+const noKit = async (): Promise<unknown> => {
+  throw new Error('no live kit');
+};
+const livePreviewMock = mock(noKit);
 const listRenderSetsMock = mock(async (_brandId: string, _templateKey: string) => ({
   items: [] as unknown[],
   nextCursor: null,
@@ -228,6 +242,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     }),
     createBatch: async () => ({ jobs: [JOB] }),
     preflight: preflightMock,
+    livePreview: livePreviewMock,
     listJobs: async () => ({ items: [JOB], nextCursor: null }),
     getJob: async () => JOB,
   },
@@ -340,6 +355,8 @@ afterEach(() => {
   localStorage.clear();
   preflightMock.mockReset();
   preflightMock.mockImplementation(async () => READY_RESPONSE);
+  livePreviewMock.mockReset();
+  livePreviewMock.mockImplementation(noKit);
   listRenderSetsMock.mockReset();
   listRenderSetsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
   listInputSetsMock.mockReset();
@@ -615,6 +632,65 @@ describe('RenderRequestsGrid', () => {
     ).toBe(true);
   });
 
+  test('a refused review asks each row once which one refuses; it reads Won’t render and is skipped', async () => {
+    const palette = 'Use a permitted brand color.';
+    const fonts = 'Card A requires Brand Sans. Upload it in Library → Typography.';
+    // Today's batch preflight refuses the whole batch and names no row.
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+        guardrails: [{ code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: palette }],
+      });
+    });
+    preflightMock.mockImplementation(async (input) => {
+      if (input.variables.headline === 'Off palette')
+        throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+          guardrails: [
+            {
+              code: 'BRAND_COLOR_OUTSIDE_PALETTE',
+              severity: 'block',
+              variableKey: 'headline',
+              message: palette,
+            },
+          ],
+        });
+      if (input.variables.headline === 'Missing face')
+        throw new ApiError('render_fonts_missing', 422, undefined, { detail: fonts });
+      return READY_RESPONSE;
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    await openMenu('Add', 'Blank row');
+    await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
+    await openMenu('Add', 'Blank row');
+    await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(3));
+    const headline = (index: number) => screen.getAllByLabelText('Headline')[index]!;
+    fireEvent.change(headline(1), { target: { value: 'Off palette' } });
+    fireEvent.change(headline(2), { target: { value: 'Missing face' } });
+    for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+    fireEvent.click(screen.getByRole('button', { name: /^Render 3 rows/ }));
+
+    // One pass over the refused batch, one preflight per row.
+    await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(3));
+    const offPalette = () => headline(1).closest('tr')!;
+    expect(await within(offPalette()).findByText(`Won’t render: ${palette}`)).toBeTruthy();
+    // Missing faces render in substitutes through the review's own override: still renderable.
+    expect(within(headline(2).closest('tr')!).getByText('Fonts will be substituted')).toBeTruthy();
+    // The review goes on with the rows that render, and lists the one that will not.
+    const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
+    expect(skipped.textContent).toContain(`Won’t render: ${palette}`);
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+    expect(
+      (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
+    ).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Review 2 ready rows' })).toBeTruthy();
+
+    // An edit retires what was found about that row, and asks the server nothing.
+    fireEvent.change(headline(1), { target: { value: 'On palette' } });
+    await waitFor(() => expect(within(offPalette()).queryByText(/Won’t render/)).toBeNull());
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1000)));
+    expect(preflightMock).toHaveBeenCalledTimes(3);
+  }, 30_000);
+
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
     contractOverrides = {
       variables: [
@@ -628,7 +704,7 @@ describe('RenderRequestsGrid', () => {
     // Raw After Effects layer names read as words in the header, never as the key.
     expect(screen.getByRole('columnheader', { name: 'Price text' })).toBeTruthy();
     expect(screen.getByText('Continuum fills this')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy(), { timeout: 3000 });
 
     fireEvent.change(headline, { target: { value: '' } });
     const status = await screen.findByText('Needs input');
@@ -778,7 +854,7 @@ describe('RenderRequestsGrid', () => {
     expect(within(sale.closest('td')!).getByText('Spain')).toBeTruthy();
   });
 
-  test('discovers the one template, seeds a row from the samples, and reads Ready with no preflight', async () => {
+  test('discovers the one template, seeds a row from the samples, and asks no preflight', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     const cell = await screen.findByLabelText('Headline');
     expect((cell as HTMLInputElement).value).toBe('Hola mundo');
@@ -788,7 +864,9 @@ describe('RenderRequestsGrid', () => {
     );
     // Reference length must not look like an enforced character limit.
     expect(screen.queryByText('10/12')).toBeNull();
-    expect(screen.getByText('Ready')).toBeTruthy();
+    // No Live kit here: nothing measured the fit, so it is not called Ready, and still renders.
+    expect(await screen.findByText('Not checked')).toBeTruthy();
+    expect(screen.queryByText('Ready')).toBeNull();
     expect(preflightMock).not.toHaveBeenCalled();
     // A media cell offers the Library and is not a text input.
     expect(screen.getByLabelText('Choose Hero')).toBeTruthy();
@@ -856,7 +934,8 @@ describe('RenderRequestsGrid', () => {
     const name = screen.getAllByLabelText('Row name')[0] as HTMLInputElement;
     await typeWhileALandedCheckArrives(name, ' — the summer launch', 'Fourth');
     expect(name.value).toBe('Base — the summer launch');
-  });
+    // Sixty keystrokes, each a full grid render: room to spare on a shared, loaded machine.
+  }, 15_000);
 
   test('has at most five top-level toolbar controls, and every row capability is still reachable', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
@@ -1040,8 +1119,8 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
     expect(screen.getByText('1 selected')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
-    expect(screen.getByText('The row is ready to render')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
+    expect(screen.getByText('The row is ready to render · 1 not checked')).toBeTruthy();
     expect(
       screen.getByText(
         'To add a field or change the layout, ask a designer to update the template.',
@@ -1100,7 +1179,8 @@ describe('RenderRequestsGrid', () => {
         ),
       );
       fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
-      await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+      // A web component has no Live kit: never Ready, still renderable.
+      await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
       fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
       const tray = await screen.findByRole('region', { name: 'Review and render' });
       expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({
@@ -1146,7 +1226,7 @@ describe('RenderRequestsGrid', () => {
     try {
       render(<RenderRequestsGrid brandId={BRAND} />);
       await screen.findByDisplayValue('Newest row');
-      await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+      await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
       fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
       const openThenCancel = async () => {
         await waitFor(() =>
@@ -1992,6 +2072,7 @@ describe('RenderRequestsGrid', () => {
   });
 
   test('an edit makes no preflight call, and the row is Ready', async () => {
+    livePreviewMock.mockImplementation(async () => EMPTY_KIT);
     render(<RenderRequestsGrid brandId={BRAND} />);
     const input = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
     input.focus();
@@ -2008,6 +2089,8 @@ describe('RenderRequestsGrid', () => {
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1000)));
     expect(preflightMock).not.toHaveBeenCalled();
     expect(batchPreflightMock).not.toHaveBeenCalled();
+    // The Live kit's one read, cached: an edit is measured in the browser, not asked for.
+    expect(livePreviewMock).toHaveBeenCalledTimes(1);
     expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
     expect(screen.getByText('The row is ready to render')).toBeTruthy();
     expect(document.activeElement).toBe(input);
@@ -2243,7 +2326,7 @@ describe('RenderRequestsGrid', () => {
     listRenderSetsMock.mockImplementation(async () => ({ items: [renderable], nextCursor: null }));
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Newest row');
-    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Not checked')).toBeTruthy());
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
     const tray = await screen.findByRole('region', { name: 'Review and render' });

@@ -524,27 +524,48 @@ export function validateRow(
   return errors;
 }
 
+/** What one row's own preflight refused, found only after a review's batch was refused. */
+export type RowRefusal = {
+  message: string;
+  /** Only missing faces: the row still renders, in substitutes, through the review's override. */
+  font: boolean;
+};
+
 /**
  * A row's status from what the browser already has: its own errors (`validateRow` and what the
- * render reads from the values) and the Live kit's fit per variable (`useLiveFit`). Nothing is
- * asked of the server on an edit; Review runs the one preflight, with the same findings and words.
+ * render reads from the values), the Live kit's fit per variable (`useLiveFit`; undefined when no
+ * kit loaded) and a refusal a review found. Nothing is asked of the server on an edit. Ready only
+ * when the fit was measured and lands; what was not measured says so, and still renders.
  */
 export type RowStatus =
   | { state: 'invalid'; errors: Record<string, string> }
-  | { state: 'review'; findings: ApiRenderReadinessFinding[] }
+  | { state: 'refused'; reason: string }
+  | { state: 'fonts'; reason: string }
+  | { state: 'warning'; findings: ApiRenderReadinessFinding[] }
   | { state: 'ai-check'; fit: ApiRenderFitReport }
+  | { state: 'unchecked'; findings: ApiRenderReadinessFinding[] }
   | { state: 'ready' };
 
 export function rowStatusOf(
   errors: Record<string, string>,
   verdicts?: ReadonlyMap<string, ApiRenderFitVerdict>,
+  refusal?: RowRefusal,
 ): RowStatus {
   if (Object.keys(errors).length) return { state: 'invalid', errors };
-  const fit = verdicts?.size ? planFitCheck({ comp: null, slots: [...verdicts.values()] }) : null;
-  const findings = readinessFindings({ fit }).filter(leavesCheckIncomplete);
-  if (findings.length) return { state: 'review', findings };
-  return fit?.escalate ? { state: 'ai-check', fit } : { state: 'ready' };
+  if (refusal) return { state: refusal.font ? 'fonts' : 'refused', reason: refusal.message };
+  if (!verdicts) return { state: 'unchecked', findings: [] };
+  const fit = planFitCheck({ comp: null, slots: [...verdicts.values()] });
+  const findings = readinessFindings({ fit });
+  const warned = findings.filter((finding) => finding.severity === 'warn');
+  if (warned.length) return { state: 'warning', findings: warned };
+  if (fit.escalate) return { state: 'ai-check', fit };
+  const unmeasured = findings.filter(leavesCheckIncomplete);
+  return unmeasured.length ? { state: 'unchecked', findings: unmeasured } : { state: 'ready' };
 }
+
+/** Everything but a wrong value and a server refusal renders; a warning is said, not a stop. */
+export const isRenderable = (status: RowStatus): boolean =>
+  status.state !== 'invalid' && status.state !== 'refused';
 
 /** The values as the wire wants them: no blanks, no sidecar. */
 export function toVariableMap(

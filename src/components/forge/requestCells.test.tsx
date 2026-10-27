@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CellContext } from '@tanstack/react-table';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import { type RequestRow, seedRow } from '@/components/forge/renderRequestRows';
+import { type RequestRow, type RowRefusal, seedRow } from '@/components/forge/renderRequestRows';
 import {
   type RequestGridMeta,
   type RequestRowActions,
@@ -172,12 +172,13 @@ describe('defaults read apart from typed input', () => {
   });
 });
 
-// The status reads the Live kit's fit (`useLiveFit`) and the row's own errors; nothing is fetched.
+// The status reads the Live kit's fit (`useLiveFit`), the row's own errors and any refusal a
+// refused review found; nothing is fetched.
 describe('the status column, with no preflight', () => {
   const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', required: false });
   const renderStatus = (
-    verdicts: Array<Partial<ApiRenderFitVerdict>>,
-    errors: Record<string, string> = {},
+    verdicts: Array<Partial<ApiRenderFitVerdict>> | null,
+    { errors = {}, refusal }: { errors?: Record<string, string>; refusal?: RowRefusal } = {},
   ) => {
     const row = seedRow([], 'Base');
     const meta = {
@@ -189,22 +190,28 @@ describe('the status column, with no preflight', () => {
       selectedIds: [],
       hiddenColumns: 0,
       generating: false,
-      liveFit: new Map([
-        [
-          row.id,
-          new Map(
-            verdicts.map((verdict) => [
-              'hero',
-              {
-                key: 'hero',
-                subject: 'media',
-                unknownReason: null,
-                ...verdict,
-              } as ApiRenderFitVerdict,
-            ]),
-          ),
-        ],
-      ]),
+      // null: no Live kit loaded for this template.
+      liveFit: new Map(
+        verdicts
+          ? [
+              [
+                row.id,
+                new Map(
+                  verdicts.map((verdict) => [
+                    'hero',
+                    {
+                      key: 'hero',
+                      subject: 'media',
+                      unknownReason: null,
+                      ...verdict,
+                    } as ApiRenderFitVerdict,
+                  ]),
+                ),
+              ],
+            ]
+          : [],
+      ),
+      refusals: new Map(refusal ? [[row.id, refusal]] : []),
     } satisfies RequestGridMeta;
     const context = {
       row: { original: row },
@@ -212,21 +219,50 @@ describe('the status column, with no preflight', () => {
     } as unknown as CellContext<RequestRow, unknown>;
     return render(<StatusCell {...context} />);
   };
-  const hover = (text: string) => {
+  const hover = (text: string | RegExp) => {
     const trigger = screen.getByText(text).closest('button')!;
     fireEvent.mouseEnter(trigger);
     fireEvent.focus(trigger);
   };
 
-  test('a fit that lands reads Ready', () => {
+  test('a fit measured to land reads Ready', () => {
     renderStatus([{ state: 'ok', why: 'lands inside the canvas' }]);
     expect(screen.getByText('Ready')).toBeTruthy();
   });
 
+  test('no Live kit reads Not checked, never Ready', () => {
+    renderStatus(null);
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.getByText('Not checked').getAttribute('title')).toContain('It still renders.');
+  });
+
   test('a wrong value reads Invalid, and says which field', async () => {
-    renderStatus([], { hero: 'One item only' });
+    renderStatus([], { errors: { hero: 'One item only' } });
     hover('Invalid');
     expect(await screen.findByText('Hero: One item only')).toBeTruthy();
+  });
+
+  test('a refusal a review found reads Won’t render, with its reason', async () => {
+    renderStatus([{ state: 'ok', why: 'lands' }], {
+      refusal: { message: 'Use a permitted brand color.', font: false },
+    });
+    expect(screen.getByText('Won’t render: Use a permitted brand color.')).toBeTruthy();
+    expect(screen.queryByText('Ready')).toBeNull();
+  });
+
+  test('missing fonts read as substituted, not refused', () => {
+    renderStatus([{ state: 'ok', why: 'lands' }], {
+      refusal: { message: 'Card A requires Brand Sans.', font: true },
+    });
+    expect(screen.getByText('Fonts will be substituted')).toBeTruthy();
+    expect(screen.queryByText(/Won’t render/)).toBeNull();
+  });
+
+  test('a clipped fit reads Warning, and says what clips', async () => {
+    renderStatus([{ state: 'clipped', why: '800x800 clips 40 px off the canvas' }]);
+    expect(screen.queryByText('Ready')).toBeNull();
+    hover('Warning');
+    expect(await screen.findByText('Hero: 800x800 clips 40 px off the canvas')).toBeTruthy();
   });
 
   test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
@@ -240,7 +276,7 @@ describe('the status column, with no preflight', () => {
     ).toBeTruthy();
   });
 
-  test('a slot a re-parse would make measurable reads "Needs review", and the hover says what to do', async () => {
+  test('a slot with no measured placement reads Not checked, and sends no one to re-parse', () => {
     renderStatus([
       {
         state: 'unknown',
@@ -248,7 +284,11 @@ describe('the status column, with no preflight', () => {
         why: 'this template has no measured placement for the slot',
       },
     ]);
-    hover('Needs review');
-    expect(await screen.findByText(/Re-parse the template to check it\.$/)).toBeTruthy();
+    const status = screen.getByText('Not checked');
+    expect(status.getAttribute('title')).toBe(
+      'Where Hero lands isn’t measured before rendering. It still renders.',
+    );
+    expect(document.body.textContent).not.toMatch(/Re-parse/);
+    expect(screen.queryByText('Needs review')).toBeNull();
   });
 });

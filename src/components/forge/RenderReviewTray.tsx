@@ -129,6 +129,8 @@ export type RenderReviewTrayProps = {
   /** Why this person cannot ask for a Final render. Null when they can. */
   finalBlocked: string | null;
   onRecheck: () => void;
+  /** Review was refused for something other than fonts; these rows' own checks can say which. */
+  onRefused?: (rowIds: string[]) => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onClose: () => void;
   onFired: (jobIds: string[]) => void;
@@ -257,6 +259,7 @@ export function RenderReviewTray({
   rechecking,
   finalBlocked,
   onRecheck,
+  onRefused,
   onDeliveryChange,
   onClose,
   onFired,
@@ -342,6 +345,8 @@ export function RenderReviewTray({
   const verdicts = useRef(new Map<string, ApiRenderReadinessFinding[]>());
   // Only the newest review lands: a slow answer about older rows must not replace a newer one.
   const latestReview = useRef(0);
+  const refused = useRef(onRefused);
+  refused.current = onRefused;
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
@@ -397,11 +402,14 @@ export function RenderReviewTray({
       } catch (error) {
         if (mine !== latestReview.current) return;
         const { message, details, canOverrideFonts } = describeFailure(error);
+        const refusal = error instanceof ApiError && error.status === 422;
         setReview(
-          error instanceof ApiError && error.status === 422
+          refusal
             ? { state: 'refused', message, details, canOverrideFonts }
             : { state: 'failed', message },
         );
+        if (refusal && !canOverrideFonts)
+          refused.current?.(todo.flatMap(({ record }) => record.renderSetRowId ?? []));
       }
     },
     [
