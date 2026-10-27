@@ -5,6 +5,7 @@ import {
   type ApiRenderOutput,
   isBucketOnlyRenderFile,
 } from '@continuum/contracts';
+import { fullSrc, thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -199,8 +200,8 @@ export function RenderJobCard({
             // biome-ignore lint/a11y/useMediaCaption: a rendered ad has no caption track
             <video
               className="nodrag w-full rounded border border-border/60"
-              // The Library copy (CDN) over the fleet's far bucket; its poster until played.
-              src={output.libraryUrl ?? output.url}
+              // A canvas card is thumbnail-sized: the 480p, its poster until played.
+              src={thumbnailSrc(output)}
               poster={output.posterUrl}
               controls
               preload="none"
@@ -208,7 +209,7 @@ export function RenderJobCard({
           ) : (
             <img
               className="nodrag w-full rounded border border-border/60"
-              src={output.libraryUrl ?? output.url}
+              src={thumbnailSrc(output)}
               alt={`${job.templateName} render ${output.fileName}`}
               loading="lazy"
             />
@@ -216,7 +217,7 @@ export function RenderJobCard({
           <div className="flex items-center justify-between gap-2">
             <a
               className="nodrag truncate text-brand-primary underline-offset-2 hover:underline"
-              href={output.libraryUrl ?? output.url}
+              href={fullSrc(output)}
               target="_blank"
               rel="noreferrer"
             >

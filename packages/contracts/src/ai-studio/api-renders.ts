@@ -1440,6 +1440,12 @@ export const apiRenderOutputSchema = z
     // never stored. Lists draw this instead of the video: a <video> per row fetched every render
     // to paint a 36 px tile. Absent until the poster exists, and on image outputs.
     posterUrl: z.string().url().optional(),
+    // The low-res rungs a screen loads before the full file, signed per read like the poster.
+    // `thumbnailUrl` is the 480p of the same kind (a video's `proxy_480`, an image's `thumbnail`)
+    // for cards and grids; `previewUrl` is a video's 720p `preview_video`, what a player starts
+    // on before it upgrades to `libraryUrl`. Each is absent until its rendition is ready.
+    thumbnailUrl: z.string().url().optional(),
+    previewUrl: z.string().url().optional(),
     // The Library copy of this exact version, signed per read and never stored: storage behind a
     // CDN, so it plays and downloads far faster than `url` (the fleet's bucket, one far region).
     // Download-disposed — a <video> ignores that, an <a> saves it. Absent until the copy exists;

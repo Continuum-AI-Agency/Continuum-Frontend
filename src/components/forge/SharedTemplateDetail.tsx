@@ -17,6 +17,7 @@ import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview'
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Panel } from '@/components/shared/Panel';
@@ -141,24 +142,14 @@ export function SharedTemplateDetail({
                   ? {
                       mode: 'rendered',
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
-                      node:
-                        rendered.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-                          <video
-                            src={`${rendered.url}#t=0.1`}
-                            className="size-full object-contain"
-                            muted
-                            playsInline
-                            preload="metadata"
-                          />
-                        ) : (
-                          // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-                          <img
-                            src={rendered.url}
-                            alt={`${name} · ${picked.ratio ?? picked.label}`}
-                            className="size-full object-contain"
-                          />
-                        ),
+                      node: (
+                        <OutputFile
+                          key={fullSrc(rendered)}
+                          output={rendered}
+                          alt={`${name} · ${picked.ratio ?? picked.label}`}
+                          muted
+                        />
+                      ),
                       caption: rendered.fileName,
                     }
                   : { mode: 'none', message: 'No render of this format yet' }

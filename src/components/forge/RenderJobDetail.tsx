@@ -22,7 +22,7 @@ import {
   RefreshCw,
   Timer,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
 import { DeliveryChain } from '@/components/forge/DeliveryChain';
@@ -37,10 +37,10 @@ import { LibraryStateLine, useLibraryState } from '@/components/forge/librarySta
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { RenderFileSpecs } from '@/components/forge/RenderFileSpecs';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
-import { Video } from '@/components/ui/video';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { fetchTemplateRevisionVariants } from '@/lib/library/templateSources';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -258,81 +258,6 @@ function RevisionTemplateVersion({
   );
 }
 
-/**
- * Whether an image already failed to load when React attached to it. A transition (opening a job)
- * builds its elements before it commits them, so an expired link can fail in between and the error
- * event lands on nothing; this reads the failure off the element instead.
- */
-export const imageFailed = (element: HTMLImageElement | null) =>
-  element !== null && element.complete && element.naturalWidth === 0;
-
-/** The Kobra player owns the element, so a broken file is read off the video it mounts. */
-function OutputVideo({
-  url,
-  poster,
-  onBroken,
-}: {
-  url: string;
-  poster?: string;
-  onBroken: () => void;
-}) {
-  const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const video = host.current?.querySelector('video');
-    if (!video) return;
-    if (video.error) onBroken();
-    const fail = () => onBroken();
-    video.addEventListener('error', fail);
-    return () => video.removeEventListener('error', fail);
-  }, [url, onBroken]);
-  return (
-    <div ref={host} className="size-full">
-      <Video
-        src={url}
-        // The frame shows at once; the video itself buffers from the fleet's bucket behind it.
-        poster={poster}
-        ariaLabel="Render"
-        className="aspect-auto! size-full rounded-none border-0"
-        videoClassName="object-contain"
-      />
-    </div>
-  );
-}
-
-/** A file that will not load — an expired signed link, or a container the browser cannot play. */
-function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
-  const [broken, setBroken] = useState(false);
-  const markBroken = useCallback(() => setBroken(true), []);
-  if (broken) {
-    return (
-      <p className="m-0 flex size-full items-center justify-center bg-muted p-[var(--card-pad)] text-center text-xs text-muted-foreground">
-        {output.kind === 'video'
-          ? 'This browser can’t play this file. Download it below.'
-          : 'This file can’t be shown — its link may have expired. Refresh to get a new one.'}
-      </p>
-    );
-  }
-  return output.kind === 'video' ? (
-    // The Library copy plays from storage behind a CDN; the fleet's bucket is one far region.
-    <OutputVideo
-      url={output.libraryUrl ?? output.url}
-      poster={output.posterUrl}
-      onBroken={markBroken}
-    />
-  ) : (
-    // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-    <img
-      src={output.libraryUrl ?? output.url}
-      alt={alt}
-      className="size-full object-contain"
-      ref={(element) => {
-        if (imageFailed(element)) setBroken(true);
-      }}
-      onError={() => setBroken(true)}
-    />
-  );
-}
-
 const checkRows = (job: ApiRenderJob, labelByKey: Record<string, string>): CheckRow[] =>
   renderJobChecks(job, labelByKey).map(({ lines, ...check }) => ({
     ...check,
@@ -494,7 +419,7 @@ export function RenderJobDetail({
                         node: (
                           <OutputFile
                             // By URL: a refresh that re-signs an expired link gets a fresh try.
-                            key={output.libraryUrl ?? output.url}
+                            key={fullSrc(output)}
                             output={output}
                             alt={`${name} · ${format.ratio ?? format.label}`}
                           />

@@ -15,6 +15,8 @@ export const LIBRARY_PROXY_LADDER = [
   { role: 'proxy_1080', shortSide: 1080, maxKbps: 4_000, label: '1080p' },
   { role: 'preview_video', shortSide: 720, maxKbps: 4_000, label: '720p' },
   { role: 'proxy_540', shortSide: 540, maxKbps: 2_200, label: '540p' },
+  // What a Forge card plays when pressed: a thumbnail-sized stage never pulls the 720.
+  { role: 'proxy_480', shortSide: 480, maxKbps: 2_200, label: '480p' },
   { role: 'proxy_360', shortSide: 360, maxKbps: 2_200, label: '360p' },
 ] as const;
 export type LibraryLadderRole = (typeof LIBRARY_PROXY_LADDER)[number]['role'];
@@ -73,6 +75,7 @@ export const libraryPlaybackRungSchema = z
       'proxy_1080',
       'preview_video',
       'proxy_540',
+      'proxy_480',
       'proxy_360',
       'hdr_proxy',
     ] satisfies (LibraryLadderRole | 'hdr_proxy')[]),
