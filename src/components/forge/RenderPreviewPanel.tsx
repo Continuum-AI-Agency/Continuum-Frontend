@@ -26,10 +26,10 @@ import {
   previewFormats,
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
 import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Video } from '@/components/ui/video';
 import { useDebounce } from '@/hooks/useDebounce';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -802,18 +802,7 @@ function TemplatePreviewPanel({
     at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
     basedOn: backdrop.job.label ?? backdrop.job.templateName,
     notes: ['same values'],
-    node:
-      backdrop.file.kind === 'video' ? (
-        <Video
-          src={backdrop.file.url}
-          ariaLabel="Render"
-          className="aspect-auto! size-full rounded-none border-0"
-          videoClassName="object-contain"
-        />
-      ) : (
-        // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-        <img alt="Render" src={backdrop.file.url} className="size-full object-contain" />
-      ),
+    node: <OutputFile key={fullSrc(backdrop.file)} output={backdrop.file} alt="Render" />,
   });
 
   /** What the picked format shows, and what it cannot show, in words. */
@@ -917,18 +906,7 @@ function TemplatePreviewPanel({
         badge: `${lastJob.test === false ? 'Final render' : 'Previous render'}${stale ? ' · before latest edits' : ''}`,
         at: lastJob.finishedAt ?? lastJob.updatedAt,
         stale,
-        node:
-          own.kind === 'video' ? (
-            <Video
-              src={own.url}
-              ariaLabel="Last render"
-              className="aspect-auto! size-full rounded-none border-0"
-              videoClassName="object-contain"
-            />
-          ) : (
-            // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-            <img alt="Last render" src={own.url} className="size-full object-contain" />
-          ),
+        node: <OutputFile key={fullSrc(own)} output={own} alt="Last render" />,
         caption: own.fileName,
         ...(stale && ownBackdrop && preview ? { preview } : {}),
       };

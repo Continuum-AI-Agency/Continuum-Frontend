@@ -32,6 +32,7 @@ import {
 } from '@/components/forge/FormatPreview';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -263,23 +264,29 @@ export function CardPicture({
 }) {
   const [broken, setBroken] = useState(false);
   if (render && !broken) {
-    return render.file.kind === 'video' ? (
+    const { file } = render;
+    // A still, never the original: a video draws its poster (its 480p only until the poster is
+    // made), an image its 480p — a gallery of cards no longer pulls every full render.
+    const still = file.kind === 'video' ? file.posterUrl : thumbnailSrc(file);
+    return still ? (
+      // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+      <img
+        src={still}
+        alt={`${name} · last render`}
+        loading="lazy"
+        decoding="async"
+        className="size-full object-contain"
+        onError={() => setBroken(true)}
+      />
+    ) : (
       // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
       <video
-        src={`${render.file.url}#t=0.1`}
+        src={`${thumbnailSrc(file)}#t=0.1`}
         aria-label={`${name} · last render`}
         className="size-full object-contain"
         muted
         playsInline
         preload="metadata"
-        onError={() => setBroken(true)}
-      />
-    ) : (
-      // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-      <img
-        src={render.file.url}
-        alt={`${name} · last render`}
-        className="size-full object-contain"
         onError={() => setBroken(true)}
       />
     );
