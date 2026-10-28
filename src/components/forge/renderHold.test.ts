@@ -287,7 +287,34 @@ describe('renderHold', () => {
     expect(result.current).toBeNull();
   });
 
-  test('the copy is built from the reason: the service’s own words, once, never parsed', () => {
+  test('a held refusal offers one next step: the service’s reason, then the ledger', () => {
+    const heldFor = (error: ApiError) => ({
+      batchId: 'batch-1',
+      heldAt: 0,
+      inflight: false,
+      saved: true,
+      sending: false,
+      signed: SIGNED,
+      reason: holdReasonOf(error),
+    });
+    // The service's own step ("Review the rows again, then render.") is not one this view offers.
+    const invalid = new ApiError('invalid_confirmation', 409, undefined, {
+      error: 'invalid_confirmation',
+    });
+    expect(heldCopy(heldFor(invalid))).toBe(
+      'This review no longer matches the rows. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+    );
+    // A 422 about the delivery, in the server's words: its reason, not its instruction.
+    const delivery = new ApiError('render_delivery_inactive', 422, undefined, {
+      error: 'render_delivery_inactive',
+      detail: 'That approval room is no longer active. Choose another room in Deliver.',
+    });
+    expect(heldCopy(heldFor(delivery))).toBe(
+      'That approval room is no longer active. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+    );
+  });
+
+  test('the copy is built from the reason, as data: the service’s words once', () => {
     const held = {
       batchId: 'batch-1',
       heldAt: 0,

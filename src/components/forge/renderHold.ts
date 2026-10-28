@@ -77,14 +77,23 @@ const codeOf = (error: ApiError) =>
 export const isSetChanged = (error: unknown): boolean =>
   error instanceof ApiError && error.status < 500 && /render_set|revision/.test(codeOf(error));
 
+/**
+ * The service's reason only, its first sentence: its own next step ("Review the rows again, then
+ * render.") is not one the held view offers, so heldCopy adds the one it does. Cut once, here,
+ * where the answer becomes data; a review refusal outside the hold keeps the whole message.
+ */
+const reasonOf = (error: ApiError) =>
+  describeRenderDiscoveryFailure(error).match(/^.+?[.!?](?=\s|$)/)?.[0] ??
+  describeRenderDiscoveryFailure(error);
+
 export function holdReasonOf(error: unknown): HoldReason {
   if (!(error instanceof ApiError)) return { kind: 'no_answer' };
   if (error.status === 401) return { kind: 'session' };
   if (error.status === 403) return { kind: 'permission' };
   if (isSetChanged(error)) return { kind: 'set_changed' };
-  const named = hasBackendError(error) ? describeRenderDiscoveryFailure(error) : undefined;
-  if (error.status >= 500 || error.status === 429) return { kind: 'busy', detail: named };
-  return { kind: 'refused', detail: describeRenderDiscoveryFailure(error) };
+  if (error.status >= 500 || error.status === 429)
+    return { kind: 'busy', detail: hasBackendError(error) ? reasonOf(error) : undefined };
+  return { kind: 'refused', detail: reasonOf(error) };
 }
 
 type Stored = { batchId: string | null; heldAt: number; inflight?: true };

@@ -1733,7 +1733,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.click(within(await heldView()).getByRole('button', { name: 'Retry this batch' }));
       await waitFor(() =>
         expect(screen.getByRole('region', { name: 'Held batch' }).textContent).toContain(
-          'This review no longer matches the rows. Review the rows again, then render. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+          'This review no longer matches the rows. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
         ),
       );
       expect(document.body.textContent).not.toContain('invalid_confirmation');
