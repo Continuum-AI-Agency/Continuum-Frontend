@@ -95,6 +95,9 @@ const updateRenderSetMock = mock(async (id: string, input: Record<string, unknow
   return { ...current, name: input.name ?? current.name, revision: current.revision + 1 };
 });
 const deleteRenderSetMock = mock(async (_brandId: string, _setId: string) => undefined);
+const changeRevisionMock = mock(async (..._args: unknown[]): Promise<unknown> => {
+  throw new Error('not in this test');
+});
 const DRAFT_ROOT = '88888888-8888-4888-8888-888888888881';
 const suggestRowsMock = mock(async (_input: unknown) => ({
   rows: [
@@ -241,6 +244,10 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     createRenderSet: createRenderSetMock,
     updateRenderSet: updateRenderSetMock,
     deleteRenderSet: deleteRenderSetMock,
+    changeRenderSetTemplateRevision: (...args: unknown[]) => changeRevisionMock(...args),
+    listRenderSetRevisions: async () => ({
+      items: [{ revision: 1, savedAt: new Date().toISOString(), contractHash: 'hash', rows: [] }],
+    }),
     suggestRows: suggestRowsMock,
     getImportMapping: async () => null,
     saveImportMapping: async () => ({ mapping: null }),
@@ -304,9 +311,18 @@ const saveTemplateVariablesMock = mock(
     _slots: Array<{ slotKey: string; exposed?: boolean | null }>,
   ) => {},
 );
+/** Published variants for the set's revision controls: the real read unless a test sets some. */
+let revisionVariants: unknown[] = [];
+const realRevisionVariants = templateSources.fetchTemplateRevisionVariants;
 mock.module('@/lib/library/templateSources', () => ({
   ...templateSources,
   saveTemplateVariables: saveTemplateVariablesMock,
+  fetchTemplateRevisionVariants: (
+    ...args: Parameters<typeof templateSources.fetchTemplateRevisionVariants>
+  ) =>
+    revisionVariants.length
+      ? Promise.resolve(args[1] ? revisionVariants : [])
+      : realRevisionVariants(...args),
 }));
 
 // The grid reads the person's brand role from the brand provider; outside one, this file is an
@@ -347,7 +363,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
-import { forgetPageSession, holdKeyOf } from './renderHold';
+import { forgetPageSession, HELD_SET, holdKeyOf } from './renderHold';
 
 const render = (
   ui: React.ReactNode,
@@ -837,6 +853,47 @@ describe('RenderRequestsGrid', () => {
       await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(4));
     }, 30_000);
 
+    test('one refused row: the review goes on with the others by itself, Next open, 1 skipped', async () => {
+      batchPreflightMock.mockImplementation(async (input) => {
+        if ((input as { records: unknown[] }).records.length > 1)
+          throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+            guardrails: [
+              { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: 'Off.' },
+            ],
+          });
+        return BATCH_READY;
+      });
+      preflightMock.mockImplementation(async (input) => {
+        if (input.variables.headline === 'Off palette')
+          throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+            guardrails: [
+              { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: 'Off.' },
+            ],
+          });
+        return READY_RESPONSE;
+      });
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Hola mundo');
+      await openMenu('Add', 'Blank row');
+      await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
+      fireEvent.change(screen.getAllByLabelText('Headline')[1]!, {
+        target: { value: 'Off palette' },
+      });
+      for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+      fireEvent.click(screen.getByRole('button', { name: /^Render 2 rows/ }));
+      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      // No toolbar step: the refused row is found and left out, and the review of the other passes.
+      await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(
+          within(tray).getByRole<HTMLButtonElement>('button', { name: 'Next: delivery' }).disabled,
+        ).toBe(false),
+      );
+      const skipped = within(tray).getByRole('list', { name: 'Rows skipped from this batch' });
+      expect(within(skipped).getAllByRole('listitem')).toHaveLength(1);
+      expect(preflightMock).toHaveBeenCalledTimes(2);
+    }, 30_000);
+
     test('a 422 about the set, not the row, marks no row and says to reload the set', async () => {
       const { tray, headline } = await setup(
         () =>
@@ -851,9 +908,10 @@ describe('RenderRequestsGrid', () => {
         ),
       ).toBeTruthy();
       expect(tray.textContent).not.toMatch(/Couldn’t check/);
-      // The set moved: not the delivery's refusal, so no Change delivery and no delivery headline.
+      // The set moved: that line alone, not the batch's headline or its findings as well.
       expect(within(tray).queryAllByRole('button', { name: 'Change delivery' })).toHaveLength(0);
-      expect(tray.textContent).not.toContain('refused this batch’s delivery');
+      expect(tray.textContent).not.toContain('refused this batch');
+      expect(tray.textContent).not.toContain(palette);
       expect(
         within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
       ).toHaveLength(0);
@@ -1646,7 +1704,156 @@ describe('RenderRequestsGrid', () => {
       expect((await heldView()).textContent).not.toContain('aren’t part of this batch');
     }, 30_000);
 
-    test('each set mutator reads the hold fresh: a hold written under an open menu or dialog stops it', async () => {
+    // The held-set gate, handler by handler: a hold another tab wrote with no event this page heard
+    // leaves each control enabled, so only the handler's own fresh read stops it; once heard, the
+    // control is disabled with why.
+    const SOURCE = '55555555-5555-4555-8555-555555555555';
+    const holdOn = (renderSetId: string) =>
+      localStorage.setItem(
+        holdKeyOf({
+          userId: USER,
+          brandId: BRAND,
+          bindingId: TEMPLATE.bindingId,
+          templateKey: '133',
+          renderSetId,
+        }),
+        JSON.stringify({ batchId: 'batch-g', heldAt: Date.now() }),
+      );
+    const heard = () =>
+      act(() => {
+        window.dispatchEvent(Object.assign(new Event('storage'), { key: null }));
+      });
+    const settle = () => act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
+    const gated = (button: HTMLElement) => {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+      expect(button.getAttribute('title')).toBe(HELD_SET);
+    };
+
+    test('re-pin and Run on other variants: each handler stops on a fresh read, then each is disabled', async () => {
+      contractOverrides = { template: { ...TEMPLATE, sourceAssetId: SOURCE } };
+      const published = (variantId: string, templateKey: string) => ({
+        templateId: 'tpl',
+        variantId,
+        name: variantId,
+        archivedAt: null,
+        sourceKind: 'upload',
+        publishedHeadRevisionId: `${variantId}-r1`,
+        revisions: [
+          {
+            id: `${variantId}-r1`,
+            number: 1,
+            sourceAssetId: SOURCE,
+            publications: [{ bindingId: TEMPLATE.bindingId, templateKey }],
+          },
+        ],
+      });
+      revisionVariants = [published('blue', '133'), published('red', '134')];
+      listRenderSetsMock.mockImplementation(async () => ({
+        items: [renderable(NEWEST)],
+        nextCursor: null,
+      }));
+      try {
+        render(<RenderRequestsGrid brandId={BRAND} />);
+        const picker = await screen.findByLabelText('Published template revision');
+        fireEvent.change(picker, {
+          target: { value: (picker as HTMLSelectElement).options[1]!.value },
+        });
+        const repin = screen.getByRole('button', { name: 'Change set template revision' });
+        const variants = screen.getByRole('button', { name: /^Run on \d other variants?$/ });
+        await waitFor(() => expect((repin as HTMLButtonElement).disabled).toBe(false));
+        holdOn(NEWEST.id);
+        const created = createRenderSetMock.mock.calls.length;
+        fireEvent.click(repin);
+        fireEvent.click(variants);
+        await settle();
+        expect(changeRevisionMock).not.toHaveBeenCalled();
+        expect(createRenderSetMock.mock.calls.length).toBe(created);
+        heard();
+        gated(screen.getByRole('button', { name: 'Change set template revision' }));
+        gated(screen.getByRole('button', { name: /^Run on \d other variants?$/ }));
+      } finally {
+        revisionVariants = [];
+      }
+    }, 30_000);
+
+    test('Update set and Update to current template: each handler stops on a fresh read', async () => {
+      listRenderSetsMock.mockImplementation(async () => ({
+        // Saved for an earlier template, with a field this one no longer has: Update set is asked.
+        items: [
+          {
+            ...NEWEST,
+            contractHash: 'old-hash',
+            rows: [
+              { ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo', subtitle: 'Gone now' } },
+            ],
+          },
+        ],
+        nextCursor: null,
+      }));
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      const banner = await screen.findByRole('region', { name: 'Older template' });
+      holdOn(NEWEST.id);
+      fireEvent.click(within(banner).getByRole('button', { name: 'Update set' }));
+      await settle();
+      expect(updateRenderSetMock).not.toHaveBeenCalled();
+      // The rail's item, from a menu opened before the hold was written.
+      act(() => localStorage.clear());
+      heard();
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Newest' }));
+      const update = await screen.findByRole('menuitem', { name: /Update to current template/ });
+      expect(update.hasAttribute('data-disabled')).toBe(false);
+      holdOn(NEWEST.id);
+      fireEvent.click(update);
+      await settle();
+      expect(updateRenderSetMock).not.toHaveBeenCalled();
+      heard();
+      gated(within(banner).getByRole('button', { name: 'Update set' }));
+    }, 30_000);
+
+    test('Import browser draft stops on a fresh read, then is disabled', async () => {
+      withSavedSets();
+      localStorage.setItem(
+        `forge:render-drafts:${BRAND}:133`,
+        JSON.stringify({
+          rows: [
+            {
+              id: '77777777-7777-4777-8777-777777777777',
+              parentId: null,
+              label: 'Draft row',
+              values: { headline: 'From the draft' },
+              clearedKeys: [],
+              outputIds: [],
+              media: {},
+            },
+          ],
+        }),
+      );
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      holdOn(NEWEST.id);
+      fireEvent.click(screen.getByRole('button', { name: 'Import browser draft' }));
+      await settle();
+      expect(screen.queryAllByDisplayValue('From the draft')).toHaveLength(0);
+      heard();
+      gated(screen.getByRole('button', { name: 'Import browser draft' }));
+    }, 30_000);
+
+    test('Restore as new set stops on a fresh read, then is disabled', async () => {
+      withSavedSets();
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      await openMenu('Actions for Newest', /Version history/);
+      const restore = await screen.findByRole('button', { name: 'Restore as new set' });
+      holdOn(NEWEST.id);
+      const created = createRenderSetMock.mock.calls.length;
+      fireEvent.click(restore);
+      await settle();
+      expect(createRenderSetMock.mock.calls.length).toBe(created);
+      heard();
+      gated(await screen.findByRole('button', { name: 'Restore as new set' }));
+    }, 30_000);
+
+    test('Duplicate and Delete stop on a fresh read: a hold written under an open menu or dialog', async () => {
       listRenderSetsMock.mockImplementation(async () => ({
         items: [renderable(NEWEST), renderable(OLDER)],
         nextCursor: null,

@@ -77,8 +77,10 @@ import {
   type HoldScope,
   heldCopy,
   isHeld,
+  isPermissionRefusal,
   isSessionRefusal,
   isSetChanged,
+  NO_PERMISSION,
   NOT_SAVED,
   RenderHeldError,
   STALE_MS,
@@ -87,6 +89,7 @@ import {
   SESSION_CHECK,
   SESSION_EXPIRED,
   SET_CHANGED,
+  SET_CHANGED_CHECK,
   SIGNED_OUT,
   type SignedBatch,
 } from '@/components/forge/renderHold';
@@ -95,7 +98,10 @@ import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import {
+  describeRenderDiscoveryFailure,
+  needsTemplateRepair,
+} from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 
 // The last look before a batch is spent, docked under the grid instead of over it: the rows stay
@@ -190,6 +196,8 @@ type Review =
       message: string;
       details: string[];
       canOverrideFonts: boolean;
+      /** The template needs fixing (TEMPLATE_REPAIR_CODES): its own copy, and no row is asked. */
+      template?: boolean;
       /** What each row said when asked alone, once the caller has asked. */
       asked?: RowsAsked;
     }
@@ -468,13 +476,22 @@ export function RenderReviewTray({
       } catch (error) {
         if (mine !== latestReview.current) return;
         const { message, details, canOverrideFonts } = describeFailure(error);
-        const refusal = error instanceof ApiError && error.status === 422;
+        // The session, the brand's access, or a set that moved: one line, and no row to ask.
+        const plain = isSessionRefusal(error)
+          ? SESSION_CHECK
+          : isPermissionRefusal(error)
+            ? NO_PERMISSION
+            : isSetChanged(error)
+              ? SET_CHANGED_CHECK
+              : null;
+        const refusal = error instanceof ApiError && error.status === 422 && !plain;
+        const template = needsTemplateRepair(error);
         setReview(
           refusal
-            ? { state: 'refused', message, details, canOverrideFonts }
-            : { state: 'failed', message: isSessionRefusal(error) ? SESSION_CHECK : message },
+            ? { state: 'refused', message, details, canOverrideFonts, template }
+            : { state: 'failed', message: plain ?? message },
         );
-        if (refusal && !canOverrideFonts)
+        if (refusal && !canOverrideFonts && !template)
           // An explicit Check again asks the rows again, even when they were just asked.
           askRows(
             mine,
@@ -618,6 +635,7 @@ export function RenderReviewTray({
       setFiring(false);
       // Refused before anything was made: the session, or a set that moved (renderHold.ts).
       if (isSessionRefusal(error)) return setProblem(SESSION_EXPIRED);
+      if (isPermissionRefusal(error)) return setProblem(NO_PERMISSION);
       if (isSetChanged(error)) return setProblem(SET_CHANGED);
       // Held: by another tab since the sign, or by this createBatch failing, whatever the status
       // (some rows may exist). Either way the hold opens, and the ledger is re-read.
@@ -983,17 +1001,20 @@ export function RenderReviewTray({
                     className="border-b border-border px-[var(--card-pad)] py-1.5 text-destructive"
                   >
                     <p className="font-medium">
-                      {refusedOnFonts
-                        ? review.message
-                        : refusedOnDelivery
-                          ? `The render service refused this batch’s delivery: ${review.message}`
-                          : review.message.startsWith('The render service')
-                            ? review.message
-                            : `The render service refused this batch: ${review.message}`}
+                      {review.asked?.setChanged
+                        ? // The set moved: that is the whole story, not the batch's headline.
+                          SET_CHANGED_CHECK
+                        : refusedOnFonts || review.template
+                          ? review.message
+                          : refusedOnDelivery
+                            ? `The render service refused this batch’s delivery: ${review.message}`
+                            : review.message.startsWith('The render service')
+                              ? review.message
+                              : `The render service refused this batch: ${review.message}`}
                     </p>
-                    {review.details.map((detail) => (
-                      <p key={detail}>{detail}</p>
-                    ))}
+                    {review.asked?.setChanged
+                      ? null
+                      : review.details.map((detail) => <p key={detail}>{detail}</p>)}
                     {refusedOnFonts ? (
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <Button
@@ -1046,10 +1067,10 @@ export function RenderReviewTray({
                           Check again
                         </Button>
                         <span className="text-muted-foreground">
-                          {!review.asked
-                            ? 'Checking each row…'
-                            : review.asked.setChanged
-                              ? 'This set changed somewhere else. Reload it, then Check again.'
+                          {review.template || review.asked?.setChanged
+                            ? null
+                            : !review.asked
+                              ? 'Checking each row…'
                               : review.asked.unchecked > 0
                                 ? `Couldn’t check ${plural(review.asked.unchecked, 'row')}.`
                                 : review.asked.refused > 0
@@ -1477,10 +1498,13 @@ export function HeldBatchView({
   onLanded,
   current,
   currentSnapshot,
+  templateNow,
 }: {
   brandId: string;
   scope: HoldScope;
   held: HeldBatch;
+  /** The template as the set renders it now; a held request signed for another says so. */
+  templateNow?: { contractHash: string; templateRef: string | null };
   /** The rows Render would take now: said apart when they are not the held batch's. */
   current: Array<{ id: string; label: string }>;
   /** reviewSignature of those rows now: a value edit since the batch was sent shows here. */
@@ -1583,6 +1607,14 @@ export function HeldBatchView({
       {differs ? (
         <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
       ) : null}
+      {request &&
+      templateNow &&
+      (request.contractHash !== templateNow.contractHash ||
+        (request.templateRef ?? null) !== templateNow.templateRef) ? (
+        <p className="text-muted-foreground">
+          This set’s template changed since this batch was sent. Retry sends the earlier version.
+        </p>
+      ) : null}
       {held.saved ? null : <p className="text-muted-foreground">{NOT_SAVED}</p>}
       <p className="text-muted-foreground">
         In the Render ledger, look for the batch from {heldTime}.
@@ -1605,7 +1637,7 @@ export function HeldBatchView({
           type="button"
           size="xs"
           variant="outline"
-          // A live send elsewhere must not be released under it: the ledger can wait its time out.
+          // Opening the ledger lets the hold go: not while a send is still out, here or elsewhere.
           disabled={sending || held.sending}
           onClick={() => {
             clearHold(scope, held.batchId);

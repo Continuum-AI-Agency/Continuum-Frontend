@@ -282,9 +282,6 @@ const refusalKey = (
     revision,
   ]);
 
-/** A refusal about the set or its revision, not the row: the set moved, not the row's values. */
-const SET_LEVEL_CODE = /render_set|revision/;
-
 /**
  * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
  * (guardrails, fonts). Anything else (an outage, a throttle, a malformed request, a set that
@@ -294,7 +291,7 @@ function refusalOf(error: unknown): RowRefusal | null {
   if (!(error instanceof ApiError) || error.status !== 422) return null;
   const code =
     error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
-  if (SET_LEVEL_CODE.test(code)) return null;
+  if (isSetChanged(error)) return null;
   const parsed = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
     error.payload?.guardrails,
   );
@@ -1143,26 +1140,14 @@ export function RenderRequestsGrid({
     [rows, variables, linkedFields],
   );
 
-  // --- a refused review, row by row -------------------------------------------------------
-  // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
-  // Today's batch preflight refuses all-or-nothing and its 422 names no row. A refusal that is not
-  // about fonts is asked again of each row's own preflight, once, three at a time, to say which
-  // rows will not render. Only a refused review does this; an edit never does, and an edit to a
-  // row (or to what it inherits) retires what was found about it.
+  // What a refused review's rows said when asked alone (askRowsAlone, below), until an edit to the
+  // row, or to what it inherits, retires it.
   const [refusals, setRefusals] = useState<ReadonlyMap<string, RowRefusal & { key: string }>>(
     new Map(),
   );
-  const [refusalsFound, setRefusalsFound] = useState(0);
-  const knownRefusals = useRef(refusals);
-  knownRefusals.current = refusals;
-  // Once per review snapshot: a refusal the rows' own checks cannot reproduce must not loop.
-  const refusalPassFor = useRef<string | null>(null);
-  // When a review last passed each row: a pass that started before it does not overrule it.
-  const passedAt = useRef(new Map<string, number>());
-  const events = useRef(0);
   // A batch whose createBatch failed is held per user, brand, binding, template and render set
   // (renderHold.ts), in every tab: while it is, the set's Render opens it, never a new review. With
-  // no user id there is no key to hold under, so Render fails closed.
+  // no user id there is no key to hold under, so Render is disabled.
   const userId = useActiveBrandContext().user?.id ?? null;
   const holdOf = (renderSetId: string): HoldScope | null =>
     userId && contract
@@ -1170,9 +1155,11 @@ export function RenderRequestsGrid({
       : null;
   const holdScope = activeSet ? holdOf(activeSet.id) : null;
   /**
-   * The one gate for what would change what a held set renders, or what it is: its rows copied,
-   * deleted, re-pinned or replaced. Read fresh, so a dialog open in another tab is gated too.
-   * Rename and describe stay open.
+   * The one gate for a held set: Duplicate, Delete, Restore as new set, Change set template
+   * revision, Run on other variants, Update to current template (rail and banner) and Import
+   * browser draft. Each control is disabled with HELD_SET and each handler re-reads it fresh, so a
+   * menu or dialog left open while another tab held the set does nothing. Rename, describe and
+   * saving row edits stay open: Retry sends the frozen batch, whatever the rows are now.
    */
   const heldReasonOf = (set: { id: string } | null): string | null => {
     const scope = set ? holdOf(set.id) : null;
@@ -2596,58 +2583,33 @@ export function RenderRequestsGrid({
       reviewSignature(rows, selectedIds, activeSet?.revision ?? null, allOutputIdsOf(contract));
 
   // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
-  // One pass at a time. A refused review that lands mid-pass runs once after it, against the
-  // rows and review as they are by then, rather than being dropped.
-  const passing = useRef<Promise<RowsAsked> | null>(null);
-  const findRefusalsNow = useRef<typeof findRefusals | null>(null);
-  const findRefusals = (rowIds: string[], { again = false } = {}): Promise<RowsAsked> => {
-    if (passing.current)
-      return passing.current.then(() => findRefusalsNow.current!(rowIds, { again }));
-    const pass = askEachRow(rowIds, again).finally(() => {
-      passing.current = null;
-    });
-    passing.current = pass;
-    return pass;
-  };
-  findRefusalsNow.current = findRefusals;
-  const lastAsked = useRef<RowsAsked>({ refused: 0, unchecked: 0 });
-
-  const askEachRow = async (rowIds: string[], again: boolean): Promise<RowsAsked> => {
-    const refusedIn = (map: ReadonlyMap<string, RowRefusal>) =>
-      rowIds.filter((id) => map.get(id) && !map.get(id)?.font).length;
-    if (!contract || !review) return { refused: refusedIn(liveRefusals), unchecked: 0 };
-    // Once per review snapshot (unless asked again): a refusal no row reproduces must not loop.
-    const snapshot = JSON.stringify([
-      review.signature,
-      [...rowIds].sort(),
-      templateRef,
-      contract.template.contractHash,
-    ]);
-    if (!again && refusalPassFor.current === snapshot) return lastAsked.current;
-    refusalPassFor.current = snapshot;
-    const startedAt = ++events.current;
+  // Today's batch preflight refuses all-or-nothing and names no row. On a whole-batch 422 no tick
+  // overrides, each row's own preflight is asked, three at a time and never retried; the review
+  // then runs again over the rows that passed, the refused ones listed as skipped. A repeated
+  // refusal asks again. Only closing the review (or the grid) abandons a pass.
+  const asking = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!review) asking.current?.abort();
+  }, [review]);
+  useEffect(() => () => asking.current?.abort(), []);
+  const askRowsAlone = async (rowIds: string[]): Promise<RowsAsked> => {
+    const asked: RowsAsked = { refused: 0, unchecked: 0, setChanged: false };
+    if (!contract) return asked;
+    asking.current?.abort();
+    const abort = new AbortController();
+    asking.current = abort;
     const current = latestRows.current;
-    const revision = activeSet?.revision ?? null;
-    const keyOf = (rowId: string) => refusalKey(current, rowId, templateRef, contract, revision);
-    // A row already known refused, and unchanged, is not asked again.
-    const queue = batch.records.filter(
-      (record) =>
-        record.renderSetRowId &&
-        rowIds.includes(record.renderSetRowId) &&
-        knownRefusals.current.get(record.renderSetRowId)?.key !== keyOf(record.renderSetRowId),
-    );
-    const checked = new Map<string, (RowRefusal & { key: string }) | null>();
-    let unchecked = 0;
-    let setChanged = false;
+    const keyOf = (id: string) =>
+      refusalKey(current, id, templateRef, contract, activeSet?.revision ?? null);
+    const queue = batch.records.filter((record) => rowIds.includes(record.renderSetRowId ?? ''));
+    const found = new Map<string, RowRefusal & { key: string }>();
     const ask = async () => {
       for (let record = queue.shift(); record; record = queue.shift()) {
         const rowId = record.renderSetRowId as string;
-        const { delivery: _delivery, ...asked } = record;
+        const { delivery: _delivery, ...alone } = record;
         // The row's own delivery, as the batch sends it at confirm: a Meta refusal is the row's.
         const own = current.find((row) => row.id === rowId)?.delivery;
-        const delivery = isResolvedDelivery(own) ? own : undefined;
         try {
-          // Asked once: fifty rows times three retries is a fan-out, not a check.
           await apiRendersApi.preflight(
             {
               brandId,
@@ -2655,71 +2617,49 @@ export function RenderRequestsGrid({
               templateKey: contract.template.key,
               contractHash: contract.template.contractHash,
               ...(templateRef ? { templateRef } : {}),
-              ...asked,
-              ...(delivery ? { delivery } : {}),
+              ...alone,
+              ...(isResolvedDelivery(own) ? { delivery: own } : {}),
             },
             { retry: false },
           );
-          checked.set(rowId, null);
         } catch (error) {
           const refusal = refusalOf(error);
-          // An outage, a throttle or a cut says nothing about the row: it was not checked. A set
-          // or revision that moved says it of the set, which is what to reload.
-          if (refusal) checked.set(rowId, { ...refusal, key: keyOf(rowId) });
-          else if (isSetChanged(error)) setChanged = true;
-          else unchecked += 1;
+          if (refusal) found.set(rowId, { ...refusal, key: keyOf(rowId) });
+          else if (isSetChanged(error)) asked.setChanged = true;
+          else asked.unchecked += 1;
         }
       }
     };
     await Promise.all([ask(), ask(), ask()]);
-    // A review that passed a row while this pass ran is newer than what the pass found about it.
-    for (const rowId of checked.keys())
-      if ((passedAt.current.get(rowId) ?? 0) > startedAt) checked.delete(rowId);
-    const merge = (previous: ReadonlyMap<string, RowRefusal & { key: string }>) => {
-      const merged = new Map(previous);
-      for (const [rowId, refusal] of checked)
-        if (refusal) merged.set(rowId, refusal);
-        else merged.delete(rowId);
-      return merged;
-    };
-    const previous = knownRefusals.current;
-    const next = merge(previous);
-    lastAsked.current = { refused: refusedIn(next), unchecked, setChanged };
-    const changed = [...checked].some(([id, refusal]) => {
-      const was = previous.get(id);
-      return refusal ? was?.message !== refusal.message || was.font !== refusal.font : Boolean(was);
+    if (abort.signal.aborted) return asked;
+    setRefusals((previous) => {
+      const next = new Map([...previous].filter(([id]) => !rowIds.includes(id)));
+      for (const [id, refusal] of found) next.set(id, refusal);
+      return next;
     });
-    if (changed) {
-      // Merged into whatever is there by then, so a clear that landed meanwhile is not undone.
-      setRefusals(merge);
-      setRefusalsFound((count) => count + 1);
-    }
-    return lastAsked.current;
+    // Missing fonts still render (Render anyway): only the rest leave the review.
+    const refused = rowIds.filter((id) => found.get(id) && !found.get(id)!.font);
+    asked.refused = refused.length;
+    const left = rowIds.filter((id) => !refused.includes(id));
+    if (refused.length && left.length && !asked.setChanged)
+      setReview((previous) =>
+        previous
+          ? {
+              ...previous,
+              key: previous.key + 1,
+              rowIds: left,
+              skippedRows: [
+                ...previous.skippedRows,
+                ...refused.map((id) => ({
+                  label: current.find((row) => row.id === id)?.label.trim() || 'Untitled',
+                  message: found.get(id)!.message,
+                })),
+              ],
+            }
+          : previous,
+      );
+    return asked;
   };
-
-  /** A review that passed for these rows is the server's newer word: what a pass found is retired. */
-  const clearRefusals = (rowIds: string[]) => {
-    const at = ++events.current;
-    for (const id of rowIds) passedAt.current.set(id, at);
-    setRefusals((previous) =>
-      rowIds.some((id) => previous.has(id))
-        ? new Map([...previous].filter(([id]) => !rowIds.includes(id)))
-        : previous,
-    );
-  };
-
-  // With the refusing rows known, the review goes on with the rest and lists those as skipped,
-  // once: when the rows that render are the ones already under review, it stays as it is. Only a
-  // saved set is reopened, so reopening never writes one; an edit meanwhile marks it stale.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only a pass that changed something reopens it.
-  useEffect(() => {
-    if (!refusalsFound || !review || !readyToFire || !contract) return;
-    if (!activeSet || signatureOf(rows, contract) !== savedSignature) return;
-    const next = selectedReady.map((row) => row.id);
-    if (next.length === review.rowIds.length && next.every((id) => review.rowIds.includes(id)))
-      return;
-    void openReview();
-  }, [refusalsFound]);
 
   /** After a batch lands, from a confirm or a held batch's Retry: the same bookkeeping. */
   const afterFire = () => {
@@ -3068,8 +3008,10 @@ export function RenderRequestsGrid({
             type="button"
             size="xs"
             variant="outline"
-            disabled={busy === 'saving'}
+            disabled={busy === 'saving' || Boolean(activeHeld)}
+            title={activeHeld ?? undefined}
             onClick={async () => {
+              if (heldReasonOf(activeSet)) return;
               setBusy('saving');
               try {
                 await saveRenderSet();
@@ -3395,6 +3337,10 @@ export function RenderRequestsGrid({
                   currentSnapshot={rowsOfSignature(
                     reviewSignature(rows, selectedIds, null, allOutputIdsOf(contract)),
                   )}
+                  templateNow={{
+                    contractHash: contract.template.contractHash,
+                    templateRef: templateRef ?? null,
+                  }}
                   // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
                   // batchId once RenderJobsGrid can open one batch from outside
                   onOpenLedger={() => onFired?.([])}
@@ -3432,8 +3378,14 @@ export function RenderRequestsGrid({
                   holdScope={holdScope}
                   reviewSnapshot={rowsOfSignature(review.signature)}
                   onHeld={() => setReview(null)}
-                  onRefused={findRefusals}
-                  onPassed={clearRefusals}
+                  onRefused={askRowsAlone}
+                  onPassed={(ids) =>
+                    setRefusals((previous) =>
+                      ids.some((id) => previous.has(id))
+                        ? new Map([...previous].filter(([id]) => !ids.includes(id)))
+                        : previous,
+                    )
+                  }
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.

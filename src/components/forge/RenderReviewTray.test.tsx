@@ -216,6 +216,7 @@ import {
   holdKeyOf,
   NOT_SAVED,
   readHold,
+  NO_PERMISSION,
   SESSION_CHECK,
   SESSION_EXPIRED,
   SET_CHANGED,
@@ -573,6 +574,34 @@ describe('RenderReviewTray · Review', () => {
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
   }, 30_000);
 
+  test('a review the brand-access check refused says permission, not that the session expired', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('Access denied to brand', 403);
+    });
+    const { onRefused } = renderTray();
+    expect(await screen.findByText(NO_PERMISSION)).toBeTruthy();
+    expect(screen.queryAllByText(SESSION_CHECK)).toHaveLength(0);
+    expect(onRefused).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('a template that needs fixing says only its fix: no row is asked, no set-changed line', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('template_revision_unpublished', 422, undefined, {
+        error: 'template_revision_unpublished',
+      });
+    });
+    const { onRefused } = renderTray();
+    expect(
+      await screen.findByText(
+        'This template has no published revision for this render workspace. Publish one from the template’s Variants tab, then save.',
+      ),
+    ).toBeTruthy();
+    expect(onRefused).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toMatch(
+      /This set changed|Checking each row|refused this batch/,
+    );
+  }, 30_000);
+
   test('a review the session refused says so, not that the rows could not be checked', async () => {
     batchPreflightMock.mockImplementationOnce(async () => {
       throw new ApiError('Unauthorized', 401);
@@ -783,6 +812,52 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(createBatchMock).not.toHaveBeenCalled();
   }, 30_000);
 
+  test('the held view says when the set’s template moved since the batch was signed', async () => {
+    await confirmUnderHold(
+      SCOPE,
+      {
+        token: 'held-token',
+        request: { brandId: BRAND, templateKey: '133', contractHash: 'hash', records: [] },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        batchId: 'batch-held',
+      },
+      async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    ).catch(() => undefined);
+    const moved =
+      'This set’s template changed since this batch was sent. Retry sends the earlier version.';
+    function Harness({ contractHash }: { contractHash: string }) {
+      const held = useRenderHold(SCOPE);
+      return held ? (
+        <HeldBatchView
+          brandId={BRAND}
+          scope={SCOPE}
+          held={held}
+          current={[]}
+          currentSnapshot=""
+          templateNow={{ contractHash, templateRef: null }}
+          onOpenLedger={() => undefined}
+          onLanded={() => undefined}
+        />
+      ) : null;
+    }
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Harness contractHash="hash" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('region', { name: 'Held batch' })).toBeTruthy();
+    expect(screen.queryAllByText(moved)).toHaveLength(0);
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Harness contractHash="hash-2" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(moved)).toBeTruthy();
+  }, 30_000);
+
   test('while this page re-sends a held batch, Open Render ledger waits for it', async () => {
     await confirmUnderHold(
       SCOPE,
@@ -943,6 +1018,19 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await press('Next: delivery');
     await press('Render 3 files');
     expect(await screen.findByText(SET_CHANGED)).toBeTruthy();
+    expect(onHeld).not.toHaveBeenCalled();
+    expect(readHold(SCOPE)).toBeNull();
+  }, 30_000);
+
+  test('a 403 from createBatch is not held, and says permission, not session', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('Forbidden', 403);
+    });
+    const { onHeld } = renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(await screen.findByText(NO_PERMISSION)).toBeTruthy();
+    expect(screen.queryAllByText(SESSION_EXPIRED)).toHaveLength(0);
     expect(onHeld).not.toHaveBeenCalled();
     expect(readHold(SCOPE)).toBeNull();
   }, 30_000);

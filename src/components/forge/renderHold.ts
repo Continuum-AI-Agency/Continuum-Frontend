@@ -47,16 +47,20 @@ export type HeldBatch = {
   sending: boolean;
 };
 
-/** A user with no id holds nothing and renders nothing: fail closed, never share a key. */
+/** A user with no id has no key to hold under, so Render is disabled rather than unprotected. */
 export const SIGNED_OUT = 'Sign in again to render';
 export const NOT_SAVED =
   'Your browser isn’t saving data for this site, so a reload won’t remember this send. If it doesn’t confirm, check the Render ledger before rendering again.';
 export const SESSION_EXPIRED = 'Your session expired. Sign in again, then Render.';
 export const SESSION_RETRY = 'Your session expired. Sign in again, then Retry.';
 export const SESSION_CHECK = 'Your session expired. Sign in again, then Check again.';
+/** A 403 is the brand-access check (routes.ts runs assertBrandAccessForPublishing at preflight). */
+export const NO_PERMISSION =
+  'You don’t have permission to render here. Ask a brand owner for access.';
+export const SET_CHANGED_CHECK = 'This set changed somewhere else. Reload it, then Check again.';
 export const SET_CHANGED = 'This set changed somewhere else. Reload it, then Render.';
 /** Why a held set's rows cannot be copied, deleted, re-pinned or replaced. */
-export const HELD_SET = 'Check the Render ledger first';
+export const HELD_SET = 'This set has an unconfirmed render. Press Render to check it first.';
 /** How often an outstanding send says it is still on its way, and how long its silence means not. */
 export const BEAT_MS = 30_000;
 export const STALE_MS = 60_000;
@@ -70,12 +74,19 @@ export class RenderHeldError extends Error {
 // authenticates before service.createBatch, whose loop raises no 401/403 and no set or revision
 // code, only the binding's (checked 2026-10-28 at 8900795ad and 0825783d3).
 export const isSessionRefusal = (error: unknown): boolean =>
-  error instanceof ApiError && (error.status === 401 || error.status === 403);
+  error instanceof ApiError && error.status === 401;
+export const isPermissionRefusal = (error: unknown): boolean =>
+  error instanceof ApiError && error.status === 403;
 
 const codeOf = (error: ApiError) =>
   error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
+/** What the backend raises when the set moved under a request (renderSets.ts, service.ts). */
+export const SET_CHANGED_CODES: ReadonlySet<string> = new Set([
+  'render_set_revision_conflict',
+  'render_set_row_snapshot_mismatch',
+]);
 export const isSetChanged = (error: unknown): boolean =>
-  error instanceof ApiError && error.status < 500 && /render_set|revision/.test(codeOf(error));
+  error instanceof ApiError && SET_CHANGED_CODES.has(codeOf(error));
 
 /**
  * The service's reason only, its first sentence: its own next step ("Review the rows again, then
@@ -202,7 +213,9 @@ export async function confirmUnderHold<T>(
     clearHold(scope, batchId);
     return result;
   } catch (error) {
-    if (!retryOf && (isSessionRefusal(error) || isSetChanged(error))) clearHold(scope, batchId);
+    const madeNothing =
+      isSessionRefusal(error) || isPermissionRefusal(error) || isSetChanged(error);
+    if (!retryOf && madeNothing) clearHold(scope, batchId);
     else if (readStored(key)?.batchId === batchId) {
       remember(key, { reason: holdReasonOf(error), sending: undefined });
       write(key, { batchId, heldAt });
