@@ -134,10 +134,13 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     return 'Couldn’t reach the render service. Check again.';
   const detail = humanDetail(failure);
   if (detail) return detail;
-  // A 4xx that said nothing but its status line ("400 Bad Request") is a refusal with no words.
-  if (failure instanceof ApiError && failure.status < 500 && /^\d{3}\b/.test(message))
-    return 'The render service refused this batch.';
-  // A code this build has no words for is never shown as the code.
-  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(message)) return 'The render service refused this.';
+  // A 4xx that said nothing but its status line ("400 Bad Request"), whether thrown or handed over
+  // as its message, and a code this build has no words for: a refusal with no words, never the
+  // status line or the code.
+  if (
+    (/^\d{3}\b/.test(message) && !(failure instanceof ApiError && failure.status >= 500)) ||
+    /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(message)
+  )
+    return 'The render service refused this.';
   return message || 'Render discovery failed';
 }

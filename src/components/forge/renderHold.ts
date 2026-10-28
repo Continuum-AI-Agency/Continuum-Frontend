@@ -15,7 +15,7 @@
 //
 // ponytail: residuals, by design. The hold is per browser; another browser does not see it, and
 // the shared Render ledger is the cross-browser check. One key holds one batch: two tabs whose
-// first sends race past the read-back both send, and the later failure is the hold left.
+// first sends race past the read-back both send, and the hold left is the key's last writer.
 
 import type { ApiRenderBatchPreflightRequest } from '@continuum/contracts';
 import { useSyncExternalStore } from 'react';
@@ -49,7 +49,9 @@ export type SignedBatch = {
  */
 export type HoldReason =
   | { kind: 'no-answer' }
-  | { kind: 'stopped'; message: string; retryable: boolean };
+  | { kind: 'stopped'; message: string; retryable: boolean }
+  /** A retry refused for the session: the token is the same user's, so it works after sign-in. */
+  | { kind: 'session' };
 
 export type HeldBatch = {
   batchId: string | null;
@@ -71,6 +73,7 @@ export const SIGNED_OUT = 'Sign in again to render';
 export const NOT_SAVED =
   'Your browser isn’t saving data for this site, so a reload won’t remember this send. If it doesn’t confirm, check the Render ledger before rendering again.';
 export const SESSION_EXPIRED = 'Your session expired. Sign in again, then Render.';
+export const SESSION_RETRY = 'Your session expired. Sign in again, then Retry.';
 /** How often an outstanding send says it is still on its way, and how long its silence means not. */
 export const BEAT_MS = 30_000;
 export const STALE_MS = 60_000;
@@ -170,16 +173,23 @@ const reasonOf = (error: ApiError) =>
     .replace(/[.\s]+$/, '');
 
 export function holdReasonOf(error: unknown): HoldReason {
+  if (isSessionRefusal(error)) return { kind: 'session' };
   if (!(error instanceof ApiError)) return { kind: 'no-answer' };
   const refused = error.status >= 400 && error.status < 500 && error.status !== 429;
   if (!refused && !hasBackendError(error)) return { kind: 'no-answer' };
   return { kind: 'stopped', message: reasonOf(error), retryable: !refused };
 }
 
-/** Held after a send failed: the stored hold loses `inflight`, the token keeps its reason. */
+/**
+ * Held after a send failed: the stored hold loses `inflight`, the token keeps its reason. Only
+ * while the hold still names this batch: one let go (or taken by another tab's batch) meanwhile
+ * is not written back.
+ */
 function heldAfter(key: string, batchId: string, heldAt: number, token: Token) {
-  tokens.set(batchId, token);
-  write(key, { batchId, heldAt });
+  if (readStored(key)?.batchId === batchId) {
+    tokens.set(batchId, token);
+    write(key, { batchId, heldAt });
+  } else tokens.delete(batchId);
   changed();
 }
 
@@ -304,6 +314,7 @@ export function heldCopy(held: HeldBatch, now = Date.now()): string {
   const { reason } = held;
   if (sendingElsewhere(held, now))
     return 'A Render of this set is still being sent. Wait a moment, then check the Render ledger.';
+  if (reason?.kind === 'session') return SESSION_RETRY;
   // No token here: this page reloaded, or another tab sent it. The stored record does not say which,
   // so the copy is the same for both.
   if (!reason)

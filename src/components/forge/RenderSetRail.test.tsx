@@ -219,6 +219,39 @@ describe('RenderSetRail', () => {
     expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, null]);
   });
 
+  test('a held set cannot be duplicated or deleted, with why; New set still can', async () => {
+    const { props } = setup({
+      onDuplicate: mock((_set: ForgeRenderSet) => undefined),
+      heldReason: (set: ForgeRenderSet) =>
+        set.id === LAUNCH.id ? 'Check the Render ledger first' : null,
+    });
+    const actions = async (name: string) => {
+      fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+      return {
+        duplicate: await screen.findByRole('menuitem', { name: /Duplicate/ }),
+        remove: screen.getByRole('menuitem', { name: /Delete/ }),
+      };
+    };
+    const held = await actions('Launch week');
+    for (const item of [held.duplicate, held.remove]) {
+      expect(
+        item.hasAttribute('data-disabled') || item.getAttribute('aria-disabled') === 'true',
+      ).toBe(true);
+      expect(item.getAttribute('title')).toBe('Check the Render ledger first');
+    }
+    fireEvent.click(held.duplicate);
+    expect(props.onDuplicate).not.toHaveBeenCalled();
+    fireEvent.keyDown(held.duplicate, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
+    // Another set of the same template is not held.
+    const free = await actions('Teaser');
+    expect(free.duplicate.hasAttribute('data-disabled')).toBe(false);
+    fireEvent.keyDown(free.duplicate, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
+    // New set is different rows: it stays open.
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New set' }).disabled).toBe(false);
+  });
+
   test('switching and New set ask the grid first; the open set is not reopened', () => {
     const { props } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Open Launch week' }));

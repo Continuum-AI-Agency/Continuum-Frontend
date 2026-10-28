@@ -13,6 +13,7 @@ import {
   oneJobId,
   RenderHeldError,
   resendHeld,
+  SESSION_RETRY,
   STALE_MS,
   readHold,
   retryHeld,
@@ -336,6 +337,40 @@ describe('renderHold', () => {
     expect(
       heldCopy({ ...held, reason: { ...held.reason, message: 'This review has expired' } }),
     ).toMatch(/^The render service stopped this batch: This review has expired\. /);
+  });
+
+  test('a retry that fails after its hold was let go does not write it back', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    let fail: (error: unknown) => void = () => undefined;
+    const retrying = retryHeld(SCOPE, () => new Promise((_, reject) => (fail = reject)));
+    // Let go elsewhere while the retry was out.
+    localStorage.removeItem(holdKeyOf(SCOPE));
+    fail(noAnswer());
+    await expect(retrying).rejects.toBeInstanceOf(TypeError);
+    expect(isHeld(SCOPE)).toBe(false);
+    expect(localStorage.getItem(holdKeyOf(SCOPE))).toBeNull();
+  });
+
+  test('a 401 or 403 on a retry keeps the hold and its Retry: sign in, then Retry', async () => {
+    for (const status of [401, 403]) {
+      await confirmUnderHold(SCOPE, SIGNED, async () => {
+        throw noAnswer();
+      }).catch(() => undefined);
+      await expect(
+        retryHeld(SCOPE, async () => {
+          throw new ApiError('Unauthorized', status);
+        }),
+      ).rejects.toBeInstanceOf(ApiError);
+      const held = readHold(SCOPE)!;
+      expect(held.reason).toEqual({ kind: 'session' });
+      expect(canRetry(held)).toBe(true);
+      expect(heldCopy(held)).toBe(SESSION_RETRY);
+      // Signed back in: the same token goes, and lands.
+      await retryHeld(SCOPE, async (token) => expect(token).toBe('token-secret'));
+      expect(isHeld(SCOPE)).toBe(false);
+    }
   });
 
   test('a scoped clear never removes another batch’s hold', async () => {

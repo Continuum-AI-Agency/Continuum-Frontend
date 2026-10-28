@@ -73,7 +73,7 @@ import {
   RenderReviewTray,
   type RowsAsked,
 } from '@/components/forge/RenderReviewTray';
-import { SIGNED_OUT, useRenderHold } from '@/components/forge/renderHold';
+import { type HoldScope, isHeld, SIGNED_OUT, useRenderHold } from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -276,6 +276,12 @@ const refusalKey = (
 
 /** A refusal about the set or its revision, not the row: the set moved, not the row's values. */
 const SET_LEVEL_CODE = /render_set|revision/;
+const isSetLevelRefusal = (error: unknown) =>
+  error instanceof ApiError &&
+  error.status === 422 &&
+  SET_LEVEL_CODE.test(
+    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message),
+  );
 
 /**
  * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
@@ -1156,16 +1162,11 @@ export function RenderRequestsGrid({
   // (renderHold.ts), in every tab: while it is, the set's Render opens it, never a new review. With
   // no user id there is no key to hold under, so Render fails closed.
   const userId = useActiveBrandContext().user?.id ?? null;
-  const holdScope =
-    userId && contract && activeSet
-      ? {
-          userId,
-          brandId,
-          bindingId,
-          templateKey: contract.template.key,
-          renderSetId: activeSet.id,
-        }
+  const holdOf = (renderSetId: string): HoldScope | null =>
+    userId && contract
+      ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
       : null;
+  const holdScope = activeSet ? holdOf(activeSet.id) : null;
   const held = useRenderHold(holdScope);
   // A held batch that a Retry landed: its jobs, shown until closed.
   const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);
@@ -2625,6 +2626,7 @@ export function RenderRequestsGrid({
     );
     const checked = new Map<string, (RowRefusal & { key: string }) | null>();
     let unchecked = 0;
+    let setChanged = false;
     const ask = async () => {
       for (let record = queue.shift(); record; record = queue.shift()) {
         const rowId = record.renderSetRowId as string;
@@ -2649,8 +2651,10 @@ export function RenderRequestsGrid({
           checked.set(rowId, null);
         } catch (error) {
           const refusal = refusalOf(error);
-          // An outage, a throttle or a cut says nothing about the row: it was not checked.
+          // An outage, a throttle or a cut says nothing about the row: it was not checked. A set
+          // or revision that moved says it of the set, which is what to reload.
           if (refusal) checked.set(rowId, { ...refusal, key: keyOf(rowId) });
+          else if (isSetLevelRefusal(error)) setChanged = true;
           else unchecked += 1;
         }
       }
@@ -2668,7 +2672,7 @@ export function RenderRequestsGrid({
     };
     const previous = knownRefusals.current;
     const next = merge(previous);
-    lastAsked.current = { refused: refusedIn(next), unchecked };
+    lastAsked.current = { refused: refusedIn(next), unchecked, setChanged };
     const changed = [...checked].some(([id, refusal]) => {
       const was = previous.get(id);
       return refusal ? was?.message !== refusal.message || was.font !== refusal.font : Boolean(was);
@@ -3225,6 +3229,10 @@ export function RenderRequestsGrid({
                     onDescribe={(set, description) => updateSetDetails(set, { description })}
                     onDelete={deleteSet}
                     onDuplicate={(set) => void duplicateSet(set)}
+                    heldReason={(set) => {
+                      const scope = holdOf(set.id);
+                      return scope && isHeld(scope) ? 'Check the Render ledger first' : null;
+                    }}
                     onHistory={setHistoryFor}
                     onUpdate={() => void saveNow()}
                     onImportDraft={() => {

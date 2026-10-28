@@ -811,12 +811,13 @@ describe('RenderRequestsGrid', () => {
       expect(batchPreflightMock).toHaveBeenCalledTimes(1);
       expect(await within(tray).findByText(palette)).toBeTruthy();
       // Every row passes alone, and alone is with no delivery: the batch's delivery was refused,
-      // with the server's reason. No row is blamed; Change delivery leads, Retry stays.
+      // with the server's reason. No row is blamed; Change delivery leads, Check again stays.
       expect(
         await within(tray).findByText(/^The render service refused this batch’s delivery: /),
       ).toBeTruthy();
       expect(within(tray).getByRole('button', { name: 'Change delivery' })).toBeTruthy();
-      expect(within(tray).getByRole('button', { name: 'Retry' })).toBeTruthy();
+      expect(within(tray).getByRole('button', { name: 'Check again' })).toBeTruthy();
+      expect(within(tray).queryAllByRole('button', { name: 'Retry' })).toHaveLength(0);
       expect(tray.textContent).not.toContain('nothing in the grid is marked');
       expect(
         within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
@@ -836,14 +837,20 @@ describe('RenderRequestsGrid', () => {
       await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(4));
     }, 30_000);
 
-    test('a 422 about the set, not the row, marks no row', async () => {
-      const { headline } = await setup(
+    test('a 422 about the set, not the row, marks no row and says to reload the set', async () => {
+      const { tray, headline } = await setup(
         () =>
           new ApiError('render_set_revision_conflict', 422, undefined, {
             error: 'render_set_revision_conflict',
             message: 'The set changed since this review.',
           }),
       );
+      expect(
+        await within(tray).findByText(
+          'This set changed somewhere else. Reload it, then Check again.',
+        ),
+      ).toBeTruthy();
+      expect(tray.textContent).not.toMatch(/Couldn’t check/);
       expect(
         within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
       ).toHaveLength(0);

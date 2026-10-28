@@ -193,7 +193,7 @@ mock.module('next/link', () => ({
   ),
 }));
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { useState } from 'react';
 import {
@@ -561,13 +561,23 @@ describe('RenderReviewTray · Review', () => {
     // The refusal names no row, so the grid is asked to find which rows refuse.
     expect(onRefused).toHaveBeenCalledWith(['root', 'spain'], { again: false });
     // Every row passes alone, and alone is with no delivery: it is the batch's delivery that was
-    // refused. The way on is Change delivery, with nothing preselected; Retry stays.
+    // refused. The way on is Change delivery, with nothing preselected; Check again stays.
     expect(
       await screen.findByText(/^The render service refused this batch’s delivery: /),
     ).toBeTruthy();
     expect(document.body.textContent).not.toContain('nothing in the grid is marked');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(screen.queryAllByRole('button', { name: 'Retry' })).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+  }, 30_000);
+
+  test('a review the session refused says so, not that the rows could not be checked', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('Unauthorized', 401);
+    });
+    renderTray();
+    expect(await screen.findByText(SESSION_EXPIRED)).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Unauthorized');
   }, 30_000);
 
   test('a review that could not reach the service says so in words, and not that rows cannot render', async () => {
@@ -598,19 +608,23 @@ describe('RenderReviewTray · Review', () => {
   }, 30_000);
 
   test('rows that could not be checked alone are said so, with Check again, never as passing', async () => {
-    batchPreflightMock.mockImplementationOnce(async () => {
-      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
-        guardrails: [
-          { code: 'BRAND_COLOR_OUTSIDE_PALETTE', message: 'Use a permitted brand color.' },
-        ],
+    // Refused twice: the review, then its Check again.
+    for (let refusal = 0; refusal < 2; refusal += 1)
+      batchPreflightMock.mockImplementationOnce(async () => {
+        throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+          guardrails: [
+            { code: 'BRAND_COLOR_OUTSIDE_PALETTE', message: 'Use a permitted brand color.' },
+          ],
+        });
       });
-    });
     const handlers = trayHandlers();
     handlers.onRefused.mockImplementation(async () => ({ refused: 0, unchecked: 2 }));
     const { onRefused } = renderTray(BINDING, { handlers });
     expect(await screen.findByText('Couldn’t check 2 rows.')).toBeTruthy();
     expect(screen.queryAllByRole('button', { name: 'Change delivery' })).toHaveLength(0);
-    expect(screen.getByText(/^The render service refused this batch: /)).toBeTruthy();
+    // An unmapped code reads as the service's refusal, once, never prefixed again.
+    expect(screen.getByText('The render service refused this.')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Check again' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(onRefused).toHaveBeenCalledTimes(2));
     expect(onRefused.mock.calls[1]?.[1]).toEqual({ again: true });
@@ -766,6 +780,54 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(createBatchMock).not.toHaveBeenCalled();
   }, 30_000);
 
+  test('while this page re-sends a held batch, Open Render ledger waits for it', async () => {
+    await confirmUnderHold(
+      SCOPE,
+      {
+        token: 'held-token',
+        request: { brandId: BRAND, templateKey: '133', contractHash: 'hash', records: [] },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        batchId: 'batch-held',
+      },
+      async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    ).catch(() => undefined);
+    let answer: (value: { batchId: string; jobs: typeof JOBS }) => void = () => undefined;
+    createBatchMock.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)) as never,
+    );
+    function Harness() {
+      const held = useRenderHold(SCOPE);
+      return held ? (
+        <HeldBatchView
+          brandId={BRAND}
+          scope={SCOPE}
+          held={held}
+          current={[]}
+          currentSnapshot=""
+          onOpenLedger={() => undefined}
+          onLanded={() => undefined}
+        />
+      ) : null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Harness />
+      </QueryClientProvider>,
+    );
+    const ledger = () =>
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Open Render ledger' });
+    expect(ledger().disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry this batch' }));
+    await waitFor(() => expect(ledger().disabled).toBe(true));
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Retry this batch' }).disabled,
+    ).toBe(true);
+    await act(async () => answer({ batchId: 'batch-held', jobs: JOBS }));
+    expect(readHold(SCOPE)).toBeNull();
+  }, 30_000);
+
   test('a retry that landed reads done, whatever throws after it: no Retry is left', async () => {
     // Held by a confirm that got no answer, with its token in this page.
     await confirmUnderHold(
@@ -905,8 +967,10 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     await press('Next: delivery');
     const signed = batchPreflightMock.mock.calls.length;
-    await press('Render 3 files');
+    // Disabled, with why, the same as the grid's Render.
+    expect(primaryDisabled('Render 3 files')).toBe(true);
     expect(await screen.findByText('Sign in again to render')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Render 3 files' }));
     expect(batchPreflightMock.mock.calls.length).toBe(signed);
     expect(createBatchMock).not.toHaveBeenCalled();
   }, 30_000);

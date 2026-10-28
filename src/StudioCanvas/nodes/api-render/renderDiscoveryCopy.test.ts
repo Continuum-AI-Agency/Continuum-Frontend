@@ -51,7 +51,17 @@ describe('render discovery copy', () => {
 
   test('a 4xx that says nothing but its status line reads as a refusal, never the status line', () => {
     expect(describeRenderDiscoveryFailure(new ApiError('400 Bad Request', 400))).toBe(
-      'The render service refused this batch.',
+      'The render service refused this.',
+    );
+    // The grid hands over `error.message`: the same status line, as text, reads the same.
+    expect(describeRenderDiscoveryFailure('413 Request Entity Too Large')).toBe(
+      'The render service refused this.',
+    );
+    expect(describeRenderDiscoveryFailure(new Error('413 Request Entity Too Large'))).toBe(
+      'The render service refused this.',
+    );
+    expect(describeRenderDiscoveryFailure('503 Service Unavailable')).toBe(
+      'The render service is busy or restarting. Check again in a moment.',
     );
   });
 

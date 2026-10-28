@@ -202,7 +202,12 @@ type Destinations =
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 /** What a refused batch's rows said when each was asked alone. */
-export type RowsAsked = { refused: number; unchecked: number };
+export type RowsAsked = {
+  refused: number;
+  unchecked: number;
+  /** A row's own check was refused for the set or its revision: the set moved, not the rows. */
+  setChanged?: boolean;
+};
 
 function describeFailure(error: unknown): {
   message: string;
@@ -404,7 +409,6 @@ export function RenderReviewTray({
       setReview((current) => (current.state === 'refused' ? { ...current, asked } : current));
     });
   }, []);
-  const askedRows = records.flatMap((record) => record.renderSetRowId ?? []);
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
@@ -466,10 +470,10 @@ export function RenderReviewTray({
         setReview(
           refusal
             ? { state: 'refused', message, details, canOverrideFonts }
-            : { state: 'failed', message },
+            : { state: 'failed', message: isSessionRefusal(error) ? SESSION_EXPIRED : message },
         );
         if (refusal && !canOverrideFonts)
-          // An explicit Retry asks the rows again, even when they were just asked.
+          // An explicit Check again asks the rows again, even when they were just asked.
           askRows(
             mine,
             todo.flatMap(({ record }) => record.renderSetRowId ?? []),
@@ -703,7 +707,7 @@ export function RenderReviewTray({
           }
         : {
             label: `Render ${plural(fileCount, 'file')}`,
-            disabled: firing || stale || deliverBlockers.length > 0,
+            disabled: firing || stale || deliverBlockers.length > 0 || !holdScope,
             run: () => void confirm(),
             fires: true,
           };
@@ -979,7 +983,9 @@ export function RenderReviewTray({
                         ? review.message
                         : refusedOnDelivery
                           ? `The render service refused this batch’s delivery: ${review.message}`
-                          : `The render service refused this batch: ${review.message}`}
+                          : review.message.startsWith('The render service')
+                            ? review.message
+                            : `The render service refused this batch: ${review.message}`}
                     </p>
                     {review.details.map((detail) => (
                       <p key={detail}>{detail}</p>
@@ -1001,8 +1007,8 @@ export function RenderReviewTray({
                             way. A render in a face nobody chose is what this whole gate exists
                             to stop, so taking the file is a choice, never a default. */}
                         <span className="text-muted-foreground">
-                          The worker may substitute missing fonts. This choice applies only to this
-                          batch and is recorded in the render ledger. To choose the fonts, use the
+                          Forge may use a substitute font. This choice applies only to this batch
+                          and is recorded in the render ledger. To choose the fonts, use the
                           template&rsquo;s Fonts check.
                         </span>
                       </div>
@@ -1024,16 +1030,7 @@ export function RenderReviewTray({
                             Change delivery
                           </Button>
                         ) : null}
-                        {review.asked && review.asked.unchecked > 0 ? (
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            onClick={() => askRows(latestReview.current, askedRows, true)}
-                          >
-                            Check again
-                          </Button>
-                        ) : null}
+                        {/* One way to ask again: the batch, and each row with it. */}
                         <Button
                           type="button"
                           size="xs"
@@ -1042,16 +1039,18 @@ export function RenderReviewTray({
                             void runReview(acceptMissingFonts, { fresh: true, again: true })
                           }
                         >
-                          Retry
+                          Check again
                         </Button>
                         <span className="text-muted-foreground">
                           {!review.asked
                             ? 'Checking each row…'
-                            : review.asked.unchecked > 0
-                              ? `Couldn’t check ${plural(review.asked.unchecked, 'row')}.`
-                              : review.asked.refused > 0
-                                ? `${plural(review.asked.refused, 'row')} won’t render; the grid marks ${review.asked.refused === 1 ? 'it' : 'them'} and Render skips ${review.asked.refused === 1 ? 'it' : 'them'}.`
-                                : null}
+                            : review.asked.setChanged
+                              ? 'This set changed somewhere else. Reload it, then Check again.'
+                              : review.asked.unchecked > 0
+                                ? `Couldn’t check ${plural(review.asked.unchecked, 'row')}.`
+                                : review.asked.refused > 0
+                                  ? `${plural(review.asked.refused, 'row')} won’t render; the grid marks ${review.asked.refused === 1 ? 'it' : 'them'} and Render skips ${review.asked.refused === 1 ? 'it' : 'them'}.`
+                                  : null}
                         </span>
                       </div>
                     )}
@@ -1256,6 +1255,10 @@ export function RenderReviewTray({
                 ) : (
                   <span className="text-destructive">Couldn’t check the rows</span>
                 )
+              ) : primary.fires && !holdScope ? (
+                <p role="status" className="text-warning">
+                  {SIGNED_OUT}
+                </p>
               ) : deliverBlockers.length ? (
                 <p role="status" className="flex flex-wrap gap-x-1 text-warning">
                   {deliverBlockers.map((blocker) => (
@@ -1597,7 +1600,7 @@ export function HeldBatchView({
           size="xs"
           variant="outline"
           // A live send elsewhere must not be released under it: the ledger can wait its time out.
-          disabled={sending}
+          disabled={sending || held.sending}
           onClick={() => {
             clearHold(scope, held.batchId);
             onOpenLedger(held.batchId);
