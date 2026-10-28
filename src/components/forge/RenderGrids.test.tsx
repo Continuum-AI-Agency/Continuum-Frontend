@@ -1683,6 +1683,7 @@ describe('RenderRequestsGrid', () => {
           brandId: BRAND,
           bindingId: TEMPLATE.bindingId,
           templateKey: '133',
+          renderSetId: NEWEST.id,
         }),
       ]);
       // Only the batch and when: the token stays in this page's memory.
@@ -1725,17 +1726,22 @@ describe('RenderRequestsGrid', () => {
       expect(JSON.stringify(localStorage)).not.toContain(held);
     }, 30_000);
 
-    test('a hold covers the template: another set of it opens the same held batch', async () => {
+    test('a hold is its render set’s: another set of the template renders, and the hold waits', async () => {
       await setup(noAnswer);
       await heldView();
       await openSet('Older', 'Older row');
+      await waitFor(() =>
+        expect(screen.queryAllByRole('region', { name: 'Held batch' })).toHaveLength(0),
+      );
+      expect(screen.queryAllByRole('button', { name: HELD_LABEL })).toHaveLength(0);
+      await renderOne();
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+      // Back on the held set, its hold is still there.
+      await openSet('Newest', 'Newest row');
       expect(await heldView()).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: HELD_LABEL }));
-      expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0);
-      expect(createBatchMock).toHaveBeenCalledTimes(1);
     }, 30_000);
 
-    test('a send still on its way elsewhere cannot be released until its time is up', async () => {
+    test('a send still beating elsewhere cannot be released', async () => {
       listRenderSetsMock.mockImplementation(async () => ({
         items: [renderable(NEWEST)],
         nextCursor: null,
@@ -1747,6 +1753,7 @@ describe('RenderRequestsGrid', () => {
           brandId: BRAND,
           bindingId: TEMPLATE.bindingId,
           templateKey: '133',
+          renderSetId: NEWEST.id,
         }),
         JSON.stringify({ batchId: 'batch-x', heldAt: Date.now() - 5_000, inflight: true }),
       );

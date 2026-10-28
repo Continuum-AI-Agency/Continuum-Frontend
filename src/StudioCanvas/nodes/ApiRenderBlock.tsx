@@ -200,12 +200,12 @@ export function ApiRenderBlock({
   }, [brandId, patchData, setError, setJobs]);
 
   const bindingId = data.bindingId ?? null;
-  // The same hold Forge's grid renders under (renderHold.ts): a batch held for this template,
-  // from any set, tab or this node, stops this node from signing another. No user: no key.
+  // The same hold Forge's sets render under (renderHold.ts), keyed to this node's own (no set): a
+  // batch it holds, in any tab, stops it from signing another. No user: no key.
   const userId = brandContext.user?.id ?? null;
   const holdScope =
     userId && brandId && data.templateKey
-      ? { userId, brandId, bindingId, templateKey: data.templateKey }
+      ? { userId, brandId, bindingId, templateKey: data.templateKey, renderSetId: null }
       : null;
   const held = useRenderHold(holdScope);
 
@@ -872,8 +872,8 @@ export function ApiRenderBlock({
                     onClick={() => {
                       if (retrying) return;
                       setRetrying(true);
-                      void retryHeld(holdScope, (token, now) =>
-                        resendHeld(now, token, apiRendersApi),
+                      void retryHeld(holdScope, (token, sent) =>
+                        resendHeld(sent, token, apiRendersApi),
                       )
                         .then(async (batch) => {
                           patchData({
@@ -904,7 +904,7 @@ export function ApiRenderBlock({
                   // A live send elsewhere must not be released under it.
                   disabled={sendingElsewhere(held)}
                   onClick={() => {
-                    clearHold(holdScope);
+                    clearHold(holdScope, held.batchId);
                     window.location.assign('/forge#approvals');
                   }}
                 >

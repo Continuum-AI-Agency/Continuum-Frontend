@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import { ApiError } from '@/lib/api/errors';
 import {
@@ -6,17 +6,18 @@ import {
   clearHold,
   confirmUnderHold,
   forgetPageSession,
+  BEAT_MS,
   heldCopy,
   holdKeyOf,
   isHeld,
   oneJobId,
   RenderHeldError,
   resendHeld,
-  SENDING_MS,
-  STORAGE_OFF,
+  STALE_MS,
   readHold,
   retryHeld,
   type SignedBatch,
+  sendingElsewhere,
   useRenderHold,
 } from './renderHold';
 
@@ -25,6 +26,7 @@ const SCOPE = {
   brandId: 'brand-a',
   bindingId: 'binding-a',
   templateKey: '133',
+  renderSetId: 'set-a',
 };
 const SIGNED: SignedBatch = {
   token: 'token-secret',
@@ -45,16 +47,18 @@ afterEach(() => {
 });
 
 describe('renderHold', () => {
-  test('the key is the user, the brand, the binding and the template, never the set', () => {
-    expect(holdKeyOf(SCOPE)).toBe('forge:held-render:user-a:brand-a:binding-a:133');
-    expect(holdKeyOf({ ...SCOPE, bindingId: null })).toBe(
-      'forge:held-render:user-a:brand-a:default:133',
+  test('the key is the user, the brand, the binding, the template and the render set', () => {
+    expect(holdKeyOf(SCOPE)).toBe('forge:held-render:user-a:brand-a:binding-a:133:set-a');
+    expect(holdKeyOf({ ...SCOPE, bindingId: null, renderSetId: null })).toBe(
+      'forge:held-render:user-a:brand-a:default:133:canvas',
     );
     for (const other of [
       { ...SCOPE, userId: 'user-b' },
       { ...SCOPE, brandId: 'brand-b' },
       { ...SCOPE, bindingId: 'binding-b' },
       { ...SCOPE, templateKey: '134' },
+      // A failure in set A does not gate set B.
+      { ...SCOPE, renderSetId: 'set-b' },
     ])
       expect(holdKeyOf(other)).not.toBe(holdKeyOf(SCOPE));
   });
@@ -83,8 +87,9 @@ describe('renderHold', () => {
     expect(heldCopy(reloaded)).toBe(
       'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
     );
-    expect(heldCopy(reloaded, reloaded.heldAt + SENDING_MS + 1)).toBe(
-      'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
+    // Its heartbeat stale: the tab is gone, so it can be let go, and the ledger may still fill.
+    expect(heldCopy(reloaded, reloaded.heldAt + STALE_MS + 1)).toBe(
+      'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again. Rows can keep appearing in the Render ledger for a few minutes after a send stops; check again before rendering any that are missing.',
     );
     answer({ jobs: [] });
     await confirming;
@@ -126,7 +131,7 @@ describe('renderHold', () => {
       }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(canRetry(readHold(SCOPE)!)).toBe(false);
-    clearHold(SCOPE);
+    clearHold(SCOPE, SIGNED.batchId);
     await expect(
       confirmUnderHold(SCOPE, SIGNED, async () => {
         throw new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' });
@@ -166,6 +171,7 @@ describe('renderHold', () => {
     const base = {
       heldAt: 0,
       inflight: false,
+      saved: true,
       signed: SIGNED,
       reason: { kind: 'no-answer' as const },
     };
@@ -226,7 +232,7 @@ describe('renderHold', () => {
       });
   });
 
-  test('a hold that cannot be written is not sent', async () => {
+  test('a hold the browser will not save is still sent, held in this page only, and says so', async () => {
     // A browser that will not keep site data: reads work, every write throws.
     const real = globalThis.localStorage;
     Object.defineProperty(globalThis, 'localStorage', {
@@ -240,24 +246,126 @@ describe('renderHold', () => {
       },
     });
     try {
-      let sent = false;
-      const refused = await confirmUnderHold(SCOPE, SIGNED, async () => {
-        sent = true;
-      }).catch((error: unknown) => error);
-      expect(refused).toBeInstanceOf(RenderHeldError);
-      expect((refused as Error).message).toBe(STORAGE_OFF);
-      expect(sent).toBe(false);
+      let notSaved = 0;
+      await expect(
+        confirmUnderHold(
+          SCOPE,
+          SIGNED,
+          async () => {
+            throw noAnswer();
+          },
+          { onNotSaved: () => (notSaved += 1) },
+        ),
+      ).rejects.toBeInstanceOf(TypeError);
+      expect(notSaved).toBe(1);
+      // Held, in memory only: this page opens it, and a second send is refused.
+      expect(readHold(SCOPE)).toMatchObject({ batchId: 'batch-1', saved: false });
+      expect(canRetry(readHold(SCOPE)!)).toBe(true);
+      await expect(confirmUnderHold(SCOPE, SIGNED, async () => undefined)).rejects.toBeInstanceOf(
+        RenderHeldError,
+      );
+      // A reload forgets it: nothing was saved.
+      forgetPageSession();
+      expect(isHeld(SCOPE)).toBe(false);
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
     }
   });
 
+  // Pinned to the backend: routes.ts authenticates before service.createBatch, and createJob raises
+  // no 401 or 403, so either means nothing was made (see isSessionRefusal).
   test('a 401 or 403 is not held: nothing was made, the session is what to fix', async () => {
     for (const status of [401, 403]) {
       await confirmUnderHold(SCOPE, SIGNED, async () => {
         throw new ApiError('Unauthorized', status);
       }).catch(() => undefined);
       expect(isHeld(SCOPE)).toBe(false);
+      expect(localStorage.getItem(holdKeyOf(SCOPE))).toBeNull();
+    }
+    // Another batch's hold is not cleared by this one's 401.
+    const other = JSON.stringify({ batchId: 'batch-9', heldAt: Date.now() });
+    localStorage.setItem(holdKeyOf(SCOPE), other);
+    await expect(
+      retryHeld(SCOPE, async () => {
+        throw new ApiError('Unauthorized', 401);
+      }),
+    ).rejects.toBeInstanceOf(RenderHeldError);
+    expect(localStorage.getItem(holdKeyOf(SCOPE))).toBe(other);
+  });
+
+  test('a scoped clear never removes another batch’s hold', async () => {
+    localStorage.setItem(
+      holdKeyOf(SCOPE),
+      JSON.stringify({ batchId: 'batch-b', heldAt: Date.now() }),
+    );
+    // Tab A's send of batch-1 finishes after tab B held batch-b: B's hold stays.
+    clearHold(SCOPE, 'batch-1');
+    expect(readHold(SCOPE)?.batchId).toBe('batch-b');
+    clearHold(SCOPE, 'batch-b');
+    expect(isHeld(SCOPE)).toBe(false);
+  });
+
+  test('a write-ahead read back as another tab’s batch is not sent; the hold opens instead', async () => {
+    // Tab B's write lands between this tab's fresh read and its read-back.
+    const real = globalThis.localStorage;
+    const raced = JSON.stringify({ batchId: 'batch-b', heldAt: Date.now(), inflight: true });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => real.getItem(key),
+        removeItem: (key: string) => real.removeItem(key),
+        setItem: (key: string) => real.setItem(key, raced),
+      },
+    });
+    try {
+      let sent = false;
+      await expect(
+        confirmUnderHold(SCOPE, SIGNED, async () => {
+          sent = true;
+        }),
+      ).rejects.toBeInstanceOf(RenderHeldError);
+      expect(sent).toBe(false);
+      expect(readHold(SCOPE)?.batchId).toBe('batch-b');
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
+    }
+  });
+
+  test('a live retry in tab A beats, so tab B cannot let it go; a stale beat can be', async () => {
+    let clock = Date.now();
+    const now = spyOn(Date, 'now').mockImplementation(() => clock);
+    let answer: (value: unknown) => void = () => undefined;
+    const timers: Array<() => void> = [];
+    const interval = spyOn(globalThis, 'setInterval').mockImplementation(((beat: () => void) => {
+      timers.push(beat);
+      return 0;
+    }) as unknown as typeof setInterval);
+    try {
+      await confirmUnderHold(SCOPE, SIGNED, async () => {
+        throw noAnswer();
+      }).catch(() => undefined);
+      const retrying = retryHeld(SCOPE, () => new Promise((resolve) => (answer = resolve)));
+      // Tab B: no token, the retry's write-ahead in storage.
+      forgetPageSession();
+      const tabB = () => readHold(SCOPE)!;
+      expect(tabB()).toMatchObject({ inflight: true, signed: null });
+      // Minutes of retries: each beat keeps it live in tab B.
+      for (let beat = 0; beat < 10; beat += 1) {
+        clock += BEAT_MS;
+        for (const run of timers) run();
+        expect(sendingElsewhere(tabB(), clock)).toBe(true);
+        expect(heldCopy(tabB(), clock)).toBe(
+          'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+        );
+      }
+      // Tab A goes away: no more beats. A minute later the entry is an orphan, and can go.
+      clock += STALE_MS + 1;
+      expect(sendingElsewhere(tabB(), clock)).toBe(false);
+      answer({ jobs: [] });
+      await retrying;
+    } finally {
+      now.mockRestore();
+      interval.mockRestore();
     }
   });
 
@@ -268,7 +376,7 @@ describe('renderHold', () => {
     );
     expect(isHeld(SCOPE)).toBe(true);
     expect(readHold(SCOPE)?.batchId).toBe('batch-1');
-    clearHold(SCOPE);
+    clearHold(SCOPE, 'batch-1');
     expect(isHeld(SCOPE)).toBe(false);
   });
 

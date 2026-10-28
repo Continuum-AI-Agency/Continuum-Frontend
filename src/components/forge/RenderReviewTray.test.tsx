@@ -205,7 +205,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
 import { type RenderPreflightRow, RenderReviewTray, type RowsAsked } from './RenderReviewTray';
-import { forgetPageSession, holdKeyOf, readHold, SESSION_EXPIRED, STORAGE_OFF } from './renderHold';
+import { forgetPageSession, holdKeyOf, NOT_SAVED, readHold, SESSION_EXPIRED } from './renderHold';
 
 /** The hold this tray renders under: a user, the brand, the template's binding, the template. */
 const SCOPE = {
@@ -213,6 +213,8 @@ const SCOPE = {
   brandId: '22222222-2222-4222-8222-222222222222',
   bindingId: '44444444-4444-4444-8444-444444444444',
   templateKey: '133',
+  // The render set the rows are from (SET below).
+  renderSetId: '33333333-3333-4333-8333-333333333333',
 };
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
@@ -765,12 +767,16 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       expect(handlers.onHeld).not.toHaveBeenCalled();
       expect(readHold(SCOPE)).toBeNull();
       expect(screen.queryAllByRole('alert')).toHaveLength(0);
+      // Done, and this review cannot Render again: no Render, no Back to one.
+      expect(screen.queryAllByRole('button', { name: /^Render \d+ file/ })).toHaveLength(0);
+      expect(screen.queryAllByRole('button', { name: 'Back' })).toHaveLength(0);
+      expect(createBatchMock).toHaveBeenCalledTimes(1);
     } finally {
       error.mockRestore();
     }
   }, 30_000);
 
-  test('a hold the browser will not save is not sent, and says why', async () => {
+  test('a hold the browser will not save is still sent, and says a reload forgets it', async () => {
     renderTray(null);
     await press('Next: delivery');
     const real = globalThis.localStorage;
@@ -786,8 +792,9 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     });
     try {
       await press('Render 3 files');
-      expect(await screen.findByText(STORAGE_OFF)).toBeTruthy();
-      expect(createBatchMock).not.toHaveBeenCalled();
+      expect(await screen.findByText(NOT_SAVED)).toBeTruthy();
+      expect(createBatchMock).toHaveBeenCalledTimes(1);
+      expect(await screen.findByRole('list', { name: 'Fired renders' })).toBeTruthy();
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
     }

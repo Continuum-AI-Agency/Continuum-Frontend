@@ -1,6 +1,6 @@
-// The canvas render node under a held batch. A batch held for a template (by any Forge set, any
-// tab, or this node) means the node signs nothing more for it: the banner says why, Render waits,
-// and no preflight or createBatch is called.
+// The canvas render node under a held batch. A batch the node holds for a template (in any tab)
+// means it signs nothing more for it: the banner says why, Render waits, and no preflight or
+// createBatch is called. A Forge set's hold is that set's own.
 
 import { afterAll, afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -130,7 +130,13 @@ test('a held template shows the banner, and Render signs nothing for it', async 
   useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
   // Held by another surface or tab: only the stored hold is known here.
   localStorage.setItem(
-    holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+    holdKeyOf({
+      userId: USER,
+      brandId: BRAND,
+      bindingId: null,
+      templateKey: '133',
+      renderSetId: null,
+    }),
     JSON.stringify({ batchId: 'batch-1', heldAt: Date.now() }),
   );
   mountNode();
@@ -183,7 +189,13 @@ test('Render’s handler reads the hold fresh: written after the node drew, noth
   const renderButton = await screen.findByRole<HTMLButtonElement>('button', { name: 'Render 1' });
   await waitFor(() => expect(renderButton.disabled).toBe(false));
   localStorage.setItem(
-    holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+    holdKeyOf({
+      userId: USER,
+      brandId: BRAND,
+      bindingId: null,
+      templateKey: '133',
+      renderSetId: null,
+    }),
     JSON.stringify({ batchId: 'batch-1', heldAt: Date.now(), inflight: true }),
   );
   fireEvent.click(renderButton);
@@ -211,7 +223,13 @@ test('a render that landed is not shown as failed when the refresh after it fail
     expect(screen.queryAllByRole('alert')).toHaveLength(0);
     expect(
       localStorage.getItem(
-        holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+        holdKeyOf({
+          userId: USER,
+          brandId: BRAND,
+          bindingId: null,
+          templateKey: '133',
+          renderSetId: null,
+        }),
       ),
     ).toBeNull();
   } finally {

@@ -1152,12 +1152,20 @@ export function RenderRequestsGrid({
   // When a review last passed each row: a pass that started before it does not overrule it.
   const passedAt = useRef(new Map<string, number>());
   const events = useRef(0);
-  // A batch whose createBatch failed is held per user, brand, binding and template (renderHold.ts),
-  // so every set and the canvas see it: while it is, Render opens it, never a new review. With no
-  // user id there is no key to hold under, so Render fails closed.
+  // A batch whose createBatch failed is held per user, brand, binding, template and render set
+  // (renderHold.ts), in every tab: while it is, the set's Render opens it, never a new review. With
+  // no user id there is no key to hold under, so Render fails closed.
   const userId = useActiveBrandContext().user?.id ?? null;
   const holdScope =
-    userId && contract ? { userId, brandId, bindingId, templateKey: contract.template.key } : null;
+    userId && contract && activeSet
+      ? {
+          userId,
+          brandId,
+          bindingId,
+          templateKey: contract.template.key,
+          renderSetId: activeSet.id,
+        }
+      : null;
   const held = useRenderHold(holdScope);
   // A held batch that a Retry landed: its jobs, shown until closed.
   const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);

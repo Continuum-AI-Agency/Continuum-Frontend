@@ -78,14 +78,14 @@ import {
   heldCopy,
   isHeld,
   isSessionRefusal,
+  NOT_SAVED,
   RenderHeldError,
-  SENDING_MS,
+  STALE_MS,
   sendingElsewhere,
   resendHeld,
   retryHeld,
   SESSION_EXPIRED,
   SIGNED_OUT,
-  STORAGE_OFF,
   type SignedBatch,
 } from '@/components/forge/renderHold';
 import { ApiError } from '@/lib/api/errors';
@@ -316,6 +316,8 @@ export function RenderReviewTray({
   );
   const [approvalDestinationIds, setApprovalDestinationIds] = useState<string[]>([]);
   const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
+  /** The last send went ahead with its hold in this page's memory only: a reload forgets it. */
+  const [notSaved, setNotSaved] = useState(false);
   const [formatByRow, setFormatByRow] = useState<Record<string, string>>({});
   const [editingDelivery, setEditingDelivery] = useState(false);
   // "Change" unmounts the button that had focus; focus the options it opened so Escape still
@@ -593,22 +595,24 @@ export function RenderReviewTray({
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
+    setNotSaved(false);
     let signed: SignedBatch | null = null;
     let batch: ApiRenderBatch;
     try {
       signed = await signBatch(indexes);
       const token = signed.token;
-      batch = await confirmUnderHold(holdScope, signed, () =>
-        apiRendersApi.createBatch({ confirmationToken: token }),
+      batch = await confirmUnderHold(
+        holdScope,
+        signed,
+        () => apiRendersApi.createBatch({ confirmationToken: token }),
+        { onNotSaved: () => setNotSaved(true) },
       );
     } catch (error) {
       setFiring(false);
-      // Refused before anything was made: the session, or a hold that could not be written.
+      // Refused before anything was made: the session.
       if (isSessionRefusal(error)) return setProblem(SESSION_EXPIRED);
-      if (error instanceof RenderHeldError && error.message === STORAGE_OFF)
-        return setProblem(STORAGE_OFF);
-      // Held: by another surface since the sign, or by this createBatch failing, whatever the
-      // status (some rows may exist). Either way the hold opens, and the ledger is re-read.
+      // Held: by another tab since the sign, or by this createBatch failing, whatever the status
+      // (some rows may exist). Either way the hold opens, and the ledger is re-read.
       if (signed || error instanceof RenderHeldError) {
         void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
         onHeld();
@@ -618,17 +622,11 @@ export function RenderReviewTray({
       setProblem([message, ...details].join(' '));
       return;
     }
-    // Sent and answered: nothing after this is a failed render, whatever throws while it is shown.
+    // Sent and answered: Running first, so this review cannot Render again, whatever throws in what
+    // follows. Nothing after this is a failed render.
+    setStep('running');
     setFiring(false);
     try {
-      for (const job of batch.jobs)
-        queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
-      // Not awaited: the jobs are already cached above, and the lists can follow.
-      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
-      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
-      const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
-      if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
-      else toast.success(`${plural(batch.jobs.length, 'render')} queued`);
       // By the row each job names, so a re-sent token's jobs land beside their own rows.
       const submitted = batch.jobs.map((job, k) => {
         const at = rows.findIndex((row) => row.rowId === job.renderSetRowId);
@@ -637,7 +635,14 @@ export function RenderReviewTray({
       setFiredRows((previous) =>
         only ? [...previous.filter((item) => !only.includes(item.row)), ...submitted] : submitted,
       );
-      setStep('running');
+      for (const job of batch.jobs)
+        queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+      // Not awaited: the jobs are already cached above, and the lists can follow.
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
+      const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
+      if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
+      else toast.success(`${plural(batch.jobs.length, 'render')} queued`);
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
       console.error('[forge] after a confirmed render', error);
@@ -685,7 +690,7 @@ export function RenderReviewTray({
 
   const steps = goesToMeta ? STEPS : STEPS.filter((item) => item.id !== 'confirm');
   const stepIndex = steps.findIndex((item) => item.id === step);
-  const reviewed = review.state === 'ready' && review.readiness.state !== 'BLOCKED';
+  const reviewed = review.state === 'ready';
   // The step's one way forward: to the next step, or — on the last one — Render.
   const primary: { label: string; disabled: boolean; run: () => void; fires?: true } =
     step === 'review'
@@ -885,6 +890,14 @@ export function RenderReviewTray({
 
       {step === 'running' ? (
         <>
+          {notSaved ? (
+            <p
+              role="status"
+              className="border-b border-dashed border-warning/60 bg-warning/10 px-[var(--card-pad)] py-1"
+            >
+              {NOT_SAVED}
+            </p>
+          ) : null}
           {approvalWarning ? (
             <p
               role="status"
@@ -1479,7 +1492,7 @@ export function HeldBatchView({
   useEffect(() => {
     const waits = [
       expiresAt ? Date.parse(expiresAt) - Date.now() : 0,
-      sending ? held.heldAt + SENDING_MS - Date.now() : 0,
+      sending ? held.heldAt + STALE_MS - Date.now() : 0,
     ].filter((wait) => wait > 0);
     if (!waits.length) return;
     const timer = setTimeout(
@@ -1529,12 +1542,13 @@ export function HeldBatchView({
     setRetrying(true);
     try {
       // Read fresh: nothing is sent once another tab has let it go. Still held on any failure.
-      const batch = await retryHeld(scope, (token, now) => resendHeld(now, token, apiRendersApi));
+      const batch = await retryHeld(scope, (token, sent) => resendHeld(sent, token, apiRendersApi));
       try {
+        // Landed first, so the batch reads done whatever throws in what follows.
+        onLanded(batch.jobs);
         for (const job of batch.jobs)
           queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
         toast.success(`${plural(batch.jobs.length, 'render')} queued`);
-        onLanded(batch.jobs);
       } catch (error) {
         // Landed: showing it may fail, the render did not.
         console.error('[forge] after a retried render', error);
@@ -1562,6 +1576,7 @@ export function HeldBatchView({
       {differs ? (
         <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
       ) : null}
+      {held.saved ? null : <p className="text-muted-foreground">{NOT_SAVED}</p>}
       <p className="text-muted-foreground">
         In the Render ledger, look for the batch from {heldTime}.
       </p>
@@ -1579,7 +1594,7 @@ export function HeldBatchView({
           // A live send elsewhere must not be released under it: the ledger can wait its time out.
           disabled={sending}
           onClick={() => {
-            clearHold(scope);
+            clearHold(scope, held.batchId);
             onOpenLedger(held.batchId);
           }}
         >
