@@ -3,6 +3,17 @@ import { resolve } from 'node:path';
 import { type BrowserContext, expect, type Page, type Response, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
+  JsonToSseTransformStream,
+  UI_MESSAGE_STREAM_HEADERS,
+  type UIMessageChunk,
+  uiMessageChunkSchema,
+} from 'ai';
+import {
+  CHART_CASES,
+  type ChartCase,
+} from '@/components/paid-media/jaina/blocks/chartCases.fixture';
+import { formatValue } from '@/lib/jaina/formatValue';
+import {
   mintSessionBundleForEmail,
   type PlaywrightStorageState,
   revokeBenchSession,
@@ -44,7 +55,31 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 // the asks create, deleted at the end through the product's DELETE endpoint (cascades runs).
 // Screenshots (1280 and 390) and the captured reports: e2e/__screenshots__/jaina-answer-formats/.
 //
+// ── CHARTS (P12) ── the standard's worked cases that call for a chart (§12: 2, 3, 4, 7, 11, 12)
+// plus a funnel, each asked in the same real chat, light and dark, and answered with a FIXTURE:
+// `CHART_CASES` (src/components/paid-media/jaina/blocks/chartCases.fixture.ts) streamed as the
+// Backend's own UI message stream — `data-jaina-report-block` per block, then
+// `data-jaina-report-meta` with its block_order (`uiMessageChunks.ts`), every chunk validated
+// against the AI SDK's schema and framed by its `JsonToSseTransformStream`. The page parses and
+// renders it with its real parser and ChartBlock; the checks read the drawn SVG:
+//   chart.<case>.<theme>.renders     a chart (not tiles, not a degraded placeholder) in the answer
+//   chart.<case>.<theme>.form        the form §4 names: axes, series kinds, goal lines (dashed),
+//                                    markers, category order, orientation, legend
+//   chart.<case>.<theme>.values      every value the block asks to label is printed, at 1280 and
+//                                    375, money as MXN (a stacked segment too narrow for its
+//                                    label keeps it in the chart's accessible text, noted)
+//   chart.<case>.<theme>.legible     at 1280 and 375 no category names run together and no
+//                                    value, goal or marker label is printed cut at the edge
+//   chart.<case>.<theme>.fits-375    at 375px neither the page nor the chart scrolls sideways
+// UN-EXERCISED HOP: the Backend and the model. The chat stream and the conversation routes are
+// answered inside the page, so no Backend is needed and nothing is written; that the Backend
+// emits these blocks unchanged through `formatBlocks` and the wire is
+// `Continuum-Backend/App/agents-ts/Jaina/src/__tests__/chartVocabulary.spec.ts`, and WHEN Jaina
+// picks each form is P13's. Screenshots: e2e/__screenshots__/jaina-answer-formats/charts/.
+//
 // Usage: cd Continuum-Frontend && bun run jaina:answer-formats:e2e:bench
+//        JAINA_ANSWER_FORMATS_ONLY=charts (or a case id, e.g. case-3) runs only the charts;
+//        steps | comparison only that live ask.
 // ---------------------------------------------------------------------------
 
 test.use(benchBrowserChannel());
@@ -716,6 +751,554 @@ async function runAsk(context: BrowserContext, expected: Expected): Promise<void
   }
 }
 
+/* -- charts: the §12 worked cases as fixture answers --------------------------------- */
+
+type Theme = 'light' | 'dark';
+const THEMES: Theme[] = ['light', 'dark'];
+const CHART_OUT_DIR = resolve(OUT_DIR, 'charts');
+const LIVE_ASKS = ['steps', 'comparison'];
+
+/** One fixture answer as the Backend streams it: the frame, the chart, then the report meta. */
+async function fixtureAnswerSse(entry: ChartCase, runId: string): Promise<string> {
+  const scope = {
+    block_id: `${entry.id}_scope`,
+    category: 'data_scope',
+    scope: 'account',
+    title: 'Alcance',
+    priority: 'secondary',
+    dates: '1–27 oct 2026 (27 de 31 días)',
+    timezone: 'America/Mexico_City',
+    source: 'api',
+    notes: ['Datos de ejemplo del estándar de presentación (§12), no de una cuenta.'],
+  };
+  const chart = { ...entry.block, answer_format: true, priority: 'primary' };
+  const blocks = [scope, chart];
+  const chunks: UIMessageChunk[] = [
+    { type: 'start', messageId: `jaina:${runId}:assistant`, messageMetadata: { runId } },
+    ...blocks.map(
+      (block): UIMessageChunk => ({
+        type: 'data-jaina-report-block',
+        id: `${runId}:block:${block.block_id}`,
+        data: block,
+      }),
+    ),
+    {
+      type: 'data-jaina-report-meta',
+      id: `${runId}:report`,
+      data: {
+        language: 'es',
+        executive_summary: entry.sentence,
+        media_map: {},
+        follow_up_questions: [],
+        what_to_watch: [],
+        handoff_trace: [],
+        execution_objectives: [],
+        cached_sources: [],
+        _meta: {
+          schema_version: '2',
+          block_count: blocks.length,
+          has_charts: true,
+          has_media: false,
+          has_citations: false,
+          primary_scope: 'account',
+        },
+        block_order: blocks.map((block) => block.block_id),
+      },
+    },
+    { type: 'finish', messageMetadata: { runId, status: 'completed' } },
+  ];
+  const schema = uiMessageChunkSchema();
+  for (const chunk of chunks) {
+    const validated = await schema.validate(chunk);
+    if (!validated.success) {
+      throw new Error(`[answer-formats] a chunk the AI SDK would reject: ${JSON.stringify(chunk)}`);
+    }
+  }
+  const reader = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  })
+    .pipeThrough(new JsonToSseTransformStream())
+    .getReader();
+  let body = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return body;
+    body += value;
+  }
+}
+
+/** The page's chat stream answered in the page (POST → the fixture, GET resume → 204), and its theme. */
+async function stubChartAnswer(page: Page, question: string, sse: string, theme: Theme) {
+  await page.addInitScript(
+    ({ ask, body, headers, mode }) => {
+      window.localStorage.setItem('theme', JSON.stringify(mode));
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (...args) => {
+        const [input, init] = args;
+        const url =
+          typeof input === 'string' ? input : input instanceof Request ? input.url : input.href;
+        if (url.includes('/api/agents/jaina/chat/stream')) {
+          const method = (
+            init?.method ?? (input instanceof Request ? input.method : 'GET')
+          ).toUpperCase();
+          if (method === 'GET') return new Response(null, { status: 204 });
+          const sent =
+            typeof init?.body === 'string' ? (JSON.parse(init.body) as { query?: string }) : {};
+          if (sent.query === ask) return new Response(body, { status: 200, headers });
+        }
+        return originalFetch(...args);
+      };
+    },
+    {
+      ask: question,
+      body: sse,
+      headers: UI_MESSAGE_STREAM_HEADERS as Record<string, string>,
+      mode: theme,
+    },
+  );
+}
+
+/** The chat's conversation routes, answered locally: no Backend, no row written. */
+async function routeConversations(context: BrowserContext, brandId: string): Promise<void> {
+  const sessionId = `bench-p12-${Date.now()}`;
+  await context.route('**/api/agents/jaina/chat/conversations**', async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (pathname.endsWith('/runs')) return json({ runs: [] });
+    if (request.method() === 'POST' && pathname.endsWith('/conversations')) {
+      const sent = (request.postDataJSON() ?? {}) as { context?: { sessionId?: string } };
+      return json({
+        session_id: sent.context?.sessionId ?? sessionId,
+        brand_id: brandId,
+        ad_account_id: null,
+        conversation_title: null,
+      });
+    }
+    return json({ sessions: [], messages: [], nextCursor: null });
+  });
+  await context.route('**/api/agents/jaina/chat/runs/*/delivery', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+  );
+}
+
+type ChartRead = {
+  found: boolean;
+  inAnswer: boolean;
+  tiles: boolean;
+  degraded: boolean;
+  surface: boolean;
+  orientation: string | null;
+  categories: string[] | null;
+  yAxes: number;
+  lines: number;
+  areas: number;
+  bars: number;
+  referenceLines: Array<{ text: string; dasharray: string | null }>;
+  markers: string[];
+  legend: string[];
+  texts: string[];
+  /** The chart's accessible text (`role=img` aria-label): every value, drawn or not. */
+  aria: string;
+  /** The widest elements inside the chart, for a layout failure's detail. */
+  widest: string[];
+  /** Category tick labels that run into each other, by their text. */
+  tickOverlaps: string[];
+  /** Value, goal and marker labels drawn past the chart's surface — printed cut. */
+  clippedLabels: string[];
+  rect: { width: number; right: number };
+};
+
+async function readChart(page: Page, blockId: string): Promise<ChartRead> {
+  return page.evaluate((id) => {
+    const root = document.querySelector(
+      `[data-testid="chart-block"][data-chart-block-id="${CSS.escape(id)}"]`,
+    ) as HTMLElement | null;
+    const answer = [...document.querySelectorAll('[data-report-section="answer"]')].at(-1);
+    const text = (el: Element | null | undefined): string =>
+      (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const count = (selector: string) => root?.querySelectorAll(selector).length ?? 0;
+    const categories = root?.getAttribute('data-chart-categories');
+    const box = root?.getBoundingClientRect();
+    return {
+      found: root != null,
+      inAnswer: Boolean(root && answer?.contains(root)),
+      tiles: Boolean(answer?.querySelector(`[data-testid="chart-as-tiles"]`)),
+      degraded: /could not be rendered/i.test(text(answer)),
+      surface: count('svg.recharts-surface') > 0,
+      orientation: root?.getAttribute('data-chart-orientation') ?? null,
+      categories: categories ? (JSON.parse(categories) as string[]) : null,
+      yAxes: count('g.recharts-yAxis'),
+      lines: count('.recharts-line'),
+      areas: count('.recharts-area'),
+      bars: count('.recharts-bar'),
+      referenceLines: [...(root?.querySelectorAll('[data-chart-reference-line]') ?? [])].map(
+        (el) => ({
+          text: text(el),
+          dasharray:
+            (el.matches('line') ? el : el.querySelector('line'))?.getAttribute(
+              'stroke-dasharray',
+            ) ?? null,
+        }),
+      ),
+      markers: [...(root?.querySelectorAll('[data-chart-marker]') ?? [])].map((el) => text(el)),
+      legend: [...(root?.querySelectorAll('.recharts-legend-wrapper') ?? [])]
+        .map((el) => text(el))
+        .filter(Boolean),
+      // A wrapped tick is one label in several <tspan>s: read each <text> whole, lines joined.
+      texts: [...(root?.querySelectorAll('text') ?? [])].map((el) => {
+        const lines = [...el.querySelectorAll('tspan')].map((span) => text(span));
+        return lines.length > 0 ? lines.join(' ') : text(el);
+      }),
+      aria: root?.querySelector('[role="img"]')?.getAttribute('aria-label') ?? '',
+      ...(() => {
+        const surface = root?.querySelector('svg.recharts-surface')?.getBoundingClientRect();
+        const ticks = [
+          ...(root?.querySelectorAll(
+            'text.recharts-xAxis.recharts-cartesian-axis-tick-value, text.recharts-yAxis.recharts-cartesian-axis-tick-value',
+          ) ?? []),
+        ].map((el) => ({
+          name: el.getAttribute('aria-label') ?? text(el),
+          box: el.getBoundingClientRect(),
+        }));
+        const tickOverlaps: string[] = [];
+        ticks.forEach((a, i) => {
+          for (const b of ticks.slice(i + 1)) {
+            const across = Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left);
+            const down = Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top);
+            if (across > 1 && down > 1) tickOverlaps.push(`"${a.name}" × "${b.name}"`);
+          }
+        });
+        const clippedLabels = surface
+          ? [
+              ...(root?.querySelectorAll(
+                '[data-chart-value-label], .chart-reference-label, .chart-marker-label',
+              ) ?? []),
+            ]
+              .filter((el) => {
+                const box = el.getBoundingClientRect();
+                return (
+                  box.width > 0 &&
+                  (box.left < surface.left - 1 ||
+                    box.right > surface.right + 1 ||
+                    box.top < surface.top - 1 ||
+                    box.bottom > surface.bottom + 1)
+                );
+              })
+              .map((el) => text(el))
+          : [];
+        return { tickOverlaps, clippedLabels };
+      })(),
+      widest: [...(root?.querySelectorAll('*') ?? [])]
+        .map((el) => ({ el, width: el.getBoundingClientRect().width }))
+        .sort((a, b) => b.width - a.width)
+        .slice(0, 4)
+        .map(
+          ({ el, width }) =>
+            `${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '')
+              .split(' ')
+              .slice(0, 2)
+              .join('.')} ${Math.round(width)}px`,
+        ),
+      rect: { width: box?.width ?? 0, right: box?.right ?? 0 },
+    } as ChartRead;
+  }, blockId);
+}
+
+const money = (value: number, block: ChartCase['block']): string =>
+  formatValue(
+    value,
+    block.value_format,
+    block.currency_code ? { currency: block.currency_code } : undefined,
+  );
+
+/** The category order the case must draw: a sort reorders by its measure, a waterfall adds its totals. */
+function expectedCategories(block: ChartCase['block']): string[] {
+  const labelOf = (row: Record<string, unknown>) => String(row[block.category_key]);
+  if (block.chart_type === 'waterfall') {
+    return [
+      ...(block.start ? [block.start.label] : []),
+      ...block.data.map(labelOf),
+      ...(block.end ? [block.end.label] : []),
+    ];
+  }
+  if (!block.sort) return block.data.map(labelOf);
+  const key = block.value_key ?? Object.keys(block.chart_config)[0] ?? '';
+  const measure = (row: Record<string, unknown>) =>
+    block.chart_type === 'stacked_bar'
+      ? Object.keys(block.chart_config).reduce((sum, k) => sum + Number(row[k] ?? 0), 0)
+      : Number(row[key] ?? 0);
+  const sorted = [...block.data].sort((a, b) => measure(b) - measure(a));
+  return (block.sort === 'asc' ? sorted.reverse() : sorted).map(labelOf);
+}
+
+/** What the drawn chart must carry for the case's form; empty when it does. */
+function formProblems(block: ChartCase['block'], read: ChartRead): string[] {
+  const problems: string[] = [];
+  const keys = Object.keys(block.chart_config);
+  const baseKind =
+    block.chart_type === 'line' ? 'line' : block.chart_type === 'area' ? 'area' : 'bar';
+  const kindOf = (key: string) => block.series_kind?.[key] ?? baseKind;
+  const wantOrientation =
+    block.chart_type === 'funnel' ? 'horizontal' : (block.orientation ?? 'vertical');
+  if (read.orientation !== wantOrientation)
+    problems.push(`orientation ${read.orientation} ≠ ${wantOrientation}`);
+  const wantCategories = expectedCategories(block);
+  if (JSON.stringify(read.categories) !== JSON.stringify(wantCategories))
+    problems.push(
+      `categories ${JSON.stringify(read.categories)} ≠ ${JSON.stringify(wantCategories)}`,
+    );
+  if (block.chart_type !== 'waterfall' && block.chart_type !== 'funnel') {
+    const lines = keys.filter((k) => kindOf(k) === 'line').length;
+    const areas = keys.filter((k) => kindOf(k) === 'area').length;
+    if (read.lines !== lines) problems.push(`${read.lines} line series ≠ ${lines}`);
+    if (read.areas !== areas) problems.push(`${read.areas} area series ≠ ${areas}`);
+    if (read.bars < keys.filter((k) => kindOf(k) === 'bar').length)
+      problems.push(`${read.bars} bar series < ${keys.filter((k) => kindOf(k) === 'bar').length}`);
+    if (keys.length > 1) {
+      const missing = keys.filter(
+        (k) => !read.legend.some((item) => item.includes(block.chart_config[k]?.label ?? k)),
+      );
+      if (missing.length > 0) problems.push(`legend lacks ${missing.join(', ')}`);
+    }
+  }
+  const rightAxis = Object.values(block.series_axis ?? {}).includes('right');
+  if (rightAxis && read.yAxes !== 2)
+    problems.push(`${read.yAxes} value axes, want 2 (a right axis)`);
+  for (const line of block.reference_lines ?? []) {
+    const drawn = read.referenceLines.find((r) => r.text.includes(line.label));
+    if (!drawn) problems.push(`reference line "${line.label}" not drawn`);
+    else if (line.style === 'dashed' && !drawn.dasharray)
+      problems.push(`reference line "${line.label}" is not dashed`);
+  }
+  for (const marker of block.markers ?? []) {
+    if (!read.markers.some((m) => m.includes(marker.label)))
+      problems.push(`marker "${marker.label}" not drawn`);
+  }
+  return problems;
+}
+
+/** What a reader cannot read: names run together, a figure printed cut. Empty when none. */
+function legibilityProblems(read: ChartRead, width: number): string[] {
+  return [
+    ...read.tickOverlaps.map((pair) => `at ${width}px ticks overlap: ${pair}`),
+    ...read.clippedLabels.map((label) => `at ${width}px label cut at the edge: "${label}"`),
+  ];
+}
+
+/** The values the block asks to print, and the money rule; empty when every one is there. */
+function valueProblems(block: ChartCase['block'], read: ChartRead): string[] {
+  const problems: string[] = [];
+  const printed = read.texts.join(' | ');
+  const want: number[] = [];
+  const key = block.value_key ?? Object.keys(block.chart_config)[0] ?? '';
+  if (block.chart_type === 'waterfall') {
+    want.push(...block.data.map((row) => Math.abs(Number(row[key]))));
+    if (block.start) want.push(block.start.value);
+    if (block.end) want.push(block.end.value);
+  } else if (block.show_values) {
+    for (const row of block.data) {
+      for (const series of Object.keys(block.chart_config)) {
+        const value = row[series];
+        if (typeof value === 'number' && value !== 0) want.push(value);
+      }
+    }
+  }
+  // A stacked segment prints inside itself or not at all; one too narrow for its label keeps
+  // its value in the chart's accessible text, and the detail says so.
+  const unprinted = want
+    .map((value) => money(value, block))
+    .filter((shown) => !printed.includes(shown));
+  const ariaOnly =
+    block.chart_type === 'stacked_bar'
+      ? unprinted.filter((shown) => read.aria.includes(shown))
+      : [];
+  for (const shown of unprinted) {
+    if (!ariaOnly.includes(shown)) problems.push(`value ${shown} not printed`);
+  }
+  if (ariaOnly.length > 0 && ariaOnly.length === want.length)
+    problems.push('no stacked segment printed its value');
+  if (ariaOnly.length > 0)
+    notes.push(
+      `${block.block_id}: too narrow to print, in the accessible text: ${ariaOnly.join(', ')}`,
+    );
+  if (block.chart_type === 'funnel') {
+    const shares = read.texts.filter((t) => /%/.test(t)).length;
+    if (shares < block.data.length - 1)
+      problems.push(`${shares} step-to-step shares, want ${block.data.length - 1}`);
+  }
+  if (block.value_format === 'currency') {
+    const bare = read.texts.filter((t) => t.includes('$') && !t.includes('MXN'));
+    if (bare.length > 0) problems.push(`money without MXN: ${bare.slice(0, 3).join(' · ')}`);
+    if (read.texts.some((t) => /MX\$/.test(t))) problems.push('money printed as MX$');
+  }
+  return problems;
+}
+
+type Graded = [step: string, ok: boolean, detail: string];
+
+/**
+ * One case in one theme. Its grades come back to the caller rather than going on the record
+ * here, so an attempt the harness broke (a page that never loaded) leaves nothing behind when it
+ * is retried. Throws when the harness, not the chart, failed.
+ */
+async function runChartCase(
+  context: BrowserContext,
+  entry: ChartCase,
+  theme: Theme,
+): Promise<Graded[]> {
+  const id = `chart.${entry.id}.${theme}`;
+  const graded: Graded[] = [];
+  const grade = (step: string, ok: boolean, detail: string) => graded.push([step, ok, detail]);
+  const runId = `bench_p12_${entry.id}_${theme}`.replace(/-/g, '_');
+  const page = await context.newPage();
+  try {
+    await stubChartAnswer(page, entry.question, await fixtureAnswerSse(entry, runId), theme);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+    const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+    await expect(composer).toBeVisible({ timeout: 240_000 });
+    // The composer mounts read-only while the panel restores; typing before it is editable throws.
+    await expect(composer).toBeEditable({ timeout: 60_000 });
+    // The panel can remount the composer read-only once more while it restores; type again then.
+    await expect(async () => {
+      await composer.fill(entry.question, { timeout: 5_000 });
+    }).toPass({ timeout: 60_000 });
+    // Sent means the question left the composer: a click that lands before the button enables
+    // sends nothing, and the chart it waits for never comes.
+    const send = page.getByRole('button', { name: 'Send message' });
+    await expect(async () => {
+      if (((await composer.textContent()) ?? '').includes(entry.question)) {
+        await send.click({ timeout: 5_000 });
+      }
+      expect((await composer.textContent()) ?? '').not.toContain(entry.question);
+    }).toPass({ timeout: 60_000 });
+    const chart = page.locator(
+      `[data-testid="chart-block"][data-chart-block-id="${entry.block.block_id}"]`,
+    );
+    // The fixture is deterministic: a chart that never shows is the harness or the page, and the
+    // failure says which from what the page holds.
+    await chart.waitFor({ state: 'visible', timeout: 120_000 }).catch(async (error: unknown) => {
+      mkdirSync(CHART_OUT_DIR, { recursive: true });
+      await page
+        .screenshot({ path: resolve(CHART_OUT_DIR, `${entry.id}-${theme}-failure.png`) })
+        .catch(() => undefined);
+      const seen = await page.evaluate(
+        (question) => ({
+          asked: document.body.innerText.includes(question),
+          reports: document.querySelectorAll('[data-report-section]').length,
+          charts: document.querySelectorAll('[data-testid="chart-block"]').length,
+        }),
+        entry.question,
+      );
+      throw new Error(
+        `no chart after the send (question in the transcript ${seen.asked}, report sections ${seen.reports}, charts ${seen.charts}): ${String(error).slice(0, 120)}`,
+      );
+    });
+    await page.waitForTimeout(1_200);
+    const htmlTheme = await page.evaluate(() =>
+      document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+    );
+    if (htmlTheme !== theme) notes.push(`${id}: the page rendered ${htmlTheme}, not ${theme}`);
+    const wide = await readChart(page, entry.block.block_id);
+    grade(
+      `${id}.renders`,
+      wide.found &&
+        wide.inAnswer &&
+        wide.surface &&
+        !wide.tiles &&
+        !wide.degraded &&
+        htmlTheme === theme,
+      `found ${wide.found}, in answer ${wide.inAnswer}, svg ${wide.surface}, tiles ${wide.tiles}, degraded ${wide.degraded}, theme ${htmlTheme}`,
+    );
+    const form = formProblems(entry.block, wide);
+    grade(
+      `${id}.form`,
+      wide.found && form.length === 0,
+      form.length === 0 ? entry.expect : form.join('; '),
+    );
+    mkdirSync(CHART_OUT_DIR, { recursive: true });
+    const answer = page.locator('[data-report-section="answer"]').last();
+    await answer.scrollIntoViewIfNeeded().catch(() => undefined);
+    await answer.screenshot({ path: resolve(CHART_OUT_DIR, `${entry.id}-${theme}-1280.png`) });
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await settledChartWidth(page, entry.block.block_id);
+    const narrow = await readChart(page, entry.block.block_id);
+    const scroll = await horizontalScrollers(
+      page,
+      `[data-testid="chart-block"][data-chart-block-id="${CSS_ESCAPE(entry.block.block_id)}"]`,
+    );
+    const values = [
+      ...valueProblems(entry.block, wide).map((problem) => `at 1280px ${problem}`),
+      ...valueProblems(entry.block, narrow).map((problem) => `at 375px ${problem}`),
+    ];
+    grade(
+      `${id}.values`,
+      wide.found && narrow.found && values.length === 0,
+      values.length === 0
+        ? 'every labelled value printed at 1280 and 375; money as $… MXN'
+        : values.join('; '),
+    );
+    const legible = [...legibilityProblems(wide, 1280), ...legibilityProblems(narrow, 375)];
+    grade(
+      `${id}.legible`,
+      wide.found && narrow.found && legible.length === 0,
+      legible.length === 0
+        ? 'no category names run together and no label is cut, at 1280 and 375'
+        : legible.slice(0, 6).join('; '),
+    );
+    const overflow = [...scroll.page, ...scroll.block];
+    if (narrow.rect.right > 376) overflow.push(`chart runs to ${Math.round(narrow.rect.right)}px`);
+    if (overflow.length > 0) overflow.push(`widest: ${narrow.widest.join(', ')}`);
+    grade(
+      `${id}.fits-375`,
+      narrow.found && narrow.surface && overflow.length === 0,
+      overflow.length === 0
+        ? `chart ${Math.round(narrow.rect.width)}px wide, nothing scrolls sideways`
+        : overflow.join('; '),
+    );
+    // At 375 the answer is taller than the transcript's own scroller, which clips an element
+    // shot of it, and the chat's "Jump to latest" floats over its bottom edge: bring the chart
+    // to the top of the transcript and shoot the chart itself.
+    await chart.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await page.waitForTimeout(400);
+    await chart.screenshot({ path: resolve(CHART_OUT_DIR, `${entry.id}-${theme}-375.png`) });
+    return graded;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
+/**
+ * Waits for the chart to finish resizing: Recharts re-measures on a ResizeObserver, and a read
+ * taken mid-resize sees the old, wider SVG. Two equal widths 400ms apart, or 10s, then read.
+ */
+async function settledChartWidth(page: Page, blockId: string): Promise<void> {
+  const widthOf = () =>
+    page.evaluate(
+      (id) =>
+        document
+          .querySelector(`[data-chart-block-id="${CSS.escape(id)}"] svg.recharts-surface`)
+          ?.getBoundingClientRect().width ?? -1,
+      blockId,
+    );
+  let previous = await widthOf();
+  for (let waited = 0; waited < 10_000; waited += 400) {
+    await page.waitForTimeout(400);
+    const current = await widthOf();
+    if (current === previous) return;
+    previous = current;
+  }
+}
+
+/** Block ids are plain snake_case; a quote in one would break the attribute selector. */
+const CSS_ESCAPE = (value: string): string => value.replace(/["\\]/g, '\\$&');
+
 async function deleteSessions(): Promise<void> {
   for (const sessionId of createdSessions) {
     const response = await fetch(
@@ -769,35 +1352,95 @@ test.describe('Jaina — the asked-for answer format renders under the sentence'
     printEnvelopeOnce();
   });
 
-  test('steps and a two-entity comparison, asked in Spanish on Easy Fit', async ({ browser }) => {
-    test.setTimeout(38 * 60_000);
-    await selectBrand(EASYFIT_BRAND_ID);
-    const [sideA, sideB] = await comparisonSides();
-    const asks: Expected[] = [
-      {
-        name: 'steps',
-        question:
-          'dame los pasos para bajar el costo por resultado de mis conjuntos de Mensajes esta semana',
-      },
-      {
-        name: 'comparison',
-        question: `compara ${sideA} vs ${sideB} en los últimos 7 días`,
-        entities: [sideA, sideB],
-      },
-    ];
-    const only = process.env.JAINA_ANSWER_FORMATS_ONLY;
-    const context = await browser.newContext({
-      storageState,
-      viewport: { width: 1280, height: 900 },
-    });
-    try {
-      for (const expected of asks) {
-        if (only && only !== expected.name) continue;
-        await test.step(expected.name, async () => runAsk(context, expected));
+  // ONLY decides at load which test exists, so a skipped one never launches a browser.
+  const only = process.env.JAINA_ANSWER_FORMATS_ONLY;
+  const named = (only ?? '').split(',').filter(Boolean);
+  const chartCases = CHART_CASES.filter(
+    (entry) => named.length === 0 || named.includes('charts') || named.includes(entry.id),
+  );
+  const liveTest =
+    named.length === 0 || named.some((name) => LIVE_ASKS.includes(name)) ? test : test.skip;
+  const chartTest = chartCases.length > 0 ? test : test.skip;
+
+  liveTest(
+    'steps and a two-entity comparison, asked in Spanish on Easy Fit',
+    async ({ browser }) => {
+      test.setTimeout(38 * 60_000);
+      await selectBrand(EASYFIT_BRAND_ID);
+      const [sideA, sideB] = await comparisonSides();
+      const asks: Expected[] = [
+        {
+          name: 'steps',
+          question:
+            'dame los pasos para bajar el costo por resultado de mis conjuntos de Mensajes esta semana',
+        },
+        {
+          name: 'comparison',
+          question: `compara ${sideA} vs ${sideB} en los últimos 7 días`,
+          entities: [sideA, sideB],
+        },
+      ];
+      const context = await browser.newContext({
+        storageState,
+        viewport: { width: 1280, height: 900 },
+      });
+      try {
+        for (const expected of asks) {
+          if (named.length > 0 && !named.includes(expected.name)) continue;
+          await test.step(expected.name, async () => runAsk(context, expected));
+        }
+      } finally {
+        await context.close().catch(() => undefined);
       }
-    } finally {
-      await context.close().catch(() => undefined);
-    }
-    expect(failed, 'every assertion of both asks').toEqual([]);
-  });
+      expect(
+        failed.filter((step) => !step.startsWith('chart.')),
+        'every assertion of both asks',
+      ).toEqual([]);
+    },
+  );
+
+  chartTest(
+    'the standard’s worked-case charts render as specified (fixture answers)',
+    async ({ browser }) => {
+      test.setTimeout(30 * 60_000);
+      const context = await browser.newContext({
+        storageState,
+        viewport: { width: 1280, height: 900 },
+        // Recharts' draw-in follows reduced motion: the screenshot is the finished chart.
+        reducedMotion: 'reduce',
+      });
+      await routeConversations(context, originalBrand ?? EASYFIT_BRAND_ID);
+      try {
+        for (const entry of chartCases) {
+          for (const theme of THEMES) {
+            // A case that throws (no composer, no chart) is that case's FAIL, not the end of the run.
+            // A throw is the harness (a page that never loaded), so it gets one more try; a
+            // failed assertion never does.
+            await test.step(`${entry.id} ${theme}`, async () => {
+              const graded = await runChartCase(context, entry, theme)
+                .catch((error: unknown) => {
+                  notes.push(`${entry.id} ${theme}: retried after ${String(error).slice(0, 160)}`);
+                  return runChartCase(context, entry, theme);
+                })
+                .catch((error: unknown): Graded[] => [
+                  [
+                    `chart.${entry.id}.${theme}.renders`,
+                    false,
+                    `threw twice: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`,
+                  ],
+                ]);
+              for (const [step, ok, detail] of graded) grade(step, ok, detail);
+            });
+          }
+        }
+      } finally {
+        await context.close().catch(() => undefined);
+      }
+      notes.push(`chart screenshots: ${CHART_OUT_DIR}`);
+      expect(
+        failed.filter((step) => step.startsWith('chart.')),
+        'every chart check of every case, light and dark',
+      ).toEqual([]);
+    },
+  );
 });
