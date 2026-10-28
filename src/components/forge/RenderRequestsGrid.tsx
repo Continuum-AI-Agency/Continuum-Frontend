@@ -5,6 +5,7 @@ import {
   type ApiRenderBatchRecord,
   type ApiRenderInputSet,
   type ApiRenderInputValue,
+  type ApiRenderJob,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
@@ -16,10 +17,8 @@ import {
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
   isWebTemplateKey,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
   type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
@@ -68,7 +67,21 @@ import {
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
-import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
+import {
+  HeldBatchView,
+  LandedBatchView,
+  RenderReviewTray,
+  type RowsAsked,
+} from '@/components/forge/RenderReviewTray';
+import {
+  HELD_SET,
+  heldConfirmCopy,
+  type HoldScope,
+  isHeld,
+  isSetChanged,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -96,6 +109,8 @@ import {
   forkLabel,
   fromRenderSetRows,
   isFontPreflightRefusal,
+  isRenderable,
+  isResolvedDelivery,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -103,22 +118,24 @@ import {
   moveRow,
   nestRows,
   newRowId,
-  PREFLIGHT_DEBOUNCE_MS,
   parseDelimited,
   proposedIds,
   pushHistory,
   type RequestRow,
   type RowDrop,
+  type RowRefusal,
   rebaseRows,
   renderedRatios,
   resetKey,
   restoreRows,
   reviewSignature,
+  rowsOfSignature,
   rootRowId,
   rowBreadcrumb,
   rowDepth,
   rowFileCount,
   rowMediaOf,
+  rowStatusOf,
   rowsFromSuggestion,
   seedRow,
   toPreflightDelivery,
@@ -176,8 +193,8 @@ import {
 //
 // One row per render, one column per variable the template exposes. The canvas node fills ONE
 // of these per node; a campaign fills fifty, and fifty forms is what NocoBase offered. Every
-// cell validates as you type, every row is dry-run against the server the moment it is
-// complete, and the selection renders as one batch — the same `records[]` the node sends, so
+// cell validates as you type and an edit asks the server nothing: Render's review is the one
+// preflight, and the selection renders as one batch — the same `records[]` the node sends, so
 // there is one batching model and this is only a wider view of it.
 //
 // Named sets persist on the server; localStorage is only an unsaved-draft recovery copy.
@@ -222,15 +239,16 @@ function readDrafts(key: string): RequestRow[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Persisted;
     if (!Array.isArray(parsed.rows)) return null;
-    // The server's verdict does not survive a reload — tokens expire, contracts move.
-    return parsed.rows.map((row, index) => ({
-      ...row,
-      parentId: row.parentId ?? null,
-      clearedKeys: row.clearedKeys ?? [],
-      outputIds: row.outputIds ?? [],
-      label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
-      check: { state: 'idle' },
-    }));
+    // A draft saved by a build that kept a per-row dry-run still carries its `check`; drop it.
+    return parsed.rows.map(
+      ({ check: _check, ...row }: RequestRow & { check?: unknown }, index) => ({
+        ...row,
+        parentId: row.parentId ?? null,
+        clearedKeys: row.clearedKeys ?? [],
+        outputIds: row.outputIds ?? [],
+        label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
+      }),
+    );
   } catch {
     return null;
   }
@@ -248,13 +266,46 @@ const seededRows = (contract: ApiRenderTemplateContract): RequestRow[] => [
 const signatureOf = (rows: RequestRow[], contract: ApiRenderTemplateContract | null) =>
   JSON.stringify(toRenderSetRows(rows, allOutputIdsOf(contract)));
 
-/** Inputs, not a render, so the snapshot is everything the dry-run is asked about. */
-const preflightSnapshot = (rows: RequestRow[], id: string) =>
+/** Everything a row's own preflight is asked about: a refusal holds only while all of it holds. */
+const refusalKey = (
+  rows: RequestRow[],
+  id: string,
+  templateRef: string | null,
+  contract: ApiRenderTemplateContract | null,
+  revision: number | null,
+) =>
   JSON.stringify([
     effectiveValues(rows, id),
     effectiveEncode(rows, id) ?? null,
     effectiveOutputIds(rows, id),
+    templateRef,
+    contract?.template.contractHash ?? null,
+    revision,
   ]);
+
+/**
+ * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
+ * (guardrails, fonts). Anything else (an outage, a throttle, a malformed request, a set that
+ * moved) is no answer about the row, and is not kept.
+ */
+function refusalOf(error: unknown): RowRefusal | null {
+  if (!(error instanceof ApiError) || error.status !== 422) return null;
+  const code =
+    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
+  if (isSetChanged(error)) return null;
+  const parsed = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
+    error.payload?.guardrails,
+  );
+  const guardrails = (parsed.success ? parsed.data : undefined) ?? [];
+  const detail = typeof error.payload?.detail === 'string' ? error.payload.detail : null;
+  return {
+    font: isFontPreflightRefusal(code, guardrails),
+    message:
+      detail ??
+      guardrails.find((finding) => finding.severity === 'block')?.message ??
+      describeRenderDiscoveryFailure(error),
+  };
+}
 
 const rowStepCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
   if (event.code === 'ArrowDown')
@@ -308,27 +359,47 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...(contract.encode && !isStillsOnly(contract)
       ? [{ id: 'encode', size: 160, header: 'Output', cell: EncodeCell }]
       : []),
-    { id: 'status', size: 110, header: 'Status', cell: StatusCell },
+    // Wide enough for a status and its reason in words, not only on hover.
+    { id: 'status', size: 200, header: 'Status', cell: StatusCell },
   ];
 }
 
-/** "4 of 6 rows ready to render · 1 needs fixing · 1 still checking" — no state word to decode. */
+/** "4 of 6 rows can render · 1 needs fixing · 1 not checked" — no state word to decode. */
 function readinessSummary(
-  counts: { ready: number; blocked: number; needsInput: number; review: number; checking: number },
+  counts: {
+    renderable: number;
+    blocked: number;
+    needsInput: number;
+    refused: number;
+    fonts: number;
+    warned: number;
+    unchecked: number;
+    fitUnmeasured: boolean;
+    fitLoading: boolean;
+  },
   total: number,
 ): string {
+  // Until the kits land, nothing else is known well enough to count.
+  if (counts.fitLoading && total) return 'Checking layout…';
   const needs = (count: number, what: string) =>
     count ? `${count} ${count === 1 ? 'needs' : 'need'} ${what}` : null;
   return [
     total === 0
       ? 'No rows to render'
-      : counts.ready === total
-        ? `${total === 1 ? 'The row is' : `All ${total} rows are`} ready to render`
-        : `${counts.ready} of ${total} ${total === 1 ? 'row' : 'rows'} ready to render`,
+      : counts.renderable === total
+        ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
+        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
-    needs(counts.review, 'a review'),
-    counts.checking ? `${counts.checking} still checking` : null,
+    counts.refused ? `${counts.refused} won’t render` : null,
+    counts.fonts
+      ? `${counts.fonts} need${counts.fonts === 1 ? 's' : ''} Render anyway for missing fonts`
+      : null,
+    counts.warned ? `${counts.warned} with a warning` : null,
+    counts.unchecked ? `${counts.unchecked} not checked` : null,
+    counts.fitUnmeasured && total
+      ? 'Layout fit isn’t measured for this template — rows can still render'
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -471,14 +542,6 @@ export function RenderRequestsGrid({
     () => (lineage.data ? checkpointGraph(lineage.data) : null),
     [lineage.data],
   );
-  const pinCheckpoint = (ref: string | null) => {
-    setTemplateRef(ref);
-    setRows((current) =>
-      current.map((row) =>
-        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
-      ),
-    );
-  };
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
@@ -952,20 +1015,18 @@ export function RenderRequestsGrid({
   const updateRow = useCallback(
     (id: string, patch: (row: RequestRow) => RequestRow, coalesce?: string) => {
       record(coalesce ?? null);
-      setRows((current) => {
-        const affected = descendantsOf(current, [id]);
-        return current.map((row) => {
-          if (row.id !== id)
-            return affected.has(row.id) ? { ...row, check: { state: 'idle' } } : row;
+      setRows((current) =>
+        current.map((row) => {
+          if (row.id !== id) return row;
           const next = patch(row);
           const evidence = Object.fromEntries(
             Object.entries(next.evidence ?? {}).filter(
               ([key]) => JSON.stringify(row.values[key]) === JSON.stringify(next.values[key]),
             ),
           );
-          return { ...next, evidence, check: { state: 'idle' } };
-        });
-      });
+          return { ...next, evidence };
+        }),
+      );
     },
     [],
   );
@@ -1060,14 +1121,7 @@ export function RenderRequestsGrid({
     [updateRow],
   );
 
-  // --- server preflight, per dirty row, debounced ---------------------------------------
-  // At most PREFLIGHT_CONCURRENCY at once: an imported sheet arms fifty rows in one go, and fifty
-  // simultaneous dry-runs queue behind each other on the server anyway.
-  const PREFLIGHT_CONCURRENCY = 3;
-  const checksInFlight = useRef(0);
-  const timers = useRef(
-    new Map<string, { timer: ReturnType<typeof setTimeout>; snapshot: string }>(),
-  );
+  // --- what the browser can tell about each row, with no request ------------------------
   const variables = contract?.variables;
   const clientErrors = useMemo(
     () =>
@@ -1081,175 +1135,55 @@ export function RenderRequestsGrid({
           );
           const errors = validateRow(variables ?? [], rendered.values);
           for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
-          if (row.check.state === 'ready' || row.check.state === 'error')
-            for (const finding of row.check.guardrails ?? []) {
-              if (
-                finding.severity === 'block' &&
-                !(
-                  row.check.state === 'error' &&
-                  isFontPreflightRefusal(row.check.code, row.check.guardrails)
-                )
-              )
-                errors[finding.variableKey ?? finding.code] = finding.message;
-            }
           return [row.id, errors] as const;
         }),
       ),
     [rows, variables, linkedFields],
   );
-  const readiness = useMemo(() => {
-    const findings = new Map<string, { message: string; rows: string[] }>();
-    let blocked = 0;
-    let needsInput = 0;
-    let review = 0;
-    let checking = 0;
-    let ready = 0;
-    const labelOf = (key: string | undefined) => {
-      const label = variables?.find((variable) => variable.key === key)?.label;
-      return label ? readableLayerName(label) : undefined;
-    };
-    for (const row of rows) {
-      const errors = clientErrors.get(row.id) ?? {};
-      // The same findings, and the same words, as the row's "Needs review" badge and the tray.
-      const unknown =
-        row.check.state === 'ready'
-          ? readinessFindings(row.check).filter(leavesCheckIncomplete)
-          : [];
-      for (const item of unknown) {
-        const key = `${item.code}:${item.variableKey ?? ''}`;
-        const finding = findings.get(key) ?? { message: explainFinding(item, labelOf), rows: [] };
-        finding.rows.push(row.label || 'Untitled');
-        findings.set(key, finding);
-      }
-      if (Object.keys(errors).length > 0 || row.check.state === 'error') {
-        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
-        const blank =
-          row.check.state !== 'error' && Object.keys(errors).every((key) => missing.includes(key));
-        if (blank) needsInput += 1;
-        else blocked += 1;
-        for (const [key, message] of Object.entries(errors)) {
-          const finding = findings.get(key) ?? { message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set(key, finding);
-        }
-        if (row.check.state === 'error') {
-          const finding = findings.get('server') ?? { message: row.check.message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set('server', finding);
-        }
-      } else if (unknown.length) review += 1;
-      else if (row.check.state === 'ready') ready += 1;
-      else checking += 1;
-    }
-    return { blocked, needsInput, review, checking, ready, findings: [...findings.entries()] };
-  }, [rows, clientErrors, variables]);
 
-  useEffect(() => {
-    if (!contract) return;
-    const { key, contractHash } = contract.template;
-    const pending = timers.current;
-    for (const row of rows) {
-      const snapshot = preflightSnapshot(rows, row.id);
-      const armedFor = `${snapshot}|${templateRef ?? ''}`;
-      const scheduled = pending.get(row.id);
-      // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === armedFor) continue;
-      if (scheduled) {
-        clearTimeout(scheduled.timer);
-        pending.delete(row.id);
-      }
-      if (row.check.state !== 'idle') continue;
-      if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
-      const resolved = effectiveValues(rows, row.id);
-      const encode = effectiveEncode(rows, row.id);
-      const outputIds = effectiveOutputIds(rows, row.id);
-      // Both updates return `current` untouched when the row moved on: a no-op must not be a new
-      // array, or every stale response re-renders the grid under the person typing in it.
-      const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
-        setRows((current) => {
-          const target = current.find((item) => item.id === row.id);
-          if (
-            !target ||
-            target.check.state !== from ||
-            preflightSnapshot(current, row.id) !== snapshot
-          )
-            return current;
-          return current.map((item) => (item === target ? { ...item, check: next } : item));
-        });
-      const run = async () => {
-        if (checksInFlight.current >= PREFLIGHT_CONCURRENCY) {
-          pending.set(row.id, { timer: setTimeout(run, 250), snapshot: armedFor });
-          return;
-        }
-        pending.delete(row.id);
-        checksInFlight.current += 1;
-        settle({ state: 'checking' }, 'idle');
-        let check: RequestRow['check'];
-        try {
-          const response = await apiRendersApi.preflight({
-            brandId,
-            ...(bindingId ? { bindingId } : {}),
-            templateKey: key,
-            contractHash,
-            variables: resolved,
-            ...(outputIds.length ? { outputIds } : {}),
-            ...(templateRevision ? { templateRevision } : {}),
-            ...(templateRef ? { templateRef } : {}),
-            ...(activeSet && signatureOf(rows, contract) === savedSignature
-              ? {
-                  renderSetId: activeSet.id,
-                  renderSetRowId: row.id,
-                  expectedRenderSetRevision: activeSet.revision,
-                }
-              : {}),
-            ...(encode ? { encode } : {}),
-          });
-          check = {
-            state: 'ready',
-            fit: response.fit,
-            test: response.test,
-            guardrails: response.guardrails ?? [],
-          };
-        } catch (error) {
-          const guardrails = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
-            error instanceof ApiError ? error.payload?.guardrails : undefined,
-          );
-          const detail =
-            error instanceof ApiError && typeof error.payload?.detail === 'string'
-              ? error.payload.detail
-              : null;
-          check = {
-            state: 'error',
-            code: error instanceof ApiError ? (error.code ?? error.message) : undefined,
-            message:
-              detail ?? describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
-            guardrails: guardrails.success ? guardrails.data : [],
-          };
-        }
-        checksInFlight.current -= 1;
-        settle(check, 'checking');
-      };
-      pending.set(row.id, { timer: setTimeout(run, PREFLIGHT_DEBOUNCE_MS), snapshot: armedFor });
-    }
-  }, [
-    rows,
-    contract,
-    clientErrors,
-    brandId,
-    bindingId,
-    templateRevision,
-    templateRef,
-    activeSet,
-    savedSignature,
-  ]);
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const { timer } of pending.values()) clearTimeout(timer);
-      pending.clear();
-    };
-  }, []);
+  // What a refused review's rows said when asked alone (askRowsAlone, below), until an edit to the
+  // row, or to what it inherits, retires it.
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, RowRefusal & { key: string }>>(
+    new Map(),
+  );
+  // A batch whose createBatch failed is held per user, brand, binding, template and render set
+  // (renderHold.ts), in every tab: while it is, the set's Render opens it, never a new review. With
+  // no user id there is no key to hold under, so Render is disabled.
+  const userId = useActiveBrandContext().user?.id ?? null;
+  const holdOf = (renderSetId: string): HoldScope | null =>
+    userId && contract
+      ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
+      : null;
+  const holdScope = activeSet ? holdOf(activeSet.id) : null;
+  /**
+   * A held set warns, never blocks: Duplicate, Delete, Restore as new set, Change set template
+   * revision, Run on other variants, Update to current template (rail and banner) and Import
+   * browser draft each ask one confirm while it is held (read fresh), then go. Retry still sends
+   * the frozen batch; a copy starts with no hold. Rename, describe and row edits never ask.
+   * True when it asked: the caller returns, and `run` goes on Continue.
+   */
+  const [heldConfirm, setHeldConfirm] = useState<{ copy: boolean; run: () => void } | null>(null);
+  const askIfHeld = (set: { id: string } | null, run: () => void, copy = false): boolean => {
+    const scope = set ? holdOf(set.id) : null;
+    if (!scope || !isHeld(scope)) return false;
+    setHeldConfirm({ copy, run });
+    return true;
+  };
+  const held = useRenderHold(holdScope);
+  // A held batch that a Retry landed: its jobs, shown until closed.
+  const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);
+  const liveRefusals = useMemo(
+    () =>
+      new Map(
+        [...refusals].filter(
+          ([id, refusal]) =>
+            rows.some((row) => row.id === id) &&
+            refusal.key ===
+              refusalKey(rows, id, templateRef, contract, activeSet?.revision ?? null),
+        ),
+      ),
+    [refusals, rows, templateRef, contract, activeSet?.revision],
+  );
 
   // --- row operations ---------------------------------------------------------------------
   // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
@@ -1358,7 +1292,6 @@ export function RenderRequestsGrid({
           ...structuredClone(row),
           id: newRowId(),
           label: duplicateLabel(row.label),
-          check: { state: 'idle' },
         })),
     );
 
@@ -1449,9 +1382,9 @@ export function RenderRequestsGrid({
   const pinnedRevisionLabel = revisionVariants
     ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
     .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
-  const changeRevision = async () => {
+  const changeRevision = async (confirmed = false) => {
     const picked = publishedRevisions.find((item) => item.id === pickedRevision);
-    if (!picked) return;
+    if (!picked || (!confirmed && askIfHeld(activeSet, () => void changeRevision(true)))) return;
     setRevisionChangeBusy(true);
     try {
       if (activeSet) {
@@ -1523,8 +1456,9 @@ export function RenderRequestsGrid({
         ? [{ variant, head, target }]
         : [];
     }) ?? [];
-  const runOnVariants = async () => {
-    if (!activeSet) return;
+  const runOnVariants = async (confirmed = false) => {
+    if (!activeSet || (!confirmed && askIfHeld(activeSet, () => void runOnVariants(true), true)))
+      return;
     setRevisionChangeBusy(true);
     const made: string[] = [];
     const refused: string[] = [];
@@ -2096,7 +2030,7 @@ export function RenderRequestsGrid({
         return saved;
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
-        if (set && message.includes('render_set_revision_conflict')) {
+        if (set && isSetChanged(error)) {
           const merged = await resolveConflict(set, submitted);
           setSaveState({ phase: 'idle' });
           return merged;
@@ -2238,7 +2172,7 @@ export function RenderRequestsGrid({
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-      if (message.includes('render_set_revision_conflict')) {
+      if (isSetChanged(error)) {
         const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
         if (fresh)
           setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
@@ -2248,8 +2182,9 @@ export function RenderRequestsGrid({
   };
 
   /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
-  const duplicateSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const duplicateSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void duplicateSet(set, true), true)))
+      return;
     const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
     const copy = rebaseRows(
       source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
@@ -2265,8 +2200,12 @@ export function RenderRequestsGrid({
   };
 
   /** A kept version as a new set. The set it came from is never written back over. */
-  const restoreRevision = async (revision: ForgeRenderSetRevision) => {
-    if (!contract) return;
+  const restoreRevision = async (revision: ForgeRenderSetRevision, confirmed = false) => {
+    if (
+      !contract ||
+      (!confirmed && askIfHeld(historyFor, () => void restoreRevision(revision, true), true))
+    )
+      return;
     if (
       revision.templateRevision &&
       (revision.templateRevision.templateKey !== contract.template.key ||
@@ -2300,8 +2239,8 @@ export function RenderRequestsGrid({
     toast.success(`Restored as “${created.name}”`);
   };
 
-  const deleteSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const deleteSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void deleteSet(set, true)))) return;
     try {
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
@@ -2335,13 +2274,17 @@ export function RenderRequestsGrid({
         : [],
     [contract],
   );
-  const fitOf = useLiveFit({
+  const fit = useLiveFit({
     brandId,
     environment: contract?.template.environment ?? null,
     templateKey: templateKey || null,
     formats: fitFormats,
     enabled: Boolean(contract) && !web,
   });
+  const fitOf = fit.state === 'measured' ? fit.fitOf : null;
+  // Nothing to measure with — a web component, or a format's kit that failed — is said once for
+  // the template, not as a badge on every row.
+  const fitUnmeasured = contract !== null && fit.state === 'unmeasured';
   const liveFit = useMemo(
     () =>
       new Map(
@@ -2358,6 +2301,60 @@ export function RenderRequestsGrid({
       ),
     [fitOf, rows],
   );
+  // The status column's verdicts, counted: the same findings and words as each row's badge.
+  const readiness = useMemo(() => {
+    const findings = new Map<string, { message: string; rows: string[] }>();
+    const counts = {
+      renderable: 0,
+      blocked: 0,
+      needsInput: 0,
+      refused: 0,
+      fonts: 0,
+      warned: 0,
+      unchecked: 0,
+    };
+    const labelOf = (key: string | undefined) => {
+      const label = variables?.find((variable) => variable.key === key)?.label;
+      return label ? readableLayerName(label) : undefined;
+    };
+    const note = (key: string, message: string, row: RequestRow) => {
+      const finding = findings.get(key) ?? { message, rows: [] };
+      finding.rows.push(row.label || 'Untitled');
+      findings.set(key, finding);
+    };
+    for (const row of rows) {
+      const status = rowStatusOf(
+        clientErrors.get(row.id) ?? {},
+        liveFit.get(row.id),
+        liveRefusals.get(row.id),
+      );
+      // An AI proposal nobody kept is skipped by Render, so it is not counted as one that can.
+      if (isRenderable(status) && !proposed.has(row.id)) counts.renderable += 1;
+      if (status.state === 'invalid') {
+        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
+        if (Object.keys(status.errors).every((key) => missing.includes(key)))
+          counts.needsInput += 1;
+        else counts.blocked += 1;
+        for (const [key, message] of Object.entries(status.errors)) note(key, message, row);
+      } else if (status.state === 'refused') {
+        counts.refused += 1;
+        note(`refused:${status.reason}`, status.reason, row);
+      } else if (status.state === 'fonts') {
+        counts.fonts += 1;
+        note(`fonts:${status.reason}`, `Fonts missing: ${status.reason}`, row);
+      } else if (status.state === 'warning') {
+        counts.warned += 1;
+        for (const item of status.findings)
+          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), row);
+      } else if (status.state === 'unchecked' && status.findings.length) counts.unchecked += 1;
+    }
+    return {
+      ...counts,
+      fitUnmeasured,
+      fitLoading: fit.state === 'loading',
+      findings: [...findings.entries()],
+    };
+  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured, proposed, fit.state]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -2374,6 +2371,8 @@ export function RenderRequestsGrid({
         hiddenColumns,
         generating: generating !== null,
         liveFit,
+        fitLoading: fit.state === 'loading',
+        refusals: liveRefusals,
       }
     : undefined;
   const table = useReactTable({
@@ -2404,10 +2403,32 @@ export function RenderRequestsGrid({
   const actionContext: GridActionContext | null = contract
     ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
     : null;
+  const canFork =
+    selected.length > 0 &&
+    rows.length < MAX_BATCH_ROWS &&
+    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
+  // A row can render unless it has a wrong value, a refusal a review found, or is an AI proposal
+  // nobody kept. Render reviews the selected rows that can, and the review lists the rest and why.
+  /** Why a selected row is left out of the batch; undefined when it can render. */
+  const skipReason = (row: RequestRow): string | undefined => {
+    const [key, message] = Object.entries(clientErrors.get(row.id) ?? {})[0] ?? [];
+    if (key)
+      return `${readableLayerName(variables?.find((variable) => variable.key === key)?.label ?? key)}: ${message}`;
+    const refusal = liveRefusals.get(row.id);
+    if (refusal && !refusal.font) return refusal.message;
+    if (proposed.has(row.id)) return 'Proposed by AI. Keep or discard it first.';
+    return undefined;
+  };
+  const selectedReady = selected.filter((row) => skipReason(row) === undefined);
+  const readyToFire =
+    Boolean(userId) &&
+    !updateRequired &&
+    selectedReady.length > 0 &&
+    selectedReady.length <= MAX_BATCH_ROWS;
   // What Render will make, counted the way the review tray counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
-    for (const row of selected) {
+    for (const row of selectedReady) {
       const outputIds = effectiveOutputIds(rows, row.id);
       files.total += rowFileCount(contract, { outputIds, delivery: row.delivery });
       if (row.delivery?.action === 'replace') files.replacements += 1;
@@ -2415,65 +2436,25 @@ export function RenderRequestsGrid({
         for (const ratio of renderedRatios(contract, outputIds))
           files.byRatio.set(ratio, (files.byRatio.get(ratio) ?? 0) + 1);
     }
-  const canFork =
-    selected.length > 0 &&
-    rows.length < MAX_BATCH_ROWS &&
-    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
-  const renderingProposed = selected.some((row) => proposed.has(row.id));
-  const readyToFire =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length > 0 &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selected.every(
-      (row) =>
-        row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-    );
-  const selectedReady = selected.filter(
-    (row) =>
-      row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-  );
-  const canReviewReady =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selectedReady.length > 0 &&
-    selectedReady.length < selected.length;
-  const canReviewMissingFonts =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length > 0 &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selected.some((row) => row.check.state === 'error') &&
-    selected.every(
-      (row) =>
-        Object.keys(clientErrors.get(row.id) ?? {}).length === 0 &&
-        (row.check.state === 'ready' ||
-          (row.check.state === 'error' &&
-            isFontPreflightRefusal(row.check.code, row.check.guardrails))),
-    );
-  const selectedProblem = selected.flatMap((row) =>
-    row.check.state === 'error'
-      ? [row.check.message]
-      : Object.values(clientErrors.get(row.id) ?? {}),
-  )[0];
-  const fireHint = updateRequired
-    ? 'Update this set to the current template first'
-    : renderingProposed
-      ? 'Keep or discard the proposed rows first'
-      : selected.length === 0
-        ? 'Select the rows to render'
-        : selected.length > MAX_BATCH_ROWS
-          ? `At most ${MAX_BATCH_ROWS} renders per batch`
-          : !readyToFire
-            ? (selectedProblem ?? 'Every selected row has to be Ready')
-            : null;
-  // A selected row still being dry-run is a wait, not a block: the tray re-checks once it lands.
-  const stillChecking = selected.some(
-    (row) =>
-      (row.check.state === 'idle' || row.check.state === 'checking') &&
-      Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
-  );
+
+  const skippedCount = selected.length - selectedReady.length;
+  const fireHint = !userId
+    ? SIGNED_OUT
+    : held
+      ? HELD_SET
+      : updateRequired
+        ? 'Update this set to the current template first'
+        : selected.length === 0
+          ? 'Select the rows to render'
+          : selectedReady.length === 0
+            ? (selected.map(skipReason).find(Boolean) ?? 'No selected row can render')
+            : selectedReady.length > MAX_BATCH_ROWS
+              ? `At most ${MAX_BATCH_ROWS} renders per batch`
+              : null;
+  const skipNote =
+    readyToFire && skippedCount
+      ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
+      : null;
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2543,14 +2524,15 @@ export function RenderRequestsGrid({
   // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async (reviewMissingFonts = false, readyOnly = false) => {
-    if (
-      !contract ||
-      (!readyToFire &&
-        !(reviewMissingFonts && canReviewMissingFonts) &&
-        !(readyOnly && canReviewReady))
-    )
+  const openReview = async () => {
+    // A pass about the review this replaces must not write into this one.
+    asking.current?.abort();
+    // A held batch is what Render opens until the ledger lets it go: read-only, nothing to sign.
+    if (held) {
+      trayPanel.current?.resize(TRAY_OPEN_SIZE);
       return;
+    }
+    if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
       const submittedSet =
@@ -2565,20 +2547,12 @@ export function RenderRequestsGrid({
         submittedSet.revision,
         allOutputIdsOf(contract),
       );
-      const chosen = readyOnly ? selectedReady : selected;
-      const rowIds = chosen.map((row) => row.id);
-      const skippedRows = selected
-        .filter((row) => !rowIds.includes(row.id))
-        .map((row) => ({
-          label: row.label.trim() || 'Untitled',
-          message:
-            row.check.state === 'error'
-              ? row.check.message
-              : (Object.entries(clientErrors.get(row.id) ?? {}).map(
-                  ([key, message]) =>
-                    `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
-                )[0] ?? 'Still checking. Recheck this row before rendering.'),
-        }));
+      const rowIds = selectedReady.map((row) => row.id);
+      // One line per row: its name and the one reason it is left out.
+      const skippedRows = selected.flatMap((row) => {
+        const message = skipReason(row);
+        return message ? [{ label: row.label.trim() || 'Untitled', message }] : [];
+      });
       setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature, rowIds, skippedRows }));
     } finally {
       setBusy(null);
@@ -2621,14 +2595,108 @@ export function RenderRequestsGrid({
     review.signature !==
       reviewSignature(rows, selectedIds, activeSet?.revision ?? null, allOutputIdsOf(contract));
 
-  // The tray unfolds for a review and folds back when it ends; a drag that folds it ends it too.
+  // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
+  // Today's batch preflight refuses all-or-nothing and names no row. On a whole-batch 422 no tick
+  // overrides, each row's own preflight is asked, three at a time and never retried; the review
+  // then runs again over the rows that passed, the refused ones listed as skipped. A pass is
+  // abandoned by a new pass, a new review (Render), Check again, closing the review or the grid;
+  // and it writes only into the review it started for.
+  const asking = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!review) asking.current?.abort();
+  }, [review]);
+  useEffect(() => () => asking.current?.abort(), []);
+  const askRowsAlone = async (rowIds: string[]): Promise<RowsAsked> => {
+    const asked: RowsAsked = { refused: 0, unchecked: 0, setChanged: false };
+    if (!contract || !review) return asked;
+    const reviewKey = review.key;
+    asking.current?.abort();
+    const abort = new AbortController();
+    asking.current = abort;
+    const current = latestRows.current;
+    const keyOf = (id: string) =>
+      refusalKey(current, id, templateRef, contract, activeSet?.revision ?? null);
+    const queue = batch.records.filter((record) => rowIds.includes(record.renderSetRowId ?? ''));
+    const found = new Map<string, RowRefusal & { key: string }>();
+    const ask = async () => {
+      for (let record = queue.shift(); record && !abort.signal.aborted; record = queue.shift()) {
+        const rowId = record.renderSetRowId as string;
+        const { delivery: _delivery, ...alone } = record;
+        // The row's own delivery, as the batch sends it at confirm: a Meta refusal is the row's.
+        const own = current.find((row) => row.id === rowId)?.delivery;
+        try {
+          await apiRendersApi.preflight(
+            {
+              brandId,
+              ...(bindingId ? { bindingId } : {}),
+              templateKey: contract.template.key,
+              contractHash: contract.template.contractHash,
+              ...(templateRef ? { templateRef } : {}),
+              ...alone,
+              ...(isResolvedDelivery(own) ? { delivery: own } : {}),
+            },
+            { retry: false },
+          );
+        } catch (error) {
+          const refusal = refusalOf(error);
+          if (refusal) found.set(rowId, { ...refusal, key: keyOf(rowId) });
+          else if (isSetChanged(error)) asked.setChanged = true;
+          else asked.unchecked += 1;
+        }
+      }
+    };
+    await Promise.all([ask(), ask(), ask()]);
+    if (abort.signal.aborted) return asked;
+    setRefusals((previous) => {
+      const next = new Map([...previous].filter(([id]) => !rowIds.includes(id)));
+      for (const [id, refusal] of found) next.set(id, refusal);
+      return next;
+    });
+    // Missing fonts still render (Render anyway): only the rest leave the review.
+    const refused = rowIds.filter((id) => found.get(id) && !found.get(id)!.font);
+    asked.refused = refused.length;
+    const left = rowIds.filter((id) => !refused.includes(id));
+    if (refused.length && left.length && !asked.setChanged)
+      setReview((previous) =>
+        previous?.key === reviewKey
+          ? {
+              ...previous,
+              key: previous.key + 1,
+              rowIds: left,
+              skippedRows: [
+                ...previous.skippedRows,
+                ...refused.map((id) => ({
+                  label: current.find((row) => row.id === id)?.label.trim() || 'Untitled',
+                  message: found.get(id)!.message,
+                })),
+              ],
+            }
+          : previous,
+      );
+    return asked;
+  };
+
+  /** After a batch lands, from a confirm or a held batch's Retry: the same bookkeeping. */
+  const afterFire = () => {
+    setRowSelection({});
+    // The rail counts renders from this read; the fired jobs are its newest.
+    if (contract)
+      void queryClient.invalidateQueries({
+        queryKey: templateJobsKey(brandId, contract.template.key),
+        exact: true,
+      });
+  };
+
+  // The tray unfolds for a review or a held batch and folds back when neither is left; a drag that
+  // folds it ends a review.
+  const trayShown = review !== null || held !== null || landed !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening and closing move the panel.
   useEffect(() => {
     const panel = trayPanel.current;
     if (!panel) return;
-    if (review && panel.isCollapsed()) panel.resize(TRAY_OPEN_SIZE);
-    else if (!review && !panel.isCollapsed()) panel.collapse();
-  }, [review === null]);
+    if (trayShown && panel.isCollapsed()) panel.resize(TRAY_OPEN_SIZE);
+    else if (!trayShown && !panel.isCollapsed()) panel.collapse();
+  }, [trayShown]);
 
   // --- keyboard ---------------------------------------------------------------------------
   /** The same column's field one row down (or up), selected for typing over. */
@@ -2727,7 +2795,6 @@ export function RenderRequestsGrid({
   });
 
   // --- render -----------------------------------------------------------------------------
-  const ready = rows.filter((row) => row.check.state === 'ready').length;
   // The pinned revision's own file when the set pins one, else the template's source.
   const settingsAssetId =
     pinnedRevisionLabel?.revision.sourceAssetId ?? contract?.template.sourceAssetId ?? null;
@@ -2817,7 +2884,7 @@ export function RenderRequestsGrid({
         }}
         checkpoints={checkpoints}
         templateRef={templateRef}
-        onTemplateRefChange={pinCheckpoint}
+        onTemplateRefChange={setTemplateRef}
         ready={contract !== null}
         sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
@@ -2828,7 +2895,6 @@ export function RenderRequestsGrid({
             current.map((row) => ({
               ...row,
               outputIds: id ? [id] : allOutputIdsOf(contract),
-              check: { state: 'idle' },
             })),
           );
         }}
@@ -2879,13 +2945,14 @@ export function RenderRequestsGrid({
         onSave={saveNow}
         selectedCount={selected.length}
         files={{ ...files, byRatio: [...files.byRatio] }}
-        readyToFire={readyToFire}
+        // While a batch is held, Render opens it: enabled whatever is selected.
+        readyToFire={readyToFire || held !== null}
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
-        readyCount={selectedReady.length}
-        onReviewReady={canReviewReady ? () => void openReview(false, true) : undefined}
-        onReviewMissingFonts={canReviewMissingFonts ? () => void openReview(true) : undefined}
+        renderCount={selectedReady.length}
+        skipNote={held ? null : skipNote}
+        heldLabel={held ? 'Unconfirmed render — check' : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -2953,13 +3020,16 @@ export function RenderRequestsGrid({
             size="xs"
             variant="outline"
             disabled={busy === 'saving'}
-            onClick={async () => {
-              setBusy('saving');
-              try {
-                await saveRenderSet();
-              } finally {
-                setBusy(null);
-              }
+            onClick={() => {
+              const update = async () => {
+                setBusy('saving');
+                try {
+                  await saveRenderSet();
+                } finally {
+                  setBusy(null);
+                }
+              };
+              if (!askIfHeld(activeSet, () => void update())) void update();
             }}
           >
             Update set
@@ -3130,14 +3200,19 @@ export function RenderRequestsGrid({
                     onDelete={deleteSet}
                     onDuplicate={(set) => void duplicateSet(set)}
                     onHistory={setHistoryFor}
-                    onUpdate={() => void saveNow()}
+                    onUpdate={() => {
+                      if (!askIfHeld(activeSet, () => void saveNow())) void saveNow();
+                    }}
                     onImportDraft={() => {
                       if (!draftOffer) return;
-                      activeSetRef.current = null;
-                      savedBase.current = [];
-                      setActiveSet(null);
-                      showRows(draftOffer, null, contract);
-                      setDraftOffer(null);
+                      const importDraft = () => {
+                        activeSetRef.current = null;
+                        savedBase.current = [];
+                        setActiveSet(null);
+                        showRows(draftOffer, null, contract);
+                        setDraftOffer(null);
+                      };
+                      if (!askIfHeld(activeSet, importDraft)) importDraft();
                     }}
                   />
                 </ResizablePanel>
@@ -3185,7 +3260,7 @@ export function RenderRequestsGrid({
                                   }
                                 : undefined
                             }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${ready} ready • ${selected.length} selected`}
+                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.fitLoading ? 'Checking layout…' : `${readiness.renderable} can render`} • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
                         </RowDropHintContext.Provider>
@@ -3208,6 +3283,7 @@ export function RenderRequestsGrid({
                         rows={rows}
                         rowId={previewId}
                         renderSetId={activeSet?.id ?? null}
+                        refusal={previewId ? liveRefusals.get(previewId) : undefined}
                         onRowChange={setPreviewRowId}
                       />
                     </div>
@@ -3262,7 +3338,40 @@ export function RenderRequestsGrid({
                 if (previous && review && trayPanel.current?.isCollapsed()) setReview(null);
               }}
             >
-              {review ? (
+              {held && holdScope ? (
+                <HeldBatchView
+                  brandId={brandId}
+                  scope={holdScope}
+                  held={held}
+                  current={selectedReady.map((row) => ({
+                    id: row.id,
+                    label: row.label.trim() || 'Untitled',
+                  }))}
+                  // Rows and selection only: a rename moves the set revision, not the batch.
+                  currentSnapshot={rowsOfSignature(
+                    reviewSignature(rows, selectedIds, null, allOutputIdsOf(contract)),
+                  )}
+                  templateNow={{
+                    contractHash: contract.template.contractHash,
+                    templateRef: templateRef ?? null,
+                  }}
+                  // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
+                  // batchId once RenderJobsGrid can open one batch from outside
+                  onOpenLedger={() => onFired?.([])}
+                  onLanded={(jobs) => {
+                    setLanded(jobs);
+                    afterFire();
+                  }}
+                />
+              ) : landed ? (
+                <LandedBatchView
+                  brandId={brandId}
+                  jobs={landed}
+                  onShowRow={showRow}
+                  onOpenLedger={(jobIds) => onFired?.(jobIds)}
+                  onClose={() => setLanded(null)}
+                />
+              ) : review ? (
                 <RenderReviewTray
                   brandId={brandId}
                   bindingId={bindingId}
@@ -3276,12 +3385,22 @@ export function RenderRequestsGrid({
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={
-                    stillChecking || canReviewMissingFonts || canReviewReady ? null : fireHint
-                  }
-                  rechecking={busy === 'firing' || stillChecking}
+                  recheckBlocked={fireHint}
+                  rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
-                  onRecheck={() => void openReview(canReviewMissingFonts, canReviewReady)}
+                  onRecheck={() => void openReview()}
+                  holdScope={holdScope}
+                  reviewSnapshot={rowsOfSignature(review.signature)}
+                  onHeld={() => setReview(null)}
+                  onRefused={askRowsAlone}
+                  onCheckAgain={() => asking.current?.abort()}
+                  onPassed={(ids) =>
+                    setRefusals((previous) =>
+                      ids.some((id) => previous.has(id))
+                        ? new Map([...previous].filter(([id]) => !ids.includes(id)))
+                        : previous,
+                    )
+                  }
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.
@@ -3295,14 +3414,7 @@ export function RenderRequestsGrid({
                     );
                   }}
                   onClose={() => setReview(null)}
-                  onFired={() => {
-                    setRowSelection({});
-                    // The rail counts renders from this read; the fired jobs are its newest.
-                    void queryClient.invalidateQueries({
-                      queryKey: templateJobsKey(brandId, contract.template.key),
-                      exact: true,
-                    });
-                  }}
+                  onFired={afterFire}
                   onOpenLedger={(jobIds) => onFired?.(jobIds)}
                   onShowRow={showRow}
                 />
@@ -3388,7 +3500,7 @@ export function RenderRequestsGrid({
         brandId={brandId}
         set={historyFor}
         contractHash={contract?.template.contractHash ?? ''}
-        onRestore={restoreRevision}
+        onRestore={(revision) => restoreRevision(revision)}
         onOpenChange={(open) => !open && setHistoryFor(null)}
       />
       <NameDialog
@@ -3404,6 +3516,31 @@ export function RenderRequestsGrid({
           setNameRequest(null);
         }}
       />
+      <AlertDialog
+        open={heldConfirm !== null}
+        onOpenChange={(open) => !open && setHeldConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unconfirmed render</AlertDialogTitle>
+            <AlertDialogDescription>
+              {heldConfirmCopy(heldConfirm?.copy ?? false)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = heldConfirm;
+                setHeldConfirm(null);
+                action?.run();
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog
         open={pendingDiscard !== null}
         onOpenChange={(open) => !open && setPendingDiscard(null)}

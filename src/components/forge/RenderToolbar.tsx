@@ -247,9 +247,9 @@ export function RenderToolbar({
   fireHint,
   busy,
   onRender,
-  onReviewMissingFonts,
-  onReviewReady,
-  readyCount,
+  renderCount,
+  skipNote,
+  heldLabel,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -303,9 +303,12 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
-  onReviewMissingFonts?: () => void;
-  onReviewReady?: () => void;
-  readyCount?: number;
+  /** The selected rows that can render: what Render's label counts. */
+  renderCount?: number;
+  /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
+  skipNote?: string | null;
+  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  heldLabel?: string;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -562,9 +565,9 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
-              onReviewMissingFonts={onReviewMissingFonts}
-              onReviewReady={onReviewReady}
-              readyCount={readyCount}
+              renderCount={renderCount}
+              skipNote={skipNote}
+              heldLabel={heldLabel}
             />
           </Control>
         </>
@@ -661,9 +664,9 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
-  onReviewMissingFonts,
-  onReviewReady,
-  readyCount,
+  renderCount,
+  skipNote,
+  heldLabel,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -671,9 +674,12 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
-  onReviewMissingFonts?: () => void;
-  onReviewReady?: () => void;
-  readyCount?: number;
+  /** The selected rows that can render: what Render's label counts. */
+  renderCount?: number;
+  /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
+  skipNote?: string | null;
+  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  heldLabel?: string;
 }) {
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
@@ -692,9 +698,11 @@ function RenderButton({
       ) : (
         <Play className="size-3.5" aria-hidden />
       )}
-      {selectedCount
-        ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
-        : 'Render'}
+      {heldLabel
+        ? heldLabel
+        : (renderCount ?? selectedCount)
+          ? `Render ${plural(renderCount ?? selectedCount, 'row')} · ${plural(files.total, 'file')}`
+          : 'Render'}
     </Button>
   );
   const content = !selectedCount ? (
@@ -722,15 +730,10 @@ function RenderButton({
   return (
     <div className="flex max-w-md flex-col items-start gap-1">
       {content}
-      {onReviewReady ? (
-        <Button type="button" size="xs" variant="outline" disabled={firing} onClick={onReviewReady}>
-          Review {readyCount} ready rows
-        </Button>
-      ) : null}
-      {onReviewMissingFonts ? (
-        <Button type="button" size="xs" variant="outline" onClick={onReviewMissingFonts}>
-          Review font override
-        </Button>
+      {!disabled && skipNote ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {skipNote}
+        </p>
       ) : null}
       {showHint ? (
         <p id={hintId} role="status" className="text-xs text-muted-foreground">

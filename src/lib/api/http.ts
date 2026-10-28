@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from '@/lib/api/config';
-import { assertOk } from '@/lib/api/errors';
+import { assertOk, markFetchFailure } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
 import { backendTimeoutPolicy, fetchWithTimeout } from '@/lib/api/timeout';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
@@ -42,6 +42,8 @@ export async function request<TResponse = unknown>(
     cache,
     next,
     signal,
+  }).catch((error: unknown) => {
+    throw markFetchFailure(error);
   });
 
   await assertOk(response);

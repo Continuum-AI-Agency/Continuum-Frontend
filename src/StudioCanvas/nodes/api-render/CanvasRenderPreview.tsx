@@ -56,7 +56,6 @@ export function CanvasRenderPreview({
         clearedKeys: [],
         outputIds: [],
         media: {},
-        check: { state: 'idle' },
       }
     : null;
   const preview = contract && row ? (

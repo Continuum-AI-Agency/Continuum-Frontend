@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ApiRenderVariable } from '@continuum/contracts';
+import type { ApiRenderFitVerdict, ApiRenderVariable } from '@continuum/contracts';
 import {
   addSibling,
   applyAssistOps,
@@ -25,6 +25,7 @@ import {
   IMPORT_SKIP,
   isDefaultValue,
   isFontPreflightRefusal,
+  isRenderable,
   keepProposed,
   mergeSetRows,
   missingInputs,
@@ -45,6 +46,7 @@ import {
   rowDepth,
   rowFileCount,
   rowMediaOf,
+  rowStatusOf,
   rowsFromMappedImport,
   rowsFromSuggestion,
   seededValue,
@@ -518,16 +520,16 @@ describe('names, order and parentage', () => {
     expect(labels(after.rows)).toEqual(['B', 'A', 'A1', 'A2', 'C', 'C1', 'C2', 'C3']);
   });
 
-  test('drops inside a row as its last child and re-checks the moved rows', () => {
+  test('drops inside a row as its last child; the rows it carries are the same objects', () => {
     const { a, b, rows } = tree();
-    rows[3]!.check = { state: 'ready', fit: null, test: true };
     const moved = moveRow(rows, b.id, { rowId: a.id, position: 'inside' }, []);
     if (!moved.ok) throw new Error(moved.reason);
     expect(labels(moved.rows)).toEqual(['A', 'A1', 'A2', 'B', 'C', 'C1', 'C2', 'C3']);
     const movedB = moved.rows.find((row) => row.id === b.id)!;
     expect(movedB.parentId).toBe(a.id);
-    expect(movedB.check.state).toBe('idle');
     expect(rowDepth(moved.rows, b.id)).toBe(1);
+    for (const row of rows.filter((item) => item.id !== b.id))
+      expect(moved.rows.find((item) => item.id === row.id)).toBe(row);
   });
 
   test('refuses a drop under its own descendant as a cycle', () => {
@@ -747,7 +749,7 @@ describe('when a review goes stale', () => {
   const signature = (rows: RequestRow[], selected: string[], revision: number | null = 3) =>
     reviewSignature(rows, selected, revision, ['sq', 'story']);
 
-  test('picking a delivery, a check landing or a thumbnail loading leaves it current', () => {
+  test('picking a delivery or a thumbnail loading leaves it current', () => {
     const { fork, rows } = reviewed();
     const before = signature(rows, [fork.id]);
     const after = rows.map((row) =>
@@ -760,7 +762,6 @@ describe('when a review goes stale', () => {
               campaignId: 'c1',
               adsetId: 's1',
             },
-            check: { state: 'ready' as const, fit: null, test: true },
             media: { hero: { thumbnailUrl: 'https://cdn.test/hero.png' } },
           }
         : row,
@@ -821,7 +822,6 @@ describe('a set saved for an earlier template', () => {
       outputIds: ['square', 'story'],
       encode: { outputs: { story: { fps: 30 }, square: { fps: 25 } } },
       media: { subtitle: { name: 'x' } },
-      check: { state: 'ready', fit: null, test: true },
     };
 
     const { rows, dropped } = rebaseRows([kept, stale], {
@@ -836,7 +836,6 @@ describe('a set saved for an earlier template', () => {
       outputIds: ['square'],
       encode: { outputs: { square: { fps: 25 } } },
       media: {},
-      check: { state: 'idle' },
     });
     expect(dropped.sort()).toEqual(['story format', 'subtitle field']);
   });
@@ -853,15 +852,14 @@ describe('editing many rows at once', () => {
   const root = (label: string, values: Record<string, string> = {}): RequestRow => ({
     ...seedRow([], label),
     values,
-    check: { state: 'ready', fit: null, test: true },
   });
 
-  test('applyValue copies one row’s value, leaves rows that already render it, and re-checks only changed rows', () => {
+  test('applyValue copies one row’s value and leaves rows that already render it untouched', () => {
     const a = root('A', { headline: 'Summer' });
     const b = root('B', { headline: 'Winter' });
     const c = root('C', { headline: 'Summer' });
     const next = applyValue([a, b, c], 'headline', a.id, [b.id, c.id]);
-    expect(next[1]).toMatchObject({ values: { headline: 'Summer' }, check: { state: 'idle' } });
+    expect(next[1]).toMatchObject({ values: { headline: 'Summer' } });
     expect(next[0]).toBe(a);
     expect(next[2]).toBe(c);
   });
@@ -945,19 +943,16 @@ describe('undo history', () => {
     expect(history.future).toEqual([]);
   });
 
-  test('restoreRows keeps unchanged rows and their verdict; changed rows are checked again', () => {
-    const kept: RequestRow = {
-      ...seedRow([], 'Kept'),
-      check: { state: 'ready', fit: null, test: true },
-    };
-    const edited: RequestRow = {
-      ...seedRow([], 'Before'),
-      check: { state: 'ready', fit: null, test: true },
-    };
-    const current = [{ ...kept }, { ...edited, label: 'After' }];
+  test('restoreRows keeps unchanged rows as their current objects; changed rows come back', () => {
+    const kept = seedRow([], 'Kept');
+    const edited = seedRow([], 'Before');
+    const current = [
+      { ...kept, media: { hero: { w: 10, h: 10 } } },
+      { ...edited, label: 'After' },
+    ];
     const restored = restoreRows([kept, edited], current);
     expect(restored[0]).toBe(current[0]);
-    expect(restored[1]).toMatchObject({ label: 'Before', check: { state: 'idle' } });
+    expect(restored[1]).toBe(edited);
   });
 });
 
@@ -1146,7 +1141,6 @@ describe('applyAssistOps', () => {
     ...seedRow([], label),
     id,
     values,
-    check: { state: 'ready', fit: null, test: true, guardrails: [] },
   });
   const A = '11111111-1111-4111-8111-111111111111';
   const B = '22222222-2222-4222-8222-222222222222';
@@ -1157,7 +1151,7 @@ describe('applyAssistOps', () => {
     { ...root(C, 'Cristal · B'), parentId: B },
   ];
 
-  test('sets, formats and renames touch only the named rows and re-check them and their variations', () => {
+  test('sets, formats and renames touch only the named rows', () => {
     const before = rows();
     const {
       rows: after,
@@ -1172,13 +1166,9 @@ describe('applyAssistOps', () => {
       ],
       ['btts', 'halftime'],
     );
-    expect(after[0]).toMatchObject({
-      label: 'FBC Melgar',
-      outputIds: ['halftime'],
-      check: { state: 'idle' },
-    });
-    expect(after[1]).toMatchObject({ values: { odds: '2.20' }, check: { state: 'idle' } });
-    expect(after[2]?.check.state).toBe('idle');
+    expect(after[0]).toMatchObject({ label: 'FBC Melgar', outputIds: ['halftime'] });
+    expect(after[1]).toMatchObject({ values: { odds: '2.20' } });
+    expect(after[2]).toBe(before[2]);
     expect(added).toEqual([]);
     expect(selected).toBeNull();
   });
@@ -1263,5 +1253,77 @@ describe('font override reachability', () => {
         { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
       ]),
     ).toBe(false);
+  });
+});
+
+describe('rowStatusOf: a row read with no request', () => {
+  const verdict = (over: Partial<ApiRenderFitVerdict>): ApiRenderFitVerdict =>
+    ({
+      key: 'hero',
+      state: 'ok',
+      subject: 'media',
+      unknownReason: null,
+      why: 'lands inside the canvas',
+      ...over,
+    }) as ApiRenderFitVerdict;
+  const fit = (...verdicts: ApiRenderFitVerdict[]) => new Map(verdicts.map((v) => [v.key, v]));
+
+  test('its own errors make it Invalid, whatever else is known', () => {
+    const status = rowStatusOf({ headline: 'Required' }, fit(verdict({})), {
+      message: 'Use a brand colour.',
+      font: false,
+    });
+    expect(status).toEqual({ state: 'invalid', errors: { headline: 'Required' } });
+    expect(isRenderable(status)).toBe(false);
+  });
+
+  test('a refusal a review found will not render; missing fonts render in substitutes', () => {
+    const refused = rowStatusOf({}, fit(verdict({})), {
+      message: 'Use a brand colour.',
+      font: false,
+    });
+    expect(refused).toEqual({ state: 'refused', reason: 'Use a brand colour.' });
+    expect(isRenderable(refused)).toBe(false);
+    const fonts = rowStatusOf({}, undefined, { message: 'Brand Sans is missing.', font: true });
+    expect(fonts).toEqual({ state: 'fonts', reason: 'Brand Sans is missing.' });
+    expect(isRenderable(fonts)).toBe(true);
+  });
+
+  test('Ready only when the fit was measured and lands', () => {
+    expect(rowStatusOf({}, fit(verdict({})))).toEqual({ state: 'ready' });
+    // A kit with nothing to place measured everything there is.
+    expect(rowStatusOf({}, new Map())).toEqual({ state: 'ready' });
+    // An unpicked slot renders the authored picture: nothing to measure.
+    expect(rowStatusOf({}, fit(verdict({ state: 'unknown', unknownReason: 'unpinned' })))).toEqual({
+      state: 'ready',
+    });
+  });
+
+  test('no Live kit, or one that failed, is Not checked, and still renders', () => {
+    const status = rowStatusOf({});
+    expect(status).toEqual({ state: 'unchecked', findings: [] });
+    expect(isRenderable(status)).toBe(true);
+  });
+
+  test('a slot with no measured placement is Not checked, not a review', () => {
+    const status = rowStatusOf({}, fit(verdict({ state: 'unknown', unknownReason: 'unplaced' })));
+    expect(status.state).toBe('unchecked');
+    if (status.state === 'unchecked')
+      expect(status.findings.map((finding) => finding.code)).toEqual(['ASSET_FIT_UNKNOWN']);
+    expect(isRenderable(status)).toBe(true);
+  });
+
+  test('a clipped fit is a Warning that still renders, never Ready', () => {
+    const status = rowStatusOf({}, fit(verdict({ state: 'clipped', why: 'clips 40 px' })));
+    expect(status.state).toBe('warning');
+    if (status.state === 'warning')
+      expect(status.findings.map((finding) => finding.code)).toEqual(['ASSET_CLIPPED']);
+    expect(isRenderable(status)).toBe(true);
+  });
+
+  test('a rig-placed slot is checked by AI after the render', () => {
+    const status = rowStatusOf({}, fit(verdict({ state: 'unknown', unknownReason: 'rigged' })));
+    expect(status.state).toBe('ai-check');
+    if (status.state === 'ai-check') expect(status.fit.escalate).toBe(true);
   });
 });

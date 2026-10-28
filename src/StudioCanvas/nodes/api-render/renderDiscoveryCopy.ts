@@ -1,5 +1,5 @@
 import type { TemplateRevisionErrorCode } from '@continuum/contracts';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, hasBackendError, isFetchFailure } from '@/lib/api/errors';
 
 // The discovery failures a brand owner can actually hit, in words they can act
 // on. Echoing the raw server code told them nothing and gave them no next step.
@@ -30,6 +30,12 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
     'This set is pinned to another template revision. Use “Change set template revision” to move it, then render.',
   render_set_revision_outputs_unresolved:
     'Some rows use formats the chosen revision does not have. Pick their formats again, then change the revision.',
+  // Confirm re-checks where the template renders; a move since the review stops the batch there.
+  render_binding_changed: 'This template’s render setup changed after the review.',
+  // A confirmation token is good for 30 minutes and signs exactly the rows it was reviewed for.
+  expired_confirmation: 'This review has expired. Review the rows again, then render.',
+  invalid_confirmation:
+    'This review no longer matches the rows. Review the rows again, then render.',
   // The server's catch-all: it hit an error it has no code for, and said nothing more.
   api_render_failed:
     'The render service hit an unexpected error. Try again; if it keeps failing, tell your Continuum contact.',
@@ -115,5 +121,32 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     for (const [code, copy] of Object.entries(MESSAGES)) {
       if (message.includes(code)) return copy;
     }
-  return humanDetail(failure) ?? (message || 'Render discovery failed');
+  // A 5xx or 429 that names no code is a gateway or a deploy, never words to show: errors.ts
+  // falls back to the bare status line ("503 Service Unavailable").
+  if (
+    failure instanceof ApiError
+      ? (failure.status === 429 || failure.status >= 500) && !hasBackendError(failure)
+      : /^(429|5\d\d)\b/.test(message)
+  )
+    return 'The render service is busy or restarting. Check again in a moment.';
+  // fetch's own words for no answer at all ("Failed to fetch", Safari's "Load failed").
+  if (isFetchFailure(failure) || /^(Failed to fetch|Load failed|NetworkError\b)/.test(message))
+    return 'Couldn’t reach the render service. Check again.';
+  const detail = humanDetail(failure);
+  if (detail) return detail;
+  // The session or the brand's access, thrown or handed over as its status line.
+  const status =
+    failure instanceof ApiError ? failure.status : Number(/^(\d{3})\b/.exec(message)?.[1]);
+  if (status === 401) return 'Your session expired. Sign in again, then try again.';
+  if (status === 403)
+    return 'You don’t have permission to do this here. Ask a brand owner for access.';
+  // A 4xx that said nothing but its status line ("400 Bad Request"), whether thrown or handed over
+  // as its message, and a code this build has no words for: a refusal with no words, never the
+  // status line or the code.
+  if (
+    (/^\d{3}\b/.test(message) && !(failure instanceof ApiError && failure.status >= 500)) ||
+    /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(message)
+  )
+    return 'The render service refused this.';
+  return message || 'Render discovery failed';
 }

@@ -12,10 +12,8 @@ import {
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   isLayerSwitch,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -68,7 +66,10 @@ import {
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
+  type RowRefusal,
+  type RowStatus,
   rowBreadcrumb,
+  rowStatusOf,
   seededValue,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
@@ -156,6 +157,10 @@ export type RequestGridMeta = {
   generating: boolean;
   /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
+  /** What a refused review found each row's own preflight refusing, while the row is unchanged. */
+  refusals?: ReadonlyMap<string, RowRefusal>;
+  /** The Live kits are still on their way: no row's fit is known yet. */
+  fitLoading?: boolean;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -396,56 +401,92 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
+/** What the Live kit could not measure, without sending anyone to re-parse a template. */
+function uncheckedWhy(findings: Array<{ variableKey?: string | null }>, labelOf: LabelOf): string {
+  const names = [
+    ...new Set(findings.map((finding) => labelOf(finding.variableKey ?? undefined) ?? 'A slot')),
+  ];
+  return `Where ${names.join(', ')} ${names.length === 1 ? 'lands' : 'land'} isn’t measured before rendering. It can still render.`;
+}
+
+/** A status word and its reason in words beside it: the reason is read, never hover-only. */
+function StatusLine({
+  variant,
+  label,
+  reason,
+}: {
+  variant: 'destructive' | 'warning' | 'muted' | 'success';
+  label: string;
+  reason?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-0.5">
+      <Badge variant={variant}>{label}</Badge>
+      {reason ? (
+        <span className="line-clamp-2 text-2xs leading-snug text-muted-foreground" title={reason}>
+          {reason}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function StatusBadge({
-  row,
+  status,
   invalidReason,
   labelOf,
+  fitLoading,
 }: {
-  row: RequestRow;
-  invalidReason?: string;
+  status: RowStatus;
+  invalidReason: string;
   labelOf: LabelOf;
+  fitLoading: boolean;
 }) {
-  if (invalidReason)
-    return (
-      <Explained why={invalidReason}>
-        <Badge variant="destructive">Invalid</Badge>
-      </Explained>
-    );
-  switch (row.check.state) {
-    case 'checking':
+  switch (status.state) {
+    case 'invalid':
+      return <StatusLine variant="destructive" label="Invalid" reason={invalidReason} />;
+    case 'refused':
+      return <StatusLine variant="destructive" label="Won’t render" reason={status.reason} />;
+    case 'fonts':
+      // What today's gate does: the review refuses these faces until Render anyway is pressed.
       return (
-        <Badge variant="muted">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
-        </Badge>
+        <StatusLine
+          variant="warning"
+          label="Fonts missing"
+          reason={`${status.reason} Needs Render anyway in the review, which renders in a substitute font.`}
+        />
       );
-    case 'error':
+    case 'warning':
       return (
-        <Badge variant="destructive" title={row.check.message}>
-          Rejected
-        </Badge>
+        <StatusLine
+          variant="warning"
+          label="Warning"
+          reason={[
+            ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+          ].join(' ')}
+        />
       );
-    case 'ready': {
-      if (row.check.guardrails?.some((finding) => finding.severity === 'block'))
-        return <Badge variant="destructive">Blocked</Badge>;
-      const review = readinessFindings(row.check).filter(leavesCheckIncomplete);
-      if (review.length)
+    case 'ai-check':
+      return (
+        <StatusLine
+          variant="warning"
+          label="AI check after render"
+          reason={aiCheckWhy(status.fit)}
+        />
+      );
+    case 'unchecked':
+      // No kit for the template (or not every format's yet): the grid says so once, not per row.
+      if (status.findings.length)
         return (
-          <Explained
-            why={[...new Set(review.map((finding) => explainFinding(finding, labelOf)))].join(' ')}
-          >
-            <Badge variant="warning">Needs review</Badge>
-          </Explained>
+          <StatusLine
+            variant="muted"
+            label="Not checked"
+            reason={uncheckedWhy(status.findings, labelOf)}
+          />
         );
-      return row.check.fit?.escalate ? (
-        <Explained why={aiCheckWhy(row.check.fit)}>
-          <Badge variant="warning">AI check after render</Badge>
-        </Explained>
-      ) : (
-        <Badge variant="success">Ready</Badge>
-      );
-    }
+      return fitLoading ? <StatusLine variant="muted" label="Checking layout…" /> : null;
     default:
-      return <Badge variant="muted">Draft</Badge>;
+      return <StatusLine variant="success" label="Can render · layout checked" />;
   }
 }
 
@@ -1138,7 +1179,7 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit, refusals, fitLoading } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
@@ -1148,9 +1189,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       readableLayerName(contract.variables.find((item) => item.key === key)?.label ?? key),
     );
     return (
-      <Badge variant="muted" title={`Fill in ${names.join(', ')}`}>
-        Needs input
-      </Badge>
+      <StatusLine variant="muted" label="Needs input" reason={`Fill in ${names.join(', ')}`} />
     );
   }
   const labelOf: LabelOf = (key) => {
@@ -1159,8 +1198,9 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
   };
   return (
     <StatusBadge
-      row={row}
+      status={rowStatusOf(errors, liveFit.get(row.id), refusals?.get(row.id))}
       labelOf={labelOf}
+      fitLoading={fitLoading ?? false}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
           const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;

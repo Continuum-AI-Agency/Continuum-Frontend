@@ -49,7 +49,6 @@ const row = (id: string, parentId: string | null = null): RequestRow => ({
   clearedKeys: [],
   outputIds: [],
   media: {},
-  check: { state: 'idle' },
 });
 
 const context = (over: Partial<GridActionContext> = {}): GridActionContext => ({

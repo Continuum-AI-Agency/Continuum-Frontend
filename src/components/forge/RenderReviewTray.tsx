@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  type ApiRenderBatch,
+  type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchReadiness,
   type ApiRenderBatchRecord,
   type ApiRenderDeliveryDestination,
@@ -51,7 +53,6 @@ import { explainFinding, readinessLine, readinessReasons } from '@/components/fo
 import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
   isFontPreflightRefusal,
-  PREFLIGHT_DEBOUNCE_MS,
   renderedRatios,
   rowFileCount,
 } from '@/components/forge/renderRequestRows';
@@ -68,12 +69,40 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  canRetry,
+  clearHold,
+  confirmUnderHold,
+  type HeldBatch,
+  type HoldScope,
+  heldCopy,
+  isHeld,
+  isPermissionRefusal,
+  isSessionRefusal,
+  isSetChanged,
+  madeNothing,
+  permissionCopy,
+  NOT_SAVED,
+  RenderHeldError,
+  STALE_MS,
+  sendingElsewhere,
+  retryHeld,
+  SESSION_CHECK,
+  SESSION_EXPIRED,
+  SET_CHANGED,
+  SET_CHANGED_CHECK,
+  SIGNED_OUT,
+  type SignedBatch,
+} from '@/components/forge/renderHold';
 import { ApiError } from '@/lib/api/errors';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import {
+  describeRenderDiscoveryFailure,
+  needsTemplateRepair,
+} from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 
 // The last look before a batch is spent, docked under the grid instead of over it: the rows stay
@@ -94,8 +123,8 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 //
 // The caller saves the set before handing over `reviewKey`, so every record points at an
 // immutable revision, and rebuilds `records` from the rows on every render. `stale` says the rows,
-// the selection or the revision moved since that key: the tray goes back to Review, asks the
-// caller to re-check once the rows settle, and refuses to confirm until then. `records[i]`
+// the selection or the revision moved since that key: the tray goes back to Review, says so, and
+// asks the server nothing until the person presses Check again. `records[i]`
 // belongs to `rows[i]`. The ROW is the source of truth for delivery: it is applied to its record
 // at confirm, and a replacing row's record is narrowed to the one format chosen here.
 
@@ -122,13 +151,30 @@ export type RenderReviewTrayProps = {
   /** A new value is a new snapshot to review: the tray opening, or a re-check. */
   reviewKey: number;
   stale: boolean;
-  /** Why a re-check cannot run — no rows selected, say. Null when it can, or will by itself. */
+  /** Why Check again cannot run — no rows selected, say. Null when it can. */
   recheckBlocked: string | null;
   /** A re-check is under way, or waiting on rows still being checked. */
   rechecking: boolean;
   /** Why this person cannot ask for a Final render. Null when they can. */
   finalBlocked: string | null;
+  /** createBatch failed, whatever the status: the caller holds this batch (renderHold.ts). */
+  /** The hold this template renders under (renderHold.ts); null when no user is signed in. */
+  holdScope: HoldScope | null;
+  /** The review's own signature of the rows (reviewSignature), kept with a held batch. */
+  reviewSnapshot?: string;
+  /** A batch is held, by this confirm or by another surface or tab: open it instead. */
+  onHeld: () => void;
   onRecheck: () => void;
+  /**
+   * Review was refused for something other than fonts; these rows' own checks can say which.
+   * Resolves to how many of them refuse alone, and how many could not be checked at all.
+   * `again` asks even when these rows were just asked.
+   */
+  onRefused?: (rowIds: string[], options?: { again?: boolean }) => Promise<RowsAsked>;
+  /** Review passed for these rows: whatever an earlier refusal said about them is out of date. */
+  onPassed?: (rowIds: string[]) => void;
+  /** Check again was pressed: whatever was asking the rows about the last check is abandoned. */
+  onCheckAgain?: () => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onClose: () => void;
   onFired: (jobIds: string[]) => void;
@@ -148,8 +194,22 @@ const STEPS: { id: Step; label: string }[] = [
 type Review =
   | { state: 'loading'; checking: number }
   | { state: 'ready'; readiness: ApiRenderBatchReadiness }
-  | { state: 'refused'; message: string; details: string[]; canOverrideFonts: boolean }
+  | {
+      state: 'refused';
+      message: string;
+      details: string[];
+      canOverrideFonts: boolean;
+      /** About the set or its template, not a row: its own copy, and no row is asked. */
+      setLevel?: boolean;
+      /** What each row said when asked alone, once the caller has asked. */
+      asked?: RowsAsked;
+    }
   | { state: 'failed'; message: string };
+
+/** A whole-batch refusal about the set or its contract, never a row's: no row is asked. */
+const isSetLevelCode = (error: unknown) =>
+  isSetChanged(error) ||
+  (error instanceof ApiError && (error.code ?? error.payload?.error) === 'render_contract_changed');
 
 type Destinations =
   | ApiRenderDeliveryDestinationsResponse
@@ -158,6 +218,14 @@ type Destinations =
   | { error: string };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/** What a refused batch's rows said when each was asked alone. */
+export type RowsAsked = {
+  refused: number;
+  unchecked: number;
+  /** A row's own check was refused for the set or its revision: the set moved, not the rows. */
+  setChanged?: boolean;
+};
 
 function describeFailure(error: unknown): {
   message: string;
@@ -250,7 +318,13 @@ export function RenderReviewTray({
   recheckBlocked,
   rechecking,
   finalBlocked,
+  holdScope,
+  reviewSnapshot,
+  onHeld,
   onRecheck,
+  onRefused,
+  onPassed,
+  onCheckAgain,
   onDeliveryChange,
   onClose,
   onFired,
@@ -266,6 +340,8 @@ export function RenderReviewTray({
   );
   const [approvalDestinationIds, setApprovalDestinationIds] = useState<string[]>([]);
   const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
+  /** The last send went ahead with its hold in this page's memory only: a reload forgets it. */
+  const [notSaved, setNotSaved] = useState(false);
   const [formatByRow, setFormatByRow] = useState<Record<string, string>>({});
   const [editingDelivery, setEditingDelivery] = useState(false);
   // "Change" unmounts the button that had focus; focus the options it opened so Escape still
@@ -332,14 +408,30 @@ export function RenderReviewTray({
   const web = isWebTemplateKey(templateKey);
 
   // Each record's findings, by everything its check reads. The set's revision is left out: every
-  // save bumps it, and it changes no row's verdict — so an edit re-checks only the rows it changed.
+  // save bumps it, and it changes no row's verdict — so Check again after an edit asks only about
+  // the rows it changed.
   const verdicts = useRef(new Map<string, ApiRenderReadinessFinding[]>());
   // Only the newest review lands: a slow answer about older rows must not replace a newer one.
   const latestReview = useRef(0);
+  const refused = useRef(onRefused);
+  refused.current = onRefused;
+  const passed = useRef(onPassed);
+  passed.current = onPassed;
+
+  /** Asks the caller which of a refused batch's rows refuse alone, and says what came back. */
+  const askRows = useCallback((mine: number, rowIds: string[], again = false) => {
+    setReview((current) =>
+      current.state === 'refused' ? { ...current, asked: undefined } : current,
+    );
+    void refused.current?.(rowIds, { again }).then((asked) => {
+      if (mine !== latestReview.current) return;
+      setReview((current) => (current.state === 'refused' ? { ...current, asked } : current));
+    });
+  }, []);
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
-    async (acceptFonts = acceptMissingFonts, { fresh = false } = {}) => {
+    async (acceptFonts = acceptMissingFonts, { fresh = false, again = false } = {}) => {
       const mine = ++latestReview.current;
       if (fresh) verdicts.current.clear();
       const keys = records.map((record) =>
@@ -359,11 +451,13 @@ export function RenderReviewTray({
           record.encode ?? null,
         ]),
       );
-      const settle = () =>
+      const settle = () => {
         setReview({
           state: 'ready',
           readiness: readinessOf(keys.map((key) => verdicts.current.get(key) ?? [])),
         });
+        passed.current?.(records.flatMap((record) => record.renderSetRowId ?? []));
+      };
       const todo = records.flatMap((record, index) =>
         verdicts.current.has(keys[index]!) ? [] : [{ record, key: keys[index]! }],
       );
@@ -391,14 +485,33 @@ export function RenderReviewTray({
       } catch (error) {
         if (mine !== latestReview.current) return;
         const { message, details, canOverrideFonts } = describeFailure(error);
+        // The session, the brand's access, or a set that moved: one line, and no row to ask.
+        const plain = isSessionRefusal(error)
+          ? SESSION_CHECK
+          : isPermissionRefusal(error)
+            ? permissionCopy(error)
+            : isSetChanged(error)
+              ? SET_CHANGED_CHECK
+              : null;
+        const refusal = error instanceof ApiError && error.status === 422 && !plain;
+        // Fanned out to the rows only when a row could be what was refused.
+        const setLevel = needsTemplateRepair(error) || isSetLevelCode(error);
         setReview(
-          error instanceof ApiError && error.status === 422
-            ? { state: 'refused', message, details, canOverrideFonts }
-            : { state: 'failed', message },
+          refusal
+            ? { state: 'refused', message, details, canOverrideFonts, setLevel }
+            : { state: 'failed', message: plain ?? message },
         );
+        if (refusal && !canOverrideFonts && !setLevel)
+          // An explicit Check again asks the rows again, even when they were just asked.
+          askRows(
+            mine,
+            todo.flatMap(({ record }) => record.renderSetRowId ?? []),
+            again,
+          );
       }
     },
     [
+      askRows,
       acceptMissingFonts,
       brandId,
       bindingId,
@@ -415,6 +528,13 @@ export function RenderReviewTray({
   // Only a font refusal offers a way past itself. Every other 422 — a stale revision, a
   // delivery target that no longer exists — is a thing to fix, not a thing to override.
   const refusedOnFonts = review.state === 'refused' && review.canOverrideFonts;
+  // Every row asked alone passed: what is left to refuse is the batch's delivery choice.
+  const refusedOnDelivery =
+    review.state === 'refused' &&
+    !review.canOverrideFonts &&
+    review.asked?.refused === 0 &&
+    review.asked.unchecked === 0 &&
+    !review.asked.setChanged;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -428,21 +548,8 @@ export function RenderReviewTray({
     if (stale) setStep((current) => (current === 'running' ? current : 'review'));
   }, [stale]);
 
-  // Rows edited after review are checked again by themselves once they settle — on the grid's
-  // own preflight debounce. Once per records snapshot, so a re-check that fails is not retried
-  // in a loop; the next edit tries again.
-  const recheck = useRef(onRecheck);
-  recheck.current = onRecheck;
-  const autoChecked = useRef<ApiRenderBatchRecord[] | null>(null);
-  useEffect(() => {
-    if (!stale || recheckBlocked !== null || rechecking || step === 'running') return;
-    if (autoChecked.current === records) return;
-    const timer = setTimeout(() => {
-      autoChecked.current = records;
-      recheck.current();
-    }, PREFLIGHT_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [stale, recheckBlocked, rechecking, step, records]);
+  // An edit with the review open asks the server nothing: the review is marked stale, and Check
+  // again (one save and one batch preflight) is the person's to press.
 
   useEffect(() => {
     let cancelled = false;
@@ -509,41 +616,68 @@ export function RenderReviewTray({
       setStep('review');
       return;
     }
+    if (!holdScope) {
+      setProblem(SIGNED_OUT);
+      return;
+    }
+    // Read fresh, not from state: another tab or the canvas may have held this template since.
+    if (isHeld(holdScope)) {
+      onHeld();
+      return;
+    }
     const indexes = only ?? rows.map((_, index) => index);
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
+    setNotSaved(false);
+    let signed: SignedBatch | null = null;
+    let batch: ApiRenderBatch;
     try {
-      const preflight = await apiRendersApi.batchPreflight({
-        brandId,
-        ...(bindingId ? { bindingId } : {}),
-        templateKey,
-        contractHash,
-        ...(templateRef ? { templateRef } : {}),
-        records: indexes.flatMap((index) => {
-          if (!records[index]) return [];
-          const { delivery: _delivery, ...record } = records[index];
-          const row = rows[index];
-          if (!row?.delivery) return record;
-          return row.delivery.action === 'replace'
-            ? { ...record, delivery: row.delivery, outputIds: rowOutputIds(row) }
-            : { ...record, delivery: row.delivery };
-        }),
-        ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
-        // Carried from the review: without it the fire is refused again on the same fonts the
-        // person already accepted, and the tray looks broken rather than protective.
-        ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
-        ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
-        // Signed into the token: a batch reviewed as a proof cannot be created as a final.
-        ...(final ? { final: true } : {}),
-        // Signed into the token too: the Backend decides per job whether it is eligible, and a
-        // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
-        ...(renderer === 'experimental' ? { renderer } : {}),
+      signed = await signBatch(indexes);
+      const token = signed.token;
+      batch = await confirmUnderHold(
+        holdScope,
+        signed,
+        () => apiRendersApi.createBatch({ confirmationToken: token }),
+        { onNotSaved: () => setNotSaved(true) },
+      );
+    } catch (error) {
+      setFiring(false);
+      // Refused before anything was made (renderHold.ts madeNothing): said, not held.
+      if (madeNothing(error))
+        return setProblem(
+          isSessionRefusal(error)
+            ? SESSION_EXPIRED
+            : isPermissionRefusal(error)
+              ? permissionCopy(error)
+              : isSetChanged(error)
+                ? SET_CHANGED
+                : describeRenderDiscoveryFailure(error),
+        );
+      // Held: by another tab since the sign, or by this createBatch failing, whatever the status
+      // (some rows may exist). Either way the hold opens, and the ledger is re-read.
+      if (signed || error instanceof RenderHeldError) {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+        onHeld();
+        return;
+      }
+      const { message, details } = describeFailure(error);
+      setProblem([message, ...details].join(' '));
+      return;
+    }
+    // Sent and answered: Running first, so this review cannot Render again, whatever throws in what
+    // follows. Nothing after this is a failed render.
+    setStep('running');
+    setFiring(false);
+    try {
+      // By the row each job names, so a re-sent token's jobs land beside their own rows.
+      const submitted = batch.jobs.map((job, k) => {
+        const at = rows.findIndex((row) => row.rowId === job.renderSetRowId);
+        return { job, row: at >= 0 ? at : (indexes[k] ?? k) };
       });
-      setApprovalWarning(preflight.approval?.warning ?? null);
-      const batch = await apiRendersApi.createBatch({
-        confirmationToken: preflight.confirmationToken,
-      });
+      setFiredRows((previous) =>
+        only ? [...previous.filter((item) => !only.includes(item.row)), ...submitted] : submitted,
+      );
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -552,23 +686,54 @@ export function RenderReviewTray({
       const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
       if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
       else toast.success(`${plural(batch.jobs.length, 'render')} queued`);
-      const submitted = batch.jobs.map((job, k) => ({ job, row: indexes[k] ?? k }));
-      setFiredRows((previous) =>
-        only ? [...previous.filter((item) => !only.includes(item.row)), ...submitted] : submitted,
-      );
-      setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
-      const { message, details } = describeFailure(error);
-      setProblem([message, ...details].join(' '));
-    } finally {
-      setFiring(false);
+      console.error('[forge] after a confirmed render', error);
     }
+  };
+
+  /** The fire's own preflight: delivery, Slack, consent, Final and renderer signed into a token. */
+  const signBatch = async (indexes: number[]): Promise<SignedBatch> => {
+    const request: ApiRenderBatchPreflightRequest = {
+      brandId,
+      ...(bindingId ? { bindingId } : {}),
+      templateKey,
+      contractHash,
+      ...(templateRef ? { templateRef } : {}),
+      records: indexes.flatMap((index) => {
+        if (!records[index]) return [];
+        const { delivery: _delivery, ...record } = records[index];
+        const row = rows[index];
+        if (!row?.delivery) return record;
+        return row.delivery.action === 'replace'
+          ? { ...record, delivery: row.delivery, outputIds: rowOutputIds(row) }
+          : { ...record, delivery: row.delivery };
+      }),
+      ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
+      // Carried from the review: without it the fire is refused again on the same fonts the
+      // person already accepted, and the tray looks broken rather than protective.
+      ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
+      ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
+      // Signed into the token: a batch reviewed as a proof cannot be created as a final.
+      ...(final ? { final: true } : {}),
+      // Signed into the token too: the Backend decides per job whether it is eligible, and a
+      // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
+      ...(renderer === 'experimental' ? { renderer } : {}),
+    };
+    const preflight = await apiRendersApi.batchPreflight(request);
+    setApprovalWarning(preflight.approval?.warning ?? null);
+    return {
+      token: preflight.confirmationToken,
+      request,
+      expiresAt: preflight.expiresAt,
+      batchId: preflight.batchId,
+      rows: reviewSnapshot,
+    };
   };
 
   const steps = goesToMeta ? STEPS : STEPS.filter((item) => item.id !== 'confirm');
   const stepIndex = steps.findIndex((item) => item.id === step);
-  const reviewed = review.state === 'ready' && review.readiness.state !== 'BLOCKED';
+  const reviewed = review.state === 'ready';
   // The step's one way forward: to the next step, or — on the last one — Render.
   const primary: { label: string; disabled: boolean; run: () => void; fires?: true } =
     step === 'review'
@@ -581,7 +746,7 @@ export function RenderReviewTray({
           }
         : {
             label: `Render ${plural(fileCount, 'file')}`,
-            disabled: firing || stale || deliverBlockers.length > 0,
+            disabled: firing || stale || deliverBlockers.length > 0 || !holdScope,
             run: () => void confirm(),
             fires: true,
           };
@@ -692,6 +857,23 @@ export function RenderReviewTray({
     </>
   );
 
+  // The rows the batch leaves out, and why: one line each, at Review and again at Deliver.
+  const skippedList = skippedRows.length ? (
+    <div role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
+      <p>
+        {skippedRows.length} selected row{skippedRows.length === 1 ? '' : 's'} will not render in
+        this batch:
+      </p>
+      <ul aria-label="Rows skipped from this batch">
+        {skippedRows.map((row, index) => (
+          <li key={`${index}:${row.label}`}>
+            {row.label}: {row.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
+
   return (
     <section
       // Named, so it is a region landmark: the tray is part of the page, never a dialog over it.
@@ -751,6 +933,14 @@ export function RenderReviewTray({
 
       {step === 'running' ? (
         <>
+          {notSaved ? (
+            <p
+              role="status"
+              className="border-b border-dashed border-warning/60 bg-warning/10 px-[var(--card-pad)] py-1"
+            >
+              {NOT_SAVED}
+            </p>
+          ) : null}
           {approvalWarning ? (
             <p
               role="status"
@@ -796,33 +986,27 @@ export function RenderReviewTray({
                 className="flex items-center gap-2 border-b border-dashed border-warning/60 bg-warning/10 px-[var(--card-pad)] py-1"
               >
                 <AlertTriangle className="size-3.5 text-warning" aria-hidden />
-                <span className="font-medium">Rows changed since review</span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  {recheckBlocked ? (
-                    `— ${recheckBlocked}.`
-                  ) : (
-                    <>
-                      — checking them again
-                      <Loader2
-                        className="size-3 animate-spin motion-reduce:animate-none"
-                        aria-hidden
-                      />
-                    </>
-                  )}
-                </span>
-                {/* Only when the re-check cannot run by itself, and disabled for the same reason. */}
+                <span className="font-medium">Rows changed since this check.</span>
                 {recheckBlocked ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    className="ml-auto"
-                    disabled
-                    title={recheckBlocked}
-                  >
-                    Re-check
-                  </Button>
+                  <span className="text-muted-foreground">{recheckBlocked}.</span>
                 ) : null}
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  disabled={recheckBlocked !== null || rechecking}
+                  title={recheckBlocked ?? undefined}
+                  onClick={onRecheck}
+                >
+                  {rechecking ? (
+                    <Loader2
+                      className="size-3 animate-spin motion-reduce:animate-none"
+                      aria-hidden
+                    />
+                  ) : null}
+                  Check again
+                </Button>
               </div>
             ) : null}
 
@@ -833,10 +1017,21 @@ export function RenderReviewTray({
                     role="alert"
                     className="border-b border-border px-[var(--card-pad)] py-1.5 text-destructive"
                   >
-                    <p className="font-medium">{review.message}</p>
-                    {review.details.map((detail) => (
-                      <p key={detail}>{detail}</p>
-                    ))}
+                    <p className="font-medium">
+                      {review.asked?.setChanged
+                        ? // The set moved: that is the whole story, not the batch's headline.
+                          SET_CHANGED_CHECK
+                        : refusedOnFonts || review.setLevel
+                          ? review.message
+                          : refusedOnDelivery
+                            ? `The render service refused this batch’s delivery: ${review.message}`
+                            : review.message.startsWith('The render service')
+                              ? review.message
+                              : `The render service refused this batch: ${review.message}`}
+                    </p>
+                    {review.asked?.setChanged
+                      ? null
+                      : review.details.map((detail) => <p key={detail}>{detail}</p>)}
                     {refusedOnFonts ? (
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <Button
@@ -854,15 +1049,53 @@ export function RenderReviewTray({
                             way. A render in a face nobody chose is what this whole gate exists
                             to stop, so taking the file is a choice, never a default. */}
                         <span className="text-muted-foreground">
-                          The worker may substitute missing fonts. This choice applies only to this
-                          batch and is recorded in the render ledger. To choose the fonts, use the
+                          Forge may use a substitute font. This choice applies only to this batch
+                          and is recorded in the render ledger. To choose the fonts, use the
                           template&rsquo;s Fonts check.
                         </span>
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">
-                        Fix the row in the grid, then re-check.
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {refusedOnDelivery ? (
+                          // Every row passes alone, and alone means with no delivery: the batch
+                          // refusals today's batch preflight has left are the delivery's.
+                          <Button
+                            type="button"
+                            size="xs"
+                            onClick={() => {
+                              setSlackDestination(null);
+                              setApprovalDestinationIds([]);
+                              setEditingDelivery(true);
+                              setStep('deliver');
+                            }}
+                          >
+                            Change delivery
+                          </Button>
+                        ) : null}
+                        {/* One way to ask again: the batch, and each row with it. */}
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            onCheckAgain?.();
+                            void runReview(acceptMissingFonts, { fresh: true, again: true });
+                          }}
+                        >
+                          Check again
+                        </Button>
+                        <span className="text-muted-foreground">
+                          {review.setLevel || review.asked?.setChanged
+                            ? null
+                            : !review.asked
+                              ? 'Checking each row…'
+                              : review.asked.unchecked > 0
+                                ? `Couldn’t check ${plural(review.asked.unchecked, 'row')}.`
+                                : review.asked.refused > 0
+                                  ? `${plural(review.asked.refused, 'row')} won’t render; the grid marks ${review.asked.refused === 1 ? 'it' : 'them'} and Render skips ${review.asked.refused === 1 ? 'it' : 'them'}.`
+                                  : null}
+                        </span>
+                      </div>
                     )}
                   </div>
                 ) : review.state === 'failed' ? (
@@ -875,27 +1108,16 @@ export function RenderReviewTray({
                       type="button"
                       size="xs"
                       variant="outline"
-                      onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
+                      onClick={() => {
+                        onCheckAgain?.();
+                        void runReview(acceptMissingFonts, { fresh: true });
+                      }}
                     >
-                      Retry
+                      Check again
                     </Button>
                   </div>
                 ) : null}
-                {skippedRows.length ? (
-                  <div role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
-                    <p>
-                      {skippedRows.length} selected row{skippedRows.length === 1 ? '' : 's'} will
-                      not render in this batch:
-                    </p>
-                    <ul aria-label="Rows skipped from this batch">
-                      {skippedRows.map((row, index) => (
-                        <li key={`${index}:${row.label}`}>
-                          {row.label}: {row.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+                {skippedList}
                 <ul aria-label="Rows to render" className="divide-y divide-border">
                   {rows.map((row, index) => {
                     const findings =
@@ -964,6 +1186,7 @@ export function RenderReviewTray({
               </>
             ) : step === 'deliver' ? (
               <>
+                {skippedList}
                 {editingDelivery ? null : (
                   <p className="flex flex-wrap items-center gap-x-2 border-b border-border px-[var(--card-pad)] py-2">
                     <span className="font-medium">{deliveryLine}</span>
@@ -1073,9 +1296,15 @@ export function RenderReviewTray({
                   </>
                 ) : review.state === 'ready' ? (
                   <ReadinessLine readiness={review.readiness} labelOf={variableLabel} />
-                ) : (
+                ) : review.state === 'refused' ? (
                   <span className="text-destructive">Can’t render as they are</span>
+                ) : (
+                  <span className="text-destructive">Couldn’t check the rows</span>
                 )
+              ) : primary.fires && !holdScope ? (
+                <p role="status" className="text-warning">
+                  {SIGNED_OUT}
+                </p>
               ) : deliverBlockers.length ? (
                 <p role="status" className="flex flex-wrap gap-x-1 text-warning">
                   {deliverBlockers.map((blocker) => (
@@ -1274,5 +1503,203 @@ function ReadinessLine({
         ))}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * A held batch, read-only: what was sent, why it is held, and the only two ways on. Retry this
+ * batch re-sends its token (each row dedupes, so it never makes a row twice) while the token is
+ * in memory and unexpired; Open Render ledger lets the hold go.
+ */
+export function HeldBatchView({
+  brandId,
+  scope,
+  held,
+  onOpenLedger,
+  onLanded,
+  current,
+  currentSnapshot,
+  templateNow,
+}: {
+  brandId: string;
+  scope: HoldScope;
+  held: HeldBatch;
+  /** The template as the set renders it now; a held request signed for another says so. */
+  templateNow?: { contractHash: string; templateRef: string | null };
+  /** The rows Render would take now: said apart when they are not the held batch's. */
+  current: Array<{ id: string; label: string }>;
+  /** reviewSignature of those rows now: a value edit since the batch was sent shows here. */
+  currentSnapshot: string;
+  onOpenLedger: (batchId: string | null) => void;
+  /** Retry landed: the jobs, for the same result a normal confirm shows. */
+  onLanded: (jobs: ApiRenderJob[]) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [retrying, setRetrying] = useState(false);
+  const [, setNow] = useState(0);
+  const expiresAt = held.signed?.expiresAt;
+  const sending = sendingElsewhere(held);
+  // Retry goes the moment the token's own expiry passes, and a send elsewhere stops counting as
+  // live once its time is up, not on whatever render happens by next.
+  useEffect(() => {
+    const waits = [
+      expiresAt ? Date.parse(expiresAt) - Date.now() : 0,
+      sending ? held.heldAt + STALE_MS - Date.now() : 0,
+    ].filter((wait) => wait > 0);
+    if (!waits.length) return;
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.min(Math.min(...waits) + 50, 2_147_483_647),
+    );
+    return () => clearTimeout(timer);
+  }, [expiresAt, sending, held.heldAt]);
+  const request = held.signed?.request;
+  const metaRows = request?.records.filter((record) => record.delivery).length ?? 0;
+  const labels = request?.records.map((record) => record.label ?? 'Untitled') ?? [];
+  const heldRows = new Set(
+    request?.records.map((record) => `${record.renderSetRowId ?? ''}|${record.label ?? ''}`),
+  );
+  // What Forge's review signs (reviewSignature) when the grid sent it; the rows' ids and labels
+  // when another surface did.
+  const sentRows = held.signed?.rows;
+  const differs =
+    request !== undefined &&
+    (sentRows !== undefined
+      ? sentRows !== currentSnapshot
+      : current.length !== heldRows.size ||
+        current.some((row) => !heldRows.has(`${row.id}|${row.label}`)));
+  const heldTime = new Date(held.heldAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const facts = request
+    ? [
+        `${plural(request.records.length, 'row')} (${labels.slice(0, 5).join(', ')}${
+          labels.length > 5 ? `, +${labels.length - 5} more` : ''
+        })`,
+        request.final ? 'Final' : 'Proof',
+        [
+          'Library',
+          ...(request.slack ? ['a Slack room'] : []),
+          ...(request.approvalDestinationIds?.length
+            ? [plural(request.approvalDestinationIds.length, 'approval room')]
+            : []),
+          ...(metaRows ? [`Meta ads for ${plural(metaRows, 'row')}`] : []),
+        ].join(', '),
+        ...(request.acceptMissingFonts ? ['missing fonts accepted'] : []),
+        ...(request.renderer === 'experimental' ? ['experimental renderer'] : []),
+      ]
+    : null;
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      // Read fresh: nothing is sent once another tab has let it go. Still held on any failure.
+      const batch = await retryHeld(scope, (token) =>
+        apiRendersApi.createBatch({ confirmationToken: token }),
+      );
+      try {
+        // Landed first, so the batch reads done whatever throws in what follows.
+        onLanded(batch.jobs);
+        for (const job of batch.jobs)
+          queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+        toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+      } catch (error) {
+        // Landed: showing it may fail, the render did not.
+        console.error('[forge] after a retried render', error);
+      }
+    } catch {
+      // The hold already says why.
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+      setRetrying(false);
+    }
+  };
+  return (
+    <section
+      aria-label="Held batch"
+      className="flex h-full min-h-0 flex-col gap-1.5 px-[var(--card-pad)] py-2 text-xs"
+    >
+      <p role="alert" className="font-medium text-destructive">
+        {heldCopy(held)}
+      </p>
+      <p className="text-muted-foreground">
+        {facts ? `What was sent: ${facts.join(' · ')}` : 'What was sent isn’t known on this page.'}
+      </p>
+      {differs ? (
+        <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
+      ) : null}
+      {request &&
+      templateNow &&
+      (request.contractHash !== templateNow.contractHash ||
+        (request.templateRef ?? null) !== templateNow.templateRef) ? (
+        <p className="text-muted-foreground">
+          This set’s template changed since this batch was sent. Retry sends the earlier version.
+        </p>
+      ) : null}
+      {held.saved ? null : <p className="text-muted-foreground">{NOT_SAVED}</p>}
+      <p className="text-muted-foreground">
+        In the Render ledger, look for the batch from {heldTime}.
+      </p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {canRetry(held) || held.sending ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={retrying || held.sending}
+            onClick={() => void retry()}
+          >
+            {retrying || held.sending ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+            ) : null}
+            Retry this batch
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          // Opening the ledger lets the hold go: not while a send is still out, here or elsewhere.
+          disabled={sending || held.sending}
+          onClick={() => {
+            clearHold(scope, held.batchId);
+            onOpenLedger(held.batchId);
+          }}
+        >
+          Open Render ledger
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** A held batch that landed on Retry: its jobs, as a confirm's Running step shows them. */
+export function LandedBatchView({
+  brandId,
+  jobs,
+  onShowRow,
+  onOpenLedger,
+  onClose,
+}: {
+  brandId: string;
+  jobs: ApiRenderJob[];
+  onShowRow: (rowId: string) => void;
+  onOpenLedger: (jobIds: string[]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <section aria-label="Retried batch" className="flex h-full min-h-0 flex-col text-xs">
+      <header className="flex items-center gap-2 border-b border-border px-[var(--card-pad)] py-1.5">
+        <span className="font-medium">{plural(jobs.length, 'render')} queued</span>
+        <Button type="button" size="xs" variant="ghost" className="ml-auto" onClick={onClose}>
+          Close
+        </Button>
+      </header>
+      <RunningStep
+        brandId={brandId}
+        fired={jobs}
+        onShowRow={onShowRow}
+        onOpenLedger={onOpenLedger}
+      />
+    </section>
   );
 }

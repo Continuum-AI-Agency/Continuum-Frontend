@@ -66,8 +66,10 @@ export const liveKitQuery = ({ brandId, environment, templateKey, format, atSec 
       },
       signal,
     ),
+  // A kit that landed is the template's for good; a failed read is not data, so it is asked again
+  // on the next mount or focus. Two retries ride out a blip that would leave every row unmeasured.
   staleTime: Number.POSITIVE_INFINITY,
-  retry: false,
+  retry: 2,
 });
 
 export function useLiveKit(
@@ -89,11 +91,19 @@ export type LiveFitOf = (
 ) => ReadonlyMap<string, ApiRenderFitVerdict>;
 
 /**
+ * The Live kit's fit for a template: measured only once EVERY format's kit has landed, because a
+ * row measured in one format of three has not been measured. `unmeasured` when there is no kit to
+ * ask for (a web component), or a format's kit failed after its retries.
+ */
+export type LiveFit =
+  | { state: 'loading' }
+  | { state: 'unmeasured' }
+  | { state: 'measured'; fitOf: LiveFitOf };
+
+/**
  * Does each value still fit the design — asked while it is typed. Every format's kit (the same
  * query the Live preview paints from, so nothing is fetched twice) through `checkLiveFit`, the
- * arithmetic preflight repeats on the server. No model, no round trip per keystroke. Null until
- * a kit has landed; a format whose kit never does is simply not checked here, and preflight
- * still asks.
+ * arithmetic preflight repeats on the server. No model, no round trip per keystroke.
  */
 export function useLiveFit(args: {
   brandId: string;
@@ -101,8 +111,9 @@ export function useLiveFit(args: {
   templateKey: string | null;
   formats: readonly PreviewFormat[];
   enabled: boolean;
-}): LiveFitOf | null {
+}): LiveFit {
   const { brandId, environment, templateKey, formats, enabled } = args;
+  const active = enabled && Boolean(environment && templateKey) && formats.length > 0;
   const kits = useQueries({
     queries: formats.map((format) => ({
       ...liveKitQuery({
@@ -112,26 +123,33 @@ export function useLiveFit(args: {
         format,
         atSec: null,
       }),
-      enabled: enabled && Boolean(environment && templateKey),
+      enabled: active,
     })),
   });
-  const stamp = kits.map((query) => query.dataUpdatedAt).join(',');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `stamp` changes exactly when a kit lands.
-  return useMemo(() => {
+  const stamp = kits.map((query) => `${query.status}@${query.dataUpdatedAt}`).join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stamp` changes exactly when a kit lands or fails.
+  return useMemo((): LiveFit => {
+    if (!active) return { state: 'unmeasured' };
     const loaded = kits.flatMap((query, i) =>
       query.data ? [{ format: formats[i]?.ratio ?? formats[i]?.label ?? '', kit: query.data }] : [],
     );
-    if (loaded.length === 0) return null;
-    return (values, assetSize) =>
-      new Map(
-        worstFitByKey(
-          loaded.map(({ format, kit }) => ({
-            format,
-            verdicts: checkLiveFit({ kit, values, assetSize }),
-          })),
-        ).map((verdict) => [verdict.key, verdict]),
-      );
-  }, [stamp]);
+    if (loaded.length < kits.length)
+      return kits.some((query) => !query.data && query.isError)
+        ? { state: 'unmeasured' }
+        : { state: 'loading' };
+    return {
+      state: 'measured',
+      fitOf: (values, assetSize) =>
+        new Map(
+          worstFitByKey(
+            loaded.map(({ format, kit }) => ({
+              format,
+              verdicts: checkLiveFit({ kit, values, assetSize }),
+            })),
+          ).map((verdict) => [verdict.key, verdict]),
+        ),
+    };
+  }, [stamp, active]);
 }
 
 /**

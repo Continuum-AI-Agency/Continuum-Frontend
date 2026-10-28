@@ -6,9 +6,11 @@
 // may answer the retry; a server that did not answer at all gets the surface's named state and
 // a Retry control instead.
 
+import { wasRetried } from '@/lib/api/errors';
 import { isRequestTimeout } from '@/lib/api/timeout';
 
+/** Nor an error the call already retried itself (a render read through a deploy cut). */
 export function retryUnlessTimeout(maxRetries: number) {
   return (failureCount: number, error: unknown): boolean =>
-    failureCount < maxRetries && !isRequestTimeout(error);
+    failureCount < maxRetries && !isRequestTimeout(error) && !wasRetried(error);
 }

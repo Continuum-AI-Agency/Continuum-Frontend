@@ -80,8 +80,8 @@ export function readinessLine(readiness: ApiRenderBatchReadiness, labelOf: Label
         .map((finding) => labelOf(finding.variableKey) ?? finding.variableKey ?? 'a slot'),
     ),
   ];
-  if (!afterRender.length) return `Ready · ${plural(readiness.totalRows, 'row')} checked`;
+  if (!afterRender.length) return `Can render · ${plural(readiness.totalRows, 'row')} checked`;
   const named =
     afterRender.length === 1 ? `${afterRender[0]} is` : `${afterRender.length} slots are`;
-  return `Ready · ${plural(readiness.totalRows, 'row')} · ${named} checked after render`;
+  return `Can render · ${plural(readiness.totalRows, 'row')} · ${named} checked after render`;
 }

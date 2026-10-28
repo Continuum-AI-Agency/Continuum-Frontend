@@ -26,6 +26,62 @@ describe('render discovery copy', () => {
     );
   });
 
+  test('a 5xx or 429 that names no code reads as busy, never as the raw status line', () => {
+    for (const thrown of [
+      new ApiError('503 Service Unavailable', 503),
+      new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
+      new ApiError('502 Bad Gateway', 502),
+      new ApiError('429 Too Many Requests', 429),
+    ])
+      expect(describeRenderDiscoveryFailure(thrown)).toBe(
+        'The render service is busy or restarting. Check again in a moment.',
+      );
+    expect(describeRenderDiscoveryFailure('503 Service Unavailable')).toBe(
+      'The render service is busy or restarting. Check again in a moment.',
+    );
+    // A 5xx that names its code still says what that code means.
+    expect(
+      describeRenderDiscoveryFailure(
+        new ApiError('render_api_not_configured', 503, undefined, {
+          error: 'render_api_not_configured',
+        }),
+      ),
+    ).toContain('not configured');
+  });
+
+  test('a 401 is the session and a 403 is access, thrown or handed over as the status line', () => {
+    const session = 'Your session expired. Sign in again, then try again.';
+    const access = 'You don’t have permission to do this here. Ask a brand owner for access.';
+    expect(describeRenderDiscoveryFailure(new ApiError('Unauthorized', 401))).toBe(session);
+    expect(describeRenderDiscoveryFailure('401 Unauthorized')).toBe(session);
+    expect(describeRenderDiscoveryFailure(new ApiError('Forbidden', 403))).toBe(access);
+    expect(describeRenderDiscoveryFailure('403 Forbidden')).toBe(access);
+  });
+
+  test('a 4xx that says nothing but its status line reads as a refusal, never the status line', () => {
+    expect(describeRenderDiscoveryFailure(new ApiError('400 Bad Request', 400))).toBe(
+      'The render service refused this.',
+    );
+    // The grid hands over `error.message`: the same status line, as text, reads the same.
+    expect(describeRenderDiscoveryFailure('413 Request Entity Too Large')).toBe(
+      'The render service refused this.',
+    );
+    expect(describeRenderDiscoveryFailure(new Error('413 Request Entity Too Large'))).toBe(
+      'The render service refused this.',
+    );
+    expect(describeRenderDiscoveryFailure('503 Service Unavailable')).toBe(
+      'The render service is busy or restarting. Check again in a moment.',
+    );
+  });
+
+  test('a confirmation that expired or no longer matches says what to do, never the raw code', () => {
+    for (const code of ['expired_confirmation', 'invalid_confirmation']) {
+      const thrown = new ApiError(code, 409, undefined, { error: code });
+      expect(describeRenderDiscoveryFailure(thrown)).not.toContain(code);
+      expect(describeRenderDiscoveryFailure(thrown)).toContain('Review the rows again');
+    }
+  });
+
   test('a template revision refusal names the revision step, never the raw code', () => {
     for (const code of [
       ...templateRevisionErrorCodeSchema.options.filter(
@@ -83,7 +139,10 @@ describe('render discovery copy', () => {
       error: 'render_something_new',
       detail: 'render_something_new',
     });
-    expect(describeRenderDiscoveryFailure(bare)).toBe('render_something_new');
+    expect(describeRenderDiscoveryFailure(bare)).toBe('The render service refused this.');
+    expect(describeRenderDiscoveryFailure('render_something_new')).toBe(
+      'The render service refused this.',
+    );
   });
 
   test('the server’s bare catch-all 500 reads as a next step, not its code', () => {

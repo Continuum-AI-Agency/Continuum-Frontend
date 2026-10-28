@@ -241,17 +241,22 @@ function placementCheck(job: ApiRenderJob, labelByKey: Record<string, string>): 
   };
 }
 
-const FINDING_WORDS: Record<JudgeFindingKind, (layer: string) => string> = {
-  occluded: (layer) => `Something covers ${layer}`,
-  clipped: (layer) => `${layer} is cut off at the edge`,
-  overlap: (layer) => `${layer} overlaps another element`,
-  unreadable_text: (layer) => `${layer} is hard to read`,
-  off_brand: (layer) => `${layer} looks off-brand`,
-  placeholder: (layer) => `${layer} still shows placeholder content`,
-  missing: (layer) => `${layer} is missing`,
-  stray_element: (layer) => `Unexpected element near ${layer}`,
-  text_overflow: (layer) => `${layer} text runs past its box`,
-};
+// Looked up by string: a kind the judge adds before this build knows it reads as its own note or
+// raw kind, never as a crash that takes the job ledger with it. A Map, so `constructor` is a kind
+// like any other and never a prototype method.
+const FINDING_WORDS = new Map<string, (layer: string) => string>(
+  Object.entries({
+    occluded: (layer) => `Something covers ${layer}`,
+    clipped: (layer) => `${layer} is cut off at the edge`,
+    overlap: (layer) => `${layer} overlaps another element`,
+    unreadable_text: (layer) => `${layer} is hard to read`,
+    off_brand: (layer) => `${layer} looks off-brand`,
+    placeholder: (layer) => `${layer} still shows placeholder content`,
+    missing: (layer) => `${layer} is missing`,
+    stray_element: (layer) => `Unexpected element near ${layer}`,
+    text_overflow: (layer) => `${layer} text runs past its box`,
+  } satisfies Record<JudgeFindingKind, (layer: string) => string>),
+);
 
 type JudgeAnswer = Pick<ApiRenderJudgeFrame, 'state' | 'verdict'>;
 
@@ -305,7 +310,8 @@ function judgeCheck(job: ApiRenderJob, now: number): JobCheck {
     const findings = (frames.length ? frames : [{ ...judge, ratio: null, fileName: '' }]).flatMap(
       (answer) =>
         (answer.verdict?.findings ?? []).map((finding) => {
-          const words = FINDING_WORDS[finding.kind](finding.layerHint);
+          const words =
+            FINDING_WORDS.get(finding.kind)?.(finding.layerHint) ?? finding.note ?? finding.kind;
           return answer.ratio ? `${answer.ratio}: ${words}` : words;
         }),
     );
