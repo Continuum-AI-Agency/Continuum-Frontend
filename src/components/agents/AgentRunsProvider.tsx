@@ -32,7 +32,7 @@ import {
 import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
-import { jainaSessionHref, resolveJainaSessionAdAccount } from '@/lib/jaina/deepLink';
+import { jainaSessionHref } from '@/lib/jaina/deepLink';
 import { DurableAiStudioRunTail } from './CanvasComposerRunTail';
 
 function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgentKind }) {
@@ -61,12 +61,13 @@ const AGENT_LABEL: Record<AgentRunDto['agent'], string> = {
 };
 
 /** Where a session lives, so a completion toast can take you back to it. */
-const SESSION_HREF: Record<AgentRunDto['agent'], (sessionId: string) => string> = {
-  organic: (sessionId) => `/organic?tab=agent&sessionId=${sessionId}`,
-  jaina: (sessionId) => jainaSessionHref(sessionId),
+const SESSION_HREF: Record<AgentRunDto['agent'], (run: AgentRunDto) => string> = {
+  organic: (run) => `/organic?tab=agent&sessionId=${run.sessionId}`,
+  // A Jaina conversation lives under one ad account; the run names it, so View lands there.
+  jaina: (run) => jainaSessionHref(run.sessionId, run.adAccountId),
   hyperframes: () => '/ai-studio',
   // A composer run's sessionId IS its canvas room.
-  canvas: (sessionId) => `/ai-studio?roomId=${sessionId}`,
+  canvas: (run) => `/ai-studio?roomId=${run.sessionId}`,
 };
 
 function runHref(run: AgentRunDto): string {
@@ -76,7 +77,7 @@ function runHref(run: AgentRunDto): string {
       run.origin.nodeId ? `&focusNodeId=${encodeURIComponent(run.origin.nodeId)}` : ''
     }`;
   }
-  return SESSION_HREF[run.agent](run.sessionId);
+  return SESSION_HREF[run.agent](run);
 }
 
 /**
@@ -112,21 +113,8 @@ function useCompletionToasts(): void {
 
       const label = AGENT_LABEL[run.agent];
       const href = runHref(run);
-      const brandId = run.brandId;
       const openSession = run.sessionId
-        ? {
-            label: 'View',
-            onClick: () => {
-              // A Jaina conversation lives under one ad account; land on that account.
-              if (run.agent !== 'jaina' || !brandId) {
-                router.push(href);
-                return;
-              }
-              void resolveJainaSessionAdAccount({ brandId, sessionId: run.sessionId }).then(
-                (adAccountId) => router.push(jainaSessionHref(run.sessionId, adAccountId)),
-              );
-            },
-          }
+        ? { label: 'View', onClick: () => router.push(href) }
         : undefined;
 
       show({

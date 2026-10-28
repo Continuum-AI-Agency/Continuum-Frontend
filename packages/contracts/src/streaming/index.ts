@@ -13,6 +13,7 @@ export * from './hyperframes';
 export * from './jaina';
 export * from './jaina-answer-shape';
 export * from './jaina-ask-shape';
+export * from './jaina-clarification';
 export * from './jaina-dashboard';
 export * from './jaina-dashboard-spec';
 export * from './jaina-depth-rubric';

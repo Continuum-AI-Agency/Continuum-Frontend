@@ -7,7 +7,8 @@
 //   1. `response.block.delta` → a `jaina-report-block` part holding the `survey` block;
 //   2. `response.output_text.delta` → the question again as plain text;
 //   3. `response.clarification_request` → a `jaina-clarification` part whose data is the frame's
-//      WHOLE `data` — `{ item_id, part_id, clarification }` — with the request nested.
+//      WHOLE `data` — `{ item_id, part_id, clarification }` — with the request nested, and the
+//      survey's alternatives as its `choices` (the Backend adapter adds them, live and on reload).
 
 import {
   JAINA_UI_DATA_PART,
@@ -54,6 +55,7 @@ export const clarificationTurn = (): JainaUIMessage =>
             source_scope: 'core',
             source_agent: 'Jaina_question_planner',
             requested_at: '2026-10-21T14:02:11.000Z',
+            choices: CLARIFICATION_OPTIONS,
           },
         },
       },
