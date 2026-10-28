@@ -37,9 +37,6 @@ import {
 /** The largest batch the server signs in one token (`apiRenderBatchPreflightRequestSchema`). */
 export const MAX_BATCH_ROWS = 50;
 
-/** How long an edit settles before an open review checks the rows again. */
-export const PREFLIGHT_DEBOUNCE_MS = 600;
-
 export const canImportRows = (existingRows: number, incomingRows: number): boolean =>
   existingRows + incomingRows <= MAX_BATCH_ROWS;
 

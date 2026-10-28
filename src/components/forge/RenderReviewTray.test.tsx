@@ -11,7 +11,8 @@
  * template with no authored outputs, one of its parse comps by name — and the preflight's approver
  * warning shows in Running. A refusal keeps the tray where it was with the
  * reason and nothing fired. One primary button moves it on. It is a docked region, never a
- * dialog: a change to the rows after review sends it back to Review and re-checks by itself.
+ * dialog: a change to the rows after review sends it back to Review, marked stale, and asks the
+ * server nothing until Check again is pressed.
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
@@ -24,7 +25,7 @@ import type {
   PaidCanvasTarget,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, markFetchFailure } from '@/lib/api/errors';
 
 const READY: ApiRenderBatchReadiness = {
   state: 'INCOMPLETE',
@@ -204,6 +205,7 @@ import {
   type HeldConfirm,
   type RenderPreflightRow,
   RenderReviewTray,
+  type RowsAsked,
 } from './RenderReviewTray';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
@@ -319,7 +321,12 @@ const trayHandlers = () => ({
   onFired: mock((_ids: string[]) => undefined),
   onClose: mock(() => undefined),
   onRecheck: mock(() => undefined),
-  onRefused: mock(async (_rowIds: string[]) => 0),
+  onRefused: mock(
+    async (_rowIds: string[], _options?: { again?: boolean }): Promise<RowsAsked> => ({
+      refused: 0,
+      unchecked: 0,
+    }),
+  ),
   onPassed: mock((_rowIds: string[]) => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
@@ -334,9 +341,10 @@ function renderTray(
     finalBlocked?: string | null;
     /** The brand's template sources, as ForgeWorkbench has already read them. */
     sources?: Array<{ templateKey: string | null; parse: unknown }>;
+    handlers?: ReturnType<typeof trayHandlers>;
   } = {},
 ) {
-  const handlers = trayHandlers();
+  const handlers = data.handlers ?? trayHandlers();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (data.sources) client.setQueryData(forgeQueryKeys.templateSources(BRAND), data.sources);
   const ui = (snapshot: Snapshot) => (
@@ -534,14 +542,61 @@ describe('RenderReviewTray · Review', () => {
     expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
     expect(primaryDisabled('Next: delivery')).toBe(true);
     // The refusal names no row, so the grid is asked to find which rows refuse.
-    expect(onRefused).toHaveBeenCalledWith(['root', 'spain']);
-    // None does on its own: it is the batch that was refused, with the server's reason, and Retry.
+    expect(onRefused).toHaveBeenCalledWith(['root', 'spain'], { again: false });
+    // Every row passes alone, and alone is with no delivery: it is the batch's delivery that was
+    // refused. The way on is Change delivery, with nothing preselected; Retry stays.
     expect(
-      await screen.findByText('No row is refused on its own, so nothing in the grid is marked.'),
+      await screen.findByText(/^The render service refused this batch’s delivery: /),
     ).toBeTruthy();
-    expect(screen.getByText(/^The render service refused this batch: /)).toBeTruthy();
+    expect(document.body.textContent).not.toContain('nothing in the grid is marked');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+  }, 30_000);
+
+  test('a review that could not reach the service says so in words, and not that rows cannot render', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw markFetchFailure(new TypeError('Failed to fetch'));
+    });
+    renderTray();
+    expect(await screen.findByText('Couldn’t reach the render service. Check again.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Failed to fetch');
+    expect(screen.getByText('Couldn’t check the rows')).toBeTruthy();
+    expect(screen.queryAllByText('Can’t render as they are')).toHaveLength(0);
+  }, 30_000);
+
+  test('Change delivery, after a delivery refusal, opens Deliver with nothing preselected', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+        guardrails: [{ code: 'APPROVAL_DESTINATION_INACTIVE', message: 'That room is off.' }],
+      });
+    });
+    renderTray(null);
+    fireEvent.click(await screen.findByRole('button', { name: 'Change delivery' }));
+    expect(await screen.findByRole('region', { name: 'Delivery options' })).toBeTruthy();
+    expect(
+      within(screen.getByRole('list', { name: 'Pre-flight steps' })).getByRole('listitem', {
+        current: 'step',
+      }).textContent,
+    ).toBe('Deliver');
+  }, 30_000);
+
+  test('rows that could not be checked alone are said so, with Check again, never as passing', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+        guardrails: [
+          { code: 'BRAND_COLOR_OUTSIDE_PALETTE', message: 'Use a permitted brand color.' },
+        ],
+      });
+    });
+    const handlers = trayHandlers();
+    handlers.onRefused.mockImplementation(async () => ({ refused: 0, unchecked: 2 }));
+    const { onRefused } = renderTray(BINDING, { handlers });
+    expect(await screen.findByText('Couldn’t check 2 rows.')).toBeTruthy();
+    expect(screen.queryAllByRole('button', { name: 'Change delivery' })).toHaveLength(0);
+    expect(screen.getByText(/^The render service refused this batch: /)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(onRefused).toHaveBeenCalledTimes(2));
+    expect(onRefused.mock.calls[1]?.[1]).toEqual({ again: true });
   }, 30_000);
 
   test('closing — the button or Esc — fires nothing', async () => {
@@ -561,7 +616,7 @@ describe('RenderReviewTray · Review', () => {
     expect(onShowRow).toHaveBeenCalledWith('spain');
   }, 30_000);
 
-  test('a change after review goes back to Review and re-checks by itself once the rows settle', async () => {
+  test('a change after review goes back to Review, stale, and asks nothing until Check again', async () => {
     const { snapshot, onRecheck, onFired } = renderTray();
     await press('Next: delivery');
     expect(screen.getByRole('button', { name: 'Render 3 files' })).toBeTruthy();
@@ -573,13 +628,15 @@ describe('RenderReviewTray · Review', () => {
         current: 'step',
       }).textContent;
     await waitFor(() => expect(current()).toBe('Review'));
-    expect(screen.getByText('Rows changed since review')).toBeTruthy();
+    expect(screen.getByText('Rows changed since this check.')).toBeTruthy();
     expect(screen.queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
     expect(primaryDisabled('Next: delivery')).toBe(true);
-    // Nothing to press: the re-check runs on the preflight debounce, once.
-    expect(screen.queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
-    await waitFor(() => expect(onRecheck).toHaveBeenCalledTimes(1));
+    // An edit asks the server nothing, however long it settles.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(onRecheck).not.toHaveBeenCalled();
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(onRecheck).toHaveBeenCalledTimes(1);
 
     // The grid re-saved and handed over a fresh snapshot: only the edited row is asked about again,
     // on the set's new revision; the row nobody touched keeps its verdict.
@@ -592,7 +649,7 @@ describe('RenderReviewTray · Review', () => {
     expect(
       (batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] }).records,
     ).toEqual([edited[1]!]);
-    expect(screen.queryByText('Rows changed since review')).toBeNull();
+    expect(screen.queryByText('Rows changed since this check.')).toBeNull();
     await press('Next: delivery');
     await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
@@ -600,12 +657,12 @@ describe('RenderReviewTray · Review', () => {
     expect(onRecheck).toHaveBeenCalledTimes(1);
   }, 30_000);
 
-  test('a re-check that cannot run says why, with a disabled Re-check, and does not fire', async () => {
+  test('a check that cannot run says why, with a disabled Check again, and does not fire', async () => {
     const { snapshot, onRecheck } = renderTray();
     await screen.findByText(/Check incomplete/);
     snapshot({ reviewKey: 1, stale: true, recheckBlocked: 'Select the rows to render' });
-    expect(await screen.findByText('— Select the rows to render.')).toBeTruthy();
-    const recheck = screen.getByRole<HTMLButtonElement>('button', { name: 'Re-check' });
+    expect(await screen.findByText('Select the rows to render.')).toBeTruthy();
+    const recheck = screen.getByRole<HTMLButtonElement>('button', { name: 'Check again' });
     expect(recheck.disabled).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(onRecheck).not.toHaveBeenCalled();

@@ -453,7 +453,7 @@ function StatusBadge({
         <StatusLine
           variant="warning"
           label="Fonts missing"
-          reason={`${status.reason} Needs Render anyway in the review, which renders in a substitute face.`}
+          reason={`${status.reason} Needs Render anyway in the review, which renders in a substitute font.`}
         />
       );
     case 'warning':
@@ -486,7 +486,7 @@ function StatusBadge({
         );
       return fitLoading ? <StatusLine variant="muted" label="Checking layout…" /> : null;
     default:
-      return <StatusLine variant="success" label="Ready" />;
+      return <StatusLine variant="success" label="Can render" reason="Layout checked." />;
   }
 }
 

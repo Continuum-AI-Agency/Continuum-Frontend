@@ -51,7 +51,6 @@ import { explainFinding, readinessLine, readinessReasons } from '@/components/fo
 import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
   isFontPreflightRefusal,
-  PREFLIGHT_DEBOUNCE_MS,
   renderedRatios,
   rowFileCount,
 } from '@/components/forge/renderRequestRows';
@@ -122,7 +121,7 @@ export type RenderReviewTrayProps = {
   /** A new value is a new snapshot to review: the tray opening, or a re-check. */
   reviewKey: number;
   stale: boolean;
-  /** Why a re-check cannot run — no rows selected, say. Null when it can, or will by itself. */
+  /** Why Check again cannot run — no rows selected, say. Null when it can. */
   recheckBlocked: string | null;
   /** A re-check is under way, or waiting on rows still being checked. */
   rechecking: boolean;
@@ -139,9 +138,10 @@ export type RenderReviewTrayProps = {
   onRecheck: () => void;
   /**
    * Review was refused for something other than fonts; these rows' own checks can say which.
-   * Resolves to how many of them are refused on their own: none means no row is at fault.
+   * Resolves to how many of them refuse alone, and how many could not be checked at all.
+   * `again` asks even when these rows were just asked.
    */
-  onRefused?: (rowIds: string[]) => Promise<number>;
+  onRefused?: (rowIds: string[], options?: { again?: boolean }) => Promise<RowsAsked>;
   /** Review passed for these rows: whatever an earlier refusal said about them is out of date. */
   onPassed?: (rowIds: string[]) => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
@@ -168,8 +168,8 @@ type Review =
       message: string;
       details: string[];
       canOverrideFonts: boolean;
-      /** Rows refused on their own, once the caller has looked; 0 means none is at fault. */
-      rowsFound?: number;
+      /** What each row said when asked alone, once the caller has asked. */
+      asked?: RowsAsked;
     }
   | { state: 'failed'; message: string };
 
@@ -182,6 +182,9 @@ type Destinations =
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 export type HeldConfirm = { token: string; blocked: 'edited' | 'expired' | null };
+
+/** What a refused batch's rows said when each was asked alone. */
+export type RowsAsked = { refused: number; unchecked: number };
 
 /** A confirm that failed without a refusal (an outage, a cut, a timeout, a 5xx) may still have
  *  made some jobs: the same token is the same batch, so this sends the person to the ledger
@@ -392,6 +395,18 @@ export function RenderReviewTray({
   const passed = useRef(onPassed);
   passed.current = onPassed;
 
+  /** Asks the caller which of a refused batch's rows refuse alone, and says what came back. */
+  const askRows = useCallback((mine: number, rowIds: string[], again = false) => {
+    setReview((current) =>
+      current.state === 'refused' ? { ...current, asked: undefined } : current,
+    );
+    void refused.current?.(rowIds, { again }).then((asked) => {
+      if (mine !== latestReview.current) return;
+      setReview((current) => (current.state === 'refused' ? { ...current, asked } : current));
+    });
+  }, []);
+  const askedRows = records.flatMap((record) => record.renderSetRowId ?? []);
+
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
     async (acceptFonts = acceptMissingFonts, { fresh = false } = {}) => {
@@ -455,17 +470,14 @@ export function RenderReviewTray({
             : { state: 'failed', message },
         );
         if (refusal && !canOverrideFonts)
-          void refused
-            .current?.(todo.flatMap(({ record }) => record.renderSetRowId ?? []))
-            .then((rowsFound) => {
-              if (mine !== latestReview.current) return;
-              setReview((current) =>
-                current.state === 'refused' ? { ...current, rowsFound } : current,
-              );
-            });
+          askRows(
+            mine,
+            todo.flatMap(({ record }) => record.renderSetRowId ?? []),
+          );
       }
     },
     [
+      askRows,
       acceptMissingFonts,
       brandId,
       bindingId,
@@ -482,6 +494,12 @@ export function RenderReviewTray({
   // Only a font refusal offers a way past itself. Every other 422 — a stale revision, a
   // delivery target that no longer exists — is a thing to fix, not a thing to override.
   const refusedOnFonts = review.state === 'refused' && review.canOverrideFonts;
+  // Every row asked alone passed: what is left to refuse is the batch's delivery choice.
+  const refusedOnDelivery =
+    review.state === 'refused' &&
+    !review.canOverrideFonts &&
+    review.asked?.refused === 0 &&
+    review.asked.unchecked === 0;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -495,21 +513,8 @@ export function RenderReviewTray({
     if (stale) setStep((current) => (current === 'running' ? current : 'review'));
   }, [stale]);
 
-  // Rows edited after review are checked again by themselves once they settle — on the grid's
-  // own preflight debounce. Once per records snapshot, so a re-check that fails is not retried
-  // in a loop; the next edit tries again.
-  const recheck = useRef(onRecheck);
-  recheck.current = onRecheck;
-  const autoChecked = useRef<ApiRenderBatchRecord[] | null>(null);
-  useEffect(() => {
-    if (!stale || recheckBlocked !== null || rechecking || step === 'running') return;
-    if (autoChecked.current === records) return;
-    const timer = setTimeout(() => {
-      autoChecked.current = records;
-      recheck.current();
-    }, PREFLIGHT_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [stale, recheckBlocked, rechecking, step, records]);
+  // An edit with the review open asks the server nothing: the review is marked stale, and Check
+  // again (one save and one batch preflight) is the person's to press.
 
   useEffect(() => {
     let cancelled = false;
@@ -795,6 +800,23 @@ export function RenderReviewTray({
     </>
   );
 
+  // The rows the batch leaves out, and why: one line each, at Review and again at Deliver.
+  const skippedList = skippedRows.length ? (
+    <div role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
+      <p>
+        {skippedRows.length} selected row{skippedRows.length === 1 ? '' : 's'} will not render in
+        this batch:
+      </p>
+      <ul aria-label="Rows skipped from this batch">
+        {skippedRows.map((row, index) => (
+          <li key={`${index}:${row.label}`}>
+            {row.label}: {row.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
+
   // A held token is said at the top of every step, from this tray or an earlier one on this set,
   // until the ledger is opened.
   const heldBanner = held ? (
@@ -922,33 +944,27 @@ export function RenderReviewTray({
                 className="flex items-center gap-2 border-b border-dashed border-warning/60 bg-warning/10 px-[var(--card-pad)] py-1"
               >
                 <AlertTriangle className="size-3.5 text-warning" aria-hidden />
-                <span className="font-medium">Rows changed since review</span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  {recheckBlocked ? (
-                    `— ${recheckBlocked}.`
-                  ) : (
-                    <>
-                      — checking them again
-                      <Loader2
-                        className="size-3 animate-spin motion-reduce:animate-none"
-                        aria-hidden
-                      />
-                    </>
-                  )}
-                </span>
-                {/* Only when the re-check cannot run by itself, and disabled for the same reason. */}
+                <span className="font-medium">Rows changed since this check.</span>
                 {recheckBlocked ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    className="ml-auto"
-                    disabled
-                    title={recheckBlocked}
-                  >
-                    Re-check
-                  </Button>
+                  <span className="text-muted-foreground">{recheckBlocked}.</span>
                 ) : null}
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  disabled={recheckBlocked !== null || rechecking}
+                  title={recheckBlocked ?? undefined}
+                  onClick={onRecheck}
+                >
+                  {rechecking ? (
+                    <Loader2
+                      className="size-3 animate-spin motion-reduce:animate-none"
+                      aria-hidden
+                    />
+                  ) : null}
+                  Check again
+                </Button>
               </div>
             ) : null}
 
@@ -962,7 +978,9 @@ export function RenderReviewTray({
                     <p className="font-medium">
                       {refusedOnFonts
                         ? review.message
-                        : `The render service refused this batch: ${review.message}`}
+                        : refusedOnDelivery
+                          ? `The render service refused this batch’s delivery: ${review.message}`
+                          : `The render service refused this batch: ${review.message}`}
                     </p>
                     {review.details.map((detail) => (
                       <p key={detail}>{detail}</p>
@@ -991,6 +1009,32 @@ export function RenderReviewTray({
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {refusedOnDelivery ? (
+                          // Every row passes alone, and alone means with no delivery: the batch
+                          // refusals today's batch preflight has left are the delivery's.
+                          <Button
+                            type="button"
+                            size="xs"
+                            onClick={() => {
+                              setSlackDestination(null);
+                              setApprovalDestinationIds([]);
+                              setEditingDelivery(true);
+                              setStep('deliver');
+                            }}
+                          >
+                            Change delivery
+                          </Button>
+                        ) : null}
+                        {review.asked && review.asked.unchecked > 0 ? (
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            onClick={() => askRows(latestReview.current, askedRows, true)}
+                          >
+                            Check again
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           size="xs"
@@ -1000,11 +1044,13 @@ export function RenderReviewTray({
                           Retry
                         </Button>
                         <span className="text-muted-foreground">
-                          {review.rowsFound === undefined
-                            ? 'Checking each row on its own…'
-                            : review.rowsFound === 0
-                              ? 'No row is refused on its own, so nothing in the grid is marked.'
-                              : `${plural(review.rowsFound, 'row')} won’t render on ${review.rowsFound === 1 ? 'its' : 'their'} own; the grid marks ${review.rowsFound === 1 ? 'it' : 'them'}.`}
+                          {!review.asked
+                            ? 'Checking each row…'
+                            : review.asked.unchecked > 0
+                              ? `Couldn’t check ${plural(review.asked.unchecked, 'row')}.`
+                              : review.asked.refused > 0
+                                ? `${plural(review.asked.refused, 'row')} won’t render; the grid marks ${review.asked.refused === 1 ? 'it' : 'them'} and Render skips ${review.asked.refused === 1 ? 'it' : 'them'}.`
+                                : null}
                         </span>
                       </div>
                     )}
@@ -1025,21 +1071,7 @@ export function RenderReviewTray({
                     </Button>
                   </div>
                 ) : null}
-                {skippedRows.length ? (
-                  <div role="status" className="px-[var(--card-pad)] py-2 text-xs text-warning">
-                    <p>
-                      {skippedRows.length} selected row{skippedRows.length === 1 ? '' : 's'} will
-                      not render in this batch:
-                    </p>
-                    <ul aria-label="Rows skipped from this batch">
-                      {skippedRows.map((row, index) => (
-                        <li key={`${index}:${row.label}`}>
-                          {row.label}: {row.message}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+                {skippedList}
                 <ul aria-label="Rows to render" className="divide-y divide-border">
                   {rows.map((row, index) => {
                     const findings =
@@ -1108,6 +1140,7 @@ export function RenderReviewTray({
               </>
             ) : step === 'deliver' ? (
               <>
+                {skippedList}
                 {editingDelivery ? null : (
                   <p className="flex flex-wrap items-center gap-x-2 border-b border-border px-[var(--card-pad)] py-2">
                     <span className="font-medium">{deliveryLine}</span>
@@ -1217,8 +1250,10 @@ export function RenderReviewTray({
                   </>
                 ) : review.state === 'ready' ? (
                   <ReadinessLine readiness={review.readiness} labelOf={variableLabel} />
-                ) : (
+                ) : review.state === 'refused' ? (
                   <span className="text-destructive">Can’t render as they are</span>
+                ) : (
+                  <span className="text-destructive">Couldn’t check the rows</span>
                 )
               ) : deliverBlockers.length ? (
                 <p role="status" className="flex flex-wrap gap-x-1 text-warning">

@@ -71,6 +71,7 @@ import {
   type HeldConfirm,
   heldMessage,
   RenderReviewTray,
+  type RowsAsked,
 } from '@/components/forge/RenderReviewTray';
 import {
   downloadTemplateCsv,
@@ -414,6 +415,7 @@ function readinessSummary(
     warned: number;
     unchecked: number;
     fitUnmeasured: boolean;
+    fitLoading: boolean;
   },
   total: number,
 ): string {
@@ -422,9 +424,11 @@ function readinessSummary(
   return [
     total === 0
       ? 'No rows to render'
-      : counts.renderable === total
-        ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
-        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
+      : counts.fitLoading
+        ? 'Checking layout…'
+        : counts.renderable === total
+          ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
+          : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
     counts.refused ? `${counts.refused} won’t render` : null,
@@ -1178,6 +1182,7 @@ export function RenderRequestsGrid({
   );
 
   // --- a refused review, row by row -------------------------------------------------------
+  // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
   // Today's batch preflight refuses all-or-nothing and its 422 names no row. A refusal that is not
   // about fonts is asked again of each row's own preflight, once, three at a time, to say which
   // rows will not render. Only a refused review does this; an edit never does, and an edit to a
@@ -1186,7 +1191,6 @@ export function RenderRequestsGrid({
     new Map(),
   );
   const [refusalsFound, setRefusalsFound] = useState(0);
-  const findingRefusals = useRef(false);
   const knownRefusals = useRef(refusals);
   knownRefusals.current = refusals;
   // Once per review snapshot: a refusal the rows' own checks cannot reproduce must not loop.
@@ -2372,8 +2376,13 @@ export function RenderRequestsGrid({
           note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), row);
       } else if (status.state === 'unchecked' && status.findings.length) counts.unchecked += 1;
     }
-    return { ...counts, fitUnmeasured, findings: [...findings.entries()] };
-  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured, proposed]);
+    return {
+      ...counts,
+      fitUnmeasured,
+      fitLoading: fit.state === 'loading',
+      findings: [...findings.entries()],
+    };
+  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured, proposed, fit.state]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -2637,24 +2646,36 @@ export function RenderRequestsGrid({
     review.signature !==
       reviewSignature(rows, selectedIds, activeSet?.revision ?? null, allOutputIdsOf(contract));
 
-  /** How many of these rows a pass has found refused on their own, as things stand. */
-  const refusedAmong = (rowIds: string[]) =>
-    rowIds.filter((id) => {
-      const refusal = liveRefusals.get(id);
-      return refusal && !refusal.font;
-    }).length;
+  // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
+  // One pass at a time. A refused review that lands mid-pass runs once after it, against the
+  // rows and review as they are by then, rather than being dropped.
+  const passing = useRef<Promise<RowsAsked> | null>(null);
+  const findRefusalsNow = useRef<typeof findRefusals | null>(null);
+  const findRefusals = (rowIds: string[], { again = false } = {}): Promise<RowsAsked> => {
+    if (passing.current)
+      return passing.current.then(() => findRefusalsNow.current!(rowIds, { again }));
+    const pass = askEachRow(rowIds, again).finally(() => {
+      passing.current = null;
+    });
+    passing.current = pass;
+    return pass;
+  };
+  findRefusalsNow.current = findRefusals;
+  const lastAsked = useRef<RowsAsked>({ refused: 0, unchecked: 0 });
 
-  const findRefusals = async (rowIds: string[]): Promise<number> => {
-    if (!contract || !review || findingRefusals.current) return refusedAmong(rowIds);
+  const askEachRow = async (rowIds: string[], again: boolean): Promise<RowsAsked> => {
+    const refusedIn = (map: ReadonlyMap<string, RowRefusal>) =>
+      rowIds.filter((id) => map.get(id) && !map.get(id)?.font).length;
+    if (!contract || !review) return { refused: refusedIn(liveRefusals), unchecked: 0 };
+    // Once per review snapshot (unless asked again): a refusal no row reproduces must not loop.
     const snapshot = JSON.stringify([
       review.signature,
       [...rowIds].sort(),
       templateRef,
       contract.template.contractHash,
     ]);
-    if (refusalPassFor.current === snapshot) return refusedAmong(rowIds);
+    if (!again && refusalPassFor.current === snapshot) return lastAsked.current;
     refusalPassFor.current = snapshot;
-    findingRefusals.current = true;
     const startedAt = ++events.current;
     const current = latestRows.current;
     const revision = activeSet?.revision ?? null;
@@ -2667,6 +2688,7 @@ export function RenderRequestsGrid({
         knownRefusals.current.get(record.renderSetRowId)?.key !== keyOf(record.renderSetRowId),
     );
     const checked = new Map<string, (RowRefusal & { key: string }) | null>();
+    let unchecked = 0;
     const ask = async () => {
       for (let record = queue.shift(); record; record = queue.shift()) {
         const rowId = record.renderSetRowId as string;
@@ -2687,15 +2709,13 @@ export function RenderRequestsGrid({
           checked.set(rowId, null);
         } catch (error) {
           const refusal = refusalOf(error);
+          // An outage, a throttle or a cut says nothing about the row: it was not checked.
           if (refusal) checked.set(rowId, { ...refusal, key: keyOf(rowId) });
+          else unchecked += 1;
         }
       }
     };
-    try {
-      await Promise.all([ask(), ask(), ask()]);
-    } finally {
-      findingRefusals.current = false;
-    }
+    await Promise.all([ask(), ask(), ask()]);
     // A review that passed a row while this pass ran is newer than what the pass found about it.
     for (const rowId of checked.keys())
       if ((passedAt.current.get(rowId) ?? 0) > startedAt) checked.delete(rowId);
@@ -2708,19 +2728,17 @@ export function RenderRequestsGrid({
     };
     const previous = knownRefusals.current;
     const next = merge(previous);
-    const same = (a?: RowRefusal & { key: string }, b?: RowRefusal & { key: string }) =>
-      a?.key === b?.key && a?.message === b?.message && a?.font === b?.font;
-    const changed =
-      next.size !== previous.size || [...next].some(([id, item]) => !same(item, previous.get(id)));
-    const found = rowIds.filter((id) => {
-      const refusal = next.get(id);
-      return refusal && !refusal.font;
-    }).length;
-    if (!changed) return found;
-    // Merged into whatever is there by then, so a clear that landed meanwhile is not undone.
-    setRefusals(merge);
-    setRefusalsFound((count) => count + 1);
-    return found;
+    lastAsked.current = { refused: refusedIn(next), unchecked };
+    const changed = [...checked].some(([id, refusal]) => {
+      const was = previous.get(id);
+      return refusal ? was?.message !== refusal.message || was.font !== refusal.font : Boolean(was);
+    });
+    if (changed) {
+      // Merged into whatever is there by then, so a clear that landed meanwhile is not undone.
+      setRefusals(merge);
+      setRefusalsFound((count) => count + 1);
+    }
+    return lastAsked.current;
   };
 
   /** A review that passed for these rows is the server's newer word: what a pass found is retired. */
@@ -2736,7 +2754,7 @@ export function RenderRequestsGrid({
 
   // With the refusing rows known, the review goes on with the rest and lists those as skipped,
   // once: when the rows that render are the ones already under review, it stays as it is. Only a
-  // saved set is reopened, so reopening never writes one; an edit meanwhile re-checks by itself.
+  // saved set is reopened, so reopening never writes one; an edit meanwhile marks it stale.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a pass that changed something reopens it.
   useEffect(() => {
     if (!refusalsFound || !review || !readyToFire || !contract) return;
@@ -3327,7 +3345,7 @@ export function RenderRequestsGrid({
                                   }
                                 : undefined
                             }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.renderable} can render • ${selected.length} selected`}
+                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.fitLoading ? 'checking layout' : `${readiness.renderable} can render`} • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
                         </RowDropHintContext.Provider>

@@ -1,5 +1,5 @@
 import type { TemplateRevisionErrorCode } from '@continuum/contracts';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, isFetchFailure } from '@/lib/api/errors';
 
 // The discovery failures a brand owner can actually hit, in words they can act
 // on. Echoing the raw server code told them nothing and gave them no next step.
@@ -119,5 +119,8 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     for (const [code, copy] of Object.entries(MESSAGES)) {
       if (message.includes(code)) return copy;
     }
+  // fetch's own words for no answer at all ("Failed to fetch", Safari's "Load failed").
+  if (isFetchFailure(failure) || /^(Failed to fetch|Load failed|NetworkError\b)/.test(message))
+    return 'Couldn’t reach the render service. Check again.';
   return humanDetail(failure) ?? (message || 'Render discovery failed');
 }

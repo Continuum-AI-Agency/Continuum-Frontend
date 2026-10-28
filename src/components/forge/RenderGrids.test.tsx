@@ -643,6 +643,11 @@ describe('RenderRequestsGrid', () => {
     expect(
       (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
     ).toHaveLength(1);
+    // Still said at Deliver, where the person decides to render without it.
+    await press('Next: delivery');
+    expect(
+      (await screen.findByRole('list', { name: 'Rows skipped from this batch' })).textContent,
+    ).toContain('Required');
     expect(
       screen
         .getAllByLabelText('Select row')
@@ -796,17 +801,30 @@ describe('RenderRequestsGrid', () => {
       expect(preflightMock).toHaveBeenCalledTimes(2);
       expect(batchPreflightMock).toHaveBeenCalledTimes(1);
       expect(await within(tray).findByText(palette)).toBeTruthy();
-      // Said as the batch's refusal, with the server's reason; no row is blamed, and Retry is there.
+      // Every row passes alone, and alone is with no delivery: the batch's delivery was refused,
+      // with the server's reason. No row is blamed; Change delivery leads, Retry stays.
       expect(
-        await within(tray).findByText(/^The render service refused this batch: /),
+        await within(tray).findByText(/^The render service refused this batch’s delivery: /),
       ).toBeTruthy();
-      expect(
-        within(tray).getByText('No row is refused on its own, so nothing in the grid is marked.'),
-      ).toBeTruthy();
+      expect(within(tray).getByRole('button', { name: 'Change delivery' })).toBeTruthy();
       expect(within(tray).getByRole('button', { name: 'Retry' })).toBeTruthy();
+      expect(tray.textContent).not.toContain('nothing in the grid is marked');
       expect(
         within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
       ).toHaveLength(0);
+    }, 30_000);
+
+    test('a row its own check could not reach is said so, never as passing; Check again asks again', async () => {
+      const { tray, headline } = await setup(
+        () => new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
+      );
+      expect(await within(tray).findByText('Couldn’t check 1 row.')).toBeTruthy();
+      expect(within(tray).queryAllByRole('button', { name: 'Change delivery' })).toHaveLength(0);
+      expect(
+        within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
+      ).toHaveLength(0);
+      fireEvent.click(within(tray).getByRole('button', { name: 'Check again' }));
+      await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(4));
     }, 30_000);
 
     test('a 422 about the set, not the row, marks no row', async () => {
@@ -1017,7 +1035,7 @@ describe('RenderRequestsGrid', () => {
     // No Live kit here: nothing measured the fit, so no row is called Ready, and none wears a
     // badge for it either: the readiness line says so once.
     expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
-    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.queryByText('Can render')).toBeNull();
     expect(screen.queryByText('Not checked')).toBeNull();
     expect(preflightMock).not.toHaveBeenCalled();
     // A media cell offers the Library and is not a text input.
@@ -1743,7 +1761,6 @@ describe('RenderRequestsGrid', () => {
             clearedKeys: [],
             outputIds: [],
             media: {},
-            check: { state: 'idle' },
           },
         ],
       }),
@@ -2370,7 +2387,17 @@ describe('RenderRequestsGrid', () => {
     expect(screen.queryByText('(unsaved edits)')).toBeNull();
   });
 
-  test('an edit makes no preflight call, and the row is Ready', async () => {
+  test('while the Live kits load, the grid says Checking layout…, not that rows can render', async () => {
+    livePreviewMock.mockImplementation(() => new Promise(() => undefined));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    // The readiness line, and each row's status.
+    const checking = await screen.findAllByText('Checking layout…');
+    expect(checking.map((node) => node.tagName)).toEqual(['SPAN', 'P']);
+    expect(screen.queryAllByText(/can render/).map((node) => node.textContent)).toEqual([]);
+  });
+
+  test('an edit makes no preflight call, and the row can render, layout checked', async () => {
     livePreviewMock.mockImplementation(async () => EMPTY_KIT);
     render(<RenderRequestsGrid brandId={BRAND} />);
     const input = (await screen.findByDisplayValue('Hola mundo')) as HTMLInputElement;
@@ -2390,7 +2417,8 @@ describe('RenderRequestsGrid', () => {
     expect(batchPreflightMock).not.toHaveBeenCalled();
     // The Live kit's one read, cached: an edit is measured in the browser, not asked for.
     expect(livePreviewMock).toHaveBeenCalledTimes(1);
-    expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
+    expect(within(input.closest('tr')!).getByText('Can render')).toBeTruthy();
+    expect(within(input.closest('tr')!).getByText('Layout checked.')).toBeTruthy();
     expect(screen.getByText('The row can render')).toBeTruthy();
     expect(document.activeElement).toBe(input);
     type(' vez');
@@ -2617,7 +2645,7 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(headline.getAttribute('title')).toBeNull());
   });
 
-  test('an edit after review sends the tray back to Review; Re-check saves it and reviews again', async () => {
+  test('an edit with the review open asks the server nothing; Check again saves and reviews again', async () => {
     const renderable = {
       ...NEWEST,
       rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
@@ -2633,15 +2661,20 @@ describe('RenderRequestsGrid', () => {
     expect(within(tray).getByRole('button', { name: 'Render 1 file' })).toBeTruthy();
 
     fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Renamed row' } });
-    expect(await within(tray).findByText('Rows changed since review')).toBeTruthy();
+    expect(await within(tray).findByText('Rows changed since this check.')).toBeTruthy();
     expect(within(tray).queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
-    // Nothing to press: the tray checks the rows again by itself once the edit settles.
-    expect(within(tray).queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
+    // However long the edit settles, nothing is checked: no row preflight, no batch preflight.
+    await act(async () => await new Promise((resolve) => setTimeout(resolve, 1000)));
+    expect(batchPreflightMock).toHaveBeenCalledTimes(1);
+    expect(preflightMock).not.toHaveBeenCalled();
 
-    // The tray saves the edit and reviews again. A name is nothing a check reads, so the review
+    // Check again saves the edit and reviews again. A name is nothing a check reads, so the review
     // settles on the verdict it already has.
-    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1), { timeout: 5000 });
-    await waitFor(() => expect(within(tray).queryByText('Rows changed since review')).toBeNull());
+    fireEvent.click(within(tray).getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalled(), { timeout: 5000 });
+    await waitFor(() =>
+      expect(within(tray).queryAllByText('Rows changed since this check.')).toHaveLength(0),
+    );
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
   });
 
