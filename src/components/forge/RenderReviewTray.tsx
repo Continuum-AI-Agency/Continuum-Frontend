@@ -93,8 +93,8 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 //
 // The caller saves the set before handing over `reviewKey`, so every record points at an
 // immutable revision, and rebuilds `records` from the rows on every render. `stale` says the rows,
-// the selection or the revision moved since that key: the tray goes back to Review, asks the
-// caller to re-check once the rows settle, and refuses to confirm until then. `records[i]`
+// the selection or the revision moved since that key: the tray goes back to Review, says so, and
+// asks the server nothing until the person presses Check again. `records[i]`
 // belongs to `rows[i]`. The ROW is the source of truth for delivery: it is applied to its record
 // at confirm, and a replacing row's record is narrowed to the one format chosen here.
 
@@ -386,7 +386,8 @@ export function RenderReviewTray({
   const web = isWebTemplateKey(templateKey);
 
   // Each record's findings, by everything its check reads. The set's revision is left out: every
-  // save bumps it, and it changes no row's verdict — so an edit re-checks only the rows it changed.
+  // save bumps it, and it changes no row's verdict — so Check again after an edit asks only about
+  // the rows it changed.
   const verdicts = useRef(new Map<string, ApiRenderReadinessFinding[]>());
   // Only the newest review lands: a slow answer about older rows must not replace a newer one.
   const latestReview = useRef(0);
