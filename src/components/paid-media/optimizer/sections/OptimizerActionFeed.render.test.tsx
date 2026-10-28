@@ -201,7 +201,8 @@ describe('OptimizerActionFeed', () => {
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
     expect(screen.getAllByText('Total daily budget').length).toBeGreaterThan(0);
     expect(screen.queryByText('daily_total')).toBeNull();
-    expect(screen.getByText('4200')).toBeTruthy();
+    expect(screen.getByText('$4,200 USD')).toBeTruthy();
+    expect(screen.queryByText('4200')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });
 

@@ -92,6 +92,23 @@ describe('OptimizerSnapshotsEnvelopeSchema', () => {
 
     expect(parsed.budgetSummary).toBeNull();
     expect(parsed.fetchedAt).toBeNull();
+    expect(parsed.inactiveWindows).toEqual([]);
+  });
+
+  test('carries windows-only rows for ad sets paused inside the window, beside the fleet', () => {
+    const windows = {
+      d3: ZERO_WINDOW,
+      d7: { ...ZERO_WINDOW, spend: 40 },
+      d14: { ...ZERO_WINDOW, spend: 65 },
+    };
+    const parsed = OptimizerSnapshotsEnvelopeSchema.parse({
+      snapshots: [SNAPSHOT],
+      inactiveWindows: [{ id: 'paused-1', windows }],
+    });
+    expect(parsed.inactiveWindows).toEqual([{ id: 'paused-1', windows }]);
+    expect(
+      OptimizerSnapshotsEnvelopeSchema.parse({ inactiveWindows: 'junk' }).inactiveWindows,
+    ).toEqual([]);
   });
 });
 

@@ -13,8 +13,22 @@
 // members. Only when that read has nothing to say for the portfolio does the cycle-time
 // snapshot stand in — and then it is dated ("as of Oct 15") and, past STALE_AFTER_DAYS,
 // says how old it is. A snapshot is never presented as current.
+//
+// A portfolio holding Google or TikTok members (alone or beside Meta ones) has no live read the
+// browser can sum: google_snapshots is service-bearer only, and the Meta reads above see only
+// its Meta half. Its figure is the portfolio metrics read (optimizer_get_portfolio_metrics), the
+// one read that sums every platform's members over one window — stored at cycle time, so a dated
+// snapshot, never live. Each platform is summed in its own currency, and platforms make one
+// figure only when they share one (presentation standard §5).
 
-import type { AdSetSnapshot, EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  EfficiencySeriesPoint,
+  MetricTotals,
+  PlatformId,
+  PortfolioListItem,
+  PortfolioMetrics,
+} from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import {
   type PortfolioWindow,
@@ -42,13 +56,21 @@ export type PortfolioFigure = PortfolioWindow & {
   ageDays: number;
   /** A snapshot older than STALE_AFTER_DAYS. A live figure is never stale. */
   stale: boolean;
+  /** The currency the money is in, on a figure from the portfolio metrics read. Absent on a
+   *  Meta figure, which is in the surface's own account currency. */
+  currency?: string | null;
 };
 
+/** One platform's share of a portfolio's metrics read, priced, in that platform's currency. */
+export type PlatformFigure = PortfolioWindow & { platform: PlatformId; currency: string | null };
+
 /** Sum the live read's 7-day (and the 7 days before it) over the portfolio's members.
- *  Null when the read is undated or misses ANY member. The read lists only ad sets active on
- *  Meta now, so a member paused inside the window drops out with all its spend: Conversaciones
- *  Whatsapp priced $883 live against $12,199 at its last cycle. A partial sum would be a wrong
- *  figure presented as current; the dated snapshot is the honest stand-in. */
+ *  Null when the read is undated or misses ANY member. The read's fleet lists only ad sets
+ *  active on Meta now; a member paused inside the window comes back beside it in
+ *  `inactiveWindows` (windows only) and is summed like any other. Without that, Conversaciones
+ *  Whatsapp priced $883 live against $12,199 at its last cycle. A member in neither list (paused
+ *  before the window, or an older edge) still makes the sum partial, and a partial sum would be
+ *  a wrong figure presented as current; the dated snapshot is the honest stand-in. */
 export function liveWindowFigures(args: {
   snapshots: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[];
   memberIds: Iterable<string>;
@@ -140,24 +162,108 @@ export function portfolioFigure(args: {
   };
 }
 
+/** A portfolio with members on another platform than Meta — a Google, TikTok or mixed one —
+ *  by the list's platforms or, once it has landed, by its metrics read. */
+export function holdsOtherPlatforms(
+  portfolio: Pick<PortfolioListItem, 'platforms'>,
+  metrics?: Pick<PortfolioMetrics, 'by_platform'> | null,
+): boolean {
+  return (
+    Boolean(portfolio.platforms?.some((platform) => platform !== 'meta')) ||
+    Boolean(metrics?.by_platform.some((row) => row.platform !== 'meta'))
+  );
+}
+
+/** The day after the metrics read's window, at 00:00 UTC: the date its figures are "as of",
+ *  as a cycle dates the 7 days before it (windowLabel). Not the read's `read_at` — that is when
+ *  the RPC ran; its rows were written at cycle time, and a member that stopped delivering ends
+ *  the window early (Evento Webinar read Oct 17–23 on Oct 27). */
+function metricsAsOf(metrics: Pick<PortfolioMetrics, 'window'>): string {
+  return new Date(Date.parse(`${metrics.window.until}T00:00:00Z`) + DAY_MS).toISOString();
+}
+
+/** Each platform's share of the metrics read, priced against the portfolio's target, in its
+ *  own currency. The read names one currency per portfolio — enrollment refuses an account
+ *  billing in another — and its by_platform rows none of their own, so each part carries the
+ *  read's. Its rows carry no prior window either. */
+export function platformFigures(
+  portfolio: PortfolioListItem,
+  metrics: Pick<PortfolioMetrics, 'by_platform' | 'currency' | 'window'>,
+): PlatformFigure[] {
+  const cycleTs = metricsAsOf(metrics);
+  return metrics.by_platform.map((row) => ({
+    ...portfolioWindowOf(portfolio, {
+      spend: row.spend,
+      results: row.results,
+      priorSpend: 0,
+      priorResults: 0,
+      cycleTs,
+    }),
+    platform: row.platform,
+    currency: metrics.currency,
+  }));
+}
+
+/** The platforms' parts as one window: their sum, but only when every part is in the same
+ *  currency. Across currencies there is no sum without a stated rate (standard §5), so the
+ *  answer is null and a surface prints the parts, each with its code. Null with no part. */
+export function sumPlatformFigures(
+  parts: readonly PlatformFigure[],
+  prior: Pick<MetricTotals, 'spend' | 'results'> | null,
+): (WindowFigures & { currency: string | null }) | null {
+  const first = parts[0];
+  if (!first || new Set(parts.map((part) => part.currency)).size > 1) return null;
+  return {
+    spend: parts.reduce((sum, part) => sum + part.spend, 0),
+    results: parts.reduce((sum, part) => sum + part.results, 0),
+    priorSpend: prior?.spend ?? 0,
+    priorResults: prior?.results ?? 0,
+    cycleTs: first.cycleTs,
+    currency: first.currency,
+  };
+}
+
 /**
- * The headline figure from the three reads every surface has: the account snapshot read
- * (with its read time), the portfolio's enrolled roster, and its cycle series. The list hook
- * and the portfolio detail both call THIS, so the same reads cannot price to two figures.
- * A read still loading is passed as null and simply contributes nothing.
+ * The headline figure from the reads every surface has: the account snapshot read (with its
+ * read time), the portfolio's enrolled roster, its cycle series and — for a Google, TikTok or
+ * mixed portfolio — its metrics read. The list hook, the platform tabs and the portfolio detail
+ * all call THIS, so the same reads cannot price to two figures. A read still loading is passed
+ * as null and simply contributes nothing.
  */
 export function portfolioFigureFromReads(args: {
   portfolio: PortfolioListItem;
   snapshots: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[] | null;
+  /** The same read's ad sets paused inside the window (see liveWindowFigures). */
+  inactiveWindows?: readonly Pick<AdSetSnapshot, 'id' | 'windows'>[];
   readAt: string | null;
   memberIds: readonly string[] | null;
   series: readonly EfficiencySeriesPoint[];
+  /** optimizer_get_portfolio_metrics (d7). The figure of a portfolio on another platform than
+   *  Meta comes from it alone: its Meta reads would price the Meta half as the whole. */
+  metrics?: PortfolioMetrics | null;
   now?: number;
 }): PortfolioFigure | null {
+  if (holdsOtherPlatforms(args.portfolio, args.metrics)) {
+    // Before the first cycle the read answers zeros, which would read as "spent nothing".
+    if (!args.metrics || !args.portfolio.last_actual_cycle_at) return null;
+    const summed = sumPlatformFigures(
+      platformFigures(args.portfolio, args.metrics),
+      args.metrics.prior_totals,
+    );
+    if (!summed) return null;
+    const { currency, ...snapshot } = summed;
+    const figure = portfolioFigure({
+      portfolio: args.portfolio,
+      live: null,
+      snapshot,
+      now: args.now,
+    });
+    return figure && { ...figure, currency };
+  }
   const live =
     args.snapshots && args.memberIds
       ? liveWindowFigures({
-          snapshots: args.snapshots,
+          snapshots: [...args.snapshots, ...(args.inactiveWindows ?? [])],
           memberIds: args.memberIds,
           portfolio: args.portfolio,
           readAt: args.readAt,

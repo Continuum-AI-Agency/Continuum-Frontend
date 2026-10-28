@@ -18,6 +18,7 @@ import { reallocate } from './engine';
 import { evaluateFatigue } from './fatigue';
 import { sum } from './internal/math';
 import { ruleSkipsFor, skippedIds } from './multiplatform/capabilities';
+import { isLongProtected } from './multiplatform/learning';
 import { computePacing } from './pacing';
 import { evaluateRules } from './rules/evaluate';
 import type { AlreadyFlagged, RuleActionKind, RuleDefinition, RuleEvaluation } from './rules/types';
@@ -68,6 +69,9 @@ export type CycleOptions = {
    *  no snapshot — the ACTIVE roster filter removed them — so they arrive separately.
    *  Absent ⇒ no D1 findings, which is the pre-existing behaviour. */
   absent?: AbsentAdset[];
+  /** The Meta ad account's IANA timezone (the snapshot envelope's). D1 dates an absence in
+   *  it, so the caller passes `asOf` as that zone's day (calendarDayIn). Absent/null ⇒ UTC. */
+  timeZone?: string | null;
   /** The portfolio's autopilot hold threshold (max_change_pct_per_cycle), so the
    *  settings family can propose raising it when the velocity cap binds. Absent ⇒ the
    *  S1 advice carries no patch. */
@@ -101,6 +105,7 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
       maxBudget: _max,
       weeklyGrowthPct: _growth,
       absent: _absent,
+      timeZone: _timeZone,
       ...rest
     } = opts;
     return runPlatformCycle(roster, {
@@ -251,6 +256,7 @@ function runPlatformCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): Cycle
     opts.asOf,
     baseCfg.currency ?? null,
     baseCfg.kpiField,
+    opts.timeZone ?? null,
   );
   const deliveryReads = delivery.reads;
   recommendations = [...delivery.recommendations];
@@ -336,9 +342,12 @@ function runPlatformCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): Cycle
     ];
   }
 
+  // A long protection (PMax) outranks a starve: grace is what holds its budget in the solver.
   const starved = classified.map((s) => {
     let next: AdSetSnapshot =
-      starveIds.has(s.id) && s.status !== 'frozen' ? { ...s, status: 'starved' as const } : s;
+      starveIds.has(s.id) && s.status !== 'frozen' && !isLongProtected(s, baseCfg)
+        ? { ...s, status: 'starved' as const }
+        : s;
     // Withhold the RAISE (not the budget) from an ad set whose spend sits on a creative we
     // have already judged. Implemented as an upper bound of currentBudget in the solver, so
     // conservation still holds and the headroom flows to ad sets that can use it.

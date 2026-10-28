@@ -209,6 +209,7 @@ describe('platformCapabilities and the cycle', () => {
       'not_applicable:google_ads',
       'not_applicable:google_ads',
       'not_applicable:google_ads',
+      'not_applicable:google_ads',
     ]);
     // G7: the Meta stages stay off, and each skip names the Google rules that judge instead.
     expect(
@@ -219,6 +220,7 @@ describe('platformCapabilities and the cycle', () => {
       'delivery:G12',
       'fatigue:G23',
       'creative:G09+G10+G18_pmax_assets+G18_pmax_coverage',
+      'pause:',
     ]);
   });
 });

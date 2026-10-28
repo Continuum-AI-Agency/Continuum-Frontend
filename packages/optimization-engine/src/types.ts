@@ -720,6 +720,15 @@ export type RecommendationEvidence = {
   title?: RecommendationTitle | null;
   /** The verb the button says and what it moves — the saving that used to live in the title. */
   action?: RecommendationAction | null;
+  /** S1 only: of `moves` movable items, `atCap` sat AT the velocity cap (the share S1 fires
+   *  on) and `breached` went PAST it — pacing or pool conservation carried them over, so the
+   *  cap did not bind them. Same whole-jsonb ride as `headline`. */
+  capBinding?: { atCap: number; breached: number; moves: number };
+  /** D1 only: the calendar day (YYYY-MM-DD) the ad set went missing, in the ad account's
+   *  timezone when the cycle holds it (UTC otherwise) — the frame of the cycle's `asOf`; `value`
+   *  is the whole calendar days from it to the cycle day. A reader counts from this day to ITS
+   *  today rather than trusting the figure frozen at cycle time. */
+  missingSinceDay?: string;
   source: 'engine';
 };
 
@@ -920,5 +929,6 @@ export type RuleSkip = {
   coveredBy?: readonly string[];
 };
 
-/** The rule families whose inputs are Meta-only today (see multiplatform/capabilities). */
-export type RuleFamily = 'delivery' | 'fatigue' | 'creative';
+/** The rule families whose inputs are Meta-only today (see multiplatform/capabilities).
+ *  `pause` is P1–P3 and every rule finding of kind pause: its Approve writes a Meta ad set. */
+export type RuleFamily = 'delivery' | 'fatigue' | 'creative' | 'pause';

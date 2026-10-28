@@ -30,6 +30,7 @@ import {
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
   type AdsetTargeting,
+  type InactiveAdsetWindows,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -1187,6 +1188,7 @@ const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
 const EMPTY_TARGETING: AdsetTargeting[] = [];
+const EMPTY_INACTIVE_WINDOWS: InactiveAdsetWindows[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
@@ -2264,6 +2266,8 @@ export function useOptimizerAccountSnapshots(
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
     targeting: query.data?.targeting ?? EMPTY_TARGETING,
+    inactiveWindows: query.data?.inactiveWindows ?? EMPTY_INACTIVE_WINDOWS,
+    timezone: query.data?.timezone ?? null,
     fetchedAt: query.data?.fetchedAt ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     refresh,

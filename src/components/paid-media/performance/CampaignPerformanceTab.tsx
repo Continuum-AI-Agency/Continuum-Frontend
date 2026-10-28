@@ -102,7 +102,14 @@ export function CampaignPerformanceTab({
   const dataPoints = React.useMemo(
     () =>
       buildCampaignInsightDataPoints({
-        campaigns,
+        // A null CPA (no single result) is skipped by the insight model, never ranked as 0.
+        campaigns: campaigns.map((campaign) => ({
+          ...campaign,
+          metrics: campaign.metrics && {
+            ...campaign.metrics,
+            cpa: campaign.metrics.cpa ?? undefined,
+          },
+        })),
         budgetPacing: budgetEntry?.data,
         evidenceWindow: rangePreset,
       }),

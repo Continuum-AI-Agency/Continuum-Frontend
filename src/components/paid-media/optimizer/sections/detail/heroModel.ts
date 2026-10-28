@@ -15,10 +15,13 @@ import type {
 } from '@continuum/contracts';
 import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
-import type { PortfolioFigure } from '../portfolioFigure';
+import { platformName } from '../../entityNoun';
+import { holdsOtherPlatforms, type PortfolioFigure } from '../portfolioFigure';
 import { impactPerDay } from '../recQueueModel';
 import { stripPaceClaim } from './paceClaim';
+import type { ResolvedRange } from './rangeModel';
 import type { RecapDay, RecapModel } from './recapModel';
+import type { PortfolioMetricsState } from './usePortfolioMetrics';
 
 export type HeroCta = {
   /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
@@ -78,10 +81,18 @@ export type HeroView = {
   asOf: string | null;
   /**
    * Where the growth figures came from when the hero shows the portfolio's headline figure
-   * (the default range): `live` (the last 7 complete days) or `snapshot` (the last cycle's
-   * window, dated). Null at any other range, where the figures are the range's own.
+   * (the default range, and for a Google, TikTok or mixed portfolio every range its metrics
+   * read covers): `live` (the last 7 complete days) or `snapshot` (a stored window, dated).
+   * Null otherwise, where the figures are the recap's own.
    */
   figure?: Pick<PortfolioFigure, 'source' | 'asOfLabel' | 'ageDays' | 'stale'> | null;
+  /**
+   * Set when `brief.growth` is NOT a read of the whole portfolio over the range: a Google,
+   * TikTok or mixed portfolio with no metrics read for it. Its zeros then mean "not read", so
+   * nothing may print them — no "no spend", no zero-delivery blocker — and the hero says this
+   * sentence instead. Null (or absent) when the growth is a read, and its zeros are real.
+   */
+  unread?: HeroUnread | null;
   /**
    * The daily recap series, so the calm card can draw cost per result against the target
    * across the window. Absent reads as no priced days. See ./news/cardVisual.
@@ -93,6 +104,65 @@ export type HeroView = {
    */
   recommendations?: ParsedCycleRunReport['recommendations'];
 };
+
+/** Why the hero has no read of the whole portfolio (HeroView.unread): `pending` while the read
+ *  that covers the range is on its way, `unavailable` when none does. */
+export type HeroUnread = { reason: 'pending' | 'unavailable'; sentence: string };
+
+/** A Google, TikTok or mixed portfolio's platforms, and the state of its metrics read at the
+ *  range's window — `uncovered` when no metrics window covers the range. */
+export type CrossPlatformRead = {
+  platforms: readonly string[];
+  read: 'uncovered' | PortfolioMetricsState['status'];
+};
+
+/**
+ * The metrics read window (optimizer_get_portfolio_metrics) the hero of a Google, TikTok or
+ * mixed portfolio stands on for a range: the trailing presets, at the range's own hero window
+ * (`ResolvedRange.window`, so 30 days reads the 14-day window, the widest the brief's growth
+ * carries — the page's range line then says the read covers 14 days). Null for 3 days, a flight
+ * and a custom range: the read has no window for them.
+ */
+export function heroMetricsWindow(
+  range: Pick<ResolvedRange, 'spec' | 'window'>,
+): 'd7' | 'd14' | null {
+  const { spec } = range;
+  if (spec.kind !== 'preset' || spec.preset === 'd3' || spec.preset === 'flight') return null;
+  return range.window === 'd3' ? null : range.window;
+}
+
+/** Null for a Meta-only portfolio, whose recap reads the whole of it. Otherwise its platforms
+ *  (the list's, and the metrics read's once it landed) and the state of the read. */
+export function crossPlatformRead(args: {
+  portfolio: Pick<PortfolioListItem, 'platforms'>;
+  /** heroMetricsWindow of the range. */
+  window: 'd7' | 'd14' | null;
+  metrics: PortfolioMetricsState;
+}): CrossPlatformRead | null {
+  const ready = args.metrics.status === 'ready' ? args.metrics.metrics : null;
+  if (!holdsOtherPlatforms(args.portfolio, ready)) return null;
+  const platforms = new Set([
+    ...(args.portfolio.platforms ?? []),
+    ...(ready?.by_platform.map((row) => row.platform) ?? []),
+  ]);
+  return { platforms: [...platforms], read: args.window ? args.metrics.status : 'uncovered' };
+}
+
+function unreadOf(cross: CrossPlatformRead, resultLabel: string): HeroUnread {
+  const names = cross.platforms.map((platform) => platformName({ platform }));
+  const last = names.pop() ?? 'another platform';
+  const on = names.length > 0 ? `${names.join(', ')} and ${last}` : last;
+  if (cross.read === 'loading') {
+    return { reason: 'pending', sentence: `Reading spend and ${resultLabel} across ${on}…` };
+  }
+  return {
+    reason: 'unavailable',
+    sentence:
+      cross.read === 'uncovered'
+        ? `Spend and ${resultLabel} for this range aren't available for a portfolio on ${on}. Pick 7 or 14 days.`
+        : `Spend and ${resultLabel} for this range aren't available yet for a portfolio on ${on}.`,
+  };
+}
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -197,6 +267,8 @@ function growthFromFigure(args: {
   metric: OptimizationMetricDefinition;
   currency: string | null;
   latestRun: ParsedCycleRunReport['latest_run'];
+  /** The window the figure measured: d7 at the default range, the metrics read's otherwise. */
+  window: BriefGrowth['window'];
 }): BriefGrowth {
   const { figure } = args;
   const priorCost = figure.priorCostPerResult;
@@ -215,7 +287,7 @@ function growthFromFigure(args: {
     },
     pacing: pacingVerdict(args.latestRun?.pacing),
     scale: null,
-    window: 'd7',
+    window: args.window,
     as_of: figure.cycleTs,
     currency: args.currency,
     result_label: args.metric.resultLabel.toLowerCase(),
@@ -360,22 +432,34 @@ export function buildHeroView(args: {
   window: BriefGrowth['window'];
   firstCycle: boolean;
   /**
-   * The portfolio's headline figure (portfolioFigure.ts), passed at the default range only.
-   * When present it IS the growth read — over the stored brief's cycle-time figures and over
-   * the recap — so the hero prints exactly what the portfolio's list row prints.
+   * The portfolio's headline figure (portfolioFigure.ts), passed at the default range — and,
+   * for a Google, TikTok or mixed portfolio, at any range its metrics read covers (measured
+   * over `window`). When present it IS the growth read — over the stored brief's cycle-time
+   * figures and over the recap — so the hero prints exactly what the portfolio's list row prints.
    */
   figure?: PortfolioFigure | null;
+  /**
+   * crossPlatformRead() for a Google, TikTok or mixed portfolio. Its recap sums the Meta half
+   * only, so without `figure` the hero has no read of the whole portfolio and says so
+   * (HeroView.unread) instead of printing the Meta half's zero as "no spend".
+   */
+  crossPlatform?: CrossPlatformRead | null;
   now?: string;
 }): HeroView {
   const { report, recap, metric } = args;
   const observe = args.portfolio.apply_mode === 'observe';
   const figure = args.figure ?? null;
+  const unread =
+    args.crossPlatform && !figure
+      ? unreadOf(args.crossPlatform, metric.resultLabel.toLowerCase())
+      : null;
   const growth = figure
     ? growthFromFigure({
         figure,
         metric,
         currency: args.currency,
         latestRun: report?.latest_run ?? null,
+        window: args.window,
       })
     : growthFromRecap({
         recap,
@@ -423,6 +507,7 @@ export function buildHeroView(args: {
           stale: figure.stale,
         }
       : null,
+    unread,
     series: recap.series,
     recommendations: report?.recommendations ?? [],
   };

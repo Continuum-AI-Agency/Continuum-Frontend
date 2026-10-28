@@ -175,11 +175,14 @@ export function buildPortfolioNews(args: {
   const brief = view.brief;
   const hero = brief.hero;
   const resultLabel = brief.growth.result_label;
+  // Unread (HeroView.unread), the growth and the recap's days are the Meta half or nothing — not
+  // the portfolio — so no card draws a spend, a result count or a cost line from them.
+  const unread = Boolean(view.unread);
   const shared = {
     recommendations: view.recommendations ?? [],
     items,
-    growth: brief.growth,
-    series: view.series ?? [],
+    growth: unread ? null : brief.growth,
+    series: unread ? [] : (view.series ?? []),
     target,
     resultLabel,
   };

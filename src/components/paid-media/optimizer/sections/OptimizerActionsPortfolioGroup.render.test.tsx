@@ -1739,6 +1739,22 @@ describe('recRowLine', () => {
     expect(line('2026-10-21', -1)).toBe('Not active since Oct 21 · 0 days');
   });
 
+  it("reads the engine's structured day over the comparator's", () => {
+    const line = recRowLine(
+      rec({
+        metric: 'days_absent',
+        value: 0,
+        comparator: 'not ACTIVE on Meta',
+        window: 'd7',
+        missingSinceDay: '2026-10-20',
+      }),
+      'MXN',
+      new Date('2026-10-21T15:00:00Z'),
+      'America/Mexico_City',
+    );
+    expect(line).toBe('Not active since Oct 20 · 1 day');
+  });
+
   it('clamps a negative engine figure when the comparator carries no date', () => {
     expect(
       recRowLine(rec({ metric: 'days_absent', value: -1, comparator: 'off', window: 'd7' }), null),

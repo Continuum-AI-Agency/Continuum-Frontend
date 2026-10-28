@@ -161,6 +161,100 @@ describe('PaidMetricsResponseSchema', () => {
   });
 });
 
+// Shaped exactly as supabase/functions/paid-media-metrics/google/handler.ts answers a daily scope
+// whose result basis is ambiguous: metrics.cpa, comparison.cpa and every trend's cpa/conversions
+// are null, and result_basis says why.
+const ambiguousGooglePayload = {
+  scope: 'campaign',
+  currency: 'MXN',
+  metrics: {
+    spend: 1596.4,
+    roas: 0,
+    impressions: 48210,
+    clicks: 1312,
+    ctr: 2.7214,
+    cpc: 1.2168,
+    cpa: null,
+  },
+  result_basis: { rule: 'google_conversion_rule_v1', bucket: null, unambiguous: false },
+  limitations: [
+    'Current conversion-action metadata is applied to historical windows; historical goal-setting changes are not reconstructed.',
+  ],
+  coverage: {
+    requested: { since: '2026-10-20', until: '2026-10-26' },
+    read: { since: '2026-10-20', until: '2026-10-26' },
+    truncated: false,
+    reason: null,
+  },
+  comparison: {
+    spend: { current: 1596.4, previous: 1402.1, percentageChange: 13.8578 },
+    roas: { current: 0, previous: 0, percentageChange: null },
+    impressions: { current: 48210, previous: 45102, percentageChange: 6.891 },
+    clicks: { current: 1312, previous: 1250, percentageChange: 4.96 },
+    ctr: { current: 2.7214, previous: 2.7715, percentageChange: -1.8077 },
+    cpc: { current: 1.2168, previous: 1.1217, percentageChange: 8.4782 },
+    cpa: null,
+  },
+  trends: [
+    {
+      date: '2026-10-20',
+      spend: 230.1,
+      clicks: 190,
+      impressions: 7020,
+      conversions: null,
+      roas: 0,
+      cpa: null,
+    },
+  ],
+  range: { since: '2026-10-20', until: '2026-10-26', preset: 'last_7d' },
+  previous_range: { since: '2026-10-13', until: '2026-10-19' },
+};
+
+describe('PaidMetricsResponseSchema — Google ambiguous result basis', () => {
+  it('accepts the payload and keeps every null CPA null, never 0', () => {
+    const parsed = PaidMetricsResponseSchema.parse(ambiguousGooglePayload);
+
+    expect(parsed.metrics.cpa).toBeNull();
+    expect(parsed.trends[0].cpa).toBeNull();
+    expect(parsed.metrics.spend).toBe(1596.4);
+  });
+
+  it('drops the null comparison entry and keeps the complete ones', () => {
+    const parsed = PaidMetricsResponseSchema.parse(ambiguousGooglePayload);
+
+    expect(parsed.comparison?.cpa).toBeUndefined();
+    expect(parsed.comparison?.roas).toBeUndefined();
+    expect(parsed.comparison?.spend).toEqual({
+      current: 1596.4,
+      previous: 1402.1,
+      percentageChange: 13.8578,
+    });
+  });
+
+  it('keeps result_basis so the page can say why there is no CPA', () => {
+    const parsed = PaidMetricsResponseSchema.parse(ambiguousGooglePayload);
+
+    expect(parsed.result_basis).toEqual({
+      rule: 'google_conversion_rule_v1',
+      bucket: null,
+      unambiguous: false,
+    });
+  });
+
+  it('accepts a null insight cpa', () => {
+    const parsed = PaidMetricsResponseSchema.parse({
+      ...basePayload,
+      insights: [{ date_start: '2026-02-28', spend: 100, cpa: null }],
+    });
+
+    expect(parsed.insights?.[0]?.cpa).toBeNull();
+  });
+
+  it('leaves result_basis absent on a Meta payload', () => {
+    expect(PaidMetricsResponseSchema.parse(basePayload).result_basis).toBeUndefined();
+  });
+});
+
 describe('PaidCampaignDailyTrendsResponseSchema', () => {
   const batchPayload = {
     scope: 'campaign_daily_trends',

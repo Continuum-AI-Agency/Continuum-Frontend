@@ -282,11 +282,13 @@ function cycleRow(
     : (rangeOf(item, target, winner) ?? budgetMoveOf(item));
 }
 
-/** Step 3: what the cycle holds, named by what is missing. */
+/** Step 3: what the cycle holds, named by what is missing. Without a growth read (null: the
+ *  hero has none for the portfolio, HeroView.unread) it carries no spend and no result count —
+ *  a zero there would mean "not read", and printed it reads "$0 spent · 0 leads". */
 function strip(args: {
   item: CycleItemRow | null;
   items: readonly CycleItemRow[];
-  growth: BriefGrowth;
+  growth: BriefGrowth | null;
   resultLabel: string;
 }): CardVisual {
   const { item, items, growth, resultLabel } = args;
@@ -308,12 +310,18 @@ function strip(args: {
     ? `ad set frozen · ${ownReason}`
     : held > 0
       ? `${held} of ${items.length} ad sets frozen${heldReason ? ` · ${heldReason}` : ''}`
-      : growth.results === 0
-        ? `0 ${words} in ${WINDOW_DAYS[growth.window] ?? 14} days`
-        : `no cost per ${resultNoun(resultLabel)} measured`;
+      : !growth
+        ? `spend and ${words} not read for this range`
+        : growth.results === 0
+          ? `0 ${words} in ${WINDOW_DAYS[growth.window] ?? 14} days`
+          : `no cost per ${resultNoun(resultLabel)} measured`;
   const cells: StripCell[] = [];
-  if (finite(growth.spend)) cells.push({ kind: 'money', value: growth.spend, label: 'spent' });
-  if (finite(growth.results)) cells.push({ kind: 'count', value: growth.results, label: words });
+  if (growth && finite(growth.spend)) {
+    cells.push({ kind: 'money', value: growth.spend, label: 'spent' });
+  }
+  if (growth && finite(growth.results)) {
+    cells.push({ kind: 'count', value: growth.results, label: words });
+  }
   if (items.length > 0) cells.push({ kind: 'count', value: items.length, label: 'ad sets' });
   return { kind: 'strip', label, cells };
 }
@@ -322,14 +330,15 @@ function strip(args: {
 function calmLine(args: {
   series: readonly RecapDay[];
   items: readonly CycleItemRow[];
-  growth: BriefGrowth;
+  growth: BriefGrowth | null;
   target: number | null;
 }): CardVisual | null {
   const { series, items, growth, target } = args;
   const days = series
     .map((day) => ({ label: day.date, cost: costOf(day) }))
     .filter((point): point is CostPoint => point.cost != null);
-  const overall = finite(growth.cost_per_result) ? round2(growth.cost_per_result) : null;
+  const portfolioCost = growth?.cost_per_result;
+  const overall = finite(portfolioCost) ? round2(portfolioCost) : null;
   if (days.length >= 2) return { kind: 'cost_line', across: 'days', points: days, target, overall };
   const adSets = items
     .map((row) => ({
@@ -350,7 +359,9 @@ export type CardVisualArgs = {
   candidate: BriefCandidate | null;
   recommendations: readonly RecommendationRow[];
   items: readonly CycleItemRow[];
-  growth: BriefGrowth;
+  /** The portfolio's growth read; null when the hero has none (HeroView.unread), and then no
+   *  card draws a spend, a result count or a portfolio cost from it. */
+  growth: BriefGrowth | null;
   series: readonly RecapDay[];
   target: number | null;
   resultLabel: string;

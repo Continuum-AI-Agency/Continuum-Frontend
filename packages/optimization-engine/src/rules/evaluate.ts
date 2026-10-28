@@ -12,11 +12,16 @@
 //     P/F triggers already flagged are recorded as deduped, and pause/starve
 //     (built-in or rule) suppresses fatigue-kind findings on the same ad set,
 //     mirroring runCycle's skipIds contract.
+//   - a finding kind belongs to the family of the built-in it mirrors, and a
+//     family that cannot judge an entity's platform (multiplatform/capabilities)
+//     is not evaluated on it: a pause rule never proposes a Meta write for a
+//     Google campaign. Budget levers (starve, freeze) belong to no family.
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';
+import { familyApplies } from '../multiplatform/capabilities';
 import { entityOf } from '../title';
-import type { AdSetSnapshot } from '../types';
+import type { AdSetSnapshot, RuleFamily } from '../types';
 import { buildAdsetFacts, buildPortfolioFacts } from './facts';
 import { OPERATORS, type ResolvedValue } from './operators';
 import { templateEvidence } from './templates';
@@ -97,6 +102,12 @@ export function interpolateReason(template: string, facts: FactMap): string {
 
 const FATIGUE_KINDS: RuleActionKind[] = ['creative_refresh', 'audience_expand'];
 
+const FAMILY_OF_KIND: Partial<Record<RuleActionKind, RuleFamily>> = {
+  pause: 'pause',
+  creative_refresh: 'fatigue',
+  audience_expand: 'fatigue',
+};
+
 const isFindingKind = (k: RuleActionKind): k is RuleFinding['kind'] =>
   k === 'pause' || k === 'creative_refresh' || k === 'audience_expand';
 
@@ -136,6 +147,8 @@ export function evaluateRules(
     const adsetFacts = buildAdsetFacts(s, portfolioFacts, cfg);
 
     for (const rule of active) {
+      const family = FAMILY_OF_KIND[rule.action.kind];
+      if (family && !familyApplies(s, family)) continue;
       const facts: FactMap = { ...adsetFacts, ...rule.params };
       try {
         if (evalCondition(rule.conditions, facts)) {

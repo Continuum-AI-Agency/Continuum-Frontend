@@ -6,6 +6,7 @@
 // walks the array instead of the calendar sees a healthy tail and reports nothing.
 import { expect, test } from 'bun:test';
 import {
+  calendarDayIn,
   countDarkDays,
   DEFAULT_CONFIG,
   evaluateDelivery,
@@ -148,6 +149,52 @@ test('D1 fires for an ad set that just left the ACTIVE roster', () => {
   expect(out.recommendations[0].trigger).toBe('D1_off_meta');
   expect(out.recommendations[0].kind).toBe('restore_delivery');
   expect(out.recommendations[0].reason).toContain('Vivo47 VR');
+});
+
+test('D1 counts calendar days from the day it went missing — never -1 on the same day', () => {
+  // markPresence stamps missing_since with the cycle's own timestamp, so on the first cycle
+  // it is a mid-day instant on the asOf day. A timestamp against that day's midnight floored
+  // to -1; day against day is 0.
+  const sameDay = evaluateDelivery(
+    [],
+    [{ adsetId: 'gone', missingSince: `${ASOF}T06:00:12.345+00:00` }],
+    ASOF,
+  ).recommendations[0];
+  expect(sameDay.evidence?.value).toBe(0);
+  expect(sameDay.evidence?.missingSinceDay).toBe(ASOF);
+  expect(sameDay.evidence?.comparator).toBe(`not ACTIVE on Meta since ${ASOF}`);
+  expect(sameDay.evidence?.title?.comparator).toContain(`desde ${ASOF}`);
+
+  // An instant written with an offset lands on its UTC day — the frame asOf is in.
+  const twoDays = evaluateDelivery(
+    [],
+    [{ adsetId: 'gone', missingSince: '2026-09-03T22:30:00-03:00' }],
+    ASOF,
+  ).recommendations[0];
+  expect(twoDays.evidence?.missingSinceDay).toBe('2026-09-04');
+  expect(twoDays.evidence?.value).toBe(2);
+});
+
+test("D1 dates the absence on the account's own calendar when the cycle holds its timezone", () => {
+  // 02:00Z on the 21st is 20:00 on the 20th in Mexico City: the account's day is the 20th.
+  const gone = [{ adsetId: 'gone', missingSince: '2026-10-21T02:00:00Z' }];
+  const local = evaluateDelivery([], gone, '2026-10-20', null, undefined, 'America/Mexico_City')
+    .recommendations[0];
+  expect(local.evidence?.missingSinceDay).toBe('2026-10-20');
+  expect(local.evidence?.value).toBe(0);
+  expect(local.reason).toContain('since 2026-10-20');
+
+  // No timezone: UTC, as before the envelope carried one.
+  const utc = evaluateDelivery([], gone, '2026-10-21', null, undefined, null).recommendations[0];
+  expect(utc.evidence?.missingSinceDay).toBe('2026-10-21');
+  expect(utc.evidence?.value).toBe(0);
+});
+
+test('calendarDayIn falls back to UTC on a zone Intl cannot read', () => {
+  expect(calendarDayIn('2026-10-21T02:00:00Z', 'America/Mexico_City')).toBe('2026-10-20');
+  expect(calendarDayIn('2026-10-21T02:00:00Z', 'Not/AZone')).toBe('2026-10-21');
+  expect(calendarDayIn('2026-10-21T02:00:00Z')).toBe('2026-10-21');
+  expect(calendarDayIn('garbage', 'UTC')).toBeNull();
 });
 
 test('a long-departed ad set is enrollment state, not a fresh finding', () => {

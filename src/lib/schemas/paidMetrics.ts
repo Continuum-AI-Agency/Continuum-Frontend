@@ -6,26 +6,21 @@ const nullableComparisonValueSchema = z.object({
   percentageChange: z.number().nullable(),
 });
 
+// A whole entry may be null: the Google edge nulls `comparison.cpa` when the account's result
+// basis is ambiguous. Such an entry is dropped like any other incomplete one.
 const comparisonRecordSchema = z
-  .record(z.string(), nullableComparisonValueSchema)
+  .record(z.string(), nullableComparisonValueSchema.nullable())
   .optional()
   .transform((comparison) => {
     if (!comparison) return undefined;
 
     const normalized = Object.fromEntries(
-      Object.entries(comparison)
-        .filter(
-          ([, value]) =>
-            typeof value.previous === 'number' && typeof value.percentageChange === 'number',
-        )
-        .map(([key, value]) => [
-          key,
-          {
-            current: value.current,
-            previous: value.previous as number,
-            percentageChange: value.percentageChange as number,
-          },
-        ]),
+      Object.entries(comparison).filter(
+        (
+          entry,
+        ): entry is [string, { current: number; previous: number; percentageChange: number }] =>
+          typeof entry[1]?.previous === 'number' && typeof entry[1].percentageChange === 'number',
+      ),
     );
 
     return Object.keys(normalized).length > 0 ? normalized : undefined;
@@ -38,7 +33,10 @@ const metricsSchema = z.object({
   clicks: z.number(),
   ctr: z.number(),
   cpc: z.number(),
-  cpa: z.number().default(0),
+  // Null when the Google edge could not name a single result (`result_basis.unambiguous` false).
+  // Absent still defaults to 0 for cached payloads; a null must never become 0 — a 0 CPA reads
+  // as free results.
+  cpa: z.number().nullable().default(0),
   // GA4 sessions/conversions merged in by date (Phase 5 dashboard trend
   // line) — brand/property-level, not tied to the selected campaign.
   // Optional + defaulted so payloads from brands without GA4 still validate.
@@ -54,9 +52,20 @@ const trendPointSchema = z.object({
   clicks: z.number().optional(),
   ctr: z.number().optional(),
   cpc: z.number().optional(),
-  cpa: z.number().optional(),
+  cpa: z.number().nullable().optional(),
   gaSessions: z.number().default(0),
   gaConversions: z.number().default(0),
+});
+
+/**
+ * Which business result the Google edge counted (`google_conversion_rule_v1`). `unambiguous`
+ * false means the account's goals name no single result, so the edge nulls every CPA. Meta
+ * payloads carry none.
+ */
+const resultBasisSchema = z.object({
+  rule: z.string(),
+  bucket: z.string().nullable(),
+  unambiguous: z.boolean(),
 });
 
 const rangeSchema = z.object({
@@ -75,6 +84,7 @@ export const PaidMetricsResponseSchema = z.object({
   // when it could not read them. Declared so the route's parse keeps them.
   currency: z.string().nullable().optional(),
   timezone: z.string().nullable().optional(),
+  result_basis: resultBasisSchema.nullable().optional(),
   metrics: metricsSchema,
   comparison: comparisonRecordSchema,
   trends: z.array(trendPointSchema),
@@ -91,7 +101,7 @@ export const PaidMetricsResponseSchema = z.object({
         cpc: z.number().optional(),
         ctr: z.number().optional(),
         roas: z.number().optional(),
-        cpa: z.number().optional(),
+        cpa: z.number().nullable().optional(),
         purchase_value: z.number().optional(),
         purchases: z.number().optional(),
         actions: z.array(z.unknown()).optional(),

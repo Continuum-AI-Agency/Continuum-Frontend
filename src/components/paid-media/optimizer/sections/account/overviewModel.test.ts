@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { figureProps } from '../../format';
-import { portfolioMetricsFixture } from '../attribution/__fixtures__/portfolioMetricsFixture';
 import {
   accountHeadlineSegments,
   accountSpend,
@@ -11,7 +10,6 @@ import {
   headlineText,
   latestCycle,
   portfolioWindow,
-  portfolioWindowFromMetrics,
   resultKinds,
   resultWords,
   sortPortfolioRows,
@@ -165,36 +163,6 @@ describe('portfolioWindow', () => {
 
   it('is null before the first cycle — a zero would read as "spent nothing"', () => {
     expect(portfolioWindow(PRUEBA, [])).toBeNull();
-  });
-});
-
-// A Google portfolio writes no adset_snapshots, so its efficiency series is empty however many
-// cycles ran (Easy Fit's b9cebbcf read "no cycle yet" beside 217.97 real leads).
-describe('portfolioWindowFromMetrics', () => {
-  const GOOGLE = { ...PRUEBA, cpa_target: 30, last_actual_cycle_at: '2026-09-28T06:49:48Z' };
-  const metrics = portfolioMetricsFixture({ platforms: ['google_ads'] });
-
-  it("quotes the portfolio's own 7 days from the metrics read, against its target", () => {
-    const window = portfolioWindowFromMetrics(GOOGLE, metrics);
-    expect(window?.spend).toBe(4062);
-    expect(window?.results).toBe(118);
-    expect(window?.costPerResult).toBeCloseTo(4062 / 118, 6);
-    expect(window?.target).toBe(30);
-    expect(window?.vsTargetPct).toBe(15);
-    expect(window?.state).toBe('warn');
-    expect(window?.cycleTs).toBe('2026-09-28T06:49:48Z');
-  });
-
-  it('reads no prior window as none, never as a free week', () => {
-    const window = portfolioWindowFromMetrics(GOOGLE, { ...metrics, prior_totals: null });
-    expect(window?.priorCostPerResult).toBeNull();
-    expect(window?.vsPriorPct).toBeNull();
-  });
-
-  it('is null before the first cycle, as the series window is', () => {
-    expect(
-      portfolioWindowFromMetrics({ ...GOOGLE, last_actual_cycle_at: null }, metrics),
-    ).toBeNull();
   });
 });
 

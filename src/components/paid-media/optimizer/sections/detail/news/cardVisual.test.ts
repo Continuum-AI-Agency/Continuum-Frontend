@@ -214,6 +214,20 @@ describe('Tours — nothing priced: the strip names what is missing', () => {
     expect(cards[0]?.figure).toBeNull();
     expect(cards[0]?.tone).toBe('neutral');
   });
+
+  // F16: a hero with no read of the whole portfolio (a Google portfolio at a range no metrics
+  // read covers) carries HeroView.unread; its growth zeros mean "not read".
+  it('unread: the same strip keeps the cycle’s own facts and drops the growth’s spend and count', () => {
+    const { report, view } = readBody('tours');
+    const cards = buildPortfolioNews({
+      view: { ...view, unread: { reason: 'unavailable', sentence: 'Not read for this range.' } },
+      items: report.latest_items,
+      target: view.brief.growth.target,
+    }).cards;
+    const visual = visualOf(cards[0], 'strip');
+    expect(visual.label).toBe('12 of 12 ad sets frozen · kpi_mismatch');
+    expect(visual.cells).toEqual([{ kind: 'count', value: 12, label: 'ad sets' }]);
+  });
 });
 
 // The no-data rule, one step at a time, on a candidate whose evidence is taken away.
@@ -337,5 +351,38 @@ describe('the no-data rule', () => {
     expect(
       figureForCard({ candidate: pause, impactPerDay: 0, visual: strip, resultLabel: 'leads' }),
     ).toBeNull();
+  });
+
+  it('3 · with no growth read (an unread hero), the strip prints no spend and no result count', () => {
+    expect(visualForCard({ ...args, growth: null, items: [] })).toEqual({
+      kind: 'strip',
+      label: 'spend and leads not read for this range',
+      cells: [],
+    });
+    expect(
+      visualForCard({ ...args, growth: null, items: [item({ adset_id: 'as-other' })] }),
+    ).toEqual({
+      kind: 'strip',
+      label: 'spend and leads not read for this range',
+      cells: [{ kind: 'count', value: 1, label: 'ad sets' }],
+    });
+  });
+
+  it('with no growth read, the card’s own evidence still draws, and a calm line has no portfolio cost', () => {
+    expect(visualForCard({ ...args, growth: null, items: [item()] }).kind).toBe('range');
+    const calm = visualForCard({
+      ...args,
+      candidate: null,
+      growth: null,
+      items: [
+        item(),
+        item({
+          adset_id: 'as-2',
+          adset_name: 'Warm',
+          diagnostics: { ci: { cpa: 30, lo: 20, hi: 40, events: 9 } },
+        } as Partial<CycleItemRow>),
+      ],
+    });
+    expect(calm).toMatchObject({ kind: 'cost_line', across: 'ad_sets', overall: null });
   });
 });

@@ -72,8 +72,9 @@ export function ActionRevertedBadge() {
   );
 }
 
-/** One side of a before → after, in the unit the change carries. Money is MINOR units in the
- *  account's currency; a null currency prints the bare figure, never "$". */
+/** One side of a before → after, in the unit the change carries. Money is MINOR ('money') or
+ *  MAJOR ('money_major') units in the account's currency; a null currency prints the bare
+ *  figure, never "$". */
 export function printChangeValue(
   change: ActionChange,
   value: string | number | null,
@@ -82,6 +83,9 @@ export function printChangeValue(
   if (value == null) return '—';
   if (change.unit === 'money' && typeof value === 'number') {
     return formatCurrency(minorToMajor(value, currency), currency);
+  }
+  if (change.unit === 'money_major' && typeof value === 'number') {
+    return formatCurrency(value, currency);
   }
   return String(value);
 }

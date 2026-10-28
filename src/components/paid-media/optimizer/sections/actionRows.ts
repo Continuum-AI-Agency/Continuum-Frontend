@@ -16,14 +16,14 @@ import {
   OPTIMIZER_MANAGED_PLATFORM,
   readAdPlatform,
 } from './platforms/platformTabsModel';
-import { settingLabel, settingSentence, settingValue } from './settingChange';
+import { settingLabel, settingMoneyUnit, settingSentence, settingValue } from './settingChange';
 
-/** How one action's before/after should be printed. `unit` decides the formatter:
- *  'money' values are MINOR units and the caller applies its currency; 'text' is printed
- *  verbatim. */
+/** How one action's before/after should be printed. `unit` decides the formatter: 'money'
+ *  values are MINOR units and 'money_major' MAJOR units (a portfolio setting such as its daily
+ *  total), both printed in the caller's currency; 'text' is printed verbatim. */
 export type ActionChange = {
   label: string;
-  unit: 'money' | 'text';
+  unit: 'money' | 'money_major' | 'text';
   before: string | number | null;
   after: string | number | null;
   /** The whole change as one sentence, when it reads better that way than before → after:
@@ -52,6 +52,13 @@ function readMinor(value: Record<string, unknown> | null | undefined): number | 
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+/** An audited value as a number; null when the audit stored none or not a number. */
+function asAmount(raw: string | null): number | null {
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function readKey(value: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -109,6 +116,17 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
             after !== null && after === row.portfolio_id
               ? 'Ad set moved into this portfolio'
               : 'Ad set moved to another portfolio',
+        };
+      }
+      const money = settingMoneyUnit(row.entity_id);
+      if (money) {
+        const amount = (value: Record<string, unknown> | null | undefined) =>
+          asAmount(readKey(value, 'value'));
+        return {
+          label: settingLabel(row.entity_id),
+          unit: money === 'minor' ? 'money' : 'money_major',
+          before: amount(row.before),
+          after: amount(row.after),
         };
       }
       const sentence = settingSentence(row.entity_id, after);

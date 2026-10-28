@@ -3,6 +3,7 @@ import {
   type AdSetSnapshot,
   AdSetSnapshotSchema,
   type AdsetTargeting,
+  type InactiveAdsetWindows,
   OptimizerSnapshotsEnvelopeSchema,
 } from '@continuum/contracts';
 
@@ -12,6 +13,11 @@ export type AccountSnapshotsResult = {
   budgetSummary: AboBudgetSummary | null;
   /** Each ad set's live targeting spec, carried beside the fleet; [] from an older edge. */
   targeting: AdsetTargeting[];
+  /** Ad sets paused inside the window, windows only — for figures, never the engine; [] from
+   *  an older edge. */
+  inactiveWindows: InactiveAdsetWindows[];
+  /** The ad account's IANA timezone, which dated the windows; null from an older edge. */
+  timezone: string | null;
 };
 
 /** Parse the reporting envelope while keeping observational ABO totals outside the engine's
@@ -23,5 +29,7 @@ export function parseOptimizerSnapshotEnvelope(value: unknown): AccountSnapshots
     fetchedAt: envelope.fetchedAt,
     budgetSummary: envelope.budgetSummary,
     targeting: envelope.targeting,
+    inactiveWindows: envelope.inactiveWindows,
+    timezone: envelope.timezone,
   };
 }
