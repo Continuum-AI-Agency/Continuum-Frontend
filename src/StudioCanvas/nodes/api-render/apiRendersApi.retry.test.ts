@@ -102,8 +102,8 @@ test.each([
   expect(wasRetried(error)).toBe(false);
 });
 
-// apiRendersApi spreads these in; built on a client that answers each call once with a deploy cut,
-// every call here must still come back. Remove the wrapper from one and its case fails.
+// All nine retried calls, as apiRendersApi spreads them in, on a client that answers each once
+// with a deploy cut: every call must still come back. Remove one wrapper and its case fails.
 test.each([
   [
     'createBatch',
@@ -123,6 +123,14 @@ test.each([
   [
     'getRenderSet',
     (calls: ReturnType<typeof renderCallsThrough>) => calls.getRenderSet('brand', 'set'),
+  ],
+  [
+    'listRenderSets',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.listRenderSets('brand', '133'),
+  ],
+  [
+    'listRenderSetRevisions',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.listRenderSetRevisions('brand', 'set'),
   ],
 ])('%s goes through retryTransient', async (_name, call) => {
   let answered = 0;
