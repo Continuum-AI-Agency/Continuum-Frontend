@@ -35,6 +35,27 @@ import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { useSetApprovalRooms } from '@/components/forge/RenderSetSettingsDialog';
 import { readinessLine } from '@/components/forge/readinessCopy';
 import {
+  canRetry,
+  clearHold,
+  confirmUnderHold,
+  type HeldBatch,
+  type HoldScope,
+  heldCopy,
+  isHeld,
+  isPermissionRefusal,
+  isSessionRefusal,
+  isSetChanged,
+  madeNothing,
+  NOT_SAVED,
+  permissionCopy,
+  retryHeld,
+  SESSION_EXPIRED,
+  SET_CHANGED,
+  SIGNED_OUT,
+  STALE_MS,
+  sendingElsewhere,
+} from '@/components/forge/renderHold';
+import {
   overrideFor,
   RENDER_OVERRIDES,
   type RenderOverride,
@@ -58,27 +79,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { cn } from '@/lib/utils';
-import {
-  canRetry,
-  clearHold,
-  confirmUnderHold,
-  type HeldBatch,
-  type HoldScope,
-  heldCopy,
-  isHeld,
-  isPermissionRefusal,
-  isSessionRefusal,
-  isSetChanged,
-  madeNothing,
-  NOT_SAVED,
-  permissionCopy,
-  retryHeld,
-  SESSION_EXPIRED,
-  SET_CHANGED,
-  SIGNED_OUT,
-  STALE_MS,
-  sendingElsewhere,
-} from '@/components/forge/renderHold';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
@@ -206,6 +206,10 @@ function Section({
     </section>
   );
 }
+
+/** A light, see-through blur that leaves the app sidebar uncovered: the grid stays in sight. */
+const CONFIRM_OVERLAY =
+  'bg-background/20 backdrop-blur-[2px] md:left-[var(--app-sidebar-width,3.5rem)]';
 
 export function RenderConfirmDialog({
   open,
@@ -564,7 +568,10 @@ export function RenderConfirmDialog({
   if (held && holdScope)
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl">
+        <DialogContent
+          className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl"
+          overlayClassName={CONFIRM_OVERLAY}
+        >
           <DialogHeader>
             <DialogTitle>Unconfirmed render</DialogTitle>
             <DialogDescription>
@@ -599,7 +606,10 @@ export function RenderConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (firing ? undefined : onOpenChange(next))}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl">
+      <DialogContent
+        className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl"
+        overlayClassName={CONFIRM_OVERLAY}
+      >
         <DialogHeader>
           <DialogTitle>
             Render {plural(rows.length, 'row')} · {plural(fileCount, 'file')}
@@ -769,7 +779,8 @@ export function RenderConfirmDialog({
           <Section title="Files per row">
             <ul
               aria-label="Output per row"
-              className="divide-y divide-border border-y border-border"
+              // Its own scroll: a long batch keeps Goes to, Render as and the footer in view.
+              className="max-h-[min(16rem,35vh)] divide-y divide-border overflow-y-auto border-y border-border"
             >
               {rows.map((row, index) => (
                 <li
