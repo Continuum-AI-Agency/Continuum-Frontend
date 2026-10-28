@@ -134,6 +134,12 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     return 'Couldn’t reach the render service. Check again.';
   const detail = humanDetail(failure);
   if (detail) return detail;
+  // The session or the brand's access, thrown or handed over as its status line.
+  const status =
+    failure instanceof ApiError ? failure.status : Number(/^(\d{3})\b/.exec(message)?.[1]);
+  if (status === 401) return 'Your session expired. Sign in again, then try again.';
+  if (status === 403)
+    return 'You don’t have permission to do this here. Ask a brand owner for access.';
   // A 4xx that said nothing but its status line ("400 Bad Request"), whether thrown or handed over
   // as its message, and a code this build has no words for: a refusal with no words, never the
   // status line or the code.

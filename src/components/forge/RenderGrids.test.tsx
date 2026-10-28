@@ -363,7 +363,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
-import { forgetPageSession, HELD_SET, holdKeyOf } from './renderHold';
+import { forgetPageSession, heldConfirmCopy, holdKeyOf } from './renderHold';
 
 const render = (
   ui: React.ReactNode,
@@ -851,6 +851,68 @@ describe('RenderRequestsGrid', () => {
       ).toHaveLength(0);
       fireEvent.click(within(tray).getByRole('button', { name: 'Check again' }));
       await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(4));
+    }, 30_000);
+
+    test('a pass about a review that was replaced writes nothing into the new one', async () => {
+      batchPreflightMock.mockImplementation(async (input) => {
+        if ((input as { records: unknown[] }).records.length > 1)
+          throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+            guardrails: [
+              { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: 'Off.' },
+            ],
+          });
+        return BATCH_READY;
+      });
+      let refuseB: () => void = () => undefined;
+      preflightMock.mockImplementation((input) =>
+        input.variables.headline === 'Off palette'
+          ? new Promise((_, reject) => {
+              refuseB = () =>
+                reject(
+                  new ApiError('render_brand_guardrail_blocked', 422, undefined, {
+                    guardrails: [
+                      { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'block', message: 'Off.' },
+                    ],
+                  }),
+                );
+            })
+          : Promise.resolve(READY_RESPONSE),
+      );
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Hola mundo');
+      for (const count of [2, 3]) {
+        await openMenu('Add', 'Blank row');
+        await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(count));
+      }
+      fireEvent.change(screen.getAllByLabelText('Headline')[1]!, {
+        target: { value: 'Off palette' },
+      });
+      fireEvent.change(screen.getAllByLabelText('Headline')[2]!, { target: { value: 'Third' } });
+      for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
+      fireEvent.click(screen.getByRole('button', { name: /^Render 3 rows/ }));
+      // B's own check is still out when the person narrows the selection and renders again.
+      await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(3));
+      const boxes = screen.getAllByLabelText('Select row');
+      fireEvent.click(boxes[1]!);
+      fireEvent.click(boxes[2]!);
+      fireEvent.click(screen.getByRole('button', { name: /^Render 1 row/ }));
+      await waitFor(() =>
+        expect(
+          (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
+        ).toHaveLength(1),
+      );
+      const calls = batchPreflightMock.mock.calls.length;
+      await act(async () => {
+        refuseB();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      // The old pass would have put C back: the new review is still the one row, asked once.
+      expect(batchPreflightMock.mock.calls.length).toBe(calls);
+      expect(
+        within(screen.getByRole('region', { name: 'Review and render' })).queryAllByRole('list', {
+          name: 'Rows skipped from this batch',
+        }),
+      ).toHaveLength(0);
     }, 30_000);
 
     test('one refused row: the review goes on with the others by itself, Next open, 1 skipped', async () => {
@@ -1704,32 +1766,46 @@ describe('RenderRequestsGrid', () => {
       expect((await heldView()).textContent).not.toContain('aren’t part of this batch');
     }, 30_000);
 
-    // The held-set gate, handler by handler: a hold another tab wrote with no event this page heard
-    // leaves each control enabled, so only the handler's own fresh read stops it; once heard, the
-    // control is disabled with why.
+    // A held set warns, never blocks: each of its actions asks once (Cancel does nothing, Continue
+    // goes on). A hold another tab wrote reaches this page by the storage event.
     const SOURCE = '55555555-5555-4555-8555-555555555555';
     const holdOn = (renderSetId: string) =>
-      localStorage.setItem(
-        holdKeyOf({
-          userId: USER,
-          brandId: BRAND,
-          bindingId: TEMPLATE.bindingId,
-          templateKey: '133',
-          renderSetId,
-        }),
-        JSON.stringify({ batchId: 'batch-g', heldAt: Date.now() }),
-      );
-    const heard = () =>
       act(() => {
+        localStorage.setItem(
+          holdKeyOf({
+            userId: USER,
+            brandId: BRAND,
+            bindingId: TEMPLATE.bindingId,
+            templateKey: '133',
+            renderSetId,
+          }),
+          JSON.stringify({ batchId: 'batch-g', heldAt: Date.now() }),
+        );
         window.dispatchEvent(Object.assign(new Event('storage'), { key: null }));
       });
     const settle = () => act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
-    const gated = (button: HTMLElement) => {
-      expect((button as HTMLButtonElement).disabled).toBe(true);
-      expect(button.getAttribute('title')).toBe(HELD_SET);
+    /** The warning, then Cancel: nothing ran. Returns how to press Continue on the next one. */
+    const warned = async ({ copy = false } = {}) => {
+      const dialog = await screen.findByRole('alertdialog', { name: 'Unconfirmed render' });
+      expect(dialog.textContent).toContain(heldConfirmCopy(copy));
+      return {
+        cancel: async () => {
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+          await waitFor(() =>
+            expect(
+              screen.queryAllByRole('alertdialog', { name: 'Unconfirmed render' }),
+            ).toHaveLength(0),
+          );
+          await settle();
+        },
+        go: async () => {
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+          await settle();
+        },
+      };
     };
 
-    test('re-pin and Run on other variants: each handler stops on a fresh read, then each is disabled', async () => {
+    test('re-pin and Run on other variants warn once, then go', async () => {
       contractOverrides = { template: { ...TEMPLATE, sourceAssetId: SOURCE } };
       const published = (variantId: string, templateKey: string) => ({
         templateId: 'tpl',
@@ -1758,59 +1834,59 @@ describe('RenderRequestsGrid', () => {
         fireEvent.change(picker, {
           target: { value: (picker as HTMLSelectElement).options[1]!.value },
         });
-        const repin = screen.getByRole('button', { name: 'Change set template revision' });
-        const variants = screen.getByRole('button', { name: /^Run on \d other variants?$/ });
-        await waitFor(() => expect((repin as HTMLButtonElement).disabled).toBe(false));
+        const repin = () => screen.getByRole('button', { name: 'Change set template revision' });
+        await waitFor(() => expect((repin() as HTMLButtonElement).disabled).toBe(false));
         holdOn(NEWEST.id);
-        const created = createRenderSetMock.mock.calls.length;
-        fireEvent.click(repin);
-        fireEvent.click(variants);
-        await settle();
+        fireEvent.click(repin());
+        await (await warned()).cancel();
         expect(changeRevisionMock).not.toHaveBeenCalled();
+        fireEvent.click(repin());
+        await (await warned()).go();
+        expect(changeRevisionMock).toHaveBeenCalledTimes(1);
+
+        const created = createRenderSetMock.mock.calls.length;
+        const variants = () => screen.getByRole('button', { name: /^Run on \d other variants?$/ });
+        await waitFor(() => expect((variants() as HTMLButtonElement).disabled).toBe(false));
+        fireEvent.click(variants());
+        await (await warned({ copy: true })).cancel();
         expect(createRenderSetMock.mock.calls.length).toBe(created);
-        heard();
-        gated(screen.getByRole('button', { name: 'Change set template revision' }));
-        gated(screen.getByRole('button', { name: /^Run on \d other variants?$/ }));
+        fireEvent.click(variants());
+        await (await warned({ copy: true })).go();
+        await waitFor(() => expect(createRenderSetMock.mock.calls.length).toBeGreaterThan(created));
       } finally {
         revisionVariants = [];
       }
     }, 30_000);
 
-    test('Update set and Update to current template: each handler stops on a fresh read', async () => {
-      listRenderSetsMock.mockImplementation(async () => ({
-        // Saved for an earlier template, with a field this one no longer has: Update set is asked.
-        items: [
-          {
-            ...NEWEST,
-            contractHash: 'old-hash',
-            rows: [
-              { ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo', subtitle: 'Gone now' } },
-            ],
-          },
-        ],
-        nextCursor: null,
-      }));
+    test('Update set and Update to current template warn once, then go', async () => {
+      // Saved for an earlier template, with a field this one no longer has: Update set is asked.
+      const older = {
+        ...NEWEST,
+        contractHash: 'old-hash',
+        rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo', subtitle: 'Gone now' } }],
+      };
+      listRenderSetsMock.mockImplementation(async () => ({ items: [older], nextCursor: null }));
       render(<RenderRequestsGrid brandId={BRAND} />);
       const banner = await screen.findByRole('region', { name: 'Older template' });
+      // The banner's save leaves the set on its older template, so the rail still offers Update.
+      updateRenderSetMock.mockImplementationOnce(async () => ({ ...older, revision: 2 }));
       holdOn(NEWEST.id);
       fireEvent.click(within(banner).getByRole('button', { name: 'Update set' }));
-      await settle();
+      await (await warned()).cancel();
       expect(updateRenderSetMock).not.toHaveBeenCalled();
-      // The rail's item, from a menu opened before the hold was written.
-      act(() => localStorage.clear());
-      heard();
-      fireEvent.click(screen.getByRole('button', { name: 'Actions for Newest' }));
-      const update = await screen.findByRole('menuitem', { name: /Update to current template/ });
-      expect(update.hasAttribute('data-disabled')).toBe(false);
-      holdOn(NEWEST.id);
-      fireEvent.click(update);
-      await settle();
-      expect(updateRenderSetMock).not.toHaveBeenCalled();
-      heard();
-      gated(within(banner).getByRole('button', { name: 'Update set' }));
+      fireEvent.click(within(banner).getByRole('button', { name: 'Update set' }));
+      await (await warned()).go();
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
+
+      await openMenu('Actions for Newest', /Update to current template/);
+      await (await warned()).cancel();
+      expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
+      await openMenu('Actions for Newest', /Update to current template/);
+      await (await warned()).go();
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(2));
     }, 30_000);
 
-    test('Import browser draft stops on a fresh read, then is disabled', async () => {
+    test('Import browser draft warns once, then goes', async () => {
       withSavedSets();
       localStorage.setItem(
         `forge:render-drafts:${BRAND}:133`,
@@ -1832,68 +1908,51 @@ describe('RenderRequestsGrid', () => {
       await screen.findByDisplayValue('Newest row');
       holdOn(NEWEST.id);
       fireEvent.click(screen.getByRole('button', { name: 'Import browser draft' }));
-      await settle();
+      await (await warned()).cancel();
       expect(screen.queryAllByDisplayValue('From the draft')).toHaveLength(0);
-      heard();
-      gated(screen.getByRole('button', { name: 'Import browser draft' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Import browser draft' }));
+      await (await warned()).go();
+      expect(await screen.findByDisplayValue('From the draft')).toBeTruthy();
     }, 30_000);
 
-    test('Restore as new set stops on a fresh read, then is disabled', async () => {
+    test('Restore as new set, Duplicate and Delete warn once (a copy says it has no hold), then go', async () => {
       withSavedSets();
       render(<RenderRequestsGrid brandId={BRAND} />);
       await screen.findByDisplayValue('Newest row');
-      await openMenu('Actions for Newest', /Version history/);
-      const restore = await screen.findByRole('button', { name: 'Restore as new set' });
       holdOn(NEWEST.id);
       const created = createRenderSetMock.mock.calls.length;
-      fireEvent.click(restore);
-      await settle();
-      expect(createRenderSetMock.mock.calls.length).toBe(created);
-      heard();
-      gated(await screen.findByRole('button', { name: 'Restore as new set' }));
-    }, 30_000);
 
-    test('Duplicate and Delete stop on a fresh read: a hold written under an open menu or dialog', async () => {
-      listRenderSetsMock.mockImplementation(async () => ({
-        items: [renderable(NEWEST), renderable(OLDER)],
-        nextCursor: null,
-      }));
-      render(<RenderRequestsGrid brandId={BRAND} />);
-      await screen.findByDisplayValue('Newest row');
-      // Written by another tab with no event this page hears: only a fresh read sees it.
-      const holdSilently = () =>
-        localStorage.setItem(
-          holdKeyOf({
-            userId: USER,
-            brandId: BRAND,
-            bindingId: TEMPLATE.bindingId,
-            templateKey: '133',
-            renderSetId: OLDER.id,
-          }),
-          JSON.stringify({ batchId: 'batch-o', heldAt: Date.now() }),
-        );
-      fireEvent.click(screen.getByRole('button', { name: 'Actions for Older' }));
-      const duplicate = await screen.findByRole('menuitem', { name: /Duplicate/ });
-      holdSilently();
-      const created = createRenderSetMock.mock.calls.length;
-      fireEvent.click(duplicate);
-      await act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
+      await openMenu('Actions for Newest', /Version history/);
+      fireEvent.click(await screen.findByRole('button', { name: 'Restore as new set' }));
+      await (await warned({ copy: true })).cancel();
       expect(createRenderSetMock.mock.calls.length).toBe(created);
-      // Let go in that tab, heard here: the menu offers Delete again.
-      act(() => {
-        localStorage.clear();
-        window.dispatchEvent(Object.assign(new Event('storage'), { key: null }));
-      });
-      if (screen.queryAllByRole('menuitem').length) {
-        fireEvent.keyDown(screen.getAllByRole('menuitem')[0]!, { key: 'Escape' });
-        await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
-      }
-      await openMenu('Actions for Older', /Delete/);
-      const confirm = await screen.findByRole('alertdialog');
-      holdSilently();
-      fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
-      await act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
+      fireEvent.click(await screen.findByRole('button', { name: 'Restore as new set' }));
+      await (await warned({ copy: true })).go();
+      await waitFor(() => expect(createRenderSetMock.mock.calls.length).toBe(created + 1));
+
+      await openMenu('Actions for Newest', /Duplicate/);
+      await (await warned({ copy: true })).cancel();
+      expect(createRenderSetMock.mock.calls.length).toBe(created + 1);
+      await openMenu('Actions for Newest', /Duplicate/);
+      await (await warned({ copy: true })).go();
+      await waitFor(() => expect(createRenderSetMock.mock.calls.length).toBe(created + 2));
+
+      await openMenu('Actions for Newest', /Delete/);
+      fireEvent.click(
+        within(await screen.findByRole('alertdialog', { name: /Delete/ })).getByRole('button', {
+          name: 'Delete',
+        }),
+      );
+      await (await warned()).cancel();
       expect(deleteRenderSetMock).not.toHaveBeenCalled();
+      await openMenu('Actions for Newest', /Delete/);
+      fireEvent.click(
+        within(await screen.findByRole('alertdialog', { name: /Delete/ })).getByRole('button', {
+          name: 'Delete',
+        }),
+      );
+      await (await warned()).go();
+      await waitFor(() => expect(deleteRenderSetMock).toHaveBeenCalledWith(BRAND, NEWEST.id));
     }, 30_000);
 
     test('a value-only edit since the batch was sent is said apart from it', async () => {

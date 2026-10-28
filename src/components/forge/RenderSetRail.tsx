@@ -259,7 +259,6 @@ export function RenderSetRail({
   onDescribe,
   onDelete,
   onDuplicate,
-  heldReason,
   onHistory,
   onUpdate,
   onImportDraft,
@@ -285,11 +284,6 @@ export function RenderSetRail({
   onDescribe: (set: ForgeRenderSet, description: string | null) => Promise<void>;
   onDelete: (set: ForgeRenderSet) => Promise<void>;
   onDuplicate: (set: ForgeRenderSet) => void;
-  /**
-   * Why a set's rows cannot be copied or deleted now: a held batch of it may already be rendering
-   * them (renderHold.ts). Null when they can.
-   */
-  heldReason?: (set: ForgeRenderSet) => string | null;
   onHistory: (set: ForgeRenderSet) => void;
   /** Saves the open set onto the current template; any other set opens first. */
   onUpdate: (set: ForgeRenderSet) => void;
@@ -304,7 +298,6 @@ export function RenderSetRail({
   /** One set's actions, for its ⋯ button and a right-click on it alike. */
   const setActions = (set: ForgeRenderSet): GridAction[][] => {
     const active = set.id === activeSet?.id;
-    const held = heldReason?.(set) ?? null;
     return [
       [
         {
@@ -327,13 +320,7 @@ export function RenderSetRail({
           run: () =>
             setDescribing((current) => ({ id: set.id, request: (current?.request ?? 0) + 1 })),
         },
-        {
-          id: 'duplicate',
-          label: 'Duplicate',
-          icon: Copy,
-          disabledReason: held,
-          run: () => onDuplicate(set),
-        },
+        { id: 'duplicate', label: 'Duplicate', icon: Copy, run: () => onDuplicate(set) },
         {
           id: 'download',
           label: 'Download set',
@@ -356,7 +343,6 @@ export function RenderSetRail({
                 id: 'update',
                 label: 'Update to current template',
                 icon: RefreshCw,
-                disabledReason: held,
                 run: () => (active ? onUpdate(set) : confirmDiscard(() => onSwitch(set))),
               },
             ]),
@@ -367,7 +353,6 @@ export function RenderSetRail({
           label: 'Delete…',
           icon: Trash2,
           destructive: true,
-          disabledReason: held,
           run: () => setDialog({ kind: 'delete', set }),
         },
       ],
@@ -617,9 +602,6 @@ export function RenderSetRail({
             size="xs"
             variant="ghost"
             className="-mx-2"
-            // The draft replaces the open set's rows: not while that set holds a render.
-            disabled={Boolean(activeSet && heldReason?.(activeSet))}
-            title={(activeSet && heldReason?.(activeSet)) || undefined}
             onClick={() => confirmDiscard(onImportDraft)}
           >
             <History data-icon="inline-start" /> Import browser draft

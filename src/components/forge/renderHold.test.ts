@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, markFetchFailure } from '@/lib/api/errors';
+import { retryTransient } from '@/StudioCanvas/nodes/api-render/renderRetry';
 import {
   canRetry,
   clearHold,
@@ -405,6 +406,88 @@ describe('renderHold', () => {
     expect(canRetry(held)).toBe(false);
     expect(heldCopy(held)).toBe(
       'This set changed somewhere else while sending. Some rows may already be rendering. Open Render ledger to check, then reload the set.',
+    );
+  });
+
+  test('a first send that answered 401 only after a transient try is held: the try may have made rows', async () => {
+    let attempt = 0;
+    await expect(
+      confirmUnderHold(SCOPE, SIGNED, () =>
+        retryTransient(
+          async () => {
+            attempt += 1;
+            if (attempt === 1) throw markFetchFailure(new TypeError('Failed to fetch'));
+            throw new ApiError('Unauthorized', 401);
+          },
+          { wait: async () => undefined },
+        ),
+      ),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(attempt).toBe(2);
+    expect(isHeld(SCOPE)).toBe(true);
+  });
+
+  test('refusals from before createBatch’s loop made nothing on a first send; on a retry they hold', async () => {
+    const refusal = (code: string, status = 409) =>
+      new ApiError(code, status, undefined, { error: code });
+    for (const code of [
+      'expired_confirmation',
+      'template_revision_unpublished',
+      'render_set_explicit_revision_change_required',
+      // A moved set, by either of its codes.
+      'render_set_revision_conflict',
+      'render_set_row_snapshot_mismatch',
+    ]) {
+      await expect(
+        confirmUnderHold(SCOPE, SIGNED, async () => {
+          throw refusal(code);
+        }),
+      ).rejects.toBeInstanceOf(ApiError);
+      expect({ code, held: isHeld(SCOPE) }).toEqual({ code, held: false });
+    }
+    // Inside the loop (createJob, after rows 1..k-1): held on a first send.
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw refusal('render_binding_changed');
+    }).catch(() => undefined);
+    expect(isHeld(SCOPE)).toBe(true);
+    clearHold(SCOPE, SIGNED.batchId);
+    // On a retry the first send may have made rows: held, and a template repair keeps its fix.
+    for (const code of [
+      'template_revision_unpublished',
+      'render_set_explicit_revision_change_required',
+    ]) {
+      await confirmUnderHold(SCOPE, SIGNED, async () => {
+        throw noAnswer();
+      }).catch(() => undefined);
+      await expect(
+        retryHeld(SCOPE, async () => {
+          throw refusal(code, 422);
+        }),
+      ).rejects.toBeInstanceOf(ApiError);
+      expect(isHeld(SCOPE)).toBe(true);
+      if (code === 'template_revision_unpublished')
+        expect(heldCopy(readHold(SCOPE)!)).toContain(
+          'Publish one from the template’s Variants tab, then save.',
+        );
+      clearHold(SCOPE, SIGNED.batchId);
+    }
+  });
+
+  test('a retry’s 403 with the service’s own reason says that reason', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    await expect(
+      retryHeld(SCOPE, async () => {
+        throw new ApiError('render_final_forbidden', 403, undefined, {
+          error: 'render_final_forbidden',
+          detail:
+            'Only a brand owner or admin can start a Final render. Send it as a Proof, or ask one of them.',
+        });
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(heldCopy(readHold(SCOPE)!)).toBe(
+      'Only a brand owner or admin can start a Final render. Open Render ledger to check what was sent.',
     );
   });
 

@@ -51,7 +51,7 @@ export function isTransientRenderError(error: unknown): boolean {
  * confirm is safe because of the backend's database rows, not the fleet (which does not dedupe
  * `request_id`): createBatch → createJob → jobForRequest(request_id) returns a row that already
  * exists before any insert, and `ad_render_jobs` is unique on (brand_id, idempotency_key). The
- * same token is the same jobs. An error that outlasted these retries is marked, so React Query's
+ * same token is the same jobs. An error that outlasted these retries, or came after one, is marked, so React Query's
  * own retry does not pay for the same cut again.
  */
 export async function retryTransient<T>(
@@ -62,7 +62,8 @@ export async function retryTransient<T>(
     try {
       return await run();
     } catch (error) {
-      if (!isTransientRenderError(error)) throw error;
+      // After a retry, any answer is marked: an earlier attempt may have reached the server.
+      if (!isTransientRenderError(error)) throw attempt > 0 ? markRetried(error) : error;
       const delay = delaysMs[attempt];
       if (delay === undefined) throw markRetried(error);
       await wait(delay);

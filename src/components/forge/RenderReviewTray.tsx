@@ -80,7 +80,8 @@ import {
   isPermissionRefusal,
   isSessionRefusal,
   isSetChanged,
-  NO_PERMISSION,
+  madeNothing,
+  permissionCopy,
   NOT_SAVED,
   RenderHeldError,
   STALE_MS,
@@ -172,6 +173,8 @@ export type RenderReviewTrayProps = {
   onRefused?: (rowIds: string[], options?: { again?: boolean }) => Promise<RowsAsked>;
   /** Review passed for these rows: whatever an earlier refusal said about them is out of date. */
   onPassed?: (rowIds: string[]) => void;
+  /** Check again was pressed: whatever was asking the rows about the last check is abandoned. */
+  onCheckAgain?: () => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onClose: () => void;
   onFired: (jobIds: string[]) => void;
@@ -196,12 +199,17 @@ type Review =
       message: string;
       details: string[];
       canOverrideFonts: boolean;
-      /** The template needs fixing (TEMPLATE_REPAIR_CODES): its own copy, and no row is asked. */
-      template?: boolean;
+      /** About the set or its template, not a row: its own copy, and no row is asked. */
+      setLevel?: boolean;
       /** What each row said when asked alone, once the caller has asked. */
       asked?: RowsAsked;
     }
   | { state: 'failed'; message: string };
+
+/** A whole-batch refusal about the set or its contract, never a row's: no row is asked. */
+const isSetLevelCode = (error: unknown) =>
+  isSetChanged(error) ||
+  (error instanceof ApiError && (error.code ?? error.payload?.error) === 'render_contract_changed');
 
 type Destinations =
   | ApiRenderDeliveryDestinationsResponse
@@ -316,6 +324,7 @@ export function RenderReviewTray({
   onRecheck,
   onRefused,
   onPassed,
+  onCheckAgain,
   onDeliveryChange,
   onClose,
   onFired,
@@ -480,18 +489,19 @@ export function RenderReviewTray({
         const plain = isSessionRefusal(error)
           ? SESSION_CHECK
           : isPermissionRefusal(error)
-            ? NO_PERMISSION
+            ? permissionCopy(error)
             : isSetChanged(error)
               ? SET_CHANGED_CHECK
               : null;
         const refusal = error instanceof ApiError && error.status === 422 && !plain;
-        const template = needsTemplateRepair(error);
+        // Fanned out to the rows only when a row could be what was refused.
+        const setLevel = needsTemplateRepair(error) || isSetLevelCode(error);
         setReview(
           refusal
-            ? { state: 'refused', message, details, canOverrideFonts, template }
+            ? { state: 'refused', message, details, canOverrideFonts, setLevel }
             : { state: 'failed', message: plain ?? message },
         );
-        if (refusal && !canOverrideFonts && !template)
+        if (refusal && !canOverrideFonts && !setLevel)
           // An explicit Check again asks the rows again, even when they were just asked.
           askRows(
             mine,
@@ -633,10 +643,17 @@ export function RenderReviewTray({
       );
     } catch (error) {
       setFiring(false);
-      // Refused before anything was made: the session, or a set that moved (renderHold.ts).
-      if (isSessionRefusal(error)) return setProblem(SESSION_EXPIRED);
-      if (isPermissionRefusal(error)) return setProblem(NO_PERMISSION);
-      if (isSetChanged(error)) return setProblem(SET_CHANGED);
+      // Refused before anything was made (renderHold.ts madeNothing): said, not held.
+      if (madeNothing(error))
+        return setProblem(
+          isSessionRefusal(error)
+            ? SESSION_EXPIRED
+            : isPermissionRefusal(error)
+              ? permissionCopy(error)
+              : isSetChanged(error)
+                ? SET_CHANGED
+                : describeRenderDiscoveryFailure(error),
+        );
       // Held: by another tab since the sign, or by this createBatch failing, whatever the status
       // (some rows may exist). Either way the hold opens, and the ledger is re-read.
       if (signed || error instanceof RenderHeldError) {
@@ -1004,7 +1021,7 @@ export function RenderReviewTray({
                       {review.asked?.setChanged
                         ? // The set moved: that is the whole story, not the batch's headline.
                           SET_CHANGED_CHECK
-                        : refusedOnFonts || review.template
+                        : refusedOnFonts || review.setLevel
                           ? review.message
                           : refusedOnDelivery
                             ? `The render service refused this batch’s delivery: ${review.message}`
@@ -1060,14 +1077,15 @@ export function RenderReviewTray({
                           type="button"
                           size="xs"
                           variant="outline"
-                          onClick={() =>
-                            void runReview(acceptMissingFonts, { fresh: true, again: true })
-                          }
+                          onClick={() => {
+                            onCheckAgain?.();
+                            void runReview(acceptMissingFonts, { fresh: true, again: true });
+                          }}
                         >
                           Check again
                         </Button>
                         <span className="text-muted-foreground">
-                          {review.template || review.asked?.setChanged
+                          {review.setLevel || review.asked?.setChanged
                             ? null
                             : !review.asked
                               ? 'Checking each row…'
@@ -1090,7 +1108,10 @@ export function RenderReviewTray({
                       type="button"
                       size="xs"
                       variant="outline"
-                      onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
+                      onClick={() => {
+                        onCheckAgain?.();
+                        void runReview(acceptMissingFonts, { fresh: true });
+                      }}
                     >
                       Check again
                     </Button>

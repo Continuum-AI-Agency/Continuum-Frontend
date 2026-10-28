@@ -25,7 +25,6 @@ export function SetHistoryDialog({
   set,
   contractHash,
   onRestore,
-  restoreBlocked = null,
   onOpenChange,
 }: {
   brandId: string;
@@ -33,8 +32,6 @@ export function SetHistoryDialog({
   /** The template as it is now, so a version saved for an earlier one says so. */
   contractHash: string;
   onRestore: (revision: ForgeRenderSetRevision) => Promise<void>;
-  /** Why Restore can't run now (the set holds an unconfirmed render); null when it can. */
-  restoreBlocked?: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
   const [restoring, setRestoring] = useState<number | null>(null);
@@ -91,8 +88,7 @@ export function SetHistoryDialog({
                   type="button"
                   size="xs"
                   variant="outline"
-                  disabled={restoring !== null || restoreBlocked !== null}
-                  title={restoreBlocked ?? undefined}
+                  disabled={restoring !== null}
                   onClick={async () => {
                     setRestoring(revision.revision);
                     try {

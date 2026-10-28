@@ -1022,6 +1022,52 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(readHold(SCOPE)).toBeNull();
   }, 30_000);
 
+  test('a first send refused before createBatch’s loop made nothing: not held, and says the fix', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('template_revision_unpublished', 422, undefined, {
+        error: 'template_revision_unpublished',
+      });
+    });
+    const { onHeld } = renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(
+      await screen.findByText(
+        'This template has no published revision for this render workspace. Publish one from the template’s Variants tab, then save.',
+      ),
+    ).toBeTruthy();
+    expect(onHeld).not.toHaveBeenCalled();
+    expect(readHold(SCOPE)).toBeNull();
+  }, 30_000);
+
+  test('a contract that changed is the set’s, not a row’s: no row is asked', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_contract_changed', 422, undefined, {
+        error: 'render_contract_changed',
+      });
+    });
+    const { onRefused } = renderTray();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(onRefused).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('Checking each row');
+  }, 30_000);
+
+  test('a 403 with the service’s own reason says that reason, not the access line', async () => {
+    batchPreflightMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_final_forbidden', 403, undefined, {
+        error: 'render_final_forbidden',
+        detail:
+          'Only a brand owner or admin can start a Final render. Send it as a Proof, or ask one of them.',
+      });
+    });
+    renderTray();
+    expect(
+      await screen.findByText(/^Only a brand owner or admin can start a Final render/),
+    ).toBeTruthy();
+    expect(screen.queryAllByText(NO_PERMISSION)).toHaveLength(0);
+  }, 30_000);
+
   test('a 403 from createBatch is not held, and says permission, not session', async () => {
     createBatchMock.mockImplementationOnce(async () => {
       throw new ApiError('Forbidden', 403);

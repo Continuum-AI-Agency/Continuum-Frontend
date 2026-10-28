@@ -49,6 +49,15 @@ describe('render discovery copy', () => {
     ).toContain('not configured');
   });
 
+  test('a 401 is the session and a 403 is access, thrown or handed over as the status line', () => {
+    const session = 'Your session expired. Sign in again, then try again.';
+    const access = 'You don’t have permission to do this here. Ask a brand owner for access.';
+    expect(describeRenderDiscoveryFailure(new ApiError('Unauthorized', 401))).toBe(session);
+    expect(describeRenderDiscoveryFailure('401 Unauthorized')).toBe(session);
+    expect(describeRenderDiscoveryFailure(new ApiError('Forbidden', 403))).toBe(access);
+    expect(describeRenderDiscoveryFailure('403 Forbidden')).toBe(access);
+  });
+
   test('a 4xx that says nothing but its status line reads as a refusal, never the status line', () => {
     expect(describeRenderDiscoveryFailure(new ApiError('400 Bad Request', 400))).toBe(
       'The render service refused this.',

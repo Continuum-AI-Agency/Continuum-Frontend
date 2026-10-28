@@ -10,8 +10,11 @@
 
 import type { ApiRenderBatchPreflightRequest } from '@continuum/contracts';
 import { useSyncExternalStore } from 'react';
-import { ApiError, hasBackendError } from '@/lib/api/errors';
-import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import { ApiError, hasBackendError, wasRetried } from '@/lib/api/errors';
+import {
+  describeRenderDiscoveryFailure,
+  needsTemplateRepair,
+} from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
 export type HoldScope = {
   userId: string;
@@ -60,7 +63,13 @@ export const NO_PERMISSION =
 export const SET_CHANGED_CHECK = 'This set changed somewhere else. Reload it, then Check again.';
 export const SET_CHANGED = 'This set changed somewhere else. Reload it, then Render.';
 /** Why a held set's rows cannot be copied, deleted, re-pinned or replaced. */
-export const HELD_SET = 'This set has an unconfirmed render. Press Render to check it first.';
+export const HELD_SET =
+  'This set has an unconfirmed render. Press Render to see it, then check the Render ledger.';
+/** A held set's actions warn, then go: one confirm. A copy starts with no hold, and says so. */
+export const heldConfirmCopy = (copy: boolean) =>
+  `This set has an unconfirmed render. Check the Render ledger before rendering this.${
+    copy ? ' The copy won’t remember the unconfirmed render.' : ''
+  } Continue?`;
 /** How often an outstanding send says it is still on its way, and how long its silence means not. */
 export const BEAT_MS = 30_000;
 export const STALE_MS = 60_000;
@@ -70,13 +79,15 @@ export class RenderHeldError extends Error {
   override name = 'RenderHeldError';
 }
 
-// A first send's 401/403 or moved set made nothing, so it is not held. Continuum-Backend routes.ts
-// authenticates before service.createBatch, whose loop raises no 401/403 and no set or revision
-// code, only the binding's (checked 2026-10-28 at 8900795ad and 0825783d3).
 export const isSessionRefusal = (error: unknown): boolean =>
   error instanceof ApiError && error.status === 401;
 export const isPermissionRefusal = (error: unknown): boolean =>
   error instanceof ApiError && error.status === 403;
+/** A 403's own reason when the service gave one (a Final needs an owner), else the access line. */
+export const permissionCopy = (error: unknown): string =>
+  error instanceof ApiError && typeof error.payload?.detail === 'string'
+    ? describeRenderDiscoveryFailure(error)
+    : NO_PERMISSION;
 
 const codeOf = (error: ApiError) =>
   error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
@@ -85,8 +96,42 @@ export const SET_CHANGED_CODES: ReadonlySet<string> = new Set([
   'render_set_revision_conflict',
   'render_set_row_snapshot_mismatch',
 ]);
+/** By its code: an ApiError's, or a bare error whose message is the code. */
 export const isSetChanged = (error: unknown): boolean =>
-  error instanceof ApiError && SET_CHANGED_CODES.has(codeOf(error));
+  error instanceof ApiError
+    ? SET_CHANGED_CODES.has(codeOf(error))
+    : error instanceof Error && SET_CHANGED_CODES.has(error.message);
+
+/**
+ * createBatch's refusals that come before any row exists (Continuum-Backend api-renders,
+ * checked 2026-10-28 at 0825783d3): verifyRenderBatch's expired_confirmation and
+ * invalid_confirmation (service.ts:5564, sent as 409 by routes.ts:201) run before its loop. The
+ * set, revision and template codes are preflight's (canonicalizeRenderSetRequest,
+ * service.ts:411-536), never createBatch's; its loop raises only createJob's
+ * micro_only_confirmation_invalid and render_binding_changed (service.ts:5737, :1210).
+ */
+export const PRE_LOOP_CODES: ReadonlySet<string> = new Set([
+  'expired_confirmation',
+  'invalid_confirmation',
+  'render_set_explicit_revision_change_required',
+  'render_set_template_revision_changed',
+  'render_set_binding_changed',
+]);
+
+/**
+ * A first send's refusal that made nothing, so it is not held: the session (routes.ts authenticates
+ * before service.createBatch), the brand's access, a moved set, a template to repair, or a
+ * pre-loop code. Only when no earlier attempt of the send was transient (wasRetried): one that
+ * was may have reached the loop, and committed rows, before this answer.
+ */
+export const madeNothing = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  !wasRetried(error) &&
+  (error.status === 401 ||
+    error.status === 403 ||
+    isSetChanged(error) ||
+    needsTemplateRepair(error) ||
+    PRE_LOOP_CODES.has(codeOf(error)));
 
 /**
  * The service's reason only, its first sentence: its own next step ("Review the rows again, then
@@ -94,13 +139,20 @@ export const isSetChanged = (error: unknown): boolean =>
  * where the answer becomes data; a review refusal outside the hold keeps the whole message.
  */
 const reasonOf = (error: ApiError) =>
-  describeRenderDiscoveryFailure(error).match(/^.+?[.!?](?=\s|$)/)?.[0] ??
+  // A template repair's step is the fix itself, so it stays.
+  (needsTemplateRepair(error)
+    ? null
+    : describeRenderDiscoveryFailure(error).match(/^.+?[.!?](?=\s|$)/)?.[0]) ??
   describeRenderDiscoveryFailure(error);
 
 export function holdReasonOf(error: unknown): HoldReason {
   if (!(error instanceof ApiError)) return { kind: 'no_answer' };
   if (error.status === 401) return { kind: 'session' };
-  if (error.status === 403) return { kind: 'permission' };
+  if (error.status === 403)
+    return {
+      kind: 'permission',
+      detail: typeof error.payload?.detail === 'string' ? reasonOf(error) : undefined,
+    };
   if (isSetChanged(error)) return { kind: 'set_changed' };
   if (error.status >= 500 || error.status === 429)
     return { kind: 'busy', detail: hasBackendError(error) ? reasonOf(error) : undefined };
@@ -213,9 +265,7 @@ export async function confirmUnderHold<T>(
     clearHold(scope, batchId);
     return result;
   } catch (error) {
-    const madeNothing =
-      isSessionRefusal(error) || isPermissionRefusal(error) || isSetChanged(error);
-    if (!retryOf && madeNothing) clearHold(scope, batchId);
+    if (!retryOf && madeNothing(error)) clearHold(scope, batchId);
     else if (readStored(key)?.batchId === batchId) {
       remember(key, { reason: holdReasonOf(error), sending: undefined });
       write(key, { batchId, heldAt });
@@ -264,7 +314,7 @@ export function heldCopy(held: HeldBatch, now = Date.now()): string {
     case 'session':
       return SESSION_RETRY;
     case 'permission':
-      return 'You don’t have permission to render here any more. Open Render ledger to check what was sent.';
+      return `${reason.detail ?? 'You don’t have permission to render here any more.'} Open Render ledger to check what was sent.`;
     case 'set_changed':
       return 'This set changed somewhere else while sending. Some rows may already be rendering. Open Render ledger to check, then reload the set.';
     case 'refused':
