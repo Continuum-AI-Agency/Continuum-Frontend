@@ -1,7 +1,4 @@
 import {
-  API_RENDER_ADVISORIES_PROFILE,
-  API_RENDER_BATCH_PREFLIGHT_ROUTE,
-  API_RENDER_BATCHES_ROUTE,
   API_RENDER_DESTINATIONS_ROUTE,
   API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
@@ -12,7 +9,6 @@ import {
   API_RENDER_JOBS_ROUTE,
   API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
   API_RENDER_MOTION_PROOFS_ROUTE,
-  API_RENDER_PREFLIGHT_ROUTE,
   API_RENDER_PREVIEW_LIVE_ROUTE,
   API_RENDER_PREVIEW_PICTURES_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
@@ -21,13 +17,9 @@ import {
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
   API_RENDER_TEMPLATES_ROUTE,
-  type ApiRenderBatch,
-  type ApiRenderBatchPreflightRequest,
-  type ApiRenderBatchPreflightResponse,
   type ApiRenderBatchShareResponse,
   type ApiRenderCreateDeliveryDestinationRequest,
   type ApiRenderCreateInputSetRequest,
-  type ApiRenderCreateJobRequest,
   type ApiRenderDeliveryDestination,
   type ApiRenderDeliveryDestinationsResponse,
   type ApiRenderDraftSourcesStatusRequest,
@@ -36,20 +28,14 @@ import {
   type ApiRenderFileSpecs,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
-  type ApiRenderJob,
-  type ApiRenderJobListResponse,
   type ApiRenderMasterDownloadRequest,
   type ApiRenderMasterDownloadResponse,
-  type ApiRenderPreflightRequest,
-  type ApiRenderPreflightResponse,
   type ApiRenderSlackChannelListResponse,
   type ApiRenderSuggestRowsRequest,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderTemplateListResponse,
   type ApiRenderUpdateInputSetRequest,
-  apiRenderBatchPreflightResponseSchema,
-  apiRenderBatchSchema,
   apiRenderBatchShareResponseSchema,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
@@ -60,11 +46,8 @@ import {
   apiRenderFileSpecsSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
-  apiRenderJobListResponseSchema,
-  apiRenderJobSchema,
   apiRenderMasterDownloadResponseSchema,
   apiRenderMasterDownloadStatusSchema,
-  apiRenderPreflightResponseSchema,
   apiRenderSetZipShareRoute,
   apiRenderSlackChannelListResponseSchema,
   apiRenderSuggestRowsResponseSchema,
@@ -92,7 +75,6 @@ import {
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
   type ForgeRenderSet,
-  type ForgeRenderSetRevision,
   type ForgeRenderSetShareResponse,
   type ForgeRenderSketch,
   type ForgeRenderSketchRequest,
@@ -106,8 +88,6 @@ import {
   forgeRenderLiveSchema,
   forgeRenderPicturesSchema,
   forgeRenderPreviewSchema,
-  forgeRenderSetListResponseSchema,
-  forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
   forgeRenderSetShareResponseSchema,
   forgeRenderSetShareRoute,
@@ -116,12 +96,11 @@ import {
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
-import { retryTransient } from './renderRetry';
-
-const query = (input: Record<string, string | number>) =>
-  new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
+import { query, renderCallsThrough } from './renderRetry';
 
 export const apiRendersApi = {
+  // The calls a deploy cut retries: built in renderRetry.ts, where their wiring is tested.
+  ...renderCallsThrough(http),
   importMedia(input: ForgeRenderImportMediaRequest) {
     return http.request<ForgeRenderImportMediaResponse>({
       path: API_RENDER_IMPORT_MEDIA_ROUTE,
@@ -193,18 +172,6 @@ export const apiRendersApi = {
       linkedFields: contract.variables.filter((variable) => variable.derivedFrom !== null),
     };
   },
-  /** `retry: false` asks once: a check fanned out over many rows must not multiply its own retries. */
-  preflight(input: ApiRenderPreflightRequest, { retry = true }: { retry?: boolean } = {}) {
-    const ask = () =>
-      http.request<ApiRenderPreflightResponse>({
-        path: API_RENDER_PREFLIGHT_ROUTE,
-        method: 'POST',
-        body: input,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-        schema: apiRenderPreflightResponseSchema,
-      });
-    return retry ? retryTransient(ask) : ask();
-  },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
   composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {
     return http.request<ForgeRenderPreview>({
@@ -260,57 +227,6 @@ export const apiRendersApi = {
       path: `${API_RENDER_MOTION_PROOFS_ROUTE}/${encodeURIComponent(proofId)}?${query({ brandId })}`,
       schema: forgeMotionProofSchema,
     });
-  },
-  createJob(input: ApiRenderCreateJobRequest) {
-    return retryTransient(() =>
-      http.request<ApiRenderJob>({
-        path: API_RENDER_JOBS_ROUTE,
-        method: 'POST',
-        body: input,
-        schema: apiRenderJobSchema,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      }),
-    );
-  },
-  listJobs(
-    brandId: string,
-    limit = 10,
-    options?: {
-      cursor?: string;
-      renderSetId?: string;
-      renderSetRowId?: string;
-      templateKey?: string;
-      status?: ApiRenderJob['status'];
-      batchId?: string;
-      variantId?: string;
-    },
-  ) {
-    return retryTransient(() =>
-      http.request<ApiRenderJobListResponse>({
-        path: `${API_RENDER_JOBS_ROUTE}?${query({
-          brandId,
-          limit,
-          ...(options?.cursor ? { cursor: options.cursor } : {}),
-          ...(options?.renderSetId ? { renderSetId: options.renderSetId } : {}),
-          ...(options?.renderSetRowId ? { renderSetRowId: options.renderSetRowId } : {}),
-          ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
-          ...(options?.status ? { status: options.status } : {}),
-          ...(options?.batchId ? { batchId: options.batchId } : {}),
-          ...(options?.variantId ? { variantId: options.variantId } : {}),
-        })}`,
-        schema: apiRenderJobListResponseSchema,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      }),
-    );
-  },
-  getJob(brandId: string, jobId: string) {
-    return retryTransient(() =>
-      http.request<ApiRenderJob>({
-        path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
-        schema: apiRenderJobSchema,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      }),
-    );
   },
   prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
     return http.request<ApiRenderMasterDownloadResponse>({
@@ -368,24 +284,6 @@ export const apiRendersApi = {
     });
   },
 
-  listRenderSets(brandId: string, templateKey?: string) {
-    return retryTransient(() =>
-      http.request<{ items: ForgeRenderSet[]; nextCursor: null }>({
-        path: `${API_RENDER_SETS_ROUTE}?${query(
-          templateKey ? { brandId, templateKey } : { brandId },
-        )}`,
-        schema: forgeRenderSetListResponseSchema,
-      }),
-    );
-  },
-  getRenderSet(brandId: string, setId: string) {
-    return retryTransient(() =>
-      http.request<ForgeRenderSet>({
-        path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}?${query({ brandId })}`,
-        schema: forgeRenderSetSchema,
-      }),
-    );
-  },
   createRenderSet(input: CreateForgeRenderSetRequest) {
     return http.request<ForgeRenderSet>({
       path: API_RENDER_SETS_ROUTE,
@@ -409,15 +307,6 @@ export const apiRendersApi = {
       body: input,
       schema: forgeRenderSetSchema,
     });
-  },
-  /** The states the set was left in, newest first, for Version history. */
-  listRenderSetRevisions(brandId: string, setId: string) {
-    return retryTransient(() =>
-      http.request<{ items: ForgeRenderSetRevision[] }>({
-        path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}/revisions?${query({ brandId })}`,
-        schema: forgeRenderSetRevisionListResponseSchema,
-      }),
-    );
   },
   deleteRenderSet(brandId: string, setId: string) {
     return http.request<void>({
@@ -465,19 +354,6 @@ export const apiRendersApi = {
     });
   },
 
-  // Batches. One token wraps N per-record tokens; every job createBatch makes carries its
-  // `batchId`, so `listJobs({ batchId })` reads the whole batch back later.
-  batchPreflight(input: ApiRenderBatchPreflightRequest) {
-    return retryTransient(() =>
-      http.request<ApiRenderBatchPreflightResponse>({
-        path: API_RENDER_BATCH_PREFLIGHT_ROUTE,
-        method: 'POST',
-        body: input,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-        schema: apiRenderBatchPreflightResponseSchema,
-      }),
-    );
-  },
   // AI fill for the requests grid. Proposals only — nothing is rendered or saved.
   suggestRows(input: ApiRenderSuggestRowsRequest) {
     return http.request<ApiRenderSuggestRowsResponse>({
@@ -527,16 +403,5 @@ export const apiRendersApi = {
       path: apiRenderDestinationRoute(destinationId),
       method: 'DELETE',
     });
-  },
-  createBatch(input: ApiRenderCreateJobRequest) {
-    return retryTransient(() =>
-      http.request<ApiRenderBatch>({
-        path: API_RENDER_BATCHES_ROUTE,
-        method: 'POST',
-        body: input,
-        schema: apiRenderBatchSchema,
-        headers: { Accept: `application/json; profile="${API_RENDER_ADVISORIES_PROFILE}"` },
-      }),
-    );
   },
 };

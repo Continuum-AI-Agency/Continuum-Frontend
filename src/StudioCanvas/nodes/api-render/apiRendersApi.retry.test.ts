@@ -3,7 +3,7 @@
 import { expect, mock, test } from 'bun:test';
 import { ApiError, markFetchFailure, wasRetried } from '@/lib/api/errors';
 import { RequestTimeoutError } from '@/lib/api/timeout';
-import { RENDER_RETRY_DELAYS_MS, retryTransient } from './renderRetry';
+import { RENDER_RETRY_DELAYS_MS, renderCallsThrough, retryTransient } from './renderRetry';
 
 /** A call that fails with each error in turn, then answers; and the waits it was made to take. */
 const calls = (...errors: unknown[]) => {
@@ -100,4 +100,48 @@ test.each([
   expect(run).toHaveBeenCalledTimes(1);
   expect(waited).toEqual([]);
   expect(wasRetried(error)).toBe(false);
+});
+
+// apiRendersApi spreads these in; built on a client that answers each call once with a deploy cut,
+// every call here must still come back. Remove the wrapper from one and its case fails.
+test.each([
+  [
+    'createBatch',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.createBatch({ confirmationToken: 't' }),
+  ],
+  [
+    'batchPreflight',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.batchPreflight({} as never),
+  ],
+  ['listJobs', (calls: ReturnType<typeof renderCallsThrough>) => calls.listJobs('brand')],
+  ['getJob', (calls: ReturnType<typeof renderCallsThrough>) => calls.getJob('brand', 'job')],
+  [
+    'createJob',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.createJob({ confirmationToken: 't' }),
+  ],
+  ['preflight', (calls: ReturnType<typeof renderCallsThrough>) => calls.preflight({} as never)],
+  [
+    'getRenderSet',
+    (calls: ReturnType<typeof renderCallsThrough>) => calls.getRenderSet('brand', 'set'),
+  ],
+])('%s goes through retryTransient', async (_name, call) => {
+  let answered = 0;
+  const request = mock(async (): Promise<never> => {
+    if (answered++ === 0) throw closing503();
+    return { ok: true } as never;
+  });
+  const calls = renderCallsThrough({ request } as never, { wait: async () => undefined });
+  await expect(call(calls)).resolves.toEqual({ ok: true });
+  expect(request).toHaveBeenCalledTimes(2);
+  // The same request, body and token included, was made again.
+  expect(request.mock.calls[1]).toEqual(request.mock.calls[0]);
+});
+
+test('a preflight asked once is not retried, even through a cut', async () => {
+  const request = mock(async (): Promise<never> => {
+    throw closing503();
+  });
+  const calls = renderCallsThrough({ request } as never, { wait: async () => undefined });
+  await expect(calls.preflight({} as never, { retry: false })).rejects.toBeInstanceOf(ApiError);
+  expect(request).toHaveBeenCalledTimes(1);
 });
