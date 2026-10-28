@@ -13,18 +13,10 @@ import {
 } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/hooks/useSession';
-import {
-  claimClientRenderJob,
-  completeClientRenderJob,
-  failClientRenderJob,
-  listClientRenderJobs,
-  releaseClientRenderJob,
-  retryClientRenderJob,
-  updateClientRenderJob,
-} from '@/lib/api/clientRenderJobs.client';
+import type * as ClientRenderJobsApi from '@/lib/api/clientRenderJobs.client';
 import { useStudioRenderQueue } from '@/lib/studio-render/StudioRenderProvider';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { probeClientRenderCapabilities } from './capabilities';
 import { getClientId } from './clientId';
 import { getClientRenderExecutor, hasClientRenderExecutor } from './executorRegistry';
@@ -87,6 +79,13 @@ export function openClientRenderInbox(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_INBOX_EVENT));
 }
 
+// The job routes validate against the whole render-job schema graph (editor project, motion
+// timeline, creative ops). This provider wraps every authenticated page, so a static import
+// put that graph in every page's first load. Every call below is already async: load it on
+// the first one, the same trade the executors make in registerDefaultExecutors.
+const jobsApi = (): Promise<typeof ClientRenderJobsApi> =>
+  import('@/lib/api/clientRenderJobs.client');
+
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError';
 
@@ -123,6 +122,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
   // show them nor count them (Airtable #296).
   const refresh = useCallback(async () => {
     try {
+      const { listClientRenderJobs } = await jobsApi();
       const result = await listClientRenderJobs(undefined, getClientId());
       setJobs(result.jobs);
     } catch {
@@ -132,19 +132,11 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // The push channel. INSERT and UPDATE are bound SEPARATELY rather than as '*': Realtime
-  // broadcasts DELETE without an RLS check and with a primary-key-only payload, so a
-  // wildcard binding would hand every operator in every account every deleted row — and
-  // `brand_id … on delete cascade` fires the whole table's worth at once.
-  //
-  // No brand filter, because the queue deliberately spans every brand this person operates
-  // and a postgres_changes filter reads one column. The RLS policy is the scoping, exactly
-  // as it is for the endpoint this refreshes.
-  //
-  // ponytail: unfiltered means every operator tab receives every progress heartbeat over
-  // the socket and Realtime evaluates the policy once per subscription for each. Fine at
-  // this table's volume; if a brand ever renders many jobs at once, add a `brand_id=eq.`
-  // channel for the selected brand alongside this one.
+  // The push channel: the viewer's own `client_render_jobs:<user>` topic. The
+  // client_render_jobs_broadcast trigger fans each INSERT and UPDATE out to every operator of
+  // the job's brand — the queue deliberately spans every brand this person operates — under
+  // the same rules as the table's RLS (no ingest jobs; a forge_web_component job only to its
+  // creator). Deletes are not sent.
   useEffect(() => {
     if (!viewerId) return;
     let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -168,17 +160,12 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined)
       .then(() => {
         if (cancelled) return;
-        unsubscribe = subscribeToPostgresChanges({
-          label: 'client-render-jobs',
-          bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
-            event,
-            schema: 'media',
-            table: 'client_render_jobs',
-            // The MediaStream ingest worker shares this table and heartbeats on its own
-            // service lease. Dropped at the socket, not just in the predicate.
-            filter: 'kind=neq.url_ingest',
-            onRow,
-          })),
+        unsubscribe = subscribeToRowBroadcasts({
+          topic: `client_render_jobs:${viewerId}`,
+          bindings: [
+            { event: 'INSERT', onRow },
+            { event: 'UPDATE', onRow },
+          ],
           onSubscribed: refresh,
           onStatus: (status) => setPushed(status === 'SUBSCRIBED'),
         });
@@ -263,6 +250,13 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
         throw new Error('This browser cannot encode video.');
       }
 
+      const {
+        claimClientRenderJob,
+        completeClientRenderJob,
+        failClientRenderJob,
+        releaseClientRenderJob,
+        updateClientRenderJob,
+      } = await jobsApi();
       let claimed: Awaited<ReturnType<typeof claimClientRenderJob>>;
       try {
         claimed = await claimClientRenderJob({
@@ -369,6 +363,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
 
   const retry = useCallback(
     async (job: ClientRenderJob) => {
+      const { retryClientRenderJob } = await jobsApi();
       const result = await retryClientRenderJob(job.id, job.brandId);
       replaceJob(result.job);
     },
@@ -381,6 +376,7 @@ export function ClientRenderProvider({ children }: { children: ReactNode }) {
       if (localJobId) studioQueue.cancel(localJobId);
       const leaseToken = leaseTokens.current.get(job.id);
       if (leaseToken && !localJobId) {
+        const { releaseClientRenderJob } = await jobsApi();
         const result = await releaseClientRenderJob(job.id, leaseToken).catch(() => null);
         if (result) replaceJob(result.job);
       }

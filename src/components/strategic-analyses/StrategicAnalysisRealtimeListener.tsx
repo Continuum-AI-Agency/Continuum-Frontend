@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { useToast } from '@/components/ui/ToastProvider';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { registerStrategicRunsCatchUp } from './realtimeBus';
 import { planCatchUp } from './strategicCatchUp';
@@ -89,18 +89,16 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
 
     const unregister = registerStrategicRunsCatchUp(brandId, catchUpMissed);
 
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `strategic_runs_${brandId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `strategic_analysis_runs:${brandId}`,
       bindings: [
         {
           event: 'UPDATE',
-          schema: 'brand_trends',
-          table: 'strategic_analysis_runs',
-          filter: `brand_id=eq.${brandId}`,
           // `meta.old` is the reason the helper carries it at all: this is an EDGE
           // detector, not a state read. Splitting the binding per event cannot express
           // "was not completed a moment ago and is now", which is what keeps a run from
-          // announcing itself again on every later touch of the row.
+          // announcing itself again on every later touch of the row. The trigger sends
+          // OLD.status for exactly this (strategic_analysis_runs_broadcast).
           onRow: (row, meta) => {
             const previous = meta.old.status;
             const next = row.status;

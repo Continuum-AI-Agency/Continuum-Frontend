@@ -4,7 +4,7 @@ import { z } from 'zod';
 // silent no-op: "Report ready" has never once reached a user. ToastProvider is the mounted
 // system, and its dedupeKey means a job that transitions twice updates one toast in place.
 import { useToast } from '@/components/ui/ToastProvider';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export const reportJobSchema = z.object({
   job_id: z.string(),
@@ -37,12 +37,6 @@ export function useReportJobsRealtime(brandProfileId: string) {
 
   useEffect(() => {
     if (!brandProfileId) return;
-
-    const scoped = {
-      schema: 'paid_media',
-      table: 'report_jobs',
-      filter: `brand_id=eq.${brandProfileId}`,
-    } as const;
 
     const applyJob = (row: Record<string, unknown>, removed: boolean) => {
       const result = reportJobSchema.safeParse(row);
@@ -86,12 +80,12 @@ export function useReportJobsRealtime(brandProfileId: string) {
       prevStatusRef.current.set(job.job_id, job.status);
     };
 
-    return subscribeToPostgresChanges({
-      label: `report-jobs:${brandProfileId}`,
+    return subscribeToRowBroadcasts({
+      topic: `report_jobs:${brandProfileId}`,
       bindings: [
-        { ...scoped, event: 'INSERT', onRow: (row) => applyJob(row, false) },
-        { ...scoped, event: 'UPDATE', onRow: (row) => applyJob(row, false) },
-        { ...scoped, event: 'DELETE', onRow: (row) => applyJob(row, true) },
+        { event: 'INSERT', onRow: (row) => applyJob(row, false) },
+        { event: 'UPDATE', onRow: (row) => applyJob(row, false) },
+        { event: 'DELETE', onRow: (row) => applyJob(row, true) },
       ],
       onStatus: (status) => setIsConnected(status === 'SUBSCRIBED'),
     });
