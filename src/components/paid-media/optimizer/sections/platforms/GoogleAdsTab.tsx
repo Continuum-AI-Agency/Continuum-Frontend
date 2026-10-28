@@ -8,12 +8,15 @@
 // PlatformPortfolioSections), not here: this is Google's own read of the account.
 //
 // When the read cannot happen, the empty state names the reason and the one thing that fixes it.
+// Under the read, in both modes: the parity sections (GoogleTabSections: the account read by
+// campaign type, the campaign explorer, the bidding panel), then Google's own views.
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
+import { GoogleTabSections } from '../google/GoogleTabSections';
 import type { GoogleReadWindow } from '../google/googleReads';
 import { GoogleOwnViews } from '../google/views/GoogleOwnViews';
 import {
@@ -388,12 +391,19 @@ export function GoogleAdsTab({
         <GoogleAdsTabView readingNote={readingNote} state={state} />
       )}
       {state.status === 'ready' ? (
-        <GoogleOwnViews
-          brandId={brandId}
-          currency={state.account.currency}
-          customerId={state.account.account_id}
-          window={{ since: state.overview.since, until: state.overview.until }}
-        />
+        <>
+          <GoogleTabSections
+            brandId={brandId}
+            currency={state.account.currency}
+            customerId={state.account.account_id}
+          />
+          <GoogleOwnViews
+            brandId={brandId}
+            currency={state.account.currency}
+            customerId={state.account.account_id}
+            window={{ since: state.overview.since, until: state.overview.until }}
+          />
+        </>
       ) : null}
       {state.status === 'loading' ? null : children}
     </>

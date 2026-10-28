@@ -27,7 +27,7 @@ export {
 
 export type CampaignTypeKey = 'search' | 'pmax' | 'video' | 'display' | 'shopping' | 'other';
 
-const CAMPAIGN_TYPE_LABELS: Record<CampaignTypeKey, string> = {
+export const CAMPAIGN_TYPE_LABELS: Record<CampaignTypeKey, string> = {
   search: 'Search',
   pmax: 'Performance Max',
   video: 'YouTube / Demand Gen',

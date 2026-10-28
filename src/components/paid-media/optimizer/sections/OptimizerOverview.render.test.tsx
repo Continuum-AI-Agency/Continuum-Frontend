@@ -97,6 +97,13 @@ mock.module('./platforms/useTikTokAdsOverview', () => ({
     return advertiserId ? tiktokState : { status: 'not-connected' };
   },
 }));
+// The Google tab's own sections read Google live; they have render tests of their own.
+mock.module('./google/GoogleTabSections', () => ({
+  GoogleTabSections: () => <div data-testid="google-tab-sections" />,
+}));
+mock.module('./google/GoogleRecentChanges', () => ({
+  GoogleRecentChanges: () => <div data-testid="google-recent-changes" />,
+}));
 const { buildGoogleOverview, GoogleAccountOverviewSchema, GoogleTopCampaignsSchema } = await import(
   './platforms/googleAdsOverviewModel'
 );
@@ -680,6 +687,8 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
       'Is Search limited by budget?',
       'Which asset group is missing assets?',
       'Is any campaign not serving?',
+      'Are the bid targets serving the goal?',
+      'What changed this week, and did it help?',
     ]);
     for (const href of hrefs) {
       expect(href).toStartWith('/scale?tab=jaina&platform=google_ads&new=1&prompt=');
@@ -1640,6 +1649,23 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
       getByTestId('overview-recommendations'),
       getByTestId('overview-links'),
       getByTestId('portfolio-rows'),
+    ];
+    for (let i = 1; i < order.length; i += 1) {
+      expect(follows(order[i - 1] as Element, order[i] as Element)).toBe(true);
+    }
+  });
+
+  it("mounts Google's parity sections under its read, and its recent changes after the rows", () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = { status: 'ready', cards: [BUDGET] };
+    const { getByTestId } = mount();
+    const order = [
+      getByTestId('google-tab'),
+      getByTestId('google-tab-sections'),
+      getByTestId('overview-recommendations'),
+      getByTestId('portfolio-rows'),
+      getByTestId('google-recent-changes'),
     ];
     for (let i = 1; i < order.length; i += 1) {
       expect(follows(order[i - 1] as Element, order[i] as Element)).toBe(true);

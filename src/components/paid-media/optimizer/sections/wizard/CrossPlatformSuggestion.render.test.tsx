@@ -127,6 +127,17 @@ const allPlatforms: PortfolioSuggestion = {
   reason: '2 ad sets on Meta and 2 campaigns on Google Ads, all buying Leads',
 };
 
+/** The same suggestion from a suggest edge that sends each Google campaign's type. */
+const typed: PortfolioSuggestion = {
+  ...allPlatforms,
+  name: 'Leads // Typed',
+  members: (allPlatforms.members ?? []).map((member) =>
+    member.platform === 'google_ads'
+      ? { ...member, channel_type: member.entity_id === 'g-1' ? 'SEARCH' : 'PERFORMANCE_MAX' }
+      : member,
+  ),
+};
+
 beforeEach(() => {
   createMutateAsync.mockClear();
   enrollMutateAsync.mockClear();
@@ -249,7 +260,7 @@ describe('Create — the Google campaigns are enrolled', () => {
     const summary = screen.getAllByTestId('wizard-summary-platform');
     expect(summary.map((li) => li.textContent)).toEqual([
       'Meta · 2 ad sets',
-      'Google · 2 campaigns · recommend-only',
+      'Google · 2 campaigns · budget recommendations',
     ]);
     // The stubbed picker carries no live budgets, so the daily total is typed.
     fireEvent.change(screen.getByLabelText(/^Daily budget/), { target: { value: '2100' } });
@@ -280,7 +291,7 @@ describe('Create — the Google campaigns are enrolled', () => {
     next();
     next();
     expect(screen.getAllByTestId('wizard-summary-platform').map((li) => li.textContent)).toEqual([
-      'Google · 1 campaign · recommend-only',
+      'Google · 1 campaign · budget recommendations',
     ]);
     // No Meta selection, so no live budget to match: the person types one.
     fireEvent.change(screen.getByLabelText(/^Daily budget/), { target: { value: '500' } });
@@ -329,5 +340,49 @@ describe('Create — the Google campaigns are enrolled', () => {
     const section = screen.getByTestId('wizard-other-platform-members');
     for (const box of within(section).getAllByRole('checkbox')) fireEvent.click(box);
     expect(screen.getByRole('status').textContent).toBe('Select at least one ad set or campaign.');
+  });
+});
+
+describe('campaign types, with the budget as the lever', () => {
+  function pick(name: string) {
+    fireEvent.click(within(card(name)).getByRole('button', { name: /Use this/ }));
+  }
+  const next = () => fireEvent.click(screen.getByRole('button', { name: /^Next/ }));
+
+  it('the card names each Google campaign type it holds; an untyped one names none', () => {
+    renderWizard([typed, allPlatforms]);
+    expect(
+      within(card('Leads // Typed'))
+        .getAllByTestId('suggestion-channel-type')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Search 1', 'Performance Max 1']);
+    expect(
+      within(card('Leads // All platforms')).queryAllByTestId('suggestion-channel-type'),
+    ).toEqual([]);
+  });
+
+  it('each Assets row carries its type, and the section says the budget is what moves', () => {
+    renderWizard([typed]);
+    pick('Leads // Typed');
+    const section = screen.getByTestId('wizard-other-platform-members');
+    expect(
+      within(section)
+        .getAllByTestId('wizard-member-channel')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Search', 'Performance Max']);
+    expect(section.textContent).toContain(
+      "The lever on these campaigns is each one's daily budget",
+    );
+  });
+
+  it('the summary names the ticked types and that the optimizer recommends their budget', () => {
+    renderWizard([typed]);
+    pick('Leads // Typed');
+    next();
+    next();
+    expect(screen.getAllByTestId('wizard-summary-platform').map((li) => li.textContent)).toEqual([
+      'Meta · 2 ad sets',
+      'Google · 2 campaigns (Search 1 · Performance Max 1) · budget recommendations',
+    ]);
   });
 });

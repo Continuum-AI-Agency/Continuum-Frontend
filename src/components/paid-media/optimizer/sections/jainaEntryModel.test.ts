@@ -159,6 +159,8 @@ describe('jainaTabEntryPrompts', () => {
       'Is Search limited by budget?',
       'Which asset group is missing assets?',
       'Is any campaign not serving?',
+      'Are the bid targets serving the goal?',
+      'What changed this week, and did it help?',
     ]);
     for (const entry of entries) {
       expect(entry.prompt).toStartWith(

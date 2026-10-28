@@ -1364,6 +1364,9 @@ export const SuggestionMemberSchema = z.object({
    *  what the wizard sums and holds to one currency. Absent from an older suggest edge. */
   currency: z.string().optional(),
   daily_budget: z.number().nonnegative().optional(),
+  /** The campaign's type on its platform (Google advertising_channel_type, verbatim:
+   *  SEARCH, PERFORMANCE_MAX…). Absent on Meta members and from an older suggest edge. */
+  channel_type: z.string().optional(),
 });
 export type SuggestionMember = z.infer<typeof SuggestionMemberSchema>;
 

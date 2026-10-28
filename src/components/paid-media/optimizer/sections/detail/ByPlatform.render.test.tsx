@@ -26,7 +26,8 @@ describe('ByPlatformView', () => {
       />,
     );
     expect(screen.getAllByTestId('by-platform-row')).toHaveLength(3);
-    expect(screen.queryByRole('img')).toBeNull();
+    // The one picture is the mixed portfolio's spend-share bar; the rows are its data table.
+    expect(screen.getAllByRole('img')).toEqual([screen.getByTestId('mixed-spend-bar')]);
     const google = rowFor('google_ads');
     expect(within(google).getByTestId('platform-chip').textContent).toContain('Google');
     expect(within(google).getByTestId('by-platform-cost').textContent).toBe('$34.42 MXN per lead');
@@ -102,6 +103,42 @@ describe('ByPlatformView', () => {
     for (const state of screen.getAllByTestId('by-platform-state')) {
       expect(state.textContent).toBe('no target set');
     }
+  });
+
+  it('tells a mixed portfolio as one story: a spend-share bar, the spend summed, no blended cost', () => {
+    render(
+      <ByPlatformView
+        now={FIXTURE_NOW}
+        state={{ status: 'ready', metrics: portfolioMetricsFixture() }}
+      />,
+    );
+    const bar = screen.getByTestId('mixed-spend-bar');
+    expect(bar.getAttribute('aria-label')).toBe('Share of spend: Meta 39%, Google 46%, TikTok 15%');
+    expect(
+      [...bar.querySelectorAll('[data-platform]')].map((part) =>
+        part.getAttribute('data-platform'),
+      ),
+    ).toEqual(['meta', 'google_ads', 'tiktok_ads']);
+    expect(screen.getByTestId('mixed-spend-total').textContent).toBe(
+      '$8,817 MXN spent across 3 platforms. Cost per lead stays per platform: each one counts its leads its own way, so they are not blended.',
+    );
+    // No cost per result for the portfolio as a whole: only the three rows carry one.
+    expect(screen.getByTestId('by-platform').textContent?.match(/per lead/g)).toHaveLength(4);
+  });
+
+  it('says no cross-platform move is proposed: nothing calls G27 yet', () => {
+    render(
+      <ByPlatformView
+        now={FIXTURE_NOW}
+        state={{ status: 'ready', metrics: portfolioMetricsFixture({ used: 'spreadsheet' }) }}
+      />,
+    );
+    expect(screen.getByTestId('cross-platform-move').textContent).toContain(
+      'Move between platforms: no move proposed.',
+    );
+    expect(screen.getByTestId('mixed-spend-total').textContent).toContain(
+      'Cost per lead stays per platform, in the rows above.',
+    );
   });
 
   it('keeps a Meta-only portfolio on today’s screens: renders nothing', () => {

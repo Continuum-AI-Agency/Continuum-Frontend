@@ -87,6 +87,7 @@ import { AskedProposalPanel } from './detail/AskedProposalPanel';
 import { adsetTableRows } from './detail/adsetTableRows';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { ByPlatform } from './detail/ByPlatform';
+import { GooglePortfolioCampaigns } from './detail/google/GooglePortfolioCampaigns';
 import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
@@ -605,6 +606,7 @@ export function PortfolioDetailWorkspace({
   // Leads and cost both off the engine's interval: the snapshot read lists ACTIVE ad sets
   // only, so a paused one would print "—" beside its measured cost (./detail/adsetTableRows).
   const adsetRows = adsetTableRows(items, { metric, snapshotById, nameById: adsetNameById });
+  const holdsMeta = portfolioPlatforms(portfolio.platforms).includes('meta');
   // The table reads the distance to the target off a small bar per row, when there is one.
   const adsetColumns = [
     ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric }),
@@ -762,9 +764,14 @@ export function PortfolioDetailWorkspace({
         {/* One text row per platform, with the attribution source named once (frontend.html §3). */}
         <ByPlatform portfolioId={portfolio.id} />
 
+        {/* Its Google campaigns against the goal, with G03/G07's proposals (P6 idea 8). */}
+        <GooglePortfolioCampaigns brandId={brandId} portfolio={portfolio} />
+
         {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
-            distance to the target is read off the bottom half of this table. */}
+            distance to the target is read off the bottom half of this table. A portfolio with
+            no Meta member has no ad set to rank. */}
         <OptimizerPanel
+          className={holdsMeta ? undefined : 'hidden'}
           meta={<>{costCiLegend(metric)} · expand a row for its creative verdicts</>}
           title={`${metric.costLabel} per ad set`}
         >

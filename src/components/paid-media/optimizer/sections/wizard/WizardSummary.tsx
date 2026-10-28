@@ -13,9 +13,11 @@ import * as typeScale from '../../typeScale';
 import { TIER_COPY } from '../fields/TierCards';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
+  channelTypeSummary,
   effectiveTargetMetric,
   MODE_COPY,
   planReadout,
+  selectedMembers,
   selectionByPlatform,
   type WizardDraft,
   type WizardStep,
@@ -34,6 +36,14 @@ type WizardSummaryProps = {
   /** The steps completed or open now; a row whose step is not among them waits. */
   reached: ReadonlySet<WizardStep>;
 };
+
+/** " (Search 1 · Performance Max 1)" for a platform's ticked campaigns, or nothing. */
+function channelTypesOf(draft: WizardDraft, platform: string): string {
+  const summary = channelTypeSummary(
+    selectedMembers(draft).filter((member) => member.platform === platform),
+  );
+  return summary ? ` (${summary})` : '';
+}
 
 function Row({
   label,
@@ -103,10 +113,12 @@ export function WizardSummary({
                   key={entry.platform}
                 >
                   {PLATFORM_NAMES[entry.platform]} · {entry.label}
+                  {entry.platform === 'meta' ? '' : channelTypesOf(draft, entry.platform)}
                   {entry.platform === 'meta' && selectedBudgetSum > 0
                     ? ` · ${formatCurrency(selectedBudgetSum, currency)}/day today`
                     : ''}
-                  {entry.platform === 'meta' ? '' : ' · recommend-only'}
+                  {/* Off Meta the optimizer recommends, and what it recommends is the budget. */}
+                  {entry.platform === 'meta' ? '' : ' · budget recommendations'}
                 </li>
               ))}
             </ul>

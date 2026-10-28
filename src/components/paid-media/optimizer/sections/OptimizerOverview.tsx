@@ -84,6 +84,7 @@ import {
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
+import { GoogleRecentChanges } from './google/GoogleRecentChanges';
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import {
@@ -962,6 +963,10 @@ function PlatformPortfolioSections({
         rowPlatforms={(portfolio) => portfolio.platforms}
         windows={windows}
       />
+
+      {platform === 'google_ads' ? (
+        <GoogleRecentChanges brandId={brandId} onOpenActivity={onOpenActivity} />
+      ) : null}
     </>
   );
 }
