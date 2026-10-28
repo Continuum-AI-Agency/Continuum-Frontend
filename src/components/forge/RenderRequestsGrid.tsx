@@ -50,7 +50,11 @@ import {
 import { ChevronDown, ChevronRight, ClipboardPaste, Loader2, Send, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout } from 'react-resizable-panels';
-import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
+import {
+  AiDraftDialog,
+  type AiDraftParent,
+  type SelectedFile,
+} from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import {
   AdDrillDown,
@@ -75,14 +79,6 @@ import {
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
 import { type FiredRow, RenderConfirmDialog } from '@/components/forge/RenderConfirmDialog';
-import {
-  HELD_SET,
-  heldConfirmCopy,
-  type HoldScope,
-  isHeld,
-  SIGNED_OUT,
-  useRenderHold,
-} from '@/components/forge/renderHold';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import {
   downloadTemplateCsv,
@@ -99,13 +95,21 @@ import { RenderSetTabs, templateJobsKey } from '@/components/forge/RenderSetTabs
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import { explainFinding } from '@/components/forge/readinessCopy';
 import {
+  HELD_SET,
+  type HoldScope,
+  heldConfirmCopy,
+  isHeld,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
+import {
   addSibling,
   applyAssistOps,
   applyFormats,
   applyValue,
   clearKey,
-  discardProposed,
   descendantsOf,
+  discardProposed,
   draftStorageKey,
   duplicateLabel,
   effectiveEncode,
@@ -425,6 +429,8 @@ export type ForgeRenderIntent = {
   bindingId?: string;
   renderSetId?: string;
   draftWithAi?: boolean;
+  /** Files dropped on the template's Draft button: the draft opens with them attached. */
+  draftDrop?: Promise<SelectedFile[]>;
   templateRevision?: TemplateRevisionRef;
   templateRef?: string;
   /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
@@ -559,11 +565,15 @@ export function RenderRequestsGrid({
   const [aiDraft, setAiDraft] = useState<{
     parent: AiDraftParent | null;
     varyKeys?: string[];
+    dropped?: Promise<SelectedFile[]>;
   } | null>(null);
   /** A menu-driven draft in flight: what the banner says, and what blocks a second click. */
   const [generating, setGenerating] = useState<{ count: number; of: string } | null>(null);
   /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
-  const [draftFor, setDraftFor] = useState<string | null>(null);
+  const [draftFor, setDraftFor] = useState<{
+    templateKey: string;
+    dropped?: Promise<SelectedFile[]>;
+  } | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [emptyVariant, setEmptyVariant] = useState('');
   const [savedSignature, setSavedSignature] = useState('');
@@ -1831,7 +1841,8 @@ export function RenderRequestsGrid({
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
-    if (intent.draftWithAi) setDraftFor(intent.templateKey);
+    if (intent.draftWithAi)
+      setDraftFor({ templateKey: intent.templateKey, dropped: intent.draftDrop });
     setFocusRow(
       intent.rowId
         ? { setId: intent.renderSetId, id: intent.rowId, select: intent.rerender === true }
@@ -1858,9 +1869,9 @@ export function RenderRequestsGrid({
 
   // The draft opens once the template it was asked for is on screen, not over the previous one.
   useEffect(() => {
-    if (!draftFor || contract?.template.key !== draftFor) return;
+    if (!draftFor || contract?.template.key !== draftFor.templateKey) return;
     setDraftFor(null);
-    setAiDraft({ parent: null });
+    setAiDraft({ parent: null, dropped: draftFor.dropped });
   }, [draftFor, contract]);
 
   // ponytail: drafts are no longer written — the server autosaves. Browser drafts written before
@@ -2903,7 +2914,7 @@ export function RenderRequestsGrid({
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={addRow}
-        onDraftWithAi={() => setAiDraft({ parent: null })}
+        onDraftWithAi={(dropped) => setAiDraft({ parent: null, dropped })}
         draftAnchorRef={draftAnchor}
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
@@ -3470,6 +3481,7 @@ export function RenderRequestsGrid({
           initialVaryKeys={aiDraft?.varyKeys ?? null}
           maxRows={MAX_BATCH_ROWS - rows.length}
           anchor={draftAnchor.current}
+          dropped={aiDraft?.dropped ?? null}
           onDrafted={acceptDraft}
           gridContext={assistContext}
           onAssist={applyAssist}
