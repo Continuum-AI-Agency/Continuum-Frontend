@@ -66,7 +66,7 @@ import {
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
-import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
+import { CONFIRM_UNKNOWN, RenderReviewTray } from '@/components/forge/RenderReviewTray';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -1141,8 +1141,22 @@ export function RenderRequestsGrid({
   // When a review last passed each row: a pass that started before it does not overrule it.
   const passedAt = useRef(new Map<string, number>());
   const events = useRef(0);
-  // A confirm that got no answer: its token, re-sent until the person opens the Render ledger.
-  const [unconfirmedToken, setUnconfirmedToken] = useState<string | null>(null);
+  // A confirm that got no answer: its token, re-sent until the person opens the Render ledger. Held
+  // per render set and template, so Render in another set signs its own batch and never re-sends
+  // this one; the message waits on its own set.
+  const [unconfirmed, setUnconfirmed] = useState<ReadonlyMap<string, string>>(new Map());
+  const tokenScope = activeSet && contract ? `${activeSet.id}|${contract.template.key}` : null;
+  const unconfirmedToken = tokenScope ? (unconfirmed.get(tokenScope) ?? null) : null;
+  /** Holds or lets go of the token for the set the tray was opened on (its render's scope). */
+  const holdToken = (token: string | null) => {
+    if (!tokenScope) return;
+    setUnconfirmed((previous) => {
+      const next = new Map(previous);
+      if (token) next.set(tokenScope, token);
+      else next.delete(tokenScope);
+      return next;
+    });
+  };
   const liveRefusals = useMemo(
     () =>
       new Map(
@@ -2914,6 +2928,25 @@ export function RenderRequestsGrid({
         renderCount={selectedReady.length}
         skipNote={skipNote}
       />
+      {unconfirmedToken && !review ? (
+        // Back on the set whose confirm got no answer: said here until the ledger is opened.
+        <Alert variant="destructive" className="shrink-0 py-2">
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{CONFIRM_UNKNOWN}</span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => {
+                holdToken(null);
+                onFired?.([]);
+              }}
+            >
+              Open Render ledger
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
           <AlertTitle>Input sets could not be loaded</AlertTitle>
@@ -3309,7 +3342,7 @@ export function RenderRequestsGrid({
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
                   unconfirmedToken={unconfirmedToken}
-                  onUnconfirmed={setUnconfirmedToken}
+                  onUnconfirmed={holdToken}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}
                   onDeliveryChange={(rowId, delivery) => {

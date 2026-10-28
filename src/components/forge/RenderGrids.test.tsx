@@ -171,6 +171,11 @@ const savedSet = (id: string, name: string, label: string) => ({
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
+const createBatchMock = mock(
+  async (_input: { confirmationToken: string }): Promise<unknown> => ({
+    jobs: [JOB],
+  }),
+);
 const NEWEST = savedSet('55555555-5555-4555-8555-555555555551', 'Newest', 'Newest row');
 const OLDER = savedSet('55555555-5555-4555-8555-555555555552', 'Older', 'Older row');
 const SAVED_SETS = [NEWEST, OLDER];
@@ -245,7 +250,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       slack: { state: 'not_connected', workspaceName: null, destinations: [] },
       meta: { connected: false, adAccountId: null, adAccountName: null },
     }),
-    createBatch: async () => ({ jobs: [JOB] }),
+    createBatch: (input: { confirmationToken: string }) => createBatchMock(input),
     preflight: preflightMock,
     livePreview: livePreviewMock,
     listJobs: async () => ({ items: [JOB], nextCursor: null }),
@@ -336,6 +341,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
+import { CONFIRM_UNKNOWN } from './RenderReviewTray';
 
 const render = (
   ui: React.ReactNode,
@@ -374,6 +380,8 @@ afterEach(() => {
   suggestRowsMock.mockClear();
   batchPreflightMock.mockReset();
   batchPreflightMock.mockImplementation(async () => BATCH_READY);
+  createBatchMock.mockReset();
+  createBatchMock.mockImplementation(async () => ({ jobs: [JOB] }));
   extraTemplates = [];
   contractOverrides = {};
   pickedAsset = HERO_ASSET;
@@ -1488,6 +1496,57 @@ describe('RenderRequestsGrid', () => {
       undefined,
     );
   });
+
+  test('a token held after a no-answer confirm stays with its set: another set signs its own', async () => {
+    // Both sets renderable, each with the headline its row needs.
+    const renderable = (set: typeof NEWEST) => ({
+      ...set,
+      rows: [{ ...set.rows[0]!, overrides: { headline: 'Hola mundo' } }],
+    });
+    const [setA, setB] = [renderable(NEWEST), renderable(OLDER)];
+    listRenderSetsMock.mockImplementation(async () => ({ items: [setA, setB], nextCursor: null }));
+    let minted = 0;
+    batchPreflightMock.mockImplementation(async () => ({
+      ...BATCH_READY,
+      confirmationToken: `token-${++minted}`,
+    }));
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const renderOne = async () => {
+      fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Render 1 row · 1 file' }));
+      await screen.findByRole('region', { name: 'Review and render' });
+      await press('Next: delivery');
+      await press('Render 1 file');
+    };
+    const openSet = async (name: string, row: string) => {
+      fireEvent.click(screen.getByRole('button', { name: `Open ${name}` }));
+      expect(await screen.findByDisplayValue(row)).toBeTruthy();
+    };
+
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    await renderOne();
+    expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+    const held = createBatchMock.mock.calls[0]?.[0].confirmationToken;
+
+    // Set B: no message, and Render signs and sends a token of its own.
+    await openSet('Older', 'Older row');
+    expect(screen.queryAllByText(CONFIRM_UNKNOWN)).toHaveLength(0);
+    await renderOne();
+    await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+    expect(createBatchMock.mock.calls[1]?.[0].confirmationToken).not.toBe(held);
+
+    // Back on set A, the no-answer is still said, with the way to the ledger.
+    await openSet('Newest', 'Newest row');
+    expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Render ledger' })).toBeTruthy();
+    // And Render there re-sends the held token, not a new one.
+    await renderOne();
+    await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
+    expect(createBatchMock.mock.calls[2]?.[0].confirmationToken).toBe(held);
+  }, 30_000);
 
   test('an intent loads its render set over the newest one', async () => {
     withSavedSets();

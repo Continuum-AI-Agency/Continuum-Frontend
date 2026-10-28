@@ -753,12 +753,13 @@ export function RenderReviewTray({
           </li>
         ))}
       </ul>
-      {problem ? (
+      {/* A token held from an earlier tray on this set says so here too, until the ledger is opened. */}
+      {problem || unconfirmedToken ? (
         <div
           role="alert"
           className="flex flex-wrap items-center gap-2 px-[var(--card-pad)] py-1.5 text-destructive"
         >
-          <p>{problem}</p>
+          <p>{problem ?? CONFIRM_UNKNOWN}</p>
           {unconfirmedToken ? (
             <Button
               type="button"
