@@ -314,13 +314,19 @@ mock.module('@/lib/library/templateSources', () => ({
 const activeBrand = await import('@/components/providers/ActiveBrandProvider');
 const realActiveBrandContext = activeBrand.useActiveBrandContext;
 let brandRole = 'owner';
+const USER = '77777777-7777-4777-8777-777777777777';
+/** The signed-in user the brand context names; null is a session with no user id. */
+let signedIn: string | null = USER;
 mock.module('@/components/providers/ActiveBrandProvider', () => ({
   ...activeBrand,
   useActiveBrandContext: () => {
     try {
       return realActiveBrandContext();
     } catch {
-      return { permissions: [{ brand_profile_id: BRAND, role: brandRole }] };
+      return {
+        permissions: [{ brand_profile_id: BRAND, role: brandRole }],
+        user: signedIn ? { id: signedIn } : null,
+      };
     }
   },
 }));
@@ -341,7 +347,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
-import { forgetPageSession } from './renderHold';
+import { forgetPageSession, holdKeyOf } from './renderHold';
 
 const render = (
   ui: React.ReactNode,
@@ -388,6 +394,7 @@ afterEach(() => {
   contractOverrides = {};
   pickedAsset = HERO_ASSET;
   brandRole = 'owner';
+  signedIn = USER;
 });
 
 const confirmDialog = async (answer: 'Keep editing' | 'Discard' | 'Cancel' | 'Delete') => {
@@ -1519,6 +1526,7 @@ describe('RenderRequestsGrid', () => {
 
   describe('a held batch: createBatch failed, so Render opens it, read-only, until the ledger', () => {
     const FUTURE = '2099-01-01T00:00:00.000Z';
+    const HELD_LABEL = 'Unconfirmed render — review';
     const renderable = (set: typeof NEWEST) => ({
       ...set,
       rows: [{ ...set.rows[0]!, overrides: { headline: 'Hola mundo' } }],
@@ -1564,35 +1572,49 @@ describe('RenderRequestsGrid', () => {
       await renderOne({ final: true });
       return { view, onFired, held: createBatchMock.mock.calls[0]?.[0].confirmationToken };
     };
+    // The backend's own body: its code in `error`, its words in `detail` (routes.ts).
     const bindingChanged = () =>
-      new ApiError('The render binding changed.', 409, undefined, {
+      new ApiError('render_binding_changed', 409, undefined, {
         error: 'render_binding_changed',
-        message: 'The render binding changed.',
+        detail: 'The render binding changed since the confirmation was signed.',
       });
     const noAnswer = () => new TypeError('Failed to fetch');
 
-    test('a 409 render_binding_changed is held, and Render opens the held batch, not a review', async () => {
+    test('a 409 render_binding_changed is held without Retry, and Render opens the held batch', async () => {
       await setup(bindingChanged);
       const view = await heldView();
       expect(view.textContent).toContain(
-        'The render service stopped this batch: The render binding changed. Rows before it may already be rendering. Open Render ledger to check before rendering again.',
+        'The render service stopped this batch: This template’s render setup changed after the review. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
       );
+      expect(view.textContent).not.toMatch(/binding|workspace|Rows before it/);
+      // A refusal cannot succeed on the same token: no Retry, only the ledger.
+      expect(
+        within(view)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual(['Open Render ledger']);
       expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0);
       const signed = batchPreflightMock.mock.calls.length;
-      fireEvent.click(screen.getByRole('button', { name: /^Render/ }));
+      fireEvent.click(screen.getByRole('button', { name: HELD_LABEL }));
       expect(await heldView()).toBeTruthy();
       expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0);
       expect(batchPreflightMock.mock.calls.length).toBe(signed);
     }, 30_000);
 
-    test('Final, Slack and the selection cannot change once held: Render shows what was signed', async () => {
+    test('Final, Slack and the selection cannot change once held: Render says it opens the held batch', async () => {
       await setup(noAnswer);
       const view = await heldView();
-      expect(view.textContent).toContain('What it signed: 1 row · Final · Library');
-      // Another selection, then Render: the same held batch, and nothing to choose in it.
+      expect(view.textContent).toContain('What it signed: 1 row (Newest row) · Final · Library');
+      expect(view.textContent).toContain('In the Render ledger, look for the batch from');
+      expect(view.textContent).not.toContain('aren’t part of this batch');
+      // The button says what it does now, never the selection's count.
+      expect(screen.queryAllByRole('button', { name: /^Render \d/ })).toHaveLength(0);
+      // Another selection, then Render: the same held batch, said apart from the grid's rows.
       fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-      fireEvent.click(screen.getByRole('button', { name: /^Render/ }));
-      await heldView();
+      fireEvent.click(screen.getByRole('button', { name: HELD_LABEL }));
+      expect((await heldView()).textContent).toContain(
+        'Your edits and selection aren’t part of this batch.',
+      );
       expect(screen.queryAllByRole('radiogroup', { name: 'Render as' })).toHaveLength(0);
       expect(screen.queryAllByRole('region', { name: 'Delivery options' })).toHaveLength(0);
       expect(
@@ -1602,14 +1624,15 @@ describe('RenderRequestsGrid', () => {
       ).toEqual(['Retry this batch', 'Open Render ledger']);
     }, 30_000);
 
-    test('Retry this batch re-sends the identical token; it clears the hold once it lands', async () => {
+    test('Retry this batch re-sends the identical token; its jobs show, and the hold clears', async () => {
       const { held } = await setup(noAnswer);
       fireEvent.click(within(await heldView()).getByRole('button', { name: 'Retry this batch' }));
       await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
       expect(createBatchMock.mock.calls[1]?.[0]).toEqual({ confirmationToken: held });
-      await waitFor(() =>
-        expect(screen.queryAllByRole('region', { name: 'Held batch' })).toHaveLength(0),
-      );
+      // The same result a confirm shows: the queued jobs, by row.
+      const landed = await screen.findByRole('region', { name: 'Retried batch' });
+      expect(within(landed).getByRole('list', { name: 'Fired renders' })).toBeTruthy();
+      expect(screen.queryAllByRole('region', { name: 'Held batch' })).toHaveLength(0);
       expect(heldKeys()).toHaveLength(0);
     }, 30_000);
 
@@ -1625,12 +1648,13 @@ describe('RenderRequestsGrid', () => {
       createBatchMock.mockImplementationOnce(async () => {
         throw new ApiError('invalid_confirmation', 409, undefined, {
           error: 'invalid_confirmation',
+          detail: 'invalid_confirmation',
         });
       });
       fireEvent.click(within(await heldView()).getByRole('button', { name: 'Retry this batch' }));
       await waitFor(() =>
         expect(screen.getByRole('region', { name: 'Held batch' }).textContent).toContain(
-          'The render service stopped this batch: This review no longer matches the rows. Review the rows again, then render. Rows before it may already be rendering. Retry isn’t available any more. Open Render ledger to check before rendering again.',
+          'The render service stopped this batch: This review no longer matches the rows. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
         ),
       );
       expect(document.body.textContent).not.toContain('invalid_confirmation');
@@ -1639,7 +1663,14 @@ describe('RenderRequestsGrid', () => {
 
     test('Open Render ledger opens the job list and clears the hold', async () => {
       const { onFired } = await setup(bindingChanged);
-      expect(heldKeys()).toHaveLength(1);
+      expect(heldKeys()).toEqual([
+        holdKeyOf({
+          userId: USER,
+          brandId: BRAND,
+          bindingId: TEMPLATE.bindingId,
+          templateKey: '133',
+        }),
+      ]);
       // Only the batch and when: the token stays in this page's memory.
       expect(Object.keys(JSON.parse(localStorage.getItem(heldKeys()[0]!)!)).sort()).toEqual([
         'batchId',
@@ -1674,24 +1705,36 @@ describe('RenderRequestsGrid', () => {
         0,
       );
       expect(reloaded.textContent).toContain(
-        'Retry isn’t available any more. Open Render ledger to check before rendering again.',
+        'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
       );
       expect(reloaded.textContent).toContain('What it signed isn’t known after a reload.');
       expect(JSON.stringify(localStorage)).not.toContain(held);
     }, 30_000);
 
-    test('a hold stays with its set: another set renders as usual, and the hold is back on return', async () => {
-      const { held } = await setup(noAnswer);
+    test('a hold covers the template: another set of it opens the same held batch', async () => {
+      await setup(noAnswer);
       await heldView();
       await openSet('Older', 'Older row');
-      expect(screen.queryAllByRole('region', { name: 'Held batch' })).toHaveLength(0);
-      await renderOne();
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
-      expect(createBatchMock.mock.calls[1]?.[0].confirmationToken).not.toBe(held);
-      await openSet('Newest', 'Newest row');
-      fireEvent.click(within(await heldView()).getByRole('button', { name: 'Retry this batch' }));
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
-      expect(createBatchMock.mock.calls[2]?.[0].confirmationToken).toBe(held);
+      expect(await heldView()).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: HELD_LABEL }));
+      expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0);
+      expect(createBatchMock).toHaveBeenCalledTimes(1);
+    }, 30_000);
+
+    test('with no user id, Render fails closed', async () => {
+      signedIn = null;
+      listRenderSetsMock.mockImplementation(async () => ({
+        items: [renderable(NEWEST)],
+        nextCursor: null,
+      }));
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+      const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+      const button = within(toolbar).getByRole<HTMLButtonElement>('button', { name: /^Render/ });
+      expect(button.disabled).toBe(true);
+      expect(within(toolbar).getByText('Sign in again to render')).toBeTruthy();
+      expect(batchPreflightMock).not.toHaveBeenCalled();
     }, 30_000);
   });
 

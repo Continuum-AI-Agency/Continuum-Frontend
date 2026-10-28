@@ -30,6 +30,8 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
     'This set is pinned to another template revision. Use “Change set template revision” to move it, then render.',
   render_set_revision_outputs_unresolved:
     'Some rows use formats the chosen revision does not have. Pick their formats again, then change the revision.',
+  // Confirm re-checks where the template renders; a move since the review stops the batch there.
+  render_binding_changed: 'This template’s render setup changed after the review.',
   // A confirmation token is good for 30 minutes and signs exactly the rows it was reviewed for.
   expired_confirmation: 'This review has expired. Review the rows again, then render.',
   invalid_confirmation:

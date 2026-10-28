@@ -249,6 +249,7 @@ export function RenderToolbar({
   onRender,
   renderCount,
   skipNote,
+  heldLabel,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -306,6 +307,8 @@ export function RenderToolbar({
   renderCount?: number;
   /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
   skipNote?: string | null;
+  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  heldLabel?: string;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -564,6 +567,7 @@ export function RenderToolbar({
               onRender={onRender}
               renderCount={renderCount}
               skipNote={skipNote}
+              heldLabel={heldLabel}
             />
           </Control>
         </>
@@ -662,6 +666,7 @@ function RenderButton({
   onRender,
   renderCount,
   skipNote,
+  heldLabel,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -673,6 +678,8 @@ function RenderButton({
   renderCount?: number;
   /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
   skipNote?: string | null;
+  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  heldLabel?: string;
 }) {
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
@@ -691,9 +698,11 @@ function RenderButton({
       ) : (
         <Play className="size-3.5" aria-hidden />
       )}
-      {(renderCount ?? selectedCount)
-        ? `Render ${plural(renderCount ?? selectedCount, 'row')} · ${plural(files.total, 'file')}`
-        : 'Render'}
+      {heldLabel
+        ? heldLabel
+        : (renderCount ?? selectedCount)
+          ? `Render ${plural(renderCount ?? selectedCount, 'row')} · ${plural(files.total, 'file')}`
+          : 'Render'}
     </Button>
   );
   const content = !selectedCount ? (

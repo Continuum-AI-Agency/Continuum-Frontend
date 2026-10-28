@@ -5,6 +5,7 @@ import {
   type ApiRenderBatchRecord,
   type ApiRenderInputSet,
   type ApiRenderInputValue,
+  type ApiRenderJob,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
@@ -68,10 +69,11 @@ import {
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import {
   HeldBatchView,
+  LandedBatchView,
   RenderReviewTray,
   type RowsAsked,
 } from '@/components/forge/RenderReviewTray';
-import { holdBatch, useRenderHold } from '@/components/forge/renderHold';
+import { SIGNED_OUT, useRenderHold } from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -1150,14 +1152,15 @@ export function RenderRequestsGrid({
   // When a review last passed each row: a pass that started before it does not overrule it.
   const passedAt = useRef(new Map<string, number>());
   const events = useRef(0);
-  // A batch whose createBatch failed is held, per user, brand, set and template (renderHold.ts):
-  // while it is, Render opens it, never a new review.
-  const userId = useActiveBrandContext().user?.id ?? 'anonymous';
+  // A batch whose createBatch failed is held per user, brand, binding and template (renderHold.ts),
+  // so every set and the canvas see it: while it is, Render opens it, never a new review. With no
+  // user id there is no key to hold under, so Render fails closed.
+  const userId = useActiveBrandContext().user?.id ?? null;
   const holdScope =
-    activeSet && contract
-      ? { userId, brandId, setId: activeSet.id, templateKey: contract.template.key }
-      : null;
+    userId && contract ? { userId, brandId, bindingId, templateKey: contract.template.key } : null;
   const held = useRenderHold(holdScope);
+  // A held batch that a Retry landed: its jobs, shown until closed.
+  const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);
   const liveRefusals = useMemo(
     () =>
       new Map(
@@ -2401,7 +2404,10 @@ export function RenderRequestsGrid({
   };
   const selectedReady = selected.filter((row) => skipReason(row) === undefined);
   const readyToFire =
-    !updateRequired && selectedReady.length > 0 && selectedReady.length <= MAX_BATCH_ROWS;
+    Boolean(userId) &&
+    !updateRequired &&
+    selectedReady.length > 0 &&
+    selectedReady.length <= MAX_BATCH_ROWS;
   // What Render will make, counted the way the review tray counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
@@ -2415,15 +2421,17 @@ export function RenderRequestsGrid({
     }
 
   const skippedCount = selected.length - selectedReady.length;
-  const fireHint = updateRequired
-    ? 'Update this set to the current template first'
-    : selected.length === 0
-      ? 'Select the rows to render'
-      : selectedReady.length === 0
-        ? (selected.map(skipReason).find(Boolean) ?? 'No selected row can render')
-        : selectedReady.length > MAX_BATCH_ROWS
-          ? `At most ${MAX_BATCH_ROWS} renders per batch`
-          : null;
+  const fireHint = !userId
+    ? SIGNED_OUT
+    : updateRequired
+      ? 'Update this set to the current template first'
+      : selected.length === 0
+        ? 'Select the rows to render'
+        : selectedReady.length === 0
+          ? (selected.map(skipReason).find(Boolean) ?? 'No selected row can render')
+          : selectedReady.length > MAX_BATCH_ROWS
+            ? `At most ${MAX_BATCH_ROWS} renders per batch`
+            : null;
   const skipNote =
     readyToFire && skippedCount
       ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
@@ -2689,9 +2697,20 @@ export function RenderRequestsGrid({
     void openReview();
   }, [refusalsFound]);
 
+  /** After a batch lands, from a confirm or a held batch's Retry: the same bookkeeping. */
+  const afterFire = () => {
+    setRowSelection({});
+    // The rail counts renders from this read; the fired jobs are its newest.
+    if (contract)
+      void queryClient.invalidateQueries({
+        queryKey: templateJobsKey(brandId, contract.template.key),
+        exact: true,
+      });
+  };
+
   // The tray unfolds for a review or a held batch and folds back when neither is left; a drag that
   // folds it ends a review.
-  const trayShown = review !== null || held !== null;
+  const trayShown = review !== null || held !== null || landed !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening and closing move the panel.
   useEffect(() => {
     const panel = trayPanel.current;
@@ -2953,7 +2972,8 @@ export function RenderRequestsGrid({
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
         renderCount={selectedReady.length}
-        skipNote={skipNote}
+        skipNote={held ? null : skipNote}
+        heldLabel={held ? 'Unconfirmed render — review' : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3336,8 +3356,25 @@ export function RenderRequestsGrid({
                   brandId={brandId}
                   scope={holdScope}
                   held={held}
-                  // ponytail: the ledger opens unfiltered; pass batchId once it can open one batch
+                  current={selectedReady.map((row) => ({
+                    id: row.id,
+                    label: row.label.trim() || 'Untitled',
+                  }))}
+                  // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
+                  // batchId once RenderJobsGrid can open one batch from outside
                   onOpenLedger={() => onFired?.([])}
+                  onLanded={(jobs) => {
+                    setLanded(jobs);
+                    afterFire();
+                  }}
+                />
+              ) : landed ? (
+                <LandedBatchView
+                  brandId={brandId}
+                  jobs={landed}
+                  onShowRow={showRow}
+                  onOpenLedger={(jobIds) => onFired?.(jobIds)}
+                  onClose={() => setLanded(null)}
                 />
               ) : review ? (
                 <RenderReviewTray
@@ -3357,11 +3394,8 @@ export function RenderRequestsGrid({
                   rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
-                  onHold={(signed, reason) => {
-                    if (holdScope)
-                      holdBatch(holdScope, { batchId: signed.batchId, signed, reason });
-                    setReview(null);
-                  }}
+                  holdScope={holdScope}
+                  onHeld={() => setReview(null)}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}
                   onDeliveryChange={(rowId, delivery) => {
@@ -3377,14 +3411,7 @@ export function RenderRequestsGrid({
                     );
                   }}
                   onClose={() => setReview(null)}
-                  onFired={() => {
-                    setRowSelection({});
-                    // The rail counts renders from this read; the fired jobs are its newest.
-                    void queryClient.invalidateQueries({
-                      queryKey: templateJobsKey(brandId, contract.template.key),
-                      exact: true,
-                    });
-                  }}
+                  onFired={afterFire}
                   onOpenLedger={(jobIds) => onFired?.(jobIds)}
                   onShowRow={showRow}
                 />

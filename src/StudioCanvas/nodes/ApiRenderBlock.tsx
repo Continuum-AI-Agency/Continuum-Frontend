@@ -23,6 +23,16 @@ import { Check, ChevronsUpDown, Clapperboard } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  canRetry,
+  clearHold,
+  confirmUnderHold,
+  heldCopy,
+  isHeld,
+  retryHeld,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -102,7 +112,8 @@ export function ApiRenderBlock({
   const [busy, setBusy] = useState(false);
   const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
   const [final, setFinal] = useState(false);
-  const role = useActiveBrandContext().permissions.find(
+  const brandContext = useActiveBrandContext();
+  const role = brandContext.permissions.find(
     (permission) => permission.brand_profile_id === brandId,
   )?.role;
   const mayRenderFinal = role === 'owner' || role === 'admin';
@@ -181,6 +192,14 @@ export function ApiRenderBlock({
   }, [brandId, patchData, setError, setJobs]);
 
   const bindingId = data.bindingId ?? null;
+  // The same hold Forge's grid renders under (renderHold.ts): a batch held for this template,
+  // from any set, tab or this node, stops this node from signing another. No user: no key.
+  const userId = brandContext.user?.id ?? null;
+  const holdScope =
+    userId && brandId && data.templateKey
+      ? { userId, brandId, bindingId, templateKey: data.templateKey }
+      : null;
+  const held = useRenderHold(holdScope);
 
   useEffect(() => {
     if (!brandId) return;
@@ -461,6 +480,12 @@ export function ApiRenderBlock({
 
   const submitRender = useCallback(async () => {
     if (!brandId || !data.templateKey || !data.contractHash) return;
+    if (!holdScope) {
+      setError(SIGNED_OUT);
+      return;
+    }
+    // Read fresh at the mint: the banner says why, and nothing is signed over a held batch.
+    if (isHeld(holdScope)) return;
     const delivery = deliveryBlock();
     if (delivery === null) {
       setError('Choose a campaign and ad set, or switch Meta delivery off.');
@@ -497,10 +522,19 @@ export function ApiRenderBlock({
                 inputSetId,
               }))
             : variations.records;
-        const preflight = await apiRendersApi.batchPreflight({ ...base, records });
-        const batch = await apiRendersApi.createBatch({
-          confirmationToken: preflight.confirmationToken,
-        });
+        const request = { ...base, records };
+        const preflight = await apiRendersApi.batchPreflight(request);
+        // Written ahead, cleared only on success, held with its token on any failure.
+        const batch = await confirmUnderHold(
+          holdScope,
+          {
+            token: preflight.confirmationToken,
+            request,
+            expiresAt: preflight.expiresAt,
+            batchId: preflight.batchId,
+          },
+          () => apiRendersApi.createBatch({ confirmationToken: preflight.confirmationToken }),
+        );
         patchData({
           jobIds: [...new Set([...(data.jobIds ?? []), ...batch.jobs.map((job) => job.id)])],
           latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
@@ -534,6 +568,11 @@ export function ApiRenderBlock({
       }
       await refreshJobs();
     } catch (cause) {
+      // Held, by this createBatch or another surface: the banner says what to do.
+      if (isHeld(holdScope)) {
+        patchData({ status: 'failed' });
+        return;
+      }
       const message =
         cause instanceof Error
           ? describeRenderDiscoveryFailure(cause.message)
@@ -553,6 +592,7 @@ export function ApiRenderBlock({
     data,
     deliveryBlock,
     deliveryEnabled,
+    holdScope,
     inputSets,
     patchData,
     refreshJobs,
@@ -775,6 +815,59 @@ export function ApiRenderBlock({
               {error}
             </p>
           ) : null}
+          {!userId ? (
+            <p className="rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive">
+              {SIGNED_OUT}
+            </p>
+          ) : held && holdScope ? (
+            <div
+              role="alert"
+              className="flex flex-col gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive"
+            >
+              <p>{heldCopy(held)}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {canRetry(held) ? (
+                  <Button
+                    size="xs"
+                    className="nodrag"
+                    disabled={busy}
+                    onClick={() =>
+                      void retryHeld(holdScope, held, (token) =>
+                        apiRendersApi.createBatch({ confirmationToken: token }),
+                      )
+                        .then(async (batch) => {
+                          patchData({
+                            jobIds: [
+                              ...new Set([
+                                ...(data.jobIds ?? []),
+                                ...batch.jobs.map((job) => job.id),
+                              ]),
+                            ],
+                            latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
+                            status: 'submitting',
+                          });
+                          await refreshJobs();
+                        })
+                        .catch(() => undefined)
+                    }
+                  >
+                    Retry this batch
+                  </Button>
+                ) : null}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="nodrag"
+                  onClick={() => {
+                    clearHold(holdScope);
+                    window.location.assign('/forge#approvals');
+                  }}
+                >
+                  Open Render ledger
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {workspace && !templatesOffered ? (
             <p className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
               {workspace.detail}
@@ -788,7 +881,7 @@ export function ApiRenderBlock({
             <Button
               size="sm"
               className="nodrag ml-auto min-w-32"
-              disabled={busy || !data.templateKey}
+              disabled={busy || !data.templateKey || !userId || held !== null}
               onClick={() => void submitRender()}
             >
               {busy ? (

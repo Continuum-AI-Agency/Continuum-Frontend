@@ -205,7 +205,15 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
 import { type RenderPreflightRow, RenderReviewTray, type RowsAsked } from './RenderReviewTray';
-import type { HoldReason, SignedBatch } from './renderHold';
+import { forgetPageSession, holdKeyOf, readHold } from './renderHold';
+
+/** The hold this tray renders under: a user, the brand, the template's binding, the template. */
+const SCOPE = {
+  userId: '77777777-7777-4777-8777-777777777777',
+  brandId: '22222222-2222-4222-8222-222222222222',
+  bindingId: '44444444-4444-4444-8444-444444444444',
+  templateKey: '133',
+};
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
 // would swallow every other file's toasts.
@@ -291,6 +299,7 @@ function Harness({
       templateKey="133"
       contractHash="hash"
       contract={contract}
+      holdScope={SCOPE}
       rows={rows}
       records={snapshot.records ?? records}
       reviewKey={snapshot.reviewKey}
@@ -321,7 +330,7 @@ const trayHandlers = () => ({
     }),
   ),
   onPassed: mock((_rowIds: string[]) => undefined),
-  onHold: mock((_signed: SignedBatch, _reason: HoldReason) => undefined),
+  onHeld: mock(() => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
 });
@@ -398,6 +407,8 @@ const primaryDisabled = (name: string) =>
 afterEach(() => {
   unregisterToasts();
   cleanup();
+  forgetPageSession();
+  localStorage.clear();
   for (const fn of [
     batchPreflightMock,
     createBatchMock,
@@ -725,6 +736,52 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(screen.queryByText(/not sent/)).toBeNull());
   }, 30_000);
 
+  test('a hold another tab wrote blocks confirm in an open, current review: no new token', async () => {
+    const { onHeld } = renderTray(null);
+    await press('Next: delivery');
+    const signed = batchPreflightMock.mock.calls.length;
+    // Another tab's createBatch, written ahead into this browser's storage.
+    localStorage.setItem(
+      holdKeyOf(SCOPE),
+      JSON.stringify({ batchId: BATCH_ID, heldAt: Date.now(), inflight: true }),
+    );
+    await press('Render 3 files');
+    await waitFor(() => expect(onHeld).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls.length).toBe(signed);
+    expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('with no user to hold under, confirm signs nothing', async () => {
+    const handlers = trayHandlers();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RenderReviewTray
+          brandId={BRAND}
+          bindingId={BINDING}
+          templateKey="133"
+          contractHash="hash"
+          contract={CONTRACT}
+          holdScope={null}
+          rows={ROWS}
+          records={RECORDS}
+          reviewKey={1}
+          stale={false}
+          recheckBlocked={null}
+          rechecking={false}
+          finalBlocked={null}
+          onDeliveryChange={() => undefined}
+          {...handlers}
+        />
+      </QueryClientProvider>,
+    );
+    await press('Next: delivery');
+    const signed = batchPreflightMock.mock.calls.length;
+    await press('Render 3 files');
+    expect(await screen.findByText('Sign in again to render')).toBeTruthy();
+    expect(batchPreflightMock.mock.calls.length).toBe(signed);
+    expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
   // The backend makes rows 1..k-1, then throws on row k, for any status: the client cannot know
   // which rows exist, so any createBatch failure hands the signed batch over to be held.
   test.each([
@@ -741,16 +798,16 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
           error: 'render_job_create_failed',
           message: 'A render job could not be created.',
         }),
-      'refused',
+      'stopped',
     ],
     [
       'a 409 at row k',
       () =>
-        new ApiError('The render binding changed.', 409, undefined, {
+        new ApiError('render_binding_changed', 409, undefined, {
           error: 'render_binding_changed',
-          message: 'The render binding changed.',
+          detail: 'The render binding changed.',
         }),
-      'refused',
+      'stopped',
     ],
   ])(
     '%s from createBatch holds the batch exactly as it was signed',
@@ -758,12 +815,14 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       createBatchMock.mockImplementationOnce(async () => {
         throw make();
       });
-      const { onHold, onFired } = renderTray(null);
+      const { onHeld, onFired } = renderTray(null);
       await press('Next: delivery');
       fireEvent.click(screen.getByRole('radio', { name: 'Final' }));
       await press('Render 3 files');
-      await waitFor(() => expect(onHold).toHaveBeenCalledTimes(1));
-      const [signed, reason] = onHold.mock.calls[0]!;
+      await waitFor(() => expect(onHeld).toHaveBeenCalledTimes(1));
+      const held = readHold(SCOPE)!;
+      const { signed, reason } = held;
+      if (!signed || !reason) throw new Error('not held with its token');
       expect(signed.token).toBe('batch-token');
       expect(signed.batchId).toBe(BATCH_ID);
       expect(signed.expiresAt).toBe(EXPIRES_AT);
