@@ -13,7 +13,12 @@ import type {
   PortfolioBrief,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
+import {
+  deterministicBrief,
+  growthSentence,
+  readBriefStanding,
+  readPortfolioBrief,
+} from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { platformName } from '../../entityNoun';
 import { holdsOtherPlatforms, type PortfolioFigure } from '../portfolioFigure';
@@ -477,9 +482,14 @@ export function buildHeroView(args: {
     (report?.hero_brief?.cycle_run_id === latestRunId ||
       Date.now() - Date.parse(stored.generated_at) < 24 * 3_600_000);
   // A stored brief keeps its words and candidates; its figures were measured at cycle time,
-  // so under the headline figure they give way to it rather than pass as current.
+  // so under the headline figure they give way to it rather than pass as current. A calm hero
+  // (module 'none') is the exception: it is never Jaina's words — the worker asks the model
+  // only when a candidate clears the floor — but code's, written FROM those figures, and the
+  // candidates were priced at the same cost per result. Under the figure it is composed again
+  // here, as the worker would have: a Google portfolio's packet reads its Meta half, zero, and
+  // its calm hero said "No spend and no leads in 14 days" under a hero showing 235 leads.
   const brief =
-    briefIsCurrent && stored
+    briefIsCurrent && stored && !(figure && stored.hero.module === 'none')
       ? withPacingVerdict(figure ? { ...stored, growth } : stored, report?.latest_run?.pacing)
       : deterministicBrief({
           growth,
@@ -487,6 +497,7 @@ export function buildHeroView(args: {
             ? candidatesFromReport(report, growth.cost_per_result ?? args.target)
             : [],
           dailyTotal: args.portfolio.daily_total,
+          standing: report ? readBriefStanding(report.latest_run, report.latest_items) : null,
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
         });

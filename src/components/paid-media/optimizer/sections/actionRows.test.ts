@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
+  actionCurrency,
   actionPlatform,
   actorLabel,
   minorToMajor,
@@ -371,5 +372,24 @@ describe("minorToMajor divides by the currency's own minor unit (ISO 4217)", () 
   it('an unrecorded or malformed currency keeps the two-decimal reading', () => {
     expect(minorToMajor(5_341, null)).toBe(53.41);
     expect(minorToMajor(5_341, 'pesos')).toBe(53.41);
+  });
+});
+
+describe("actionCurrency reads the row's own portfolio or account, never the page's", () => {
+  const META = { account_id: 'act_521903353286118', currency: 'MXN' };
+  const stamped = { id: PORTFOLIO_ID, ad_account_id: '521903353286118', currency: 'usd' };
+  const unstamped = { ...stamped, currency: null };
+
+  it("the portfolio's stamped code first, normalized", () => {
+    expect(actionCurrency(action(), [stamped], [])).toBe('USD');
+  });
+
+  it("else its account's, matched with or without act_", () => {
+    expect(actionCurrency(action(), [unstamped], [META])).toBe('MXN');
+  });
+
+  it('a row with no portfolio and no account in its receipt records nothing', () => {
+    expect(actionCurrency(action({ portfolio_id: null }), [stamped], [META])).toBeNull();
+    expect(actionCurrency(action(), [unstamped], [])).toBeNull();
   });
 });

@@ -63,13 +63,7 @@ function Segmented<TValue extends string | number>({
   );
 }
 
-export function OptimizerActivity({
-  brandId,
-  currency,
-}: {
-  brandId: string;
-  currency: string | null;
-}) {
+export function OptimizerActivity({ brandId }: { brandId: string }) {
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
@@ -88,12 +82,7 @@ export function OptimizerActivity({
   );
 
   return feed === 'actions' ? (
-    <OptimizerActionFeed
-      brandId={brandId}
-      controls={controls}
-      currency={currency}
-      windowDays={windowDays}
-    />
+    <OptimizerActionFeed brandId={brandId} controls={controls} windowDays={windowDays} />
   ) : (
     <OptimizerLogs brandId={brandId} controls={controls} windowDays={windowDays} />
   );

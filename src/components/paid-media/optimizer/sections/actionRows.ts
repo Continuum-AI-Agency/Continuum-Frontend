@@ -9,7 +9,9 @@
 // this is a DB-derived read model, so an op the contract has not caught up with (today,
 // 'convert') must still render as something honest rather than crash the page.
 
-import { currencyMinorOffset } from '@continuum/contracts';
+import { type AdAccount, currencyMinorOffset, type PortfolioListItem } from '@continuum/contracts';
+import { bareAccountId } from '@/lib/paid-media/accountId';
+import { normalizeCurrency } from '../format';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type AdPlatform,
@@ -42,6 +44,52 @@ export function minorToMajor(minor: number, currency: string | null): number {
   } catch {
     return minor / 100;
   }
+}
+
+/** "customers/5251780631/campaignBudgets/…" → "5251780631": the customer a Google write landed
+ *  on, as its applier's receipt names it. */
+function receiptAccountId(row: OptimizerActionFeedRow): string | null {
+  const names = row.receipt?.['resourceNames'];
+  if (!Array.isArray(names)) return null;
+  for (const name of names) {
+    const match = typeof name === 'string' ? /^customers\/(\d+)\//.exec(name) : null;
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+/**
+ * The currency one action's amounts are in: its own portfolio's, else its own ad account's —
+ * never the account the page has selected. The feed is brand-wide and a brand runs portfolios
+ * on several accounts, so one page-level code stripped every row whenever the selected account
+ * recorded none (Easy Fit's and Vivo Center's do not) and mislabelled rows from another account.
+ *
+ * The portfolio's code is the one stamped at creation. An account's is the account list's, or
+ * the one stamped on any portfolio on that account (a Google asset row carries none). A write
+ * with no portfolio — the Google tab's — names its account in its receipt. Null when nothing
+ * records it: the amounts then print bare, the money rule's answer, never a guessed "$".
+ */
+export function actionCurrency(
+  row: OptimizerActionFeedRow,
+  portfolios: readonly Pick<PortfolioListItem, 'id' | 'ad_account_id' | 'currency'>[],
+  accounts: readonly Pick<AdAccount, 'account_id' | 'currency'>[],
+): string | null {
+  const portfolio = row.portfolio_id
+    ? portfolios.find((candidate) => candidate.id === row.portfolio_id)
+    : undefined;
+  const accountId = portfolio?.ad_account_id ?? receiptAccountId(row);
+  const onAccount = (id: string | null) =>
+    accountId != null && id != null && bareAccountId(id) === bareAccountId(accountId);
+  const recorded = [
+    portfolio?.currency,
+    ...accounts.filter((account) => onAccount(account.account_id)).map((a) => a.currency),
+    ...portfolios.filter((other) => onAccount(other.ad_account_id)).map((p) => p.currency),
+  ];
+  for (const currency of recorded) {
+    const code = normalizeCurrency(currency);
+    if (code) return code;
+  }
+  return null;
 }
 
 function readMinor(value: Record<string, unknown> | null | undefined): number | null {
