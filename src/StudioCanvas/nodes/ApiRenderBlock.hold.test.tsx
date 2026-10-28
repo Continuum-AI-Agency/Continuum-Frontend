@@ -142,7 +142,7 @@ test('a held template shows the banner, and Render signs nothing for it', async 
   mountNode();
   const banner = await screen.findByRole('alert');
   expect(banner.textContent).toContain(
-    'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
+    'Retry isn’t available on this page. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
   );
   expect(screen.getByRole('button', { name: 'Open Render ledger' })).toBeTruthy();
   const renderButton = screen.getByRole<HTMLButtonElement>('button', { name: /^Render/ });

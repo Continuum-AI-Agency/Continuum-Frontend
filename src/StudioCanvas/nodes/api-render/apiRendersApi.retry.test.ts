@@ -153,3 +153,16 @@ test('a preflight asked once is not retried, even through a cut', async () => {
   await expect(calls.preflight({} as never, { retry: false })).rejects.toBeInstanceOf(ApiError);
   expect(request).toHaveBeenCalledTimes(1);
 });
+
+// The real export, read where it is written: a test mocking apiRendersApi may share this process,
+// so the module's own source is the one thing no mock can stand in for. Every retried call comes
+// from renderCallsThrough, and none of them is defined again after the spread, bypassing retry.
+test('the real apiRendersApi takes every retried call from renderCallsThrough, and redefines none', async () => {
+  const retried = Object.keys(renderCallsThrough({ request: async () => undefined } as never));
+  expect(retried).toHaveLength(9);
+  const source = await Bun.file(new URL('./apiRendersApi.ts', import.meta.url)).text();
+  const exported = source.slice(source.indexOf('export const apiRendersApi = {'));
+  expect(exported).toContain('...renderCallsThrough(http),');
+  for (const name of retried)
+    expect(exported).not.toMatch(new RegExp(`^\\s+(async\\s+)?${name}\\s*[(:<]`, 'm'));
+});

@@ -864,11 +864,11 @@ export function ApiRenderBlock({
             >
               <p>{heldCopy(held)}</p>
               <div className="flex flex-wrap gap-1.5">
-                {canRetry(held) ? (
+                {canRetry(held) || held.sending ? (
                   <Button
                     size="xs"
                     className="nodrag"
-                    disabled={busy || retrying}
+                    disabled={busy || retrying || held.sending}
                     onClick={() => {
                       if (retrying) return;
                       setRetrying(true);

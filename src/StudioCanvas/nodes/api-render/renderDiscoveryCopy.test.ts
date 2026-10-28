@@ -120,7 +120,10 @@ describe('render discovery copy', () => {
       error: 'render_something_new',
       detail: 'render_something_new',
     });
-    expect(describeRenderDiscoveryFailure(bare)).toBe('render_something_new');
+    expect(describeRenderDiscoveryFailure(bare)).toBe('The render service refused this.');
+    expect(describeRenderDiscoveryFailure('render_something_new')).toBe(
+      'The render service refused this.',
+    );
   });
 
   test('the server’s bare catch-all 500 reads as a next step, not its code', () => {

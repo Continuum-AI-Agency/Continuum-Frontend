@@ -137,5 +137,7 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
   // A 4xx that said nothing but its status line ("400 Bad Request") is a refusal with no words.
   if (failure instanceof ApiError && failure.status < 500 && /^\d{3}\b/.test(message))
     return 'The render service refused this batch.';
+  // A code this build has no words for is never shown as the code.
+  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(message)) return 'The render service refused this.';
   return message || 'Render discovery failed';
 }

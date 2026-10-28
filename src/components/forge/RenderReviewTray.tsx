@@ -1569,9 +1569,7 @@ export function HeldBatchView({
         {heldCopy(held)}
       </p>
       <p className="text-muted-foreground">
-        {facts
-          ? `What was sent: ${facts.join(' · ')}`
-          : 'What was sent isn’t known after a reload.'}
+        {facts ? `What was sent: ${facts.join(' · ')}` : 'What was sent isn’t known on this page.'}
       </p>
       {differs ? (
         <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
@@ -1581,9 +1579,16 @@ export function HeldBatchView({
         In the Render ledger, look for the batch from {heldTime}.
       </p>
       <div className="flex flex-wrap gap-2 pt-1">
-        {canRetry(held) ? (
-          <Button type="button" size="xs" disabled={retrying} onClick={() => void retry()}>
-            {retrying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+        {canRetry(held) || held.sending ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={retrying || held.sending}
+            onClick={() => void retry()}
+          >
+            {retrying || held.sending ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+            ) : null}
             Retry this batch
           </Button>
         ) : null}

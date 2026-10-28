@@ -3281,7 +3281,7 @@ export function RenderRequestsGrid({
                                   }
                                 : undefined
                             }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.fitLoading ? 'checking layout' : `${readiness.renderable} can render`} • ${selected.length} selected`}
+                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.fitLoading ? 'Checking layout…' : `${readiness.renderable} can render`} • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
                         </RowDropHintContext.Provider>

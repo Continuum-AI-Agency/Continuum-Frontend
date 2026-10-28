@@ -1720,9 +1720,9 @@ describe('RenderRequestsGrid', () => {
         0,
       );
       expect(reloaded.textContent).toContain(
-        'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
+        'Retry isn’t available on this page. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
       );
-      expect(reloaded.textContent).toContain('What was sent isn’t known after a reload.');
+      expect(reloaded.textContent).toContain('What was sent isn’t known on this page.');
       expect(JSON.stringify(localStorage)).not.toContain(held);
     }, 30_000);
 
@@ -1760,7 +1760,7 @@ describe('RenderRequestsGrid', () => {
       render(<RenderRequestsGrid brandId={BRAND} />);
       const view = await heldView();
       expect(view.textContent).toContain(
-        'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+        'A Render of this set is still being sent. Wait a moment, then check the Render ledger.',
       );
       expect(
         within(view).getByRole<HTMLButtonElement>('button', { name: 'Open Render ledger' })

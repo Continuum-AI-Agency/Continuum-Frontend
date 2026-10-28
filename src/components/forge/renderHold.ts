@@ -62,6 +62,8 @@ export type HeldBatch = {
   signed: SignedBatch | null;
   /** Why it is held; null when only the stored hold is known. */
   reason: HoldReason | null;
+  /** This page is re-sending it now: the view stays, Retry waits. */
+  sending: boolean;
 };
 
 /** A user with no id holds nothing and renders nothing: fail closed, never share a key. */
@@ -91,7 +93,7 @@ export const isSessionRefusal = (error: unknown): boolean =>
   error instanceof ApiError && (error.status === 401 || error.status === 403);
 
 type Stored = { batchId: string | null; heldAt: number; inflight?: true };
-type Token = { signed: SignedBatch; reason: HoldReason | null; sending?: true };
+type Token = { signed: SignedBatch; reason: HoldReason | null; sending?: 'first' | 'retry' };
 
 export const holdKeyOf = ({ userId, brandId, bindingId, templateKey, renderSetId }: HoldScope) =>
   `forge:held-render:${userId}:${brandId}:${bindingId ?? 'default'}:${templateKey}:${renderSetId ?? 'canvas'}`;
@@ -133,12 +135,12 @@ function write(key: string, stored: Stored | null): boolean {
 /** Read fresh: another tab may have written or cleared it since. */
 export const isHeld = (scope: HoldScope): boolean => readStored(holdKeyOf(scope)) !== null;
 
-/** The hold as a surface shows it. A send this page has in flight is not held to itself. */
+/** The hold as a surface shows it. A first send this page has in flight is not held to itself. */
 export function readHold(scope: HoldScope): HeldBatch | null {
   const stored = readStored(holdKeyOf(scope));
   if (!stored) return null;
   const token = stored.batchId ? tokens.get(stored.batchId) : undefined;
-  if (token?.sending) return null;
+  if (token?.sending === 'first') return null;
   return {
     batchId: stored.batchId,
     heldAt: stored.heldAt,
@@ -146,6 +148,7 @@ export function readHold(scope: HoldScope): HeldBatch | null {
     saved: !unsaved.has(holdKeyOf(scope)),
     signed: token?.signed ?? null,
     reason: token?.reason ?? null,
+    sending: token?.sending === 'retry',
   };
 }
 
@@ -210,7 +213,9 @@ async function sendUnderHold<T>(
     changed();
     throw new RenderHeldError();
   }
-  tokens.set(batchId, { signed, reason, sending: true });
+  tokens.set(batchId, { signed, reason, sending: first ? 'first' : 'retry' });
+  // A retry is shown while it runs: every reader re-reads, and sees it sending.
+  if (!first) changed();
   const timer = setInterval(() => {
     if (readStored(key)?.batchId === batchId) beat();
   }, BEAT_MS);
@@ -249,6 +254,7 @@ export async function confirmUnderHold<T>(
 /** Retry is the identical batch: only while its token is in memory, unexpired, and could land. */
 export const canRetry = (held: HeldBatch, now = Date.now()): boolean =>
   held.signed !== null &&
+  !held.sending &&
   !sendingElsewhere(held, now) &&
   Date.parse(held.signed.expiresAt) > now &&
   !(held.reason?.kind === 'stopped' && !held.reason.retryable);
@@ -297,10 +303,12 @@ export const sendingElsewhere = (held: HeldBatch, now = Date.now()): boolean =>
 export function heldCopy(held: HeldBatch, now = Date.now()): string {
   const { reason } = held;
   if (sendingElsewhere(held, now))
-    return 'A Render of this template is still being sent. Wait a moment, then check the Render ledger.';
+    return 'A Render of this set is still being sent. Wait a moment, then check the Render ledger.';
+  // No token here: this page reloaded, or another tab sent it. The stored record does not say which,
+  // so the copy is the same for both.
   if (!reason)
     return [
-      'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
+      'Retry isn’t available on this page. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
       // Its tab is gone mid-send: the server may still be making rows it was sent.
       held.inflight
         ? 'Rows can keep appearing in the Render ledger for a few minutes after a send stops; check again before rendering any that are missing.'
@@ -308,13 +316,18 @@ export function heldCopy(held: HeldBatch, now = Date.now()): string {
     ]
       .filter(Boolean)
       .join(' ');
+  // A reason that already names the render service is said as it is, not after a second prefix.
+  const stopped = (message: string) =>
+    message.startsWith('The render service')
+      ? `${message}.`
+      : `The render service stopped this batch: ${message}.`;
   if (reason.kind === 'stopped' && !reason.retryable)
-    return `The render service stopped this batch: ${reason.message}. Some rows may already be rendering. Open Render ledger to check, then Render to review again.`;
+    return `${stopped(reason.message)} Some rows may already be rendering. Open Render ledger to check, then Render to review again.`;
   return [
     reason.kind === 'stopped'
-      ? `The render service stopped this batch: ${reason.message}. Some rows may already be rendering.`
+      ? `${stopped(reason.message)} Some rows may already be rendering.`
       : 'Couldn’t confirm with the render service. Some or all rows may already be rendering.',
-    canRetry(held, now) ? null : 'Retry isn’t available any more.',
+    canRetry(held, now) || held.sending ? null : 'Retry isn’t available any more.',
     'Open Render ledger to check before rendering again.',
   ]
     .filter(Boolean)

@@ -204,8 +204,21 @@ import {
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
-import { type RenderPreflightRow, RenderReviewTray, type RowsAsked } from './RenderReviewTray';
-import { forgetPageSession, holdKeyOf, NOT_SAVED, readHold, SESSION_EXPIRED } from './renderHold';
+import {
+  HeldBatchView,
+  type RenderPreflightRow,
+  RenderReviewTray,
+  type RowsAsked,
+} from './RenderReviewTray';
+import {
+  confirmUnderHold,
+  forgetPageSession,
+  holdKeyOf,
+  NOT_SAVED,
+  readHold,
+  SESSION_EXPIRED,
+  useRenderHold,
+} from './renderHold';
 
 /** The hold this tray renders under: a user, the brand, the template's binding, the template. */
 const SCOPE = {
@@ -751,6 +764,61 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(onHeld).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls.length).toBe(signed);
     expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('a retry that landed reads done, whatever throws after it: no Retry is left', async () => {
+    // Held by a confirm that got no answer, with its token in this page.
+    await confirmUnderHold(
+      SCOPE,
+      {
+        token: 'held-token',
+        request: { brandId: BRAND, templateKey: '133', contractHash: 'hash', records: [] },
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        batchId: 'batch-held',
+      },
+      async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    ).catch(() => undefined);
+    // What the grid does: the held view while held, the landed jobs once a retry lands.
+    function Harness() {
+      const held = useRenderHold(SCOPE);
+      const [landed, setLanded] = useState<number | null>(null);
+      if (landed !== null) return <p>Done · {landed} renders</p>;
+      return held ? (
+        <HeldBatchView
+          brandId={BRAND}
+          scope={SCOPE}
+          held={held}
+          current={[]}
+          currentSnapshot=""
+          onOpenLedger={() => undefined}
+          onLanded={(jobs) => setLanded(jobs.length)}
+        />
+      ) : null;
+    }
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    // The tail after landing throws: here its toast. Landed first, the view is done regardless.
+    unregisterToasts();
+    unregisterToasts = registerToastSink(() => {
+      throw new Error('the toast broke');
+    });
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Harness />
+        </QueryClientProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Retry this batch' }));
+      expect(await screen.findByText(`Done · ${JOBS.length} renders`)).toBeTruthy();
+      expect(screen.queryAllByRole('button', { name: 'Retry this batch' })).toHaveLength(0);
+      expect(createBatchMock).toHaveBeenCalledTimes(1);
+      expect(createBatchMock.mock.calls[0]?.[0]).toEqual({ confirmationToken: 'held-token' });
+      expect(readHold(SCOPE)).toBeNull();
+      expect(error).toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   }, 30_000);
 
   test('a confirm that landed is never shown as failed, whatever throws while it is shown', async () => {

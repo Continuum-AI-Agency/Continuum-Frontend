@@ -85,11 +85,11 @@ describe('renderHold', () => {
     });
     expect(canRetry(reloaded)).toBe(false);
     expect(heldCopy(reloaded)).toBe(
-      'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+      'A Render of this set is still being sent. Wait a moment, then check the Render ledger.',
     );
     // Its heartbeat stale: the tab is gone, so it can be let go, and the ledger may still fill.
     expect(heldCopy(reloaded, reloaded.heldAt + STALE_MS + 1)).toBe(
-      'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again. Rows can keep appearing in the Render ledger for a few minutes after a send stops; check again before rendering any that are missing.',
+      'Retry isn’t available on this page. Some or all rows may already be rendering. Open Render ledger to check before rendering again. Rows can keep appearing in the Render ledger for a few minutes after a send stops; check again before rendering any that are missing.',
     );
     answer({ jobs: [] });
     await confirming;
@@ -172,6 +172,7 @@ describe('renderHold', () => {
       heldAt: 0,
       inflight: false,
       saved: true,
+      sending: false,
       signed: SIGNED,
       reason: { kind: 'no-answer' as const },
     };
@@ -293,6 +294,50 @@ describe('renderHold', () => {
     expect(localStorage.getItem(holdKeyOf(SCOPE))).toBe(other);
   });
 
+  test('a retry in this page tells its readers, and the held view stays, sending, until it lands', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    const { result } = renderHook(() => useRenderHold(SCOPE));
+    expect(result.current?.sending).toBe(false);
+    let answer: (value: unknown) => void = () => undefined;
+    let retrying: Promise<unknown> = Promise.resolve();
+    act(() => {
+      retrying = retryHeld(SCOPE, () => new Promise((resolve) => (answer = resolve)));
+    });
+    // Re-rendered without waiting for anything else to render: still held, now sending.
+    expect(result.current).toMatchObject({ batchId: 'batch-1', sending: true });
+    expect(canRetry(result.current!)).toBe(false);
+    expect(heldCopy(result.current!)).not.toContain('Retry isn’t available');
+    await act(async () => {
+      answer({ jobs: [] });
+      await retrying;
+    });
+    expect(result.current).toBeNull();
+  });
+
+  test('a stop already worded as the render service is not prefixed again', () => {
+    const held = {
+      batchId: 'batch-1',
+      heldAt: 0,
+      inflight: false,
+      saved: true,
+      sending: false,
+      signed: SIGNED,
+      reason: {
+        kind: 'stopped' as const,
+        message: 'The render service refused this batch',
+        retryable: false,
+      },
+    };
+    expect(heldCopy(held)).toBe(
+      'The render service refused this batch. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+    );
+    expect(
+      heldCopy({ ...held, reason: { ...held.reason, message: 'This review has expired' } }),
+    ).toMatch(/^The render service stopped this batch: This review has expired\. /);
+  });
+
   test('a scoped clear never removes another batch’s hold', async () => {
     localStorage.setItem(
       holdKeyOf(SCOPE),
@@ -355,7 +400,7 @@ describe('renderHold', () => {
         for (const run of timers) run();
         expect(sendingElsewhere(tabB(), clock)).toBe(true);
         expect(heldCopy(tabB(), clock)).toBe(
-          'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+          'A Render of this set is still being sent. Wait a moment, then check the Render ledger.',
         );
       }
       // Tab A goes away: no more beats. A minute later the entry is an orphan, and can go.
