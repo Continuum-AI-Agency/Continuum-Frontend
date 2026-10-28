@@ -83,7 +83,6 @@ import {
   RenderHeldError,
   STALE_MS,
   sendingElsewhere,
-  resendHeld,
   retryHeld,
   SESSION_CHECK,
   SESSION_EXPIRED,
@@ -1550,7 +1549,9 @@ export function HeldBatchView({
     setRetrying(true);
     try {
       // Read fresh: nothing is sent once another tab has let it go. Still held on any failure.
-      const batch = await retryHeld(scope, (token, sent) => resendHeld(sent, token, apiRendersApi));
+      const batch = await retryHeld(scope, (token) =>
+        apiRendersApi.createBatch({ confirmationToken: token }),
+      );
       try {
         // Landed first, so the batch reads done whatever throws in what follows.
         onLanded(batch.jobs);

@@ -1594,7 +1594,7 @@ describe('RenderRequestsGrid', () => {
       await setup(bindingChanged);
       const view = await heldView();
       expect(view.textContent).toContain(
-        'The render service stopped this batch: This template’s render setup changed after the review. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+        'This template’s render setup changed after the review. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
       );
       expect(view.textContent).not.toMatch(/binding|workspace|Rows before it/);
       // A refusal cannot succeed on the same token: no Retry, only the ledger.
@@ -1733,7 +1733,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.click(within(await heldView()).getByRole('button', { name: 'Retry this batch' }));
       await waitFor(() =>
         expect(screen.getByRole('region', { name: 'Held batch' }).textContent).toContain(
-          'The render service stopped this batch: This review no longer matches the rows. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+          'This review no longer matches the rows. Review the rows again, then render. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
         ),
       );
       expect(document.body.textContent).not.toContain('invalid_confirmation');

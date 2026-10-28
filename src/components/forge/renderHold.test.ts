@@ -10,9 +10,8 @@ import {
   heldCopy,
   holdKeyOf,
   isHeld,
-  oneJobId,
+  holdReasonOf,
   RenderHeldError,
-  resendHeld,
   SESSION_RETRY,
   STALE_MS,
   readHold,
@@ -50,8 +49,8 @@ afterEach(() => {
 describe('renderHold', () => {
   test('the key is the user, the brand, the binding, the template and the render set', () => {
     expect(holdKeyOf(SCOPE)).toBe('forge:held-render:user-a:brand-a:binding-a:133:set-a');
-    expect(holdKeyOf({ ...SCOPE, bindingId: null, renderSetId: null })).toBe(
-      'forge:held-render:user-a:brand-a:default:133:canvas',
+    expect(holdKeyOf({ ...SCOPE, bindingId: null })).toBe(
+      'forge:held-render:user-a:brand-a:default:133:set-a',
     );
     for (const other of [
       { ...SCOPE, userId: 'user-b' },
@@ -155,35 +154,6 @@ describe('renderHold', () => {
     await retryHeld(SCOPE, async (token) => sent.push(token));
     expect(sent).toEqual(['token-secret']);
     expect(isHeld(SCOPE)).toBe(false);
-  });
-
-  test('a held one-row confirm is re-sent as one job, a batch as a batch', async () => {
-    const sent: string[] = [];
-    const api = {
-      createBatch: async (input: { confirmationToken: string }) => {
-        sent.push(`batch:${input.confirmationToken}`);
-        return { jobs: ['a', 'b'] };
-      },
-      createJob: async (input: { confirmationToken: string }) => {
-        sent.push(`job:${input.confirmationToken}`);
-        return 'a';
-      },
-    };
-    const base = {
-      heldAt: 0,
-      inflight: false,
-      saved: true,
-      sending: false,
-      signed: SIGNED,
-      reason: { kind: 'no-answer' as const },
-    };
-    expect(await resendHeld({ ...base, batchId: oneJobId('f'.repeat(64)) }, 't1', api)).toEqual({
-      jobs: ['a'],
-    });
-    expect(await resendHeld({ ...base, batchId: 'batch-1' }, 't2', api)).toEqual({
-      jobs: ['a', 'b'],
-    });
-    expect(sent).toEqual(['job:t1', 'batch:t2']);
   });
 
   test('storage is the hold: once another tab clears it, Retry sends nothing and Render signs fresh', async () => {
@@ -317,7 +287,7 @@ describe('renderHold', () => {
     expect(result.current).toBeNull();
   });
 
-  test('a stop already worded as the render service is not prefixed again', () => {
+  test('the copy is built from the reason: the service’s own words, once, never parsed', () => {
     const held = {
       batchId: 'batch-1',
       heldAt: 0,
@@ -325,18 +295,16 @@ describe('renderHold', () => {
       saved: true,
       sending: false,
       signed: SIGNED,
-      reason: {
-        kind: 'stopped' as const,
-        message: 'The render service refused this batch',
-        retryable: false,
-      },
+      reason: { kind: 'refused' as const, detail: 'The render service refused this.' },
     };
     expect(heldCopy(held)).toBe(
-      'The render service refused this batch. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
+      'The render service refused this. Some rows may already be rendering. Open Render ledger to check, then Render to review again.',
     );
-    expect(
-      heldCopy({ ...held, reason: { ...held.reason, message: 'This review has expired' } }),
-    ).toMatch(/^The render service stopped this batch: This review has expired\. /);
+    expect(holdReasonOf(new ApiError('Service Unavailable', 503))).toEqual({
+      kind: 'busy',
+      detail: undefined,
+    });
+    expect(holdReasonOf(noAnswer())).toEqual({ kind: 'no_answer' });
   });
 
   test('a retry that fails after its hold was let go does not write it back', async () => {

@@ -23,22 +23,6 @@ import { Check, ChevronsUpDown, Clapperboard } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
-import {
-  canRetry,
-  clearHold,
-  confirmUnderHold,
-  heldCopy,
-  isHeld,
-  isSessionRefusal,
-  oneJobId,
-  RenderHeldError,
-  resendHeld,
-  retryHeld,
-  SESSION_EXPIRED,
-  SIGNED_OUT,
-  sendingElsewhere,
-  useRenderHold,
-} from '@/components/forge/renderHold';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -116,12 +100,9 @@ export function ApiRenderBlock({
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [busy, setBusy] = useState(false);
-  // A Retry already on its way: a second tap must not send the token twice at once.
-  const [retrying, setRetrying] = useState(false);
   const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
   const [final, setFinal] = useState(false);
-  const brandContext = useActiveBrandContext();
-  const role = brandContext.permissions.find(
+  const role = useActiveBrandContext().permissions.find(
     (permission) => permission.brand_profile_id === brandId,
   )?.role;
   const mayRenderFinal = role === 'owner' || role === 'admin';
@@ -200,14 +181,6 @@ export function ApiRenderBlock({
   }, [brandId, patchData, setError, setJobs]);
 
   const bindingId = data.bindingId ?? null;
-  // The same hold Forge's sets render under (renderHold.ts), keyed to this node's own (no set): a
-  // batch it holds, in any tab, stops it from signing another. No user: no key.
-  const userId = brandContext.user?.id ?? null;
-  const holdScope =
-    userId && brandId && data.templateKey
-      ? { userId, brandId, bindingId, templateKey: data.templateKey, renderSetId: null }
-      : null;
-  const held = useRenderHold(holdScope);
 
   useEffect(() => {
     if (!brandId) return;
@@ -488,12 +461,6 @@ export function ApiRenderBlock({
 
   const submitRender = useCallback(async () => {
     if (!brandId || !data.templateKey || !data.contractHash) return;
-    if (!holdScope) {
-      setError(SIGNED_OUT);
-      return;
-    }
-    // Read fresh at the mint: the banner says why, and nothing is signed over a held batch.
-    if (isHeld(holdScope)) return;
     const delivery = deliveryBlock();
     if (delivery === null) {
       setError('Choose a campaign and ad set, or switch Meta delivery off.');
@@ -521,8 +488,6 @@ export function ApiRenderBlock({
     setBusy(true);
     setError(null);
     patchData({ status: 'submitting' });
-    // Set once createBatch or createJob has answered: whatever throws after is not a failed render.
-    let sent = false;
     try {
       if (batchIds.length > 0 || (!data.inputSetId && variations.records.length > 1)) {
         const records =
@@ -532,20 +497,10 @@ export function ApiRenderBlock({
                 inputSetId,
               }))
             : variations.records;
-        const request = { ...base, records };
-        const preflight = await apiRendersApi.batchPreflight(request);
-        // Written ahead, cleared only on success, held with its token on any failure.
-        const batch = await confirmUnderHold(
-          holdScope,
-          {
-            token: preflight.confirmationToken,
-            request,
-            expiresAt: preflight.expiresAt,
-            batchId: preflight.batchId,
-          },
-          () => apiRendersApi.createBatch({ confirmationToken: preflight.confirmationToken }),
-        );
-        sent = true;
+        const preflight = await apiRendersApi.batchPreflight({ ...base, records });
+        const batch = await apiRendersApi.createBatch({
+          confirmationToken: preflight.confirmationToken,
+        });
         patchData({
           jobIds: [...new Set([...(data.jobIds ?? []), ...batch.jobs.map((job) => job.id)])],
           latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
@@ -561,28 +516,9 @@ export function ApiRenderBlock({
           ? { ...base, inputSetId: data.inputSetId }
           : { ...base, variables: variations.records[0]?.variables ?? {} };
         const preflight = await apiRendersApi.preflight(request);
-        // A one-row batch to the hold: written ahead, cleared on success, held on any failure.
-        const job = await confirmUnderHold(
-          holdScope,
-          {
-            token: preflight.confirmationToken,
-            request: {
-              ...base,
-              records: [
-                {
-                  label: data.templateName ?? 'Canvas render',
-                  ...(data.inputSetId
-                    ? { inputSetId: data.inputSetId }
-                    : { variables: request.variables ?? {} }),
-                },
-              ],
-            },
-            expiresAt: preflight.expiresAt,
-            batchId: oneJobId(preflight.confirmationHash),
-          },
-          () => apiRendersApi.createJob({ confirmationToken: preflight.confirmationToken }),
-        );
-        sent = true;
+        const job = await apiRendersApi.createJob({
+          confirmationToken: preflight.confirmationToken,
+        });
         patchData({
           latestJobId: job.id,
           jobIds: [...new Set([...(data.jobIds ?? []), job.id])],
@@ -598,23 +534,10 @@ export function ApiRenderBlock({
       }
       await refreshJobs();
     } catch (cause) {
-      // Answered: a refresh or a toast that fails afterwards is not a failed render.
-      if (sent) {
-        console.error('[render node] after a confirmed render', cause);
-        return;
-      }
-      // Held, by this createBatch or another surface: the banner says what to do.
-      if (isHeld(holdScope)) {
-        patchData({ status: 'failed' });
-        return;
-      }
-      const message = isSessionRefusal(cause)
-        ? SESSION_EXPIRED
-        : cause instanceof RenderHeldError
-          ? cause.message
-          : cause instanceof Error
-            ? describeRenderDiscoveryFailure(cause.message)
-            : 'Render submission failed';
+      const message =
+        cause instanceof Error
+          ? describeRenderDiscoveryFailure(cause.message)
+          : 'Render submission failed';
       setError(message);
       patchData({ status: 'failed', error: message });
     } finally {
@@ -630,7 +553,6 @@ export function ApiRenderBlock({
     data,
     deliveryBlock,
     deliveryEnabled,
-    holdScope,
     inputSets,
     patchData,
     refreshJobs,
@@ -853,66 +775,6 @@ export function ApiRenderBlock({
               {error}
             </p>
           ) : null}
-          {!userId ? (
-            <p className="rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive">
-              {SIGNED_OUT}
-            </p>
-          ) : held && holdScope ? (
-            <div
-              role="alert"
-              className="flex flex-col gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-2xs text-destructive"
-            >
-              <p>{heldCopy(held)}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {canRetry(held) || held.sending ? (
-                  <Button
-                    size="xs"
-                    className="nodrag"
-                    disabled={busy || retrying || held.sending}
-                    onClick={() => {
-                      if (retrying) return;
-                      setRetrying(true);
-                      void retryHeld(holdScope, (token, sent) =>
-                        resendHeld(sent, token, apiRendersApi),
-                      )
-                        .then(async (batch) => {
-                          patchData({
-                            jobIds: [
-                              ...new Set([
-                                ...(data.jobIds ?? []),
-                                ...batch.jobs.map((job) => job.id),
-                              ]),
-                            ],
-                            latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
-                            status: 'submitting',
-                          });
-                          await refreshJobs().catch((error) =>
-                            console.error('[render node] after a retried render', error),
-                          );
-                        })
-                        .catch(() => undefined)
-                        .finally(() => setRetrying(false));
-                    }}
-                  >
-                    Retry this batch
-                  </Button>
-                ) : null}
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="nodrag"
-                  // A live send elsewhere must not be released under it.
-                  disabled={sendingElsewhere(held)}
-                  onClick={() => {
-                    clearHold(holdScope, held.batchId);
-                    window.location.assign('/forge#approvals');
-                  }}
-                >
-                  Open Render ledger
-                </Button>
-              </div>
-            </div>
-          ) : null}
           {workspace && !templatesOffered ? (
             <p className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
               {workspace.detail}
@@ -926,7 +788,7 @@ export function ApiRenderBlock({
             <Button
               size="sm"
               className="nodrag ml-auto min-w-32"
-              disabled={busy || !data.templateKey || !userId || held !== null}
+              disabled={busy || !data.templateKey}
               onClick={() => void submitRender()}
             >
               {busy ? (

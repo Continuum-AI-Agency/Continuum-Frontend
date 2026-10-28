@@ -995,11 +995,11 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
   // The backend makes rows 1..k-1, then throws on row k, for any status: the client cannot know
   // which rows exist, so any createBatch failure hands the signed batch over to be held.
   test.each([
-    ['a network failure', () => new TypeError('Failed to fetch'), 'no-answer'],
+    ['a network failure', () => new TypeError('Failed to fetch'), 'no_answer'],
     [
       'a code-less 503',
       () => new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
-      'no-answer',
+      'busy',
     ],
     [
       'a 5xx that names a code',
@@ -1008,7 +1008,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
           error: 'render_job_create_failed',
           message: 'A render job could not be created.',
         }),
-      'stopped',
+      'busy',
     ],
     [
       'a 409 at row k',
@@ -1017,7 +1017,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
           error: 'render_binding_changed',
           detail: 'The render binding changed.',
         }),
-      'stopped',
+      'refused',
     ],
   ])(
     '%s from createBatch holds the batch exactly as it was signed',
