@@ -181,7 +181,11 @@ type Destinations =
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-export type HeldConfirm = { token: string; blocked: 'edited' | 'expired' | null };
+/** `token` is null after a reload: only this page ever kept it, and then only the ledger helps. */
+export type HeldConfirm = {
+  token: string | null;
+  blocked: 'edited' | 'expired' | 'reloaded' | null;
+};
 
 /** What a refused batch's rows said when each was asked alone. */
 export type RowsAsked = { refused: number; unchecked: number };
@@ -193,6 +197,8 @@ export const CONFIRM_UNKNOWN =
   'Couldn’t confirm with the render service — Open Render ledger to check before rendering again';
 export const HELD_EDITED =
   'Your last Render wasn’t confirmed. Open Render ledger to check it before rendering your edits.';
+export const HELD_RELOADED =
+  'Your last Render wasn’t confirmed. Open Render ledger to check it before rendering again.';
 export const HELD_EXPIRED =
   'Your last Render wasn’t confirmed and its request has expired. Open Render ledger to check it, then Render again.';
 
@@ -207,7 +213,9 @@ export const heldMessage = (held: HeldConfirm | null): string | null =>
       ? HELD_EDITED
       : held.blocked === 'expired'
         ? HELD_EXPIRED
-        : null;
+        : held.blocked === 'reloaded'
+          ? HELD_RELOADED
+          : null;
 
 function describeFailure(error: unknown): {
   message: string;
@@ -617,7 +625,7 @@ export function RenderReviewTray({
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
       const code = error instanceof ApiError ? error.payload?.error : undefined;
-      if (held && typeof code === 'string' && TOKEN_GONE.has(code)) {
+      if (held?.token && typeof code === 'string' && TOKEN_GONE.has(code)) {
         onHold({ token: held.token, expired: true });
         setProblem(null);
         return;

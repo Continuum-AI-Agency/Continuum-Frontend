@@ -276,11 +276,12 @@ const refusalKey = (
 const SET_LEVEL_CODE = /render_set|revision/;
 
 /**
- * A confirm token held after a createBatch that failed without a refusal, kept in this browser so
- * a reload still knows. Only the token, a hash of what it signed, and when: dropped on success, on
- * Open Render ledger, or after a day.
+ * A confirm held after a createBatch that failed without a refusal, kept in this browser so a
+ * reload still knows not to render twice. Only the set it was for, a hash of what it signed, and
+ * when: never the token, which lives in this page's memory alone, so nothing stored can be replayed.
+ * Dropped on success, on Open Render ledger, or after a day.
  */
-type StoredHold = { token: string; snapshot: string; heldAt: number };
+type StoredHold = { set: string; snapshot: string; heldAt: number };
 const HOLD_KEEP_MS = 24 * 60 * 60 * 1000;
 /** A confirmation token is good for 30 minutes; after that only the ledger can say what it made. */
 const TOKEN_LIFE_MS = 30 * 60 * 1000;
@@ -290,7 +291,7 @@ const holdStorageKey = (brandId: string, setId: string, templateKey: string) =>
 function readHold(key: string): StoredHold | null {
   try {
     const hold = JSON.parse(localStorage.getItem(key) ?? 'null') as StoredHold | null;
-    if (hold && typeof hold.token === 'string' && Date.now() - hold.heldAt < HOLD_KEEP_MS)
+    if (hold && typeof hold.heldAt === 'number' && Date.now() - hold.heldAt < HOLD_KEEP_MS)
       return hold;
     localStorage.removeItem(key);
   } catch {
@@ -1206,6 +1207,8 @@ export function RenderRequestsGrid({
   // This page's word on each key; a key it has not touched yet is read from storage.
   const [holds, setHolds] = useState<ReadonlyMap<string, StoredHold | null>>(new Map());
   const stored = holdKey ? (holds.has(holdKey) ? holds.get(holdKey)! : readHold(holdKey)) : null;
+  // The held tokens themselves, by the same key: this page's memory only.
+  const heldTokens = useRef(new Map<string, string>());
   const liveRefusals = useMemo(
     () =>
       new Map(
@@ -2477,27 +2480,31 @@ export function RenderRequestsGrid({
       ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
       : null;
 
-  // The held token, and whether Render may re-send it: not once it has expired, and not when the
-  // rows under review are no longer the ones it signed (an edit, another selection, a re-pin).
+  // The held confirm, and whether Render may re-send it: not once it has expired, not after a
+  // reload (the token stayed in the page that held it), and not when the rows under review are no
+  // longer the ones it signed (an edit, another selection, a re-pin).
+  const heldToken = holdKey ? (heldTokens.current.get(holdKey) ?? null) : null;
   const held: HeldConfirm | null = stored
     ? {
-        token: stored.token,
+        token: heldToken,
         blocked:
           Date.now() - stored.heldAt >= TOKEN_LIFE_MS
             ? 'expired'
-            : review &&
-                stored.snapshot !==
-                  renderSnapshot(rows, review.rowIds, activeSet, contract, templateRef)
-              ? 'edited'
-              : null,
+            : !heldToken
+              ? 'reloaded'
+              : review &&
+                  stored.snapshot !==
+                    renderSnapshot(rows, review.rowIds, activeSet, contract, templateRef)
+                ? 'edited'
+                : null,
       }
     : null;
   /** Holds or lets go of the token for the set this render opened on (its own render's scope). */
   const holdToken = (next: { token: string; expired?: true } | null) => {
-    if (!holdKey) return;
+    if (!holdKey || !activeSet || !contract) return;
     const hold: StoredHold | null = next
       ? {
-          token: next.token,
+          set: `${activeSet.id}|${contract.template.key}`,
           snapshot: next.expired
             ? (stored?.snapshot ?? '')
             : renderSnapshot(rows, review?.rowIds ?? [], activeSet, contract, templateRef),
@@ -2505,6 +2512,8 @@ export function RenderRequestsGrid({
           heldAt: next.expired ? Date.now() - TOKEN_LIFE_MS : Date.now(),
         }
       : null;
+    if (next) heldTokens.current.set(holdKey, next.token);
+    else heldTokens.current.delete(holdKey);
     try {
       if (hold) localStorage.setItem(holdKey, JSON.stringify(hold));
       else localStorage.removeItem(holdKey);
