@@ -542,6 +542,30 @@ describe('OptimizerActionsPortfolioGroup — a pause on a roster that left Meta'
   });
 });
 
+// G8, 2026-10-27: Meta's pause rules (P1/P2) fire on Google campaigns, and the Google-only
+// portfolio "Leads // Google Ads only" offered Approve on "Pause ad set · Unnamed ad set" — a
+// pause the Meta writer would send with a Google campaign id.
+describe('OptimizerActionsPortfolioGroup — a pause in a portfolio with no Meta side', () => {
+  it('replaces Approve with why it cannot be approved here', () => {
+    renderGroup({ platforms: ['google_ads'] });
+    expect(
+      screen.queryByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+    ).toBeNull();
+    expect(screen.getByTestId('queue-row-blocked').textContent).toBe(
+      'Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in Google Ads if you agree.',
+    );
+    const box = screen.getByLabelText(/^Select pause ad set for Pause Set$/);
+    expect(box.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('keeps Approve on a pause in a portfolio that holds Meta', () => {
+    renderGroup({ platforms: ['meta', 'google_ads'] });
+    expect(
+      screen.getByRole('button', { name: /^Approve pause ad set for Pause Set$/ }),
+    ).toBeDefined();
+  });
+});
+
 // Beta, Oct 2026: the Portfolios list said 9 waiting and the tray said 8. The list counts
 // pending recommendations + pending budget moves; the tray counted selectable rows, which
 // leaves out a pending settings row (decided from its own button).
