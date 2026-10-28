@@ -75,6 +75,14 @@ import {
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
 import { type FiredRow, RenderConfirmDialog } from '@/components/forge/RenderConfirmDialog';
+import {
+  HELD_SET,
+  heldConfirmCopy,
+  type HoldScope,
+  isHeld,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import {
   downloadTemplateCsv,
@@ -467,7 +475,12 @@ export function RenderRequestsGrid({
 }) {
   const queryClient = useQueryClient();
   // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
-  const brandRole = useActiveBrandContext().permissions.find(
+  const brandContext = useActiveBrandContext();
+  // A batch whose createBatch failed is held per user, brand, binding, template and render set
+  // (renderHold.ts), in every tab: while it is, Render opens it, never a new confirmation. With no
+  // user id there is no key to hold under, so Render is disabled.
+  const userId = brandContext.user?.id ?? null;
+  const brandRole = brandContext.permissions.find(
     (permission) => permission.brand_profile_id === brandId,
   )?.role;
   const finalBlocked =
@@ -575,6 +588,26 @@ export function RenderRequestsGrid({
   } | null>(null);
   /** "Send to ad set…" is open over the selected rows. */
   const [sendingTo, setSendingTo] = useState(false);
+  const holdOf = (renderSetId: string): HoldScope | null =>
+    userId && contract
+      ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
+      : null;
+  const holdScope = activeSet ? holdOf(activeSet.id) : null;
+  const held = useRenderHold(holdScope);
+  /**
+   * A held set warns, never blocks: Duplicate, Delete, Restore as new set, Change set template
+   * revision, Run on other variants, Update to current template (tab menu and banner) and Import
+   * browser draft each ask one confirm while it is held (read fresh), then go. Retry still sends
+   * the frozen batch; a copy starts with no hold. Rename, describe and row edits never ask.
+   * True when it asked: the caller returns, and `run` goes on Continue.
+   */
+  const [heldConfirm, setHeldConfirm] = useState<{ copy: boolean; run: () => void } | null>(null);
+  const askIfHeld = (set: { id: string } | null, run: () => void, copy = false): boolean => {
+    const scope = set ? holdOf(set.id) : null;
+    if (!scope || !isHeld(scope)) return false;
+    setHeldConfirm({ copy, run });
+    return true;
+  };
   /** The set whose delivery settings are open. */
   const [settingsFor, setSettingsFor] = useState<ForgeRenderSet | null>(null);
   /** Each rendered row's newest job, and the row as it was rendered: an edit ends its run view. */
@@ -1321,9 +1354,9 @@ export function RenderRequestsGrid({
   const pinnedRevisionLabel = revisionVariants
     ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
     .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
-  const changeRevision = async () => {
+  const changeRevision = async (confirmed = false) => {
     const picked = publishedRevisions.find((item) => item.id === pickedRevision);
-    if (!picked) return;
+    if (!picked || (!confirmed && askIfHeld(activeSet, () => void changeRevision(true)))) return;
     setRevisionChangeBusy(true);
     try {
       if (activeSet) {
@@ -1395,8 +1428,9 @@ export function RenderRequestsGrid({
         ? [{ variant, head, target }]
         : [];
     }) ?? [];
-  const runOnVariants = async () => {
-    if (!activeSet) return;
+  const runOnVariants = async (confirmed = false) => {
+    if (!activeSet || (!confirmed && askIfHeld(activeSet, () => void runOnVariants(true), true)))
+      return;
     setRevisionChangeBusy(true);
     const made: string[] = [];
     const refused: string[] = [];
@@ -2130,8 +2164,9 @@ export function RenderRequestsGrid({
   };
 
   /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
-  const duplicateSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const duplicateSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void duplicateSet(set, true), true)))
+      return;
     const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
     const copy = rebaseRows(
       source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
@@ -2148,8 +2183,12 @@ export function RenderRequestsGrid({
   };
 
   /** A kept version as a new set. The set it came from is never written back over. */
-  const restoreRevision = async (revision: ForgeRenderSetRevision) => {
-    if (!contract) return;
+  const restoreRevision = async (revision: ForgeRenderSetRevision, confirmed = false) => {
+    if (
+      !contract ||
+      (!confirmed && askIfHeld(historyFor, () => void restoreRevision(revision, true), true))
+    )
+      return;
     if (
       revision.templateRevision &&
       (revision.templateRevision.templateKey !== contract.template.key ||
@@ -2183,8 +2222,8 @@ export function RenderRequestsGrid({
     toast.success(`Restored as “${created.name}”`);
   };
 
-  const deleteSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const deleteSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void deleteSet(set, true)))) return;
     try {
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
@@ -2297,7 +2336,8 @@ export function RenderRequestsGrid({
       const label = row.label || 'Untitled';
       if (status?.state === 'invalid') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
-        if (Object.keys(status.errors).every((key) => missing.includes(key))) counts.needsInput += 1;
+        if (Object.keys(status.errors).every((key) => missing.includes(key)))
+          counts.needsInput += 1;
         else counts.blocked += 1;
         for (const [key, message] of Object.entries(status.errors)) note(key, message, label);
       } else if (status?.state === 'refused') {
@@ -2459,20 +2499,24 @@ export function RenderRequestsGrid({
     selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
   const renderingProposed = selected.some((row) => proposed.has(row.id));
   const canRender = !updateRequired && !renderingProposed && selected.length <= MAX_BATCH_ROWS;
-  const readyToFire = canRender && selectedReady.length > 0;
-  const fireHint = updateRequired
-    ? 'Update this set to the current template first'
-    : renderingProposed
-      ? 'Keep or discard the proposed rows first'
-      : selected.length === 0
-        ? 'Select the rows to render'
-        : selected.length > MAX_BATCH_ROWS
-          ? `At most ${MAX_BATCH_ROWS} renders per batch`
-          : selectedReady.length === 0
-            ? skipReason(selected[0]!)
-            : skipped.length
-              ? `${skipped.length} selected ${skipped.length === 1 ? 'row' : 'rows'} can’t render and ${skipped.length === 1 ? 'is' : 'are'} skipped`
-              : null;
+  const readyToFire = Boolean(userId) && (held !== null || (canRender && selectedReady.length > 0));
+  const fireHint = !userId
+    ? SIGNED_OUT
+    : held
+      ? HELD_SET
+      : updateRequired
+        ? 'Update this set to the current template first'
+        : renderingProposed
+          ? 'Keep or discard the proposed rows first'
+          : selected.length === 0
+            ? 'Select the rows to render'
+            : selected.length > MAX_BATCH_ROWS
+              ? `At most ${MAX_BATCH_ROWS} renders per batch`
+              : selectedReady.length === 0
+                ? skipReason(selected[0]!)
+                : skipped.length
+                  ? `${skipped.length} selected ${skipped.length === 1 ? 'row' : 'rows'} can’t render and ${skipped.length === 1 ? 'is' : 'are'} skipped`
+                  : null;
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2543,6 +2587,12 @@ export function RenderRequestsGrid({
   // Render, so it is silent — and a set with no edits is already saved, so it writes no revision.
   const openConfirm = async () => {
     if (!contract || !readyToFire) return;
+    // A held batch is what Render opens: read-only, nothing to save or sign.
+    if (held) {
+      setSubset(null);
+      setConfirming(true);
+      return;
+    }
     setBusy('firing');
     try {
       const submittedSet =
@@ -2900,6 +2950,7 @@ export function RenderRequestsGrid({
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openConfirm()}
+        heldLabel={held ? 'Unconfirmed render — check' : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -2967,13 +3018,16 @@ export function RenderRequestsGrid({
             size="xs"
             variant="outline"
             disabled={busy === 'saving'}
-            onClick={async () => {
-              setBusy('saving');
-              try {
-                await saveRenderSet();
-              } finally {
-                setBusy(null);
-              }
+            onClick={() => {
+              const update = async () => {
+                setBusy('saving');
+                try {
+                  await saveRenderSet();
+                } finally {
+                  setBusy(null);
+                }
+              };
+              if (!askIfHeld(activeSet, () => void update())) void update();
             }}
           >
             Update set
@@ -3102,15 +3156,20 @@ export function RenderRequestsGrid({
             onDelete={deleteSet}
             onDuplicate={(set) => void duplicateSet(set)}
             onHistory={setHistoryFor}
-            onUpdate={() => void saveNow()}
+            onUpdate={() => {
+              if (!askIfHeld(activeSet, () => void saveNow())) void saveNow();
+            }}
             onSettings={setSettingsFor}
             onImportDraft={() => {
               if (!draftOffer) return;
-              activeSetRef.current = null;
-              savedBase.current = [];
-              setActiveSet(null);
-              showRows(draftOffer, null, contract);
-              setDraftOffer(null);
+              const importDraft = () => {
+                activeSetRef.current = null;
+                savedBase.current = [];
+                setActiveSet(null);
+                showRows(draftOffer, null, contract);
+                setDraftOffer(null);
+              };
+              if (!askIfHeld(activeSet, importDraft)) importDraft();
             }}
           />
           <section
@@ -3445,6 +3504,8 @@ export function RenderRequestsGrid({
           onFired={onBatchFired}
           onOpenLedger={onFired}
           onRowsRefused={onRowsRefused}
+          holdScope={holdScope}
+          held={held}
         />
       ) : null}
       <RenderSetSettingsDialog
@@ -3466,7 +3527,7 @@ export function RenderRequestsGrid({
         brandId={brandId}
         set={historyFor}
         contractHash={contract?.template.contractHash ?? ''}
-        onRestore={restoreRevision}
+        onRestore={(revision) => restoreRevision(revision)}
         onOpenChange={(open) => !open && setHistoryFor(null)}
       />
       <NameDialog
@@ -3482,6 +3543,31 @@ export function RenderRequestsGrid({
           setNameRequest(null);
         }}
       />
+      <AlertDialog
+        open={heldConfirm !== null}
+        onOpenChange={(open) => !open && setHeldConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unconfirmed render</AlertDialogTitle>
+            <AlertDialogDescription>
+              {heldConfirmCopy(heldConfirm?.copy ?? false)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = heldConfirm;
+                setHeldConfirm(null);
+                action?.run();
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog
         open={pendingDiscard !== null}
         onOpenChange={(open) => !open && setPendingDiscard(null)}

@@ -309,18 +309,21 @@ mock.module('@/lib/library/templateSources', () => ({
 const activeBrand = await import('@/components/providers/ActiveBrandProvider');
 const realActiveBrandContext = activeBrand.useActiveBrandContext;
 let brandRole = 'owner';
+/** The signed-in user: a render set's hold is keyed to them (renderHold.ts). */
+const USER = '77777777-7777-4777-8777-777777777777';
 mock.module('@/components/providers/ActiveBrandProvider', () => ({
   ...activeBrand,
   useActiveBrandContext: () => {
     try {
       return realActiveBrandContext();
     } catch {
-      return { permissions: [{ brand_profile_id: BRAND, role: brandRole }] };
+      return { permissions: [{ brand_profile_id: BRAND, role: brandRole }], user: { id: USER } };
     }
   },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { holdKeyOf } from './renderHold';
 import {
   act,
   cleanup,
@@ -659,7 +662,9 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     expect(
-      await screen.findByText(/Layout fit isn’t measured for this template — rows can still render/),
+      await screen.findByText(
+        /Layout fit isn’t measured for this template — rows can still render/,
+      ),
     ).toBeTruthy();
     expect(screen.queryAllByText('Ready')).toHaveLength(0);
     expect(screen.queryAllByText(/^Checking/)).toHaveLength(0);
@@ -889,8 +894,6 @@ describe('RenderRequestsGrid', () => {
     expect(within(cell).getByText('Default')).toBeTruthy();
   });
 
-
-
   test('a paste onto the grid is reviewed like a sheet: its fields, its errors, its row cap', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
@@ -975,7 +978,11 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(screen.getAllByLabelText('Row name')).toHaveLength(2));
     const second = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
 
-    const typeWhileAnotherRowChanges = async (input: HTMLInputElement, text: string, tag: string) => {
+    const typeWhileAnotherRowChanges = async (
+      input: HTMLInputElement,
+      text: string,
+      tag: string,
+    ) => {
       input.focus();
       let typed = input.value;
       for (const [index, char] of [...text].entries()) {
@@ -1599,6 +1606,46 @@ describe('RenderRequestsGrid', () => {
     }
   });
 
+  test('a held set: Render opens its unconfirmed batch, and Duplicate warns once before it goes', async () => {
+    withSavedSets();
+    localStorage.setItem(
+      holdKeyOf({
+        userId: USER,
+        brandId: BRAND,
+        bindingId: TEMPLATE.bindingId,
+        templateKey: '133',
+        renderSetId: NEWEST.id,
+      }),
+      JSON.stringify({ batchId: 'batch-h', heldAt: Date.now() }),
+    );
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    fireEvent.click(await screen.findByRole('button', { name: 'Unconfirmed render — check' }));
+    const view = await screen.findByRole('region', { name: 'Held batch' });
+    expect(view.textContent).toContain('Open Render ledger to check before rendering again');
+    expect(batchPreflightMock).not.toHaveBeenCalled();
+    fireEvent.keyDown(view, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryAllByRole('region', { name: 'Held batch' })).toHaveLength(0),
+    );
+
+    const created = createRenderSetMock.mock.calls.length;
+    await openMenu('Actions for Newest', /Duplicate/);
+    const warning = await screen.findByRole('alertdialog', { name: 'Unconfirmed render' });
+    expect(warning.textContent).toContain('The copy won’t remember the unconfirmed render.');
+    fireEvent.click(within(warning).getByRole('button', { name: 'Cancel' }));
+    expect(createRenderSetMock.mock.calls.length).toBe(created);
+    await openMenu('Actions for Newest', /Duplicate/);
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog', { name: 'Unconfirmed render' })).getByRole(
+        'button',
+        { name: 'Continue' },
+      ),
+    );
+    await waitFor(() => expect(createRenderSetMock.mock.calls.length).toBe(created + 1));
+    localStorage.clear();
+  }, 30_000);
+
   test('renames the set without touching unsaved rows, then deletes it and lands on the next', async () => {
     withSavedSets();
     render(<RenderRequestsGrid brandId={BRAND} />);
@@ -2113,7 +2160,6 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getAllByLabelText('Row name')).toHaveLength(1);
     expect(unsavedShown()).toBe(false);
   });
-
 
   test('Add variation and Row below add beside a row, take focus, and never touch the selection', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);

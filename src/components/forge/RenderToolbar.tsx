@@ -244,6 +244,7 @@ export function RenderToolbar({
   fireHint,
   busy,
   onRender,
+  heldLabel,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -302,6 +303,8 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
+  heldLabel?: string;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -543,6 +546,7 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
+              heldLabel={heldLabel}
             />
           </Control>
         </>
@@ -639,6 +643,7 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
+  heldLabel,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -646,6 +651,8 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
+  heldLabel?: string;
 }) {
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
@@ -664,33 +671,36 @@ function RenderButton({
       ) : (
         <Play className="size-3.5" aria-hidden />
       )}
-      {selectedCount
-        ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
-        : 'Render'}
+      {heldLabel
+        ? heldLabel
+        : selectedCount
+          ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
+          : 'Render'}
     </Button>
   );
-  const content = !selectedCount ? (
-    button
-  ) : (
-    <Tooltip>
-      <TooltipTrigger render={button} />
-      <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
-        {files.byRatio.map(([ratio, count], index) => (
-          <Fragment key={ratio}>
-            {index > 0 ? <span aria-hidden>·</span> : null}
-            <RatioGlyph ratio={ratio} />
-            {ratio} ×{count}
-          </Fragment>
-        ))}
-        {files.replacements ? (
-          <span>
-            {files.byRatio.length ? '· ' : ''}
-            {plural(files.replacements, 'ad replacement')}, one file each
-          </span>
-        ) : null}
-      </TooltipContent>
-    </Tooltip>
-  );
+  const content =
+    heldLabel || !selectedCount ? (
+      button
+    ) : (
+      <Tooltip>
+        <TooltipTrigger render={button} />
+        <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
+          {files.byRatio.map(([ratio, count], index) => (
+            <Fragment key={ratio}>
+              {index > 0 ? <span aria-hidden>·</span> : null}
+              <RatioGlyph ratio={ratio} />
+              {ratio} ×{count}
+            </Fragment>
+          ))}
+          {files.replacements ? (
+            <span>
+              {files.byRatio.length ? '· ' : ''}
+              {plural(files.replacements, 'ad replacement')}, one file each
+            </span>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    );
   return (
     <div className="flex max-w-md flex-col items-start gap-1">
       {content}
