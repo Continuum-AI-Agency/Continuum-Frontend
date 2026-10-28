@@ -81,7 +81,7 @@ function createClientStub(plan: Record<string, DbResult[]>) {
   const queries: QueryStub[] = [];
   const client = {
     auth: {
-      getUser: () => Promise.resolve({ data: { user: { id: USER_ID } }, error: null }),
+      getClaims: () => Promise.resolve({ data: { claims: { sub: USER_ID } }, error: null }),
     },
     schema: (schemaName: string) => ({
       from(table: string) {

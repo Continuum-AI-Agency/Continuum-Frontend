@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   collectionViewConfigSchema,
   collectionVisibilitySchema,
@@ -47,11 +48,8 @@ const createSchema = z.object({
 // would skip that gate — and there is no service-role key on the deployed Frontend anyway.
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -89,11 +87,8 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -27,6 +27,7 @@ import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { newDraftFieldPatch } from '@/lib/organic/publishPlan';
 import { useCalendarStore } from '@/lib/organic/store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
 type CalendarEntry = {
@@ -278,9 +279,7 @@ export function useCalendarDraftPersistence({
 
       const sync = async () => {
         try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
+          const user = await getSessionUser();
           if (!user) return;
 
           const organicSchema = supabase.schema('organic' as never) as any;
@@ -383,9 +382,7 @@ export function useCalendarDraftPersistence({
     let cancelled = false;
 
     const run = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getSessionUser();
       if (!user) return;
       const organicSchema = supabase.schema('organic' as never) as any;
       await Promise.all(

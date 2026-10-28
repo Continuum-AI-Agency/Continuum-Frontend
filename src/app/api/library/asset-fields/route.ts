@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   assetFieldValueSchema,
   listAssetFieldValuesResponseSchema,
@@ -29,11 +30,8 @@ type Session = { userId: string; client: Awaited<ReturnType<typeof createSupabas
 
 async function openSession(brandId: string): Promise<Session | Response> {
   const client = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await client.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(client);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(client, brandId))) {

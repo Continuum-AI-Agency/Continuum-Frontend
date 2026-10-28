@@ -8,6 +8,7 @@
 // pool carries asset ids, and the bucket/path behind each id is resolved here
 // from a brand-filtered media.assets read before anything is signed.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import type { TimelineDraftPoolMedia, TimelineDraftStatus } from '@continuum/contracts';
 import {
   getTimelineDraftResponseSchema,
@@ -62,11 +63,8 @@ type Caller = { supabase: SupabaseClient; userId: string };
 
 async function authorizeCaller(brandId: string): Promise<Caller | NextResponse> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, brandId))) {

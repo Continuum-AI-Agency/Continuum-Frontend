@@ -14,6 +14,7 @@
 // Streaming: SSE with `text` delta events + `complete` event so
 // useWorkflowExecution can stream the enriched prompt token-by-token.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
@@ -279,11 +280,8 @@ function sseComplete(): string {
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

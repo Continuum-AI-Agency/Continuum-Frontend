@@ -31,7 +31,7 @@ const updateChain = {
 };
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }) },
     schema: () => ({ from: () => updateChain }),
   }),
 }));

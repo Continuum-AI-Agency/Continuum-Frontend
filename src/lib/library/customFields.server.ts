@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import 'server-only';
 
 // The server-side seam for media.custom_fields and media.asset_field_values.
@@ -174,8 +175,8 @@ async function withViewerResolved(
   if (!filters.some((filter) => filter.values.includes(CURRENT_USER_FILTER_TOKEN))) {
     return [...filters];
   }
-  const { data } = await client.auth.getUser();
-  return resolveViewerToken(filters, data.user?.id ?? 'no-viewer');
+  const viewer = await claimsIdentityOf(client);
+  return resolveViewerToken(filters, viewer?.id ?? 'no-viewer');
 }
 
 /**

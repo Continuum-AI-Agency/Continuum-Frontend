@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { assetUsageSchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { rowToMediaAsset } from '@/lib/media/mapper';
@@ -34,11 +35,8 @@ export async function GET(request: Request) {
   }
 
   const client = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await client.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(client);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

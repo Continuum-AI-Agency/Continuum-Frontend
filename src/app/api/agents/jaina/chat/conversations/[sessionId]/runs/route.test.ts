@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-const getUserMock = mock(() =>
+const getClaimsMock = mock(() =>
   Promise.resolve({
-    data: { user: { id: 'user-1', email: 'analyst@example.com' } },
+    data: { claims: { sub: 'user-1', email: 'analyst@example.com' } },
     error: null,
   }),
 );
@@ -21,7 +21,7 @@ mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: () =>
     Promise.resolve({
       auth: {
-        getUser: getUserMock,
+        getClaims: getClaimsMock,
         getSession: getSessionMock,
       },
       schema: schemaMock,
@@ -32,7 +32,7 @@ import { GET } from './route';
 
 describe('Jaina conversation runs hydration route', () => {
   beforeEach(() => {
-    getUserMock.mockClear();
+    getClaimsMock.mockClear();
     getSessionMock.mockClear();
     schemaMock.mockClear();
     fromMock.mockClear();
@@ -110,8 +110,8 @@ describe('Jaina conversation runs hydration route', () => {
   });
 
   it('returns 401 when no authenticated user exists', async () => {
-    getUserMock.mockResolvedValueOnce({
-      data: { user: null },
+    getClaimsMock.mockResolvedValueOnce({
+      data: { claims: null },
       error: null,
     });
 

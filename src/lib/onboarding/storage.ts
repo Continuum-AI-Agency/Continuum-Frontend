@@ -1,4 +1,6 @@
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { claimsIdentityOf } from '@/lib/auth/claims';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { AuthIdentity } from '@/lib/auth/identity';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
@@ -34,7 +36,7 @@ type SupabaseOnboardingClient = SupabaseClient<Database>;
 
 type AuthContext = {
   supabase: SupabaseOnboardingClient;
-  user: User;
+  user: AuthIdentity;
   owner: BrandMember;
 };
 
@@ -44,10 +46,10 @@ type OnboardingContext = {
   brandId: string;
   owner: BrandMember;
   supabase: SupabaseOnboardingClient;
-  user: User;
+  user: AuthIdentity;
 };
 
-function getOwnerMember(user: User): BrandMember {
+function getOwnerMember(user: AuthIdentity): BrandMember {
   const email = user.email ?? `${user.id}@continuum.local`;
   return {
     id: user.id,
@@ -58,9 +60,7 @@ function getOwnerMember(user: User): BrandMember {
 
 async function getAuthContext(): Promise<AuthContext> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
 
   if (!user) {
     redirect('/login');
@@ -650,7 +650,7 @@ async function persistBrandState(
 
 async function persistMetadata(
   supabase: SupabaseOnboardingClient,
-  user: User,
+  user: AuthIdentity,
   metadata: OnboardingMetadata,
 ): Promise<void> {
   ensureActiveSelection(metadata);

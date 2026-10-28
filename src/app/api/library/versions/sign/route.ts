@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { versionSignUploadRequestSchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 
@@ -10,11 +11,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 // constructs a service-role client.
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await claimsIdentityOf(supabase);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const parsed = versionSignUploadRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 422 });

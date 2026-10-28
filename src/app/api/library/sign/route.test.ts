@@ -57,10 +57,10 @@ function makeQuery(table: string) {
 mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: {
-      getUser: async () =>
+      getClaims: async () =>
         state.authed
-          ? { data: { user: { id: 'user-1' } }, error: null }
-          : { data: { user: null }, error: { message: 'no session' } },
+          ? { data: { claims: { sub: 'user-1' } }, error: null }
+          : { data: { claims: null }, error: { message: 'no session' } },
     },
     schema: () => ({ from: (table: string) => makeQuery(table) }),
   }),

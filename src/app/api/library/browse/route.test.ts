@@ -5,7 +5,7 @@ import type { LibraryBrowseQuery } from '@continuum/contracts';
 mock.module('server-only', () => ({}));
 mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: { getClaims: async () => ({ data: { claims: { sub: 'user-1' } } }) },
   }),
 }));
 mock.module('@/lib/media/brand-access.server', () => ({

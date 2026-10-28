@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { type PlanDecisionAnyCommand, planDecisionAnyCommandSchema } from '@/lib/jaina/schemas';
@@ -26,8 +27,8 @@ function extractCommands(body: unknown): unknown[] {
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

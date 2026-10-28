@@ -48,10 +48,8 @@ function buildSyncPath(basePath: string, params: Record<string, string>): string
 async function getBrowserUserId(): Promise<string | undefined> {
   if (typeof window === 'undefined') return undefined;
   try {
-    const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
-    const supabase = createSupabaseBrowserClient();
-    const { data } = await supabase.auth.getUser();
-    return data.user?.id ?? undefined;
+    const { getSessionUser } = await import('@/lib/supabase/sessionUser');
+    return (await getSessionUser())?.id;
   } catch {
     return undefined;
   }
@@ -474,10 +472,9 @@ function extractPermissions(rawPayload: unknown): unknown {
 
 export async function fetchUserIntegrationAssets(): Promise<UserIntegrationAssetRow[]> {
   const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+  const { getSessionUser } = await import('@/lib/supabase/sessionUser');
   const supabase = createSupabaseBrowserClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
@@ -564,10 +561,9 @@ export async function unassignBrandIntegrationAccount(
 
 export async function fetchUserTikTokAccountIds(): Promise<string[]> {
   const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+  const { getSessionUser } = await import('@/lib/supabase/sessionUser');
   const supabase = createSupabaseBrowserClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -588,10 +584,9 @@ export async function fetchUserLinkedInAccountIds(options?: {
   type?: 'linkedin_ad_account' | 'linkedin_organization';
 }): Promise<string[]> {
   const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+  const { getSessionUser } = await import('@/lib/supabase/sessionUser');
   const supabase = createSupabaseBrowserClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return [];
 
   let query = supabase
@@ -614,10 +609,9 @@ export async function fetchUserLinkedInAccountIds(options?: {
 
 export async function fetchUserXAccountIds(): Promise<string[]> {
   const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+  const { getSessionUser } = await import('@/lib/supabase/sessionUser');
   const supabase = createSupabaseBrowserClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return [];
 
   const { data, error } = await supabase

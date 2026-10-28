@@ -77,7 +77,8 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
   }, [resolveAvatarUrl, supabase]);
 
   useEffect(() => {
-    void refresh();
+    // INITIAL_SESSION delivers the user from the session already in this browser; refresh() (an
+    // Auth round trip) is only for callers that just changed the profile.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -86,7 +87,7 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
       setIsLoading(false);
     });
     return () => subscription.unsubscribe();
-  }, [resolveAvatarUrl, supabase, refresh]);
+  }, [resolveAvatarUrl, supabase]);
 
   return { user, avatarUrl, initials: getInitials(user), isLoading, refresh };
 }

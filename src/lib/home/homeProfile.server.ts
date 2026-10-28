@@ -1,6 +1,7 @@
 // Reads and writes the objectives each brand's Home leads with (brand_profiles.home_profiles).
 // A brand without the table or without a row is a normal state: the Home infers objectives
 // from the account's results, so a failed read degrades to "no saved objectives", never to an error.
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import 'server-only';
 
 import {
@@ -50,7 +51,7 @@ export async function saveHomeObjectives(input: {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: auth } = await supabase.auth.getUser();
+  const viewer = await claimsIdentityOf(supabase);
   const { error } = await supabase
     .schema('brand_profiles')
     .from(TABLE)
@@ -60,7 +61,7 @@ export async function saveHomeObjectives(input: {
         scope: input.scope,
         objectives: objectives.data,
         source: 'user',
-        updated_by: auth.user?.id ?? null,
+        updated_by: viewer?.id ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'brand_id,scope' },

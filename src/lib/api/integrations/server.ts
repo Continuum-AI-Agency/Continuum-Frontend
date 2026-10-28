@@ -15,10 +15,8 @@ import {
 
 async function getServerUserId(): Promise<string | undefined> {
   try {
-    const { createSupabaseServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createSupabaseServerClient();
-    const { data } = await supabase.auth.getUser();
-    return data.user?.id ?? undefined;
+    const { getClaimsIdentity } = await import('@/lib/auth/claims');
+    return (await getClaimsIdentity())?.id;
   } catch {
     return undefined;
   }

@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { libraryBrowseQuerySchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { parseFieldFiltersParam } from '@/lib/library/customFields';
@@ -15,9 +16,7 @@ function optionalBoolean(value: string | null): boolean | null | undefined {
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);

@@ -28,6 +28,7 @@ import {
   upsertComment,
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 
 export type PostMultiCommentInput = {
@@ -120,11 +121,11 @@ export function useMultiAssetComments(
 
     const supabase = createSupabaseBrowserClient();
 
-    void supabase.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return;
-      currentUserRef.current = { id: data.user.id, email: data.user.email ?? null };
-      authorsRef.current.set(data.user.id, { name: null, email: data.user.email ?? null });
-      setCurrentUserId(data.user.id);
+    void getSessionUser().then((user) => {
+      if (cancelled || !user) return;
+      currentUserRef.current = { id: user.id, email: user.email ?? null };
+      authorsRef.current.set(user.id, { name: null, email: user.email ?? null });
+      setCurrentUserId(user.id);
     });
 
     Promise.all(ids.map((assetId) => listCommentsWithVersion(brandId, assetId)))

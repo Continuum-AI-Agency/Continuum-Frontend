@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { resolveInitialCanvasRoomId } from '@/lib/ai-studio/canvas-room.server';
@@ -129,11 +130,8 @@ export async function POST(request: Request) {
     const { brandId, assetId, template } = parsed.data;
 
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await claimsIdentityOf(supabase);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!(await callerHasBrandAccess(supabase, brandId))) {

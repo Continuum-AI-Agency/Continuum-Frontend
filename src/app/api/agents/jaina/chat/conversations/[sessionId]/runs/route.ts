@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -13,8 +14,8 @@ type AuthResult = { ok: true } | { ok: false; response: NextResponse };
 
 async function authorizeConversationRequest(): Promise<AuthResult> {
   const supabase = await createSupabaseServerClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),

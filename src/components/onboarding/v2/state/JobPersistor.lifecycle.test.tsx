@@ -17,7 +17,7 @@ afterEach(() => {
 
 function setup() {
   const auth = spyOn(client, 'createSupabaseBrowserClient').mockReturnValue({
-    auth: { getUser: async () => ({ data: { user: null } }) },
+    auth: { getSession: async () => ({ data: { session: null } }) },
   } as unknown as ReturnType<typeof client.createSupabaseBrowserClient>);
   const logo = spyOn(logos, 'internalizeLogo').mockResolvedValue(null);
   const save = spyOn(actions, 'mutateOnboardingStateAction').mockImplementation(

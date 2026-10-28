@@ -63,7 +63,7 @@ function stubClient(rows: unknown[], calls: string[]) {
     limit: () => Promise.resolve({ data: rows, error: null }),
   };
   return {
-    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'user-1' } }, error: null }) },
+    auth: { getClaims: () => Promise.resolve({ data: { claims: { sub: 'user-1' } }, error: null }) },
     schema: () => ({ from: () => chain }),
   };
 }

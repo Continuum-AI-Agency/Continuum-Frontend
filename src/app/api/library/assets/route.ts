@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   type CustomFieldFilter,
   DEFAULT_LIBRARY_SORT,
@@ -53,11 +54,8 @@ const querySchema = z.object({
 // Page 0 is also seeded server-side by the RSC; this endpoint serves page N>0.
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { mutateCollectionMembershipOperation } from '@/lib/library/creativeOperations';
@@ -17,11 +18,8 @@ const itemSchema = z.object({
 // through authorize_operation — that the caller is not a viewer.
 async function mutate(request: Request, mode: 'add' | 'remove'): Promise<Response> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

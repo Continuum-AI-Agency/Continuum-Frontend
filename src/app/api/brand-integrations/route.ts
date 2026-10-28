@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
-import { getServerUser } from '@/lib/supabase/server';
+import { getClaimsIdentity } from '@/lib/auth/claims';
 
 export async function GET(request: Request) {
-  const user = await getServerUser();
+  const user = await getClaimsIdentity();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

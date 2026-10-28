@@ -84,7 +84,8 @@ function createClientStub(rows: DbResult[], uploadError: { message: string } | n
 
 let currentUser: { id: string } | null = null;
 const auth = () => ({
-  getUser: () => Promise.resolve({ data: { user: currentUser }, error: null }),
+  getClaims: () =>
+    Promise.resolve({ data: { claims: currentUser && { sub: currentUser.id } }, error: null }),
 });
 
 function setAuth(user: { id: string } | null) {

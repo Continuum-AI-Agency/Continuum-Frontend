@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { addCommentReactionRequestSchema, commentReactionSchema } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
@@ -40,11 +41,8 @@ type Caller = { supabase: SupabaseClient; userId: string };
 
 async function caller(): Promise<Caller | NextResponse> {
   const supabase = (await createSupabaseServerClient()) as unknown as SupabaseClient;
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await claimsIdentityOf(supabase);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return { supabase, userId: user.id };
 }
 

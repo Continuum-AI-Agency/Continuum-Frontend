@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { deriveOrganicMediaStage, syncDraftSnapshotFormat } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
@@ -115,11 +116,8 @@ export async function POST(request: Request) {
   const payload = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
