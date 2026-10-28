@@ -71,10 +71,15 @@ const destinations = (
   meta: { connected: false, adAccountId: null, adAccountName: null, ...meta },
 });
 
-const batchPreflightMock = mock(async (_input: unknown) => ({
+const BATCH_ID = '99999999-9999-4999-8999-999999999990';
+const EXPIRES_AT = '2099-01-01T00:00:00.000Z';
+const signedBatch = async (_input: unknown) => ({
+  batchId: BATCH_ID,
   confirmationToken: 'batch-token',
+  expiresAt: EXPIRES_AT,
   readiness: READY,
-}));
+});
+const batchPreflightMock = mock(signedBatch);
 const queuedJob = (id: string, label: string, rowId: string): ApiRenderJob =>
   ({
     id,
@@ -199,14 +204,8 @@ import {
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
-import {
-  CONFIRM_UNKNOWN,
-  HELD_EXPIRED,
-  type HeldConfirm,
-  type RenderPreflightRow,
-  RenderReviewTray,
-  type RowsAsked,
-} from './RenderReviewTray';
+import { type RenderPreflightRow, RenderReviewTray, type RowsAsked } from './RenderReviewTray';
+import type { HoldReason, SignedBatch } from './renderHold';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
 // would swallow every other file's toasts.
@@ -285,14 +284,8 @@ function Harness({
   handlers: ReturnType<typeof trayHandlers>;
 }) {
   const [rows, setRows] = useState(initialRows);
-  // Kept above the tray, as the grid keeps it (the grid also compares it with the rows).
-  const [held, setHeld] = useState<HeldConfirm | null>(null);
   return (
     <RenderReviewTray
-      held={held}
-      onHold={(next) =>
-        setHeld(next ? { token: next.token, blocked: next.expired ? 'expired' : null } : null)
-      }
       brandId={BRAND}
       bindingId={bindingId}
       templateKey="133"
@@ -328,6 +321,7 @@ const trayHandlers = () => ({
     }),
   ),
   onPassed: mock((_rowIds: string[]) => undefined),
+  onHold: mock((_signed: SignedBatch, _reason: HoldReason) => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
 });
@@ -463,10 +457,7 @@ describe('RenderReviewTray · Review', () => {
           .acceptMissingFonts,
       ).toBeUndefined();
     } finally {
-      batchPreflightMock.mockImplementation(async () => ({
-        confirmationToken: 'batch-token',
-        readiness: READY,
-      }));
+      batchPreflightMock.mockImplementation(signedBatch);
     }
   });
 
@@ -734,141 +725,56 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(screen.queryByText(/not sent/)).toBeNull());
   }, 30_000);
 
-  test('after a confirm with no answer, Render re-sends that same token until the ledger is opened', async () => {
-    let minted = 0;
-    batchPreflightMock.mockImplementation(async () => ({
-      confirmationToken: `token-${++minted}`,
-      readiness: READY,
-    }));
-    const noAnswer = async () => {
-      throw new TypeError('Failed to fetch');
-    };
-    createBatchMock.mockImplementationOnce(noAnswer).mockImplementationOnce(noAnswer);
-    try {
-      const { onOpenLedger } = renderTray(null);
-      await press('Next: delivery');
-      await press('Render 3 files');
-      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
-      const signed = batchPreflightMock.mock.calls.length;
-      const first = createBatchMock.mock.calls[0]?.[0];
-      // Render again: the very same token, and no fresh preflight to mint another one.
-      await press('Render 3 files');
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
-      expect(createBatchMock.mock.calls[1]?.[0]).toEqual(first);
-      expect(batchPreflightMock.mock.calls.length).toBe(signed);
-      // Still no answer. Once the person opens the ledger, the next Render signs afresh.
-      fireEvent.click(await screen.findByRole('button', { name: 'Open Render ledger' }));
-      expect(onOpenLedger).toHaveBeenCalledWith([]);
-      await press('Render 3 files');
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
-      expect(batchPreflightMock.mock.calls.length).toBe(signed + 1);
-      expect(createBatchMock.mock.calls[2]?.[0]).not.toEqual(first);
-    } finally {
-      batchPreflightMock.mockImplementation(async () => ({
-        confirmationToken: 'batch-token',
-        readiness: READY,
-      }));
-    }
-  }, 30_000);
-
-  test('a confirm that fails with no answer sends the person to the job list, not the button', async () => {
-    for (const failure of [
-      new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
-      new TypeError('Failed to fetch'),
-    ]) {
+  // The backend makes rows 1..k-1, then throws on row k, for any status: the client cannot know
+  // which rows exist, so any createBatch failure hands the signed batch over to be held.
+  test.each([
+    ['a network failure', () => new TypeError('Failed to fetch'), 'no-answer'],
+    [
+      'a code-less 503',
+      () => new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
+      'no-answer',
+    ],
+    [
+      'a 5xx that names a code',
+      () =>
+        new ApiError('A render job could not be created.', 500, undefined, {
+          error: 'render_job_create_failed',
+          message: 'A render job could not be created.',
+        }),
+      'refused',
+    ],
+    [
+      'a 409 at row k',
+      () =>
+        new ApiError('The render binding changed.', 409, undefined, {
+          error: 'render_binding_changed',
+          message: 'The render binding changed.',
+        }),
+      'refused',
+    ],
+  ])(
+    '%s from createBatch holds the batch exactly as it was signed',
+    async (_name, make, kind) => {
       createBatchMock.mockImplementationOnce(async () => {
-        throw failure;
+        throw make();
       });
-      renderTray(null);
+      const { onHold, onFired } = renderTray(null);
       await press('Next: delivery');
+      fireEvent.click(screen.getByRole('radio', { name: 'Final' }));
       await press('Render 3 files');
-      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
-      cleanup();
-    }
-    // A 4xx refusal made nothing: its own words, and the next Render signs afresh.
-    createBatchMock.mockImplementationOnce(async () => {
-      throw new ApiError('This confirmation has expired. Review again.', 409, undefined, {
-        error: 'render_confirmation_expired',
-        message: 'This confirmation has expired. Review again.',
-      });
-    });
-    renderTray(null);
-    await press('Next: delivery');
-    await press('Render 3 files');
-    expect(await screen.findByText(/This confirmation has expired/)).toBeTruthy();
-    expect(screen.queryByText(CONFIRM_UNKNOWN)).toBeNull();
-    expect(screen.queryAllByRole('button', { name: 'Open Render ledger' })).toHaveLength(0);
-  }, 30_000);
-
-  // The backend makes rows 1..k-1, then throws when row k never got one: re-signing would make
-  // those rows twice, re-sending the same token hands them back.
-  test('a 5xx with a backend code mid-batch keeps its words, holds the token, and Render re-sends it', async () => {
-    let minted = 0;
-    batchPreflightMock.mockImplementation(async () => ({
-      confirmationToken: `token-${++minted}`,
-      readiness: READY,
-    }));
-    createBatchMock.mockImplementationOnce(async () => {
-      throw new ApiError('A render job could not be created.', 500, undefined, {
-        error: 'render_job_create_failed',
-        message: 'A render job could not be created.',
-      });
-    });
-    try {
-      renderTray(null);
-      await press('Next: delivery');
-      await press('Render 3 files');
-      expect(await screen.findByText('A render job could not be created.')).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Open Render ledger' })).toBeTruthy();
-      const signed = batchPreflightMock.mock.calls.length;
-      await press('Render 3 files');
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
-      expect(createBatchMock.mock.calls[1]?.[0]).toEqual(createBatchMock.mock.calls[0]?.[0]);
-      expect(batchPreflightMock.mock.calls.length).toBe(signed);
-    } finally {
-      batchPreflightMock.mockImplementation(async () => ({
-        confirmationToken: 'batch-token',
-        readiness: READY,
-      }));
-    }
-  }, 30_000);
-
-  test('a held token the server calls expired is no dead end: the ledger, then a fresh Render', async () => {
-    let minted = 0;
-    batchPreflightMock.mockImplementation(async () => ({
-      confirmationToken: `token-${++minted}`,
-      readiness: READY,
-    }));
-    createBatchMock
-      .mockImplementationOnce(async () => {
-        throw new TypeError('Failed to fetch');
-      })
-      .mockImplementationOnce(async () => {
-        throw new ApiError('expired_confirmation', 409, undefined, {
-          error: 'expired_confirmation',
-        });
-      });
-    try {
-      renderTray(null);
-      await press('Next: delivery');
-      await press('Render 3 files');
-      await screen.findByText(CONFIRM_UNKNOWN);
-      await press('Render 3 files');
-      expect(await screen.findByText(HELD_EXPIRED)).toBeTruthy();
-      expect(document.body.textContent).not.toContain('expired_confirmation');
-      // Render waits for the ledger: nothing can be re-sent, and nothing new signed over it.
-      expect(primaryDisabled('Render 3 files')).toBe(true);
-      fireEvent.click(screen.getByRole('button', { name: 'Open Render ledger' }));
-      await press('Render 3 files');
-      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
-      expect(createBatchMock.mock.calls[2]?.[0]).not.toEqual(createBatchMock.mock.calls[0]?.[0]);
-    } finally {
-      batchPreflightMock.mockImplementation(async () => ({
-        confirmationToken: 'batch-token',
-        readiness: READY,
-      }));
-    }
-  }, 30_000);
+      await waitFor(() => expect(onHold).toHaveBeenCalledTimes(1));
+      const [signed, reason] = onHold.mock.calls[0]!;
+      expect(signed.token).toBe('batch-token');
+      expect(signed.batchId).toBe(BATCH_ID);
+      expect(signed.expiresAt).toBe(EXPIRES_AT);
+      // The very body createBatch's token signed: what the held view shows, and Retry re-sends.
+      expect(signed.request).toEqual(batchPreflightMock.mock.calls.at(-1)?.[0]);
+      expect(signed.request.final).toBe(true);
+      expect(reason.kind).toBe(kind);
+      expect(onFired).not.toHaveBeenCalled();
+    },
+    30_000,
+  );
 
   test('Final is signed into the render’s preflight; the review never asks for one', async () => {
     const { onFired } = renderTray();

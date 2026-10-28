@@ -26,6 +26,29 @@ describe('render discovery copy', () => {
     );
   });
 
+  test('a 5xx or 429 that names no code reads as busy, never as the raw status line', () => {
+    for (const thrown of [
+      new ApiError('503 Service Unavailable', 503),
+      new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' }),
+      new ApiError('502 Bad Gateway', 502),
+      new ApiError('429 Too Many Requests', 429),
+    ])
+      expect(describeRenderDiscoveryFailure(thrown)).toBe(
+        'The render service is busy or restarting. Check again in a moment.',
+      );
+    expect(describeRenderDiscoveryFailure('503 Service Unavailable')).toBe(
+      'The render service is busy or restarting. Check again in a moment.',
+    );
+    // A 5xx that names its code still says what that code means.
+    expect(
+      describeRenderDiscoveryFailure(
+        new ApiError('render_api_not_configured', 503, undefined, {
+          error: 'render_api_not_configured',
+        }),
+      ),
+    ).toContain('not configured');
+  });
+
   test('a confirmation that expired or no longer matches says what to do, never the raw code', () => {
     for (const code of ['expired_confirmation', 'invalid_confirmation']) {
       const thrown = new ApiError(code, 409, undefined, { error: code });

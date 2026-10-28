@@ -227,20 +227,19 @@ describe('the status column, with no preflight', () => {
   // Every reason is read beside its status, not only on hover.
   test('a fit measured to land reads Can render, layout checked', () => {
     renderStatus([{ state: 'ok', why: 'lands inside the canvas' }]);
-    expect(screen.getByText('Can render')).toBeTruthy();
-    expect(screen.getByText('Layout checked.')).toBeTruthy();
+    expect(screen.getByText('Can render · layout checked')).toBeTruthy();
   });
 
   test('with no Live kit for the template a row wears no badge: the grid says it once', () => {
     renderStatus(null);
-    expect(screen.queryByText('Can render')).toBeNull();
+    expect(screen.queryByText(/^Can render/)).toBeNull();
     expect(screen.queryByText('Not checked')).toBeNull();
   });
 
   test('while the kits load, the row says it is checking, not that it can render', () => {
     renderStatus(null, { fitLoading: true });
     expect(screen.getByText('Checking layout…')).toBeTruthy();
-    expect(screen.queryByText('Can render')).toBeNull();
+    expect(screen.queryByText(/^Can render/)).toBeNull();
   });
 
   test('a wrong value reads Invalid, and says which field', () => {
@@ -255,7 +254,7 @@ describe('the status column, with no preflight', () => {
     });
     expect(screen.getByText('Won’t render')).toBeTruthy();
     expect(screen.getByText('Use a permitted brand color.')).toBeTruthy();
-    expect(screen.queryByText('Can render')).toBeNull();
+    expect(screen.queryByText(/^Can render/)).toBeNull();
   });
 
   test('missing fonts say what the gate does: Render anyway in the review', () => {
@@ -273,7 +272,7 @@ describe('the status column, with no preflight', () => {
 
   test('a clipped fit reads Warning, and says what clips', () => {
     renderStatus([{ state: 'clipped', why: '800x800 clips 40 px off the canvas' }]);
-    expect(screen.queryByText('Can render')).toBeNull();
+    expect(screen.queryByText(/^Can render/)).toBeNull();
     expect(screen.getByText('Warning')).toBeTruthy();
     expect(screen.getByText('Hero: 800x800 clips 40 px off the canvas')).toBeTruthy();
   });

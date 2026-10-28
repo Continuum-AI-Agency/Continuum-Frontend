@@ -1,5 +1,5 @@
 import type { TemplateRevisionErrorCode } from '@continuum/contracts';
-import { ApiError, isFetchFailure } from '@/lib/api/errors';
+import { ApiError, hasBackendError, isFetchFailure } from '@/lib/api/errors';
 
 // The discovery failures a brand owner can actually hit, in words they can act
 // on. Echoing the raw server code told them nothing and gave them no next step.
@@ -119,6 +119,14 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
     for (const [code, copy] of Object.entries(MESSAGES)) {
       if (message.includes(code)) return copy;
     }
+  // A 5xx or 429 that names no code is a gateway or a deploy, never words to show: errors.ts
+  // falls back to the bare status line ("503 Service Unavailable").
+  if (
+    failure instanceof ApiError
+      ? (failure.status === 429 || failure.status >= 500) && !hasBackendError(failure)
+      : /^(429|5\d\d)\b/.test(message)
+  )
+    return 'The render service is busy or restarting. Check again in a moment.';
   // fetch's own words for no answer at all ("Failed to fetch", Safari's "Load failed").
   if (isFetchFailure(failure) || /^(Failed to fetch|Load failed|NetworkError\b)/.test(message))
     return 'Couldn’t reach the render service. Check again.';

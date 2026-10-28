@@ -67,12 +67,11 @@ import {
 } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import {
-  CONFIRM_UNKNOWN,
-  type HeldConfirm,
-  heldMessage,
+  HeldBatchView,
   RenderReviewTray,
   type RowsAsked,
 } from '@/components/forge/RenderReviewTray';
+import { holdBatch, useRenderHold } from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -101,6 +100,7 @@ import {
   fromRenderSetRows,
   isFontPreflightRefusal,
   isRenderable,
+  isResolvedDelivery,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -276,55 +276,6 @@ const refusalKey = (
 const SET_LEVEL_CODE = /render_set|revision/;
 
 /**
- * A confirm held after a createBatch that failed without a refusal, kept in this browser so a
- * reload still knows not to render twice. Only the set it was for, a hash of what it signed, and
- * when: never the token, which lives in this page's memory alone, so nothing stored can be replayed.
- * Dropped on success, on Open Render ledger, or after a day.
- */
-type StoredHold = { set: string; snapshot: string; heldAt: number };
-const HOLD_KEEP_MS = 24 * 60 * 60 * 1000;
-/** A confirmation token is good for 30 minutes; after that only the ledger can say what it made. */
-const TOKEN_LIFE_MS = 30 * 60 * 1000;
-const holdStorageKey = (brandId: string, setId: string, templateKey: string) =>
-  `forge:unconfirmed-render:${brandId}:${setId}:${templateKey}`;
-
-function readHold(key: string): StoredHold | null {
-  try {
-    const hold = JSON.parse(localStorage.getItem(key) ?? 'null') as StoredHold | null;
-    if (hold && typeof hold.heldAt === 'number' && Date.now() - hold.heldAt < HOLD_KEEP_MS)
-      return hold;
-    localStorage.removeItem(key);
-  } catch {
-    // Unreadable or storage off: nothing is held across a reload.
-  }
-  return null;
-}
-
-/** FNV-1a: a short stand-in for what a token signed, so the rows themselves are never stored. */
-const hashOf = (text: string) => {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
-  return (hash >>> 0).toString(36);
-};
-
-/** What a confirm signs, as far as an edit can change it: the rows rendered, their values, the pin. */
-const renderSnapshot = (
-  rows: RequestRow[],
-  rowIds: string[],
-  set: ForgeRenderSet | null,
-  contract: ApiRenderTemplateContract | null,
-  templateRef: string | null,
-) =>
-  hashOf(
-    JSON.stringify([
-      reviewSignature(rows, rowIds, set?.revision ?? null, allOutputIdsOf(contract)),
-      templateRef,
-      set?.templateRevision?.revisionId ?? null,
-      contract?.template.contractHash ?? null,
-    ]),
-  );
-
-/**
  * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
  * (guardrails, fonts). Anything else (an outage, a throttle, a malformed request, a set that
  * moved) is no answer about the row, and is not kept.
@@ -420,16 +371,16 @@ function readinessSummary(
   },
   total: number,
 ): string {
+  // Until the kits land, nothing else is known well enough to count.
+  if (counts.fitLoading && total) return 'Checking layout…';
   const needs = (count: number, what: string) =>
     count ? `${count} ${count === 1 ? 'needs' : 'need'} ${what}` : null;
   return [
     total === 0
       ? 'No rows to render'
-      : counts.fitLoading
-        ? 'Checking layout…'
-        : counts.renderable === total
-          ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
-          : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
+      : counts.renderable === total
+        ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
+        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
     counts.refused ? `${counts.refused} won’t render` : null,
@@ -1199,16 +1150,14 @@ export function RenderRequestsGrid({
   // When a review last passed each row: a pass that started before it does not overrule it.
   const passedAt = useRef(new Map<string, number>());
   const events = useRef(0);
-  // A confirm that got no answer: its token, re-sent until the person opens the Render ledger. Held
-  // per render set and template, so Render in another set signs its own batch and never re-sends
-  // this one; the message waits on its own set.
-  const holdKey =
-    activeSet && contract ? holdStorageKey(brandId, activeSet.id, contract.template.key) : null;
-  // This page's word on each key; a key it has not touched yet is read from storage.
-  const [holds, setHolds] = useState<ReadonlyMap<string, StoredHold | null>>(new Map());
-  const stored = holdKey ? (holds.has(holdKey) ? holds.get(holdKey)! : readHold(holdKey)) : null;
-  // The held tokens themselves, by the same key: this page's memory only.
-  const heldTokens = useRef(new Map<string, string>());
+  // A batch whose createBatch failed is held, per user, brand, set and template (renderHold.ts):
+  // while it is, Render opens it, never a new review.
+  const userId = useActiveBrandContext().user?.id ?? 'anonymous';
+  const holdScope =
+    activeSet && contract
+      ? { userId, brandId, setId: activeSet.id, templateKey: contract.template.key }
+      : null;
+  const held = useRenderHold(holdScope);
   const liveRefusals = useMemo(
     () =>
       new Map(
@@ -2480,49 +2429,6 @@ export function RenderRequestsGrid({
       ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
       : null;
 
-  // The held confirm, and whether Render may re-send it: not once it has expired, not after a
-  // reload (the token stayed in the page that held it), and not when the rows under review are no
-  // longer the ones it signed (an edit, another selection, a re-pin).
-  const heldToken = holdKey ? (heldTokens.current.get(holdKey) ?? null) : null;
-  const held: HeldConfirm | null = stored
-    ? {
-        token: heldToken,
-        blocked:
-          Date.now() - stored.heldAt >= TOKEN_LIFE_MS
-            ? 'expired'
-            : !heldToken
-              ? 'reloaded'
-              : review &&
-                  stored.snapshot !==
-                    renderSnapshot(rows, review.rowIds, activeSet, contract, templateRef)
-                ? 'edited'
-                : null,
-      }
-    : null;
-  /** Holds or lets go of the token for the set this render opened on (its own render's scope). */
-  const holdToken = (next: { token: string; expired?: true } | null) => {
-    if (!holdKey || !activeSet || !contract) return;
-    const hold: StoredHold | null = next
-      ? {
-          set: `${activeSet.id}|${contract.template.key}`,
-          snapshot: next.expired
-            ? (stored?.snapshot ?? '')
-            : renderSnapshot(rows, review?.rowIds ?? [], activeSet, contract, templateRef),
-          // An expired token is kept as one past its life: nothing more is stored to say so.
-          heldAt: next.expired ? Date.now() - TOKEN_LIFE_MS : Date.now(),
-        }
-      : null;
-    if (next) heldTokens.current.set(holdKey, next.token);
-    else heldTokens.current.delete(holdKey);
-    try {
-      if (hold) localStorage.setItem(holdKey, JSON.stringify(hold));
-      else localStorage.removeItem(holdKey);
-    } catch {
-      // Storage full or off: the hold still lasts as long as this page.
-    }
-    setHolds((previous) => new Map(previous).set(holdKey, hold));
-  };
-
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -2592,6 +2498,11 @@ export function RenderRequestsGrid({
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
   const openReview = async () => {
+    // A held batch is what Render opens until the ledger lets it go: read-only, nothing to sign.
+    if (held) {
+      trayPanel.current?.resize(TRAY_OPEN_SIZE);
+      return;
+    }
     if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
@@ -2702,6 +2613,9 @@ export function RenderRequestsGrid({
       for (let record = queue.shift(); record; record = queue.shift()) {
         const rowId = record.renderSetRowId as string;
         const { delivery: _delivery, ...asked } = record;
+        // The row's own delivery, as the batch sends it at confirm: a Meta refusal is the row's.
+        const own = current.find((row) => row.id === rowId)?.delivery;
+        const delivery = isResolvedDelivery(own) ? own : undefined;
         try {
           // Asked once: fifty rows times three retries is a fan-out, not a check.
           await apiRendersApi.preflight(
@@ -2712,6 +2626,7 @@ export function RenderRequestsGrid({
               contractHash: contract.template.contractHash,
               ...(templateRef ? { templateRef } : {}),
               ...asked,
+              ...(delivery ? { delivery } : {}),
             },
             { retry: false },
           );
@@ -2774,14 +2689,16 @@ export function RenderRequestsGrid({
     void openReview();
   }, [refusalsFound]);
 
-  // The tray unfolds for a review and folds back when it ends; a drag that folds it ends it too.
+  // The tray unfolds for a review or a held batch and folds back when neither is left; a drag that
+  // folds it ends a review.
+  const trayShown = review !== null || held !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening and closing move the panel.
   useEffect(() => {
     const panel = trayPanel.current;
     if (!panel) return;
-    if (review && panel.isCollapsed()) panel.resize(TRAY_OPEN_SIZE);
-    else if (!review && !panel.isCollapsed()) panel.collapse();
-  }, [review === null]);
+    if (trayShown && panel.isCollapsed()) panel.resize(TRAY_OPEN_SIZE);
+    else if (!trayShown && !panel.isCollapsed()) panel.collapse();
+  }, [trayShown]);
 
   // --- keyboard ---------------------------------------------------------------------------
   /** The same column's field one row down (or up), selected for typing over. */
@@ -3030,32 +2947,14 @@ export function RenderRequestsGrid({
         onSave={saveNow}
         selectedCount={selected.length}
         files={{ ...files, byRatio: [...files.byRatio] }}
-        readyToFire={readyToFire}
+        // While a batch is held, Render opens it: enabled whatever is selected.
+        readyToFire={readyToFire || held !== null}
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
         renderCount={selectedReady.length}
         skipNote={skipNote}
       />
-      {held && !review ? (
-        // Back on the set whose confirm got no answer: said here until the ledger is opened.
-        <Alert variant="destructive" className="shrink-0 py-2">
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-            <span>{heldMessage(held) ?? CONFIRM_UNKNOWN}</span>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() => {
-                holdToken(null);
-                onFired?.([]);
-              }}
-            >
-              Open Render ledger
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
           <AlertTitle>Input sets could not be loaded</AlertTitle>
@@ -3432,7 +3331,15 @@ export function RenderRequestsGrid({
                 if (previous && review && trayPanel.current?.isCollapsed()) setReview(null);
               }}
             >
-              {review ? (
+              {held && holdScope ? (
+                <HeldBatchView
+                  brandId={brandId}
+                  scope={holdScope}
+                  held={held}
+                  // ponytail: the ledger opens unfiltered; pass batchId once it can open one batch
+                  onOpenLedger={() => onFired?.([])}
+                />
+              ) : review ? (
                 <RenderReviewTray
                   brandId={brandId}
                   bindingId={bindingId}
@@ -3450,8 +3357,11 @@ export function RenderRequestsGrid({
                   rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
-                  held={held}
-                  onHold={holdToken}
+                  onHold={(signed, reason) => {
+                    if (holdScope)
+                      holdBatch(holdScope, { batchId: signed.batchId, signed, reason });
+                    setReview(null);
+                  }}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}
                   onDeliveryChange={(rowId, delivery) => {

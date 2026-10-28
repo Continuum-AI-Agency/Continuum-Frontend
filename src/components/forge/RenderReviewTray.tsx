@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchReadiness,
   type ApiRenderBatchRecord,
   type ApiRenderDeliveryDestination,
@@ -67,7 +68,19 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ApiError, hasBackendError } from '@/lib/api/errors';
+import {
+  canRetry,
+  clearHold,
+  type HeldBatch,
+  type HoldReason,
+  type HoldScope,
+  heldCopy,
+  holdBatch,
+  holdReasonOf,
+  type SignedBatch,
+  tokenGone,
+} from '@/components/forge/renderHold';
+import { ApiError } from '@/lib/api/errors';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
@@ -127,14 +140,8 @@ export type RenderReviewTrayProps = {
   rechecking: boolean;
   /** Why this person cannot ask for a Final render. Null when they can. */
   finalBlocked: string | null;
-  /**
-   * A confirmation token whose createBatch failed without a 4xx, so some of its jobs may exist.
-   * Kept by the caller, per set, so it outlives this tray and a reload. While it is held Render
-   * re-sends it, never a new one; `blocked` says why it cannot (the rows changed, or it expired),
-   * and then only the ledger lets go of it.
-   */
-  held: HeldConfirm | null;
-  onHold: (next: { token: string; expired?: true } | null) => void;
+  /** createBatch failed, whatever the status: the caller holds this batch (renderHold.ts). */
+  onHold: (signed: SignedBatch, reason: HoldReason) => void;
   onRecheck: () => void;
   /**
    * Review was refused for something other than fonts; these rows' own checks can say which.
@@ -181,41 +188,8 @@ type Destinations =
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-/** `token` is null after a reload: only this page ever kept it, and then only the ledger helps. */
-export type HeldConfirm = {
-  token: string | null;
-  blocked: 'edited' | 'expired' | 'reloaded' | null;
-};
-
 /** What a refused batch's rows said when each was asked alone. */
 export type RowsAsked = { refused: number; unchecked: number };
-
-/** A confirm that failed without a refusal (an outage, a cut, a timeout, a 5xx) may still have
- *  made some jobs: the same token is the same batch, so this sends the person to the ledger
- *  rather than to the button. */
-export const CONFIRM_UNKNOWN =
-  'Couldn’t confirm with the render service — Open Render ledger to check before rendering again';
-export const HELD_EDITED =
-  'Your last Render wasn’t confirmed. Open Render ledger to check it before rendering your edits.';
-export const HELD_RELOADED =
-  'Your last Render wasn’t confirmed. Open Render ledger to check it before rendering again.';
-export const HELD_EXPIRED =
-  'Your last Render wasn’t confirmed and its request has expired. Open Render ledger to check it, then Render again.';
-
-/** The re-sent token was too old, or no longer matched: only the ledger can say what it made. */
-const TOKEN_GONE = new Set(['expired_confirmation', 'invalid_confirmation']);
-
-/** What a held token's banner says: why Render cannot re-send it, or that it will. */
-export const heldMessage = (held: HeldConfirm | null): string | null =>
-  !held
-    ? null
-    : held.blocked === 'edited'
-      ? HELD_EDITED
-      : held.blocked === 'expired'
-        ? HELD_EXPIRED
-        : held.blocked === 'reloaded'
-          ? HELD_RELOADED
-          : null;
 
 function describeFailure(error: unknown): {
   message: string;
@@ -308,7 +282,6 @@ export function RenderReviewTray({
   recheckBlocked,
   rechecking,
   finalBlocked,
-  held,
   onHold,
   onRecheck,
   onRefused,
@@ -418,7 +391,7 @@ export function RenderReviewTray({
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
   const runReview = useCallback(
-    async (acceptFonts = acceptMissingFonts, { fresh = false } = {}) => {
+    async (acceptFonts = acceptMissingFonts, { fresh = false, again = false } = {}) => {
       const mine = ++latestReview.current;
       if (fresh) verdicts.current.clear();
       const keys = records.map((record) =>
@@ -479,9 +452,11 @@ export function RenderReviewTray({
             : { state: 'failed', message },
         );
         if (refusal && !canOverrideFonts)
+          // An explicit Retry asks the rows again, even when they were just asked.
           askRows(
             mine,
             todo.flatMap(({ record }) => record.renderSetRowId ?? []),
+            again,
           );
       }
     },
@@ -586,10 +561,7 @@ export function RenderReviewTray({
   /** Fires every row, or — to resend what the render API refused — only the rows named. */
   const confirm = async (only?: number[]) => {
     // The records below are rebuilt from the rows on screen; a review of other rows signs nothing.
-    // A held token is re-sent as it is: each row dedupes on its request_id, so the backend hands
-    // back the jobs it already made, where a fresh token would make them twice.
-    if (held?.blocked) return;
-    if (stale && !held) {
+    if (stale) {
       setStep('review');
       return;
     }
@@ -597,14 +569,10 @@ export function RenderReviewTray({
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
-    let confirming = false;
-    let token = held?.token ?? null;
+    let signed: SignedBatch | null = null;
     try {
-      if (!token) token = await signBatch(indexes);
-      confirming = true;
-      const batch = await apiRendersApi.createBatch({ confirmationToken: token });
-      confirming = false;
-      if (held) onHold(null);
+      signed = await signBatch(indexes);
+      const batch = await apiRendersApi.createBatch({ confirmationToken: signed.token });
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -624,23 +592,11 @@ export function RenderReviewTray({
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
-      const code = error instanceof ApiError ? error.payload?.error : undefined;
-      if (held?.token && typeof code === 'string' && TOKEN_GONE.has(code)) {
-        onHold({ token: held.token, expired: true });
-        setProblem(null);
-        return;
-      }
-      // Only a 4xx is a refusal that made nothing. Anything else — a 5xx with or without a code
-      // (the backend makes rows 1..k-1 and then throws on row k), a network failure, a timeout —
-      // may have made some rows, so the token is held and re-sent, never signed afresh.
-      const refused = error instanceof ApiError && error.status >= 400 && error.status < 500;
-      if (confirming && !refused && token) {
-        onHold({ token });
-        setProblem(
-          error instanceof ApiError && hasBackendError(error)
-            ? describeFailure(error).message
-            : CONFIRM_UNKNOWN,
-        );
+      // Signed, then createBatch failed, whatever the status: some rows may exist (the backend
+      // makes rows 1..k-1, then throws on row k), so the batch is held and the ledger re-read.
+      if (signed) {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+        onHold(signed, holdReasonOf(error));
         return;
       }
       const { message, details } = describeFailure(error);
@@ -651,8 +607,8 @@ export function RenderReviewTray({
   };
 
   /** The fire's own preflight: delivery, Slack, consent, Final and renderer signed into a token. */
-  const signBatch = async (indexes: number[]) => {
-    const preflight = await apiRendersApi.batchPreflight({
+  const signBatch = async (indexes: number[]): Promise<SignedBatch> => {
+    const request: ApiRenderBatchPreflightRequest = {
       brandId,
       ...(bindingId ? { bindingId } : {}),
       templateKey,
@@ -677,9 +633,15 @@ export function RenderReviewTray({
       // Signed into the token too: the Backend decides per job whether it is eligible, and a
       // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
       ...(renderer === 'experimental' ? { renderer } : {}),
-    });
+    };
+    const preflight = await apiRendersApi.batchPreflight(request);
     setApprovalWarning(preflight.approval?.warning ?? null);
-    return preflight.confirmationToken;
+    return {
+      token: preflight.confirmationToken,
+      request,
+      expiresAt: preflight.expiresAt,
+      batchId: preflight.batchId,
+    };
   };
 
   const steps = goesToMeta ? STEPS : STEPS.filter((item) => item.id !== 'confirm');
@@ -697,8 +659,7 @@ export function RenderReviewTray({
           }
         : {
             label: `Render ${plural(fileCount, 'file')}`,
-            disabled:
-              firing || Boolean(held?.blocked) || (stale && !held) || deliverBlockers.length > 0,
+            disabled: firing || stale || deliverBlockers.length > 0,
             run: () => void confirm(),
             fires: true,
           };
@@ -801,7 +762,7 @@ export function RenderReviewTray({
           </li>
         ))}
       </ul>
-      {problem && !held ? (
+      {problem ? (
         <p role="alert" className="px-[var(--card-pad)] py-1.5 text-destructive">
           {problem}
         </p>
@@ -823,28 +784,6 @@ export function RenderReviewTray({
           </li>
         ))}
       </ul>
-    </div>
-  ) : null;
-
-  // A held token is said at the top of every step, from this tray or an earlier one on this set,
-  // until the ledger is opened.
-  const heldBanner = held ? (
-    <div
-      role="alert"
-      className="flex flex-wrap items-center gap-2 border-b border-border px-[var(--card-pad)] py-1.5 text-destructive"
-    >
-      <p>{heldMessage(held) ?? problem ?? CONFIRM_UNKNOWN}</p>
-      <Button
-        type="button"
-        size="xs"
-        variant="outline"
-        onClick={() => {
-          onHold(null);
-          onOpenLedger([]);
-        }}
-      >
-        Open Render ledger
-      </Button>
     </div>
   ) : null;
 
@@ -946,7 +885,6 @@ export function RenderReviewTray({
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {heldBanner}
             {stale && step === 'review' ? (
               <div
                 role="status"
@@ -1048,7 +986,9 @@ export function RenderReviewTray({
                           type="button"
                           size="xs"
                           variant="outline"
-                          onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
+                          onClick={() =>
+                            void runReview(acceptMissingFonts, { fresh: true, again: true })
+                          }
                         >
                           Retry
                         </Button>
@@ -1076,7 +1016,7 @@ export function RenderReviewTray({
                       variant="outline"
                       onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
                     >
-                      Retry
+                      Check again
                     </Button>
                   </div>
                 ) : null}
@@ -1462,5 +1402,107 @@ function ReadinessLine({
         ))}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * A held batch, read-only: what it signed, why it is held, and the only two ways on. Retry this
+ * batch re-sends its token (each row dedupes, so it never makes a row twice) while the token is
+ * in memory and unexpired; Open Render ledger lets the hold go.
+ */
+export function HeldBatchView({
+  brandId,
+  scope,
+  held,
+  onOpenLedger,
+}: {
+  brandId: string;
+  scope: HoldScope;
+  held: HeldBatch;
+  onOpenLedger: (batchId: string | null) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [retrying, setRetrying] = useState(false);
+  const [, setNow] = useState(0);
+  const expiresAt = held.signed?.expiresAt;
+  // Retry goes the moment the token's own expiry passes, not on the next render that happens by.
+  useEffect(() => {
+    const wait = expiresAt ? Date.parse(expiresAt) - Date.now() : 0;
+    if (!(wait > 0)) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait + 50, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [expiresAt]);
+  const request = held.signed?.request;
+  const metaRows = request?.records.filter((record) => record.delivery).length ?? 0;
+  const facts = request
+    ? [
+        plural(request.records.length, 'row'),
+        request.final ? 'Final' : 'Proof',
+        [
+          'Library',
+          ...(request.slack ? ['a Slack room'] : []),
+          ...(request.approvalDestinationIds?.length
+            ? [plural(request.approvalDestinationIds.length, 'approval room')]
+            : []),
+          ...(metaRows ? [`Meta ads for ${plural(metaRows, 'row')}`] : []),
+        ].join(', '),
+        ...(request.acceptMissingFonts ? ['missing fonts accepted'] : []),
+        ...(request.renderer === 'experimental' ? ['experimental renderer'] : []),
+      ]
+    : null;
+  const retry = async () => {
+    if (!held.signed) return;
+    setRetrying(true);
+    try {
+      const batch = await apiRendersApi.createBatch({ confirmationToken: held.signed.token });
+      for (const job of batch.jobs)
+        queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+      toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+      clearHold(scope);
+    } catch (error) {
+      // Still held, whatever came back; a token the server no longer takes cannot be retried.
+      holdBatch(scope, {
+        batchId: held.batchId,
+        signed: tokenGone(error) ? null : held.signed,
+        reason: holdReasonOf(error),
+      });
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+      setRetrying(false);
+    }
+  };
+  return (
+    <section
+      aria-label="Held batch"
+      className="flex h-full min-h-0 flex-col gap-1.5 px-[var(--card-pad)] py-2 text-xs"
+    >
+      <p role="alert" className="font-medium text-destructive">
+        {heldCopy(held)}
+      </p>
+      <p className="text-muted-foreground">
+        {facts
+          ? `What it signed: ${facts.join(' · ')}`
+          : 'What it signed isn’t known after a reload.'}
+      </p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {canRetry(held) ? (
+          <Button type="button" size="xs" disabled={retrying} onClick={() => void retry()}>
+            {retrying ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+            Retry this batch
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={() => {
+            clearHold(scope);
+            onOpenLedger(held.batchId);
+          }}
+        >
+          Open Render ledger
+        </Button>
+      </div>
+    </section>
   );
 }

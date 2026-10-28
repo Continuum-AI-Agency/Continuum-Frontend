@@ -486,7 +486,7 @@ function StatusBadge({
         );
       return fitLoading ? <StatusLine variant="muted" label="Checking layout…" /> : null;
     default:
-      return <StatusLine variant="success" label="Can render" reason="Layout checked." />;
+      return <StatusLine variant="success" label="Can render · layout checked" />;
   }
 }
 
