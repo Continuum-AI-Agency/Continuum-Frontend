@@ -115,43 +115,11 @@ import {
   isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
-import { ApiError, hasBackendError, isFetchFailure } from '@/lib/api/errors';
 import { http } from '@/lib/api/http';
+import { retryTransient } from './renderRetry';
 
 const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
-
-/** Waits before each retry, sized to a backend deploy cut. Mutable so tests need not wait. */
-export const renderRetry = { delaysMs: [1_000, 3_000, 8_000] };
-
-/** 429, a gateway or closing 502/503 that carries no backend error, or `fetch` itself failing. A
- *  504 may still be running, a timeout already waited its bound, and a TypeError thrown while
- *  building the request would only repeat, so none of those is retried. */
-export function isTransientRenderError(error: unknown): boolean {
-  if (isFetchFailure(error)) return true;
-  if (!(error instanceof ApiError)) return false;
-  if (error.status === 429) return true;
-  if (error.status !== 502 && error.status !== 503) return false;
-  return !hasBackendError(error);
-}
-
-/**
- * Repeats `run` (same body, same confirmationToken) through a transient failure. Repeating a
- * confirm is safe because of the backend's database row, not the fleet (which does not dedupe
- * request_id): the same token's idempotency key returns the existing ad_render_jobs row before
- * anything triggers, so the same token is the same job.
- */
-export async function retryTransient<T>(run: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await run();
-    } catch (error) {
-      const delay = renderRetry.delaysMs[attempt];
-      if (delay === undefined || !isTransientRenderError(error)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-}
 
 export const apiRendersApi = {
   importMedia(input: ForgeRenderImportMediaRequest) {

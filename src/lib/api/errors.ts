@@ -77,6 +77,17 @@ export function markFetchFailure(error: unknown): unknown {
 export const isFetchFailure = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && fetchFailures.has(error);
 
+const retriedOut = new WeakSet<object>();
+
+/** Marks an error a caller already retried through: one retry layer, not two stacked. */
+export function markRetried(error: unknown): unknown {
+  if (typeof error === 'object' && error !== null) retriedOut.add(error);
+  return error;
+}
+
+export const wasRetried = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && retriedOut.has(error);
+
 export async function assertOk(response: Response): Promise<void> {
   if (!response.ok) {
     throw await toApiError(response);

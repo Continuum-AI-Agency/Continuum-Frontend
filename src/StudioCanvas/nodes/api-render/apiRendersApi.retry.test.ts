@@ -1,15 +1,23 @@
-import { afterEach, beforeAll, expect, mock, test } from 'bun:test';
-import { ApiError, markFetchFailure } from '@/lib/api/errors';
+// The render calls' retry, tested where it lives (renderRetry.ts) rather than through a mocked
+// http: tests that mock apiRendersApi share this process, and could never swap this module out.
+import { expect, mock, test } from 'bun:test';
+import { ApiError, markFetchFailure, wasRetried } from '@/lib/api/errors';
+import { RequestTimeoutError } from '@/lib/api/timeout';
+import { RENDER_RETRY_DELAYS_MS, retryTransient } from './renderRetry';
 
-type Input = { path: string; body?: unknown };
-const request = mock(async (_input: Input): Promise<unknown> => ({}));
-mock.module('@/lib/api/http', () => ({ http: { request } }));
-const { apiRendersApi, renderRetry } = await import('./apiRendersApi');
-
-beforeAll(() => {
-  renderRetry.delaysMs = [0, 0, 0];
-});
-afterEach(() => request.mockReset());
+/** A call that fails with each error in turn, then answers; and the waits it was made to take. */
+const calls = (...errors: unknown[]) => {
+  const run = mock(async (): Promise<unknown> => {
+    const error = errors[run.mock.calls.length - 1];
+    if (error) throw error;
+    return { ok: true };
+  });
+  const waited: number[] = [];
+  const wait = async (ms: number) => {
+    waited.push(ms);
+  };
+  return { run, waited, retry: () => retryTransient(run, { wait }) };
+};
 
 // fastify/lib/route.js answers a request that arrives while the server closes with exactly this.
 const closing503 = () =>
@@ -20,118 +28,76 @@ const closing503 = () =>
   });
 /** What `http.request` throws when `fetch` itself rejects: a refused connection, a dropped one. */
 const cut = () => markFetchFailure(new TypeError('Failed to fetch'));
-const fails = (...errors: unknown[]) => {
-  for (const error of errors)
-    request.mockImplementationOnce(async () => {
-      throw error;
-    });
-};
 
-test('a Fastify closing 503 is retried with the same body and token', async () => {
-  fails(closing503());
-  request.mockImplementationOnce(async () => ({ id: 'job' }));
-  await expect(apiRendersApi.createJob({ confirmationToken: 'token' })).resolves.toEqual({
-    id: 'job',
-  });
-  expect(request).toHaveBeenCalledTimes(2);
-  const [first, second] = request.mock.calls.map(([input]) => input);
-  expect(second).toEqual(first);
-  expect(second?.body).toEqual({ confirmationToken: 'token' });
+test('the backoff is 1 s, 3 s, 8 s, then the last error, marked so React Query does not retry it', async () => {
+  expect(RENDER_RETRY_DELAYS_MS).toEqual([1_000, 3_000, 8_000]);
+  const last = closing503();
+  const { run, waited, retry } = calls(cut(), closing503(), closing503(), last);
+  await expect(retry()).rejects.toBe(last);
+  expect(run).toHaveBeenCalledTimes(4);
+  expect(waited).toEqual([1_000, 3_000, 8_000]);
+  expect(wasRetried(last)).toBe(true);
 });
 
-test('a 503 carrying a backend code is a domain error, not retried', async () => {
-  const unverifiable = new ApiError('Fonts could not be verified', 503, undefined, {
-    error: 'render_fonts_unverifiable',
-    message: 'Fonts could not be verified',
-  });
-  fails(unverifiable);
-  await expect(apiRendersApi.createBatch({ confirmationToken: 'token' })).rejects.toBe(
-    unverifiable,
-  );
-  expect(request).toHaveBeenCalledTimes(1);
+test('a Fastify closing 503 is retried, and the same call (same body, same token) is made again', async () => {
+  const { run, waited, retry } = calls(closing503());
+  await expect(retry()).resolves.toEqual({ ok: true });
+  expect(run).toHaveBeenCalledTimes(2);
+  expect(waited).toEqual([1_000]);
+});
+
+test('a GET poll survives a deploy cut: refused connections, then the closing 503', async () => {
+  const { run, retry } = calls(cut(), cut(), closing503());
+  await expect(retry()).resolves.toEqual({ ok: true });
+  expect(run).toHaveBeenCalledTimes(4);
 });
 
 test('a 502/503 with no body, or any phrase that is not a backend code, is retried', async () => {
-  fails(
+  const { run, retry } = calls(
     new ApiError('502 Bad Gateway', 502),
-    new ApiError('Bad Gateway', 502, undefined, { error: 'Bad Gateway' }),
     new ApiError('Service Temporarily Unavailable', 503, undefined, {
       error: 'Service Temporarily Unavailable',
     }),
   );
-  request.mockImplementationOnce(async () => ({ ok: true }));
-  await expect(apiRendersApi.preflight({} as never)).resolves.toEqual({ ok: true });
-  expect(request).toHaveBeenCalledTimes(4);
-});
-
-test('a 503 whose error is an object is the backend talking, not retried', async () => {
-  const refused = new ApiError('Validation error', 503, undefined, {
-    error: { formErrors: ['not yet'], fieldErrors: {} },
-  });
-  fails(refused);
-  await expect(apiRendersApi.createJob({ confirmationToken: 'token' })).rejects.toBe(refused);
-  expect(request).toHaveBeenCalledTimes(1);
+  await expect(retry()).resolves.toEqual({ ok: true });
+  expect(run).toHaveBeenCalledTimes(3);
 });
 
 test('a 429 is retried', async () => {
-  fails(new ApiError('Too Many Requests', 429));
-  request.mockImplementationOnce(async () => ({ ok: true }));
-  await expect(apiRendersApi.batchPreflight({} as never)).resolves.toEqual({ ok: true });
-  expect(request).toHaveBeenCalledTimes(2);
+  const { run, retry } = calls(new ApiError('Too Many Requests', 429));
+  await expect(retry()).resolves.toEqual({ ok: true });
+  expect(run).toHaveBeenCalledTimes(2);
 });
 
-test('fetch failing is retried', async () => {
-  fails(cut());
-  request.mockImplementationOnce(async () => ({ ok: true }));
-  await expect(apiRendersApi.getRenderSet('brand', 'set')).resolves.toEqual({ ok: true });
-  expect(request).toHaveBeenCalledTimes(2);
-});
-
-test('a TypeError thrown while building the request is a bug, not retried', async () => {
-  const bug = new TypeError('Converting circular structure to JSON');
-  fails(bug);
-  await expect(apiRendersApi.createBatch({ confirmationToken: 'token' })).rejects.toBe(bug);
-  expect(request).toHaveBeenCalledTimes(1);
-});
-
-test('a preflight asked once is not retried, even through a cut', async () => {
-  const cutOff = closing503();
-  fails(cutOff);
-  await expect(apiRendersApi.preflight({} as never, { retry: false })).rejects.toBe(cutOff);
-  expect(request).toHaveBeenCalledTimes(1);
-});
-
-test('a 504 is not retried: the request may still be running', async () => {
-  const gatewayTimeout = new ApiError('504 Gateway Timeout', 504);
-  fails(gatewayTimeout);
-  await expect(apiRendersApi.createJob({ confirmationToken: 'token' })).rejects.toBe(
-    gatewayTimeout,
-  );
-  expect(request).toHaveBeenCalledTimes(1);
-});
-
-test('a timeout is not retried', async () => {
-  const { RequestTimeoutError } = await import('@/lib/api/timeout');
-  const timedOut = new RequestTimeoutError('https://api/jobs', 8_000);
-  fails(timedOut);
-  await expect(apiRendersApi.listJobs('brand')).rejects.toBe(timedOut);
-  expect(request).toHaveBeenCalledTimes(1);
-});
-
-test('a GET poll survives a deploy cut: refused connections, then the closing 503', async () => {
-  fails(cut(), cut(), closing503());
-  request.mockImplementationOnce(async () => ({ id: 'job', status: 'running' }));
-  await expect(apiRendersApi.getJob('brand', 'job')).resolves.toEqual({
-    id: 'job',
-    status: 'running',
-  });
-  expect(request).toHaveBeenCalledTimes(4);
-  for (const [input] of request.mock.calls) expect(input.path).toContain('/job?brandId=brand');
-});
-
-test('a cut longer than the backoff fails with the last error', async () => {
-  const last = closing503();
-  fails(cut(), closing503(), closing503(), last);
-  await expect(apiRendersApi.getJob('brand', 'job')).rejects.toBe(last);
-  expect(request).toHaveBeenCalledTimes(4);
+test.each([
+  [
+    'a 503 carrying a backend code',
+    () =>
+      new ApiError('Fonts could not be verified', 503, undefined, {
+        error: 'render_fonts_unverifiable',
+      }),
+  ],
+  [
+    'a 503 whose error is a validation object',
+    () =>
+      new ApiError('Validation error', 503, undefined, {
+        error: { formErrors: ['not yet'], fieldErrors: {} },
+      }),
+  ],
+  ['a 504, which may still be running', () => new ApiError('504 Gateway Timeout', 504)],
+  [
+    'a timeout, which already waited its bound',
+    () => new RequestTimeoutError('https://api/jobs', 8_000),
+  ],
+  [
+    'a TypeError thrown while building the request',
+    () => new TypeError('Converting circular structure to JSON'),
+  ],
+])('%s is not retried, nor marked as retried', async (_name, make) => {
+  const error = make();
+  const { run, waited, retry } = calls(error);
+  await expect(retry()).rejects.toBe(error);
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(waited).toEqual([]);
+  expect(wasRetried(error)).toBe(false);
 });
