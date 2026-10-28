@@ -29,6 +29,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Fragment, type ReactNode, type Ref, useId, useMemo, useState } from 'react';
+import { draftDropTarget, type SelectedFile } from '@/components/forge/AiVariationsDialog';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -267,8 +268,11 @@ export function RenderToolbar({
   inputSets: ApiRenderInputSet[];
   canAddRows: boolean;
   onAddRow: () => void;
-  /** Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. */
-  onDraftWithAi: () => void;
+  /**
+   * Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. `dropped`:
+   * files dropped on Add, attached when the draft opens.
+   */
+  onDraftWithAi: (dropped?: Promise<SelectedFile[]>) => void;
   draftAnchorRef?: Ref<HTMLButtonElement>;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
   /** Layer Show switches no row can change yet; picking one asks for it per row. */
@@ -421,6 +425,8 @@ export function RenderToolbar({
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
+                    title="Add rows — or drop files here to draft them with AI"
+                    {...draftDropTarget(canAddRows ? onDraftWithAi : null)}
                   >
                     <Plus className="size-3.5" aria-hidden /> Add
                     <ChevronDown className="size-3.5" aria-hidden />
@@ -431,7 +437,7 @@ export function RenderToolbar({
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
                   <Plus aria-hidden /> Blank row
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canAddRows} onClick={onDraftWithAi}>
+                <DropdownMenuItem disabled={!canAddRows} onClick={() => onDraftWithAi()}>
                   <Sparkles aria-hidden /> Draft with AI…
                 </DropdownMenuItem>
                 <DropdownMenuSub>
