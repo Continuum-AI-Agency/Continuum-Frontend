@@ -132,5 +132,10 @@ export function describeRenderDiscoveryFailure(failure: unknown): string {
   // fetch's own words for no answer at all ("Failed to fetch", Safari's "Load failed").
   if (isFetchFailure(failure) || /^(Failed to fetch|Load failed|NetworkError\b)/.test(message))
     return 'Couldn’t reach the render service. Check again.';
-  return humanDetail(failure) ?? (message || 'Render discovery failed');
+  const detail = humanDetail(failure);
+  if (detail) return detail;
+  // A 4xx that said nothing but its status line ("400 Bad Request") is a refusal with no words.
+  if (failure instanceof ApiError && failure.status < 500 && /^\d{3}\b/.test(message))
+    return 'The render service refused this batch.';
+  return message || 'Render discovery failed';
 }

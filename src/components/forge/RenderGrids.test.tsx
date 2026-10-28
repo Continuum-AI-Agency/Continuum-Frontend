@@ -1526,7 +1526,7 @@ describe('RenderRequestsGrid', () => {
 
   describe('a held batch: createBatch failed, so Render opens it, read-only, until the ledger', () => {
     const FUTURE = '2099-01-01T00:00:00.000Z';
-    const HELD_LABEL = 'Unconfirmed render — review';
+    const HELD_LABEL = 'Unconfirmed render — check';
     const renderable = (set: typeof NEWEST) => ({
       ...set,
       rows: [{ ...set.rows[0]!, overrides: { headline: 'Hola mundo' } }],
@@ -1604,7 +1604,7 @@ describe('RenderRequestsGrid', () => {
     test('Final, Slack and the selection cannot change once held: Render says it opens the held batch', async () => {
       await setup(noAnswer);
       const view = await heldView();
-      expect(view.textContent).toContain('What it signed: 1 row (Newest row) · Final · Library');
+      expect(view.textContent).toContain('What was sent: 1 row (Newest row) · Final · Library');
       expect(view.textContent).toContain('In the Render ledger, look for the batch from');
       expect(view.textContent).not.toContain('aren’t part of this batch');
       // The button says what it does now, never the selection's count.
@@ -1622,6 +1622,20 @@ describe('RenderRequestsGrid', () => {
           .getAllByRole('button')
           .map((button) => button.textContent),
       ).toEqual(['Retry this batch', 'Open Render ledger']);
+    }, 30_000);
+
+    test('a value-only edit since the batch was sent is said apart from it', async () => {
+      await setup(noAnswer);
+      expect((await heldView()).textContent).not.toContain('aren’t part of this batch');
+      // Same row, same name, same selection: only a value moves.
+      fireEvent.change(screen.getByDisplayValue('Hola mundo'), {
+        target: { value: 'Hola otra vez' },
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Held batch' }).textContent).toContain(
+          'Your edits and selection aren’t part of this batch.',
+        ),
+      );
     }, 30_000);
 
     test('Retry this batch re-sends the identical token; its jobs show, and the hold clears', async () => {
@@ -1707,7 +1721,7 @@ describe('RenderRequestsGrid', () => {
       expect(reloaded.textContent).toContain(
         'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
       );
-      expect(reloaded.textContent).toContain('What it signed isn’t known after a reload.');
+      expect(reloaded.textContent).toContain('What was sent isn’t known after a reload.');
       expect(JSON.stringify(localStorage)).not.toContain(held);
     }, 30_000);
 
@@ -1719,6 +1733,33 @@ describe('RenderRequestsGrid', () => {
       fireEvent.click(screen.getByRole('button', { name: HELD_LABEL }));
       expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0);
       expect(createBatchMock).toHaveBeenCalledTimes(1);
+    }, 30_000);
+
+    test('a send still on its way elsewhere cannot be released until its time is up', async () => {
+      listRenderSetsMock.mockImplementation(async () => ({
+        items: [renderable(NEWEST)],
+        nextCursor: null,
+      }));
+      // Another tab wrote it ahead a moment ago and has not been answered yet.
+      localStorage.setItem(
+        holdKeyOf({
+          userId: USER,
+          brandId: BRAND,
+          bindingId: TEMPLATE.bindingId,
+          templateKey: '133',
+        }),
+        JSON.stringify({ batchId: 'batch-x', heldAt: Date.now() - 5_000, inflight: true }),
+      );
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      const view = await heldView();
+      expect(view.textContent).toContain(
+        'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+      );
+      expect(
+        within(view).getByRole<HTMLButtonElement>('button', { name: 'Open Render ledger' })
+          .disabled,
+      ).toBe(true);
+      expect(heldKeys()).toHaveLength(1);
     }, 30_000);
 
     test('with no user id, Render fails closed', async () => {

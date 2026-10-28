@@ -12,6 +12,8 @@ import {
   oneJobId,
   RenderHeldError,
   resendHeld,
+  SENDING_MS,
+  STORAGE_OFF,
   readHold,
   retryHeld,
   type SignedBatch,
@@ -67,12 +69,21 @@ describe('renderHold', () => {
       inflight: true,
     });
     expect(readHold(SCOPE)).toBeNull();
-    // The page reloads before the answer: the hold stays, without its token.
+    // The page reloads before the answer: the hold stays, without its token, and while the send
+    // may still be on its way it says so.
     forgetPageSession();
     const reloaded = readHold(SCOPE)!;
-    expect(reloaded).toMatchObject({ batchId: 'batch-1', signed: null, reason: null });
+    expect(reloaded).toMatchObject({
+      batchId: 'batch-1',
+      inflight: true,
+      signed: null,
+      reason: null,
+    });
     expect(canRetry(reloaded)).toBe(false);
     expect(heldCopy(reloaded)).toBe(
+      'A Render of this template is still being sent. Wait a moment, then check the Render ledger.',
+    );
+    expect(heldCopy(reloaded, reloaded.heldAt + SENDING_MS + 1)).toBe(
       'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
     );
     answer({ jobs: [] });
@@ -129,13 +140,13 @@ describe('renderHold', () => {
       throw noAnswer();
     }).catch(() => undefined);
     await expect(
-      retryHeld(SCOPE, readHold(SCOPE)!, async () => {
+      retryHeld(SCOPE, async () => {
         throw noAnswer();
       }),
     ).rejects.toBeInstanceOf(TypeError);
     expect(isHeld(SCOPE)).toBe(true);
     const sent: string[] = [];
-    await retryHeld(SCOPE, readHold(SCOPE)!, async (token) => sent.push(token));
+    await retryHeld(SCOPE, async (token) => sent.push(token));
     expect(sent).toEqual(['token-secret']);
     expect(isHeld(SCOPE)).toBe(false);
   });
@@ -152,7 +163,12 @@ describe('renderHold', () => {
         return 'a';
       },
     };
-    const base = { heldAt: 0, signed: SIGNED, reason: { kind: 'no-answer' as const } };
+    const base = {
+      heldAt: 0,
+      inflight: false,
+      signed: SIGNED,
+      reason: { kind: 'no-answer' as const },
+    };
     expect(await resendHeld({ ...base, batchId: oneJobId('f'.repeat(64)) }, 't1', api)).toEqual({
       jobs: ['a'],
     });
@@ -160,6 +176,89 @@ describe('renderHold', () => {
       jobs: ['a', 'b'],
     });
     expect(sent).toEqual(['job:t1', 'batch:t2']);
+  });
+
+  test('storage is the hold: once another tab clears it, Retry sends nothing and Render signs fresh', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    expect(canRetry(readHold(SCOPE)!)).toBe(true);
+    // Tab B opens the ledger: the key goes; this page still has the token in memory.
+    localStorage.removeItem(holdKeyOf(SCOPE));
+    expect(isHeld(SCOPE)).toBe(false);
+    expect(readHold(SCOPE)).toBeNull();
+    let retried = false;
+    await expect(
+      retryHeld(SCOPE, async () => {
+        retried = true;
+      }),
+    ).rejects.toBeInstanceOf(RenderHeldError);
+    expect(retried).toBe(false);
+    let signedFresh = false;
+    await confirmUnderHold(SCOPE, { ...SIGNED, token: 'fresh', batchId: 'batch-2' }, async () => {
+      signedFresh = true;
+    });
+    expect(signedFresh).toBe(true);
+  });
+
+  test('a cleared key heard from another tab drops this page’s token for that batch', () => {
+    return confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    })
+      .catch(() => undefined)
+      .then(() => {
+        const { result } = renderHook(() => useRenderHold(SCOPE));
+        const record = localStorage.getItem(holdKeyOf(SCOPE))!;
+        act(() => {
+          localStorage.removeItem(holdKeyOf(SCOPE));
+          window.dispatchEvent(
+            Object.assign(new Event('storage'), {
+              key: holdKeyOf(SCOPE),
+              oldValue: record,
+              newValue: null,
+            }),
+          );
+        });
+        expect(result.current).toBeNull();
+        // The same record written back (a late write elsewhere) holds, but this page's token went.
+        localStorage.setItem(holdKeyOf(SCOPE), record);
+        expect(readHold(SCOPE)?.signed).toBeNull();
+      });
+  });
+
+  test('a hold that cannot be written is not sent', async () => {
+    // A browser that will not keep site data: reads work, every write throws.
+    const real = globalThis.localStorage;
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => real.getItem(key),
+        removeItem: (key: string) => real.removeItem(key),
+        setItem: () => {
+          throw new Error('QuotaExceededError');
+        },
+      },
+    });
+    try {
+      let sent = false;
+      const refused = await confirmUnderHold(SCOPE, SIGNED, async () => {
+        sent = true;
+      }).catch((error: unknown) => error);
+      expect(refused).toBeInstanceOf(RenderHeldError);
+      expect((refused as Error).message).toBe(STORAGE_OFF);
+      expect(sent).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
+    }
+  });
+
+  test('a 401 or 403 is not held: nothing was made, the session is what to fix', async () => {
+    for (const status of [401, 403]) {
+      await confirmUnderHold(SCOPE, SIGNED, async () => {
+        throw new ApiError('Unauthorized', status);
+      }).catch(() => undefined);
+      expect(isHeld(SCOPE)).toBe(false);
+    }
   });
 
   test('a hold from days ago is still held: only the ledger lets it go', () => {

@@ -49,6 +49,12 @@ describe('render discovery copy', () => {
     ).toContain('not configured');
   });
 
+  test('a 4xx that says nothing but its status line reads as a refusal, never the status line', () => {
+    expect(describeRenderDiscoveryFailure(new ApiError('400 Bad Request', 400))).toBe(
+      'The render service refused this batch.',
+    );
+  });
+
   test('a confirmation that expired or no longer matches says what to do, never the raw code', () => {
     for (const code of ['expired_confirmation', 'invalid_confirmation']) {
       const thrown = new ApiError(code, 409, undefined, { error: code });

@@ -2,7 +2,7 @@
 // tab, or this node) means the node signs nothing more for it: the banner says why, Render waits,
 // and no preflight or createBatch is called.
 
-import { afterEach, expect, mock, test } from 'bun:test';
+import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -29,6 +29,12 @@ const TEMPLATE = {
 
 const batchPreflight = mock(async () => ({ confirmationToken: 't', batchId: 'b', expiresAt: '' }));
 const createBatch = mock(async () => ({ jobs: [] }));
+const listJobs = mock(
+  async (..._args: unknown[]): Promise<unknown> => ({
+    items: [],
+    nextCursor: null,
+  }),
+);
 const preflight = mock(async () => ({
   confirmationToken: 'job-token',
   confirmationHash: 'a'.repeat(64),
@@ -54,7 +60,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       linkedFields: [],
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
-    listJobs: async () => ({ items: [], nextCursor: null }),
+    listJobs: (...args: unknown[]) => listJobs(...args),
     getJob: async () => null,
     livePreview: async () => {
       throw new Error('no kit');
@@ -80,6 +86,8 @@ const { forgetPageSession, holdKeyOf } = await import('@/components/forge/render
 afterEach(() => {
   cleanup();
   for (const fn of [batchPreflight, createBatch, preflight, createJob]) fn.mockClear();
+  listJobs.mockReset();
+  listJobs.mockImplementation(async () => ({ items: [], nextCursor: null }));
   forgetPageSession();
   localStorage.clear();
 });
@@ -151,4 +159,48 @@ test('a createJob that gets no answer holds the template; Retry re-sends the sam
   expect(createBatch).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryAllByRole('alert')).toHaveLength(0));
   expect(preflight).toHaveBeenCalledTimes(1);
+});
+
+// The check that matters is in Render's own handler: a hold another tab wrote after this node
+// drew (no storage event yet, so Render still looks enabled) must still stop the send.
+test('Render’s handler reads the hold fresh: written after the node drew, nothing is signed', async () => {
+  useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
+  mountNode();
+  const renderButton = await screen.findByRole<HTMLButtonElement>('button', { name: 'Render 1' });
+  await waitFor(() => expect(renderButton.disabled).toBe(false));
+  localStorage.setItem(
+    holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+    JSON.stringify({ batchId: 'batch-1', heldAt: Date.now(), inflight: true }),
+  );
+  fireEvent.click(renderButton);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(preflight).not.toHaveBeenCalled();
+  expect(batchPreflight).not.toHaveBeenCalled();
+  expect(createJob).not.toHaveBeenCalled();
+});
+
+test('a render that landed is not shown as failed when the refresh after it fails', async () => {
+  useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
+  const error = spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    mountNode();
+    const renderButton = await screen.findByRole<HTMLButtonElement>('button', { name: 'Render 1' });
+    await waitFor(() => expect(renderButton.disabled).toBe(false));
+    // The jobs list breaks only now, after the node drew: the refresh after createJob rejects.
+    listJobs.mockImplementation(async () => {
+      throw new Error('jobs list down');
+    });
+    fireEvent.click(renderButton);
+    await waitFor(() => expect(createJob).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(renderButton.disabled).toBe(false));
+    expect(screen.queryByText(/jobs list down|failed/i)).toBeNull();
+    expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    expect(
+      localStorage.getItem(
+        holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+      ),
+    ).toBeNull();
+  } finally {
+    error.mockRestore();
+  }
 });

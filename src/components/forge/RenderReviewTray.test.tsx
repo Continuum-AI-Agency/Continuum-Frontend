@@ -15,7 +15,7 @@
  * server nothing until Check again is pressed.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type {
   ApiRenderBatchReadiness,
   ApiRenderBatchRecord,
@@ -205,7 +205,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
 import { type RenderPreflightRow, RenderReviewTray, type RowsAsked } from './RenderReviewTray';
-import { forgetPageSession, holdKeyOf, readHold } from './renderHold';
+import { forgetPageSession, holdKeyOf, readHold, SESSION_EXPIRED, STORAGE_OFF } from './renderHold';
 
 /** The hold this tray renders under: a user, the brand, the template's binding, the template. */
 const SCOPE = {
@@ -749,6 +749,60 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(onHeld).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls.length).toBe(signed);
     expect(createBatchMock).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('a confirm that landed is never shown as failed, whatever throws while it is shown', async () => {
+    const handlers = trayHandlers();
+    handlers.onFired.mockImplementation(() => {
+      throw new Error('the rail refresh broke');
+    });
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      renderTray(null, { handlers });
+      await press('Next: delivery');
+      await press('Render 3 files');
+      expect(await screen.findByRole('list', { name: 'Fired renders' })).toBeTruthy();
+      expect(handlers.onHeld).not.toHaveBeenCalled();
+      expect(readHold(SCOPE)).toBeNull();
+      expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    } finally {
+      error.mockRestore();
+    }
+  }, 30_000);
+
+  test('a hold the browser will not save is not sent, and says why', async () => {
+    renderTray(null);
+    await press('Next: delivery');
+    const real = globalThis.localStorage;
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => real.getItem(key),
+        removeItem: (key: string) => real.removeItem(key),
+        setItem: () => {
+          throw new Error('QuotaExceededError');
+        },
+      },
+    });
+    try {
+      await press('Render 3 files');
+      expect(await screen.findByText(STORAGE_OFF)).toBeTruthy();
+      expect(createBatchMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
+    }
+  }, 30_000);
+
+  test('a 401 from createBatch is not held: the session expired', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('Unauthorized', 401);
+    });
+    const { onHeld } = renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(await screen.findByText(SESSION_EXPIRED)).toBeTruthy();
+    expect(onHeld).not.toHaveBeenCalled();
+    expect(readHold(SCOPE)).toBeNull();
   }, 30_000);
 
   test('with no user to hold under, confirm signs nothing', async () => {

@@ -2973,7 +2973,7 @@ export function RenderRequestsGrid({
         onRender={() => void openReview()}
         renderCount={selectedReady.length}
         skipNote={held ? null : skipNote}
-        heldLabel={held ? 'Unconfirmed render — review' : undefined}
+        heldLabel={held ? 'Unconfirmed render — check' : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3360,6 +3360,12 @@ export function RenderRequestsGrid({
                     id: row.id,
                     label: row.label.trim() || 'Untitled',
                   }))}
+                  currentSnapshot={reviewSignature(
+                    rows,
+                    selectedIds,
+                    activeSet?.revision ?? null,
+                    allOutputIdsOf(contract),
+                  )}
                   // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
                   // batchId once RenderJobsGrid can open one batch from outside
                   onOpenLedger={() => onFired?.([])}
@@ -3395,6 +3401,7 @@ export function RenderRequestsGrid({
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
                   holdScope={holdScope}
+                  reviewSnapshot={review.signature}
                   onHeld={() => setReview(null)}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}

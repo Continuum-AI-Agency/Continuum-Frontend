@@ -29,10 +29,14 @@ import {
   confirmUnderHold,
   heldCopy,
   isHeld,
+  isSessionRefusal,
   oneJobId,
+  RenderHeldError,
   resendHeld,
   retryHeld,
+  SESSION_EXPIRED,
   SIGNED_OUT,
+  sendingElsewhere,
   useRenderHold,
 } from '@/components/forge/renderHold';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -112,6 +116,8 @@ export function ApiRenderBlock({
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [busy, setBusy] = useState(false);
+  // A Retry already on its way: a second tap must not send the token twice at once.
+  const [retrying, setRetrying] = useState(false);
   const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
   const [final, setFinal] = useState(false);
   const brandContext = useActiveBrandContext();
@@ -515,6 +521,8 @@ export function ApiRenderBlock({
     setBusy(true);
     setError(null);
     patchData({ status: 'submitting' });
+    // Set once createBatch or createJob has answered: whatever throws after is not a failed render.
+    let sent = false;
     try {
       if (batchIds.length > 0 || (!data.inputSetId && variations.records.length > 1)) {
         const records =
@@ -537,6 +545,7 @@ export function ApiRenderBlock({
           },
           () => apiRendersApi.createBatch({ confirmationToken: preflight.confirmationToken }),
         );
+        sent = true;
         patchData({
           jobIds: [...new Set([...(data.jobIds ?? []), ...batch.jobs.map((job) => job.id)])],
           latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
@@ -573,6 +582,7 @@ export function ApiRenderBlock({
           },
           () => apiRendersApi.createJob({ confirmationToken: preflight.confirmationToken }),
         );
+        sent = true;
         patchData({
           latestJobId: job.id,
           jobIds: [...new Set([...(data.jobIds ?? []), job.id])],
@@ -588,15 +598,23 @@ export function ApiRenderBlock({
       }
       await refreshJobs();
     } catch (cause) {
+      // Answered: a refresh or a toast that fails afterwards is not a failed render.
+      if (sent) {
+        console.error('[render node] after a confirmed render', cause);
+        return;
+      }
       // Held, by this createBatch or another surface: the banner says what to do.
       if (isHeld(holdScope)) {
         patchData({ status: 'failed' });
         return;
       }
-      const message =
-        cause instanceof Error
-          ? describeRenderDiscoveryFailure(cause.message)
-          : 'Render submission failed';
+      const message = isSessionRefusal(cause)
+        ? SESSION_EXPIRED
+        : cause instanceof RenderHeldError
+          ? cause.message
+          : cause instanceof Error
+            ? describeRenderDiscoveryFailure(cause.message)
+            : 'Render submission failed';
       setError(message);
       patchData({ status: 'failed', error: message });
     } finally {
@@ -850,10 +868,12 @@ export function ApiRenderBlock({
                   <Button
                     size="xs"
                     className="nodrag"
-                    disabled={busy}
-                    onClick={() =>
-                      void retryHeld(holdScope, held, (token) =>
-                        resendHeld(held, token, apiRendersApi),
+                    disabled={busy || retrying}
+                    onClick={() => {
+                      if (retrying) return;
+                      setRetrying(true);
+                      void retryHeld(holdScope, (token, now) =>
+                        resendHeld(now, token, apiRendersApi),
                       )
                         .then(async (batch) => {
                           patchData({
@@ -866,10 +886,13 @@ export function ApiRenderBlock({
                             latestJobId: batch.jobs[0]?.id ?? data.latestJobId,
                             status: 'submitting',
                           });
-                          await refreshJobs();
+                          await refreshJobs().catch((error) =>
+                            console.error('[render node] after a retried render', error),
+                          );
                         })
                         .catch(() => undefined)
-                    }
+                        .finally(() => setRetrying(false));
+                    }}
                   >
                     Retry this batch
                   </Button>
@@ -878,6 +901,8 @@ export function ApiRenderBlock({
                   size="xs"
                   variant="outline"
                   className="nodrag"
+                  // A live send elsewhere must not be released under it.
+                  disabled={sendingElsewhere(held)}
                   onClick={() => {
                     clearHold(holdScope);
                     window.location.assign('/forge#approvals');

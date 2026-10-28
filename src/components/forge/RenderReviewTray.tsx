@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchReadiness,
   type ApiRenderBatchRecord,
@@ -76,10 +77,15 @@ import {
   type HoldScope,
   heldCopy,
   isHeld,
+  isSessionRefusal,
   RenderHeldError,
+  SENDING_MS,
+  sendingElsewhere,
   resendHeld,
   retryHeld,
+  SESSION_EXPIRED,
   SIGNED_OUT,
+  STORAGE_OFF,
   type SignedBatch,
 } from '@/components/forge/renderHold';
 import { ApiError } from '@/lib/api/errors';
@@ -145,6 +151,8 @@ export type RenderReviewTrayProps = {
   /** createBatch failed, whatever the status: the caller holds this batch (renderHold.ts). */
   /** The hold this template renders under (renderHold.ts); null when no user is signed in. */
   holdScope: HoldScope | null;
+  /** The review's own signature of the rows (reviewSignature), kept with a held batch. */
+  reviewSnapshot?: string;
   /** A batch is held, by this confirm or by another surface or tab: open it instead. */
   onHeld: () => void;
   onRecheck: () => void;
@@ -288,6 +296,7 @@ export function RenderReviewTray({
   rechecking,
   finalBlocked,
   holdScope,
+  reviewSnapshot,
   onHeld,
   onRecheck,
   onRefused,
@@ -585,12 +594,33 @@ export function RenderReviewTray({
     setProblem(null);
     setApprovalWarning(null);
     let signed: SignedBatch | null = null;
+    let batch: ApiRenderBatch;
     try {
       signed = await signBatch(indexes);
       const token = signed.token;
-      const batch = await confirmUnderHold(holdScope, signed, () =>
+      batch = await confirmUnderHold(holdScope, signed, () =>
         apiRendersApi.createBatch({ confirmationToken: token }),
       );
+    } catch (error) {
+      setFiring(false);
+      // Refused before anything was made: the session, or a hold that could not be written.
+      if (isSessionRefusal(error)) return setProblem(SESSION_EXPIRED);
+      if (error instanceof RenderHeldError && error.message === STORAGE_OFF)
+        return setProblem(STORAGE_OFF);
+      // Held: by another surface since the sign, or by this createBatch failing, whatever the
+      // status (some rows may exist). Either way the hold opens, and the ledger is re-read.
+      if (signed || error instanceof RenderHeldError) {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+        onHeld();
+        return;
+      }
+      const { message, details } = describeFailure(error);
+      setProblem([message, ...details].join(' '));
+      return;
+    }
+    // Sent and answered: nothing after this is a failed render, whatever throws while it is shown.
+    setFiring(false);
+    try {
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -610,17 +640,7 @@ export function RenderReviewTray({
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
-      // Held: by another surface since the sign, or by this createBatch failing, whatever the
-      // status (some rows may exist). Either way the hold opens, and the ledger is re-read.
-      if (signed || error instanceof RenderHeldError) {
-        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
-        onHeld();
-        return;
-      }
-      const { message, details } = describeFailure(error);
-      setProblem([message, ...details].join(' '));
-    } finally {
-      setFiring(false);
+      console.error('[forge] after a confirmed render', error);
     }
   };
 
@@ -659,6 +679,7 @@ export function RenderReviewTray({
       request,
       expiresAt: preflight.expiresAt,
       batchId: preflight.batchId,
+      rows: reviewSnapshot,
     };
   };
 
@@ -1424,7 +1445,7 @@ function ReadinessLine({
 }
 
 /**
- * A held batch, read-only: what it signed, why it is held, and the only two ways on. Retry this
+ * A held batch, read-only: what was sent, why it is held, and the only two ways on. Retry this
  * batch re-sends its token (each row dedupes, so it never makes a row twice) while the token is
  * in memory and unexpired; Open Render ledger lets the hold go.
  */
@@ -1435,12 +1456,15 @@ export function HeldBatchView({
   onOpenLedger,
   onLanded,
   current,
+  currentSnapshot,
 }: {
   brandId: string;
   scope: HoldScope;
   held: HeldBatch;
   /** The rows Render would take now: said apart when they are not the held batch's. */
   current: Array<{ id: string; label: string }>;
+  /** reviewSignature of those rows now: a value edit since the batch was sent shows here. */
+  currentSnapshot: string;
   onOpenLedger: (batchId: string | null) => void;
   /** Retry landed: the jobs, for the same result a normal confirm shows. */
   onLanded: (jobs: ApiRenderJob[]) => void;
@@ -1449,23 +1473,36 @@ export function HeldBatchView({
   const [retrying, setRetrying] = useState(false);
   const [, setNow] = useState(0);
   const expiresAt = held.signed?.expiresAt;
-  // Retry goes the moment the token's own expiry passes, not on the next render that happens by.
+  const sending = sendingElsewhere(held);
+  // Retry goes the moment the token's own expiry passes, and a send elsewhere stops counting as
+  // live once its time is up, not on whatever render happens by next.
   useEffect(() => {
-    const wait = expiresAt ? Date.parse(expiresAt) - Date.now() : 0;
-    if (!(wait > 0)) return;
-    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait + 50, 2_147_483_647));
+    const waits = [
+      expiresAt ? Date.parse(expiresAt) - Date.now() : 0,
+      sending ? held.heldAt + SENDING_MS - Date.now() : 0,
+    ].filter((wait) => wait > 0);
+    if (!waits.length) return;
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.min(Math.min(...waits) + 50, 2_147_483_647),
+    );
     return () => clearTimeout(timer);
-  }, [expiresAt]);
+  }, [expiresAt, sending, held.heldAt]);
   const request = held.signed?.request;
   const metaRows = request?.records.filter((record) => record.delivery).length ?? 0;
   const labels = request?.records.map((record) => record.label ?? 'Untitled') ?? [];
   const heldRows = new Set(
     request?.records.map((record) => `${record.renderSetRowId ?? ''}|${record.label ?? ''}`),
   );
+  // What Forge's review signs (reviewSignature) when the grid sent it; the rows' ids and labels
+  // when another surface did.
+  const sentRows = held.signed?.rows;
   const differs =
     request !== undefined &&
-    (current.length !== heldRows.size ||
-      current.some((row) => !heldRows.has(`${row.id}|${row.label}`)));
+    (sentRows !== undefined
+      ? sentRows !== currentSnapshot
+      : current.length !== heldRows.size ||
+        current.some((row) => !heldRows.has(`${row.id}|${row.label}`)));
   const heldTime = new Date(held.heldAt).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -1491,12 +1528,17 @@ export function HeldBatchView({
   const retry = async () => {
     setRetrying(true);
     try {
-      // Still held on any failure; a token the server no longer takes cannot be retried.
-      const batch = await retryHeld(scope, held, (token) => resendHeld(held, token, apiRendersApi));
-      for (const job of batch.jobs)
-        queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
-      toast.success(`${plural(batch.jobs.length, 'render')} queued`);
-      onLanded(batch.jobs);
+      // Read fresh: nothing is sent once another tab has let it go. Still held on any failure.
+      const batch = await retryHeld(scope, (token, now) => resendHeld(now, token, apiRendersApi));
+      try {
+        for (const job of batch.jobs)
+          queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+        toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+        onLanded(batch.jobs);
+      } catch (error) {
+        // Landed: showing it may fail, the render did not.
+        console.error('[forge] after a retried render', error);
+      }
     } catch {
       // The hold already says why.
     } finally {
@@ -1514,8 +1556,8 @@ export function HeldBatchView({
       </p>
       <p className="text-muted-foreground">
         {facts
-          ? `What it signed: ${facts.join(' · ')}`
-          : 'What it signed isn’t known after a reload.'}
+          ? `What was sent: ${facts.join(' · ')}`
+          : 'What was sent isn’t known after a reload.'}
       </p>
       {differs ? (
         <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
@@ -1534,6 +1576,8 @@ export function HeldBatchView({
           type="button"
           size="xs"
           variant="outline"
+          // A live send elsewhere must not be released under it: the ledger can wait its time out.
+          disabled={sending}
           onClick={() => {
             clearHold(scope);
             onOpenLedger(held.batchId);
