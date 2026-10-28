@@ -14,6 +14,8 @@
 import {
   currencyMinorOffset,
   formatMoney,
+  G07_COOLDOWN_DAYS,
+  G07_STEP,
   type MultiPlatformSnapshot,
   NegativeTermSchema,
   type OptimizerAction,
@@ -51,12 +53,9 @@ export const G07_RANK_LOST_ABOVE = 0.3;
 /** G07: lower the Google Ads target CPA when the real cost is over this multiple of the
  *  portfolio's CPA goal — or over the goal at all while Google's target sits above it. */
 export const G07_LOWER_ABOVE = 1.3;
-/** G07: ±10% per change. */
-export const G07_STEP = 0.1;
-/** G07: Smart Bidding relearns after a target change; one change per this many days. */
-export const G07_COOLDOWN_DAYS = 14;
-/** G11: a Quality Score at or under this is low. */
-export const G11_MAX_QUALITY_SCORE = 3;
+/** G07's step and cooldown and G11's Quality Score floor live in contracts (google-tab.ts),
+ *  where the Google tab reads them too. */
+export { G07_COOLDOWN_DAYS, G07_STEP, G11_MAX_QUALITY_SCORE } from '@continuum/contracts';
 /** T1: a creative needs this many impressions before its 2-second hold is judged. */
 export const T1_MIN_IMPRESSIONS = 2000;
 /** T1: the portfolio's lower quartile needs at least this many judged creatives. */

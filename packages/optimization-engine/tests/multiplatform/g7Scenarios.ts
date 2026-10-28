@@ -212,8 +212,10 @@ export function runG7Scenarios(rec: Recorder): void {
     ]);
     const covered = Object.fromEntries(skips.map((s) => [s.family, s.coveredBy?.join('/')]));
     rec.check(
-      'e45–e47: EKATAR’s Meta-only families stay skipped by name, each naming the Google rules that judge it — delivery G12, fatigue G23, creative G09/G10/G18',
-      skips.length === 3 &&
+      'e45–e47: EKATAR’s Meta-only families stay skipped by name, each naming the Google rules that judge it — delivery G12, fatigue G23, creative G09/G10/G18 — and pause, a Meta write nothing covers',
+      skips.length === 4 &&
+        'pause' in covered &&
+        covered.pause === undefined &&
         covered.delivery === 'G12' &&
         covered.fatigue === 'G23' &&
         covered.creative === 'G09/G10/G18_pmax_assets/G18_pmax_coverage',

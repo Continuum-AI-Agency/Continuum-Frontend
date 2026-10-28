@@ -472,6 +472,17 @@ describe('withHonestCapBinding', () => {
     expect(withHonestCapBinding(s1 as never, items)).toBe(s1 as never);
   });
 
+  it("trusts the engine's own counts when the row carries them, whatever the items say", () => {
+    const engineRow = {
+      ...s1,
+      reason:
+        'The ±30% velocity cap bound on 3 of 4 moves this cycle. 1 of 4 moves went past the ±30% cap: pacing may exceed it.',
+      evidence: { ...s1.evidence, capBinding: { atCap: 3, breached: 1, moves: 4 } },
+    };
+    const items = [-0.3, 0.3, -0.3, -0.45].map((change_pct) => ({ change_pct }));
+    expect(withHonestCapBinding(engineRow as never, items)).toBe(engineRow as never);
+  });
+
   it('leaves every other trigger alone', () => {
     const other = { ...s1, trigger: 'P2_sustained_poor' };
     expect(withHonestCapBinding(other as never, [{ change_pct: -0.9 }])).toBe(other as never);

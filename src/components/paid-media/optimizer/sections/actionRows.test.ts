@@ -59,8 +59,34 @@ describe('readActionChange reads one row shape across four unit systems', () => 
       }),
     );
     expect(change.label).toBe('Total daily budget');
-    expect(change.after).toBe('4200');
+    expect(change.after).toBe(4200);
     expect(change.sentence).toBeUndefined();
+  });
+
+  it('reads a money setting as money in the unit the audit stored, never bare text', () => {
+    const setting = (entity_id: string, before: string, after: string) =>
+      readActionChange(
+        action({
+          family: 'settings',
+          op: 'setting',
+          entity_id,
+          before: { value: before },
+          after: { value: after },
+        }),
+      );
+    // Vivo Center (d666c706), 2026-10-26: Activity read "100 → 79.82" with no currency.
+    expect(setting('daily_total', '100', '79.82')).toEqual({
+      label: 'Total daily budget',
+      unit: 'money_major',
+      before: 100,
+      after: 79.82,
+    });
+    expect(setting('cpa_target', '300', '250').unit).toBe('money_major');
+    expect(setting('max_daily_apply_minor', '50000', '80000')).toMatchObject({
+      unit: 'money',
+      after: 80000,
+    });
+    expect(setting('velocity_cap_pct', '0.3', '0.25').unit).toBe('text');
   });
 
   it('reads an ad set moved between portfolios as a sentence, never the two ids', () => {

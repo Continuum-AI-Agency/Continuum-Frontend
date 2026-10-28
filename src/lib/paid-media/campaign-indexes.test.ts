@@ -88,4 +88,20 @@ describe('buildCampaignIndexAggregate', () => {
     expect(aggregate.trends[1]?.spend).toBe(80);
     expect(aggregate.trends[2]?.spend).toBe(60);
   });
+
+  it('skips a null CPA (no single result) instead of averaging it as 0', () => {
+    const base = { spend: 50, roas: 0, ctr: 1, cpc: 1, impressions: 100, clicks: 10 };
+    const mixed = buildCampaignIndexAggregate([
+      { id: 'g1', metrics: { ...base, cpa: null }, trends: [{ date: '2026-10-20', cpa: null }] },
+      { id: 'g2', metrics: { ...base, cpa: 20 }, trends: [{ date: '2026-10-20', cpa: 20 }] },
+    ]);
+    expect(mixed.metrics.cpa).toBe(20);
+    expect(mixed.trends[0]?.cpa).toBe(20);
+
+    const allNull = buildCampaignIndexAggregate([
+      { id: 'g1', metrics: { ...base, cpa: null }, trends: [{ date: '2026-10-20', cpa: null }] },
+    ]);
+    expect(allNull.metrics.cpa).toBeNull();
+    expect(allNull.trends[0]?.cpa).toBeUndefined();
+  });
 });

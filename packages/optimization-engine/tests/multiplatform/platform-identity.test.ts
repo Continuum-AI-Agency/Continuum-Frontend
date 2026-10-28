@@ -112,8 +112,8 @@ describe('a Google-only cycle says which platform and entity each row is about',
   });
 
   test('every recommendation carries google_ads, and names the campaign it is about', () => {
-    const dead = result.recommendations.find((rec) => rec.adSetId === 'g-zero');
-    expect(dead?.trigger).toBe('P3_low_significance');
+    // G8 F2: P3 used to fire on g-zero, and its Approve wrote a Meta ad set with a campaign id.
+    expect(result.recommendations.some((rec) => rec.adSetId === 'g-zero')).toBe(false);
     for (const rec of result.recommendations) {
       expect(rec.platform).toBe('google_ads');
       if (rec.adSetId.startsWith('g-')) expect(rec.entityRef?.id).toBe(rec.adSetId);

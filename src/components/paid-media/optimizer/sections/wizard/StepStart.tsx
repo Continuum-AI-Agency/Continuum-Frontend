@@ -8,7 +8,8 @@
 // a row of its own, not a footnote.
 //
 // A cross-platform suggestion ("Leads // All platforms") says which platforms it spans and how
-// many members each one brings, chip by chip; a Meta-only card reads exactly as before.
+// many members each one brings, chip by chip, with each Google campaign type it holds ("Search
+// 2", "Performance Max 1"); a Meta-only card reads exactly as before.
 
 import type {
   AdSetSnapshot,
@@ -30,7 +31,7 @@ import { PlatformChip } from '../platforms/PlatformChip';
 import { SuggestionExplorer } from '../SuggestionExplorer';
 import { CONVERSION_OBJECTIVES } from '../suggestionModel';
 import { questionHeading } from './OptionRow';
-import { suggestionPlatformCounts } from './wizardModel';
+import { channelTypeCounts, suggestionPlatformCounts } from './wizardModel';
 
 export type SuggestionOverride = { objective: OptimizationObjective; mode: OptimizationModeDto };
 
@@ -165,6 +166,13 @@ function SuggestionCard({
             >
               <PlatformChip platform={entry.platform} />
               <span className="text-muted-foreground tabular-nums">{entry.label}</span>
+              {channelTypeCounts(
+                (suggestion.members ?? []).filter((member) => member.platform === entry.platform),
+              ).map(({ label, count }) => (
+                <Badge data-testid="suggestion-channel-type" key={label} variant="muted">
+                  {label} {count}
+                </Badge>
+              ))}
             </li>
           ))}
         </ul>

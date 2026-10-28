@@ -258,14 +258,17 @@ const percent = (key: string, raw: number, window: FigureWindow): HeadlineFigure
 /**
  * How we are doing: "56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN and
  * 34% cheaper than the week before." With nothing bought the sentence says what was spent
- * for it; with no target it says there is none.
+ * for it; with no target it says there is none. With no read of the whole portfolio
+ * (HeroView.unread) it says that, and no figure: "no spend" is only ever a read zero.
  */
 export function statusSentence(
   growth: BriefGrowth,
   words: { one: string; many: string },
   currency: string | null,
   days: number,
+  unread: HeroView['unread'] = null,
 ): HeadlineSentence {
+  if (unread) return [unread.sentence];
   const window = growth.window;
   const period = `in ${dayWords(days)}`;
   const results = Math.round(growth.results);
@@ -403,7 +406,9 @@ export function opportunitySentence(args: {
 /**
  * The third sentence, only when something blocks a decision: ad sets bidding for a result
  * the portfolio does not measure (the engine holds them), nothing delivered in the window,
- * or spend with no result to read. One at a time, in that order.
+ * or spend with no result to read. One at a time, in that order. The last two read the growth,
+ * so they need it to BE a read of the whole portfolio: with `unread` set, its zeros mean "not
+ * read" and neither is claimed.
  */
 export function blockerSentence(args: {
   growth: BriefGrowth;
@@ -411,6 +416,7 @@ export function blockerSentence(args: {
   words: { one: string; many: string };
   currency: string | null;
   days: number;
+  unread?: HeroView['unread'];
 }): HeadlineBlocker | null {
   const { growth, mismatch, words, currency, days } = args;
   const window = growth.window;
@@ -434,6 +440,7 @@ export function blockerSentence(args: {
       actions: mismatch.actions,
     };
   }
+  if (args.unread) return null;
   const period = dayWords(days);
   if (growth.spend <= 0) {
     return {
@@ -617,7 +624,8 @@ export function buildPortfolioHeadline(args: {
   const growth = view.brief.growth;
   const words = resultNouns(metric.kpiField, metric.resultLabel);
   const days = coveredDays(growth, createdAtOf(report));
-  const status = statusSentence(growth, words, currency, days);
+  const unread = view.unread ?? null;
+  const status = statusSentence(growth, words, currency, days, unread);
   const items = report?.latest_items ?? [];
   const waiting = decisionsWaiting(report, args.portfolio.apply_mode);
   const atStakePerDay =
@@ -632,7 +640,9 @@ export function buildPortfolioHeadline(args: {
       currency,
       words,
     }),
-    blocker: blockerSentence({ growth, mismatch: args.mismatch, words, currency, days }),
+    blocker: blockerSentence({ growth, mismatch: args.mismatch, words, currency, days, unread }),
+    // Unread, the spend, result and cost tiles would print the placeholder zeros; the decisions
+    // waiting are the cycle's own and stay.
     tiles: tilesOf({
       growth,
       words,
@@ -641,7 +651,7 @@ export function buildPortfolioHeadline(args: {
       dailyTotal: args.portfolio.daily_total,
       waiting,
       atStakePerDay,
-    }),
+    }).filter((tile) => !unread || tile.key === 'decisions'),
     read: jainaRead({ view, name: args.portfolio.name, status, growth, currency, now }),
     decisions: { waiting, atStakePerDay },
     days,

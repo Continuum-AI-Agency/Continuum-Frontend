@@ -10,7 +10,6 @@
 // opens a new conversation for it instead of appending it to the most recent one.
 
 import { type PlatformId, PlatformIdSchema } from '@continuum/contracts';
-import { z } from 'zod';
 
 export function jainaPromptHref(
   prompt: string,
@@ -64,33 +63,4 @@ export function jainaSessionHref(sessionId: string, adAccountId?: string | null)
 export function jainaAdAccountParam(raw: string | null): string | null {
   const trimmed = raw?.trim();
   return trimmed ? trimmed : null;
-}
-
-const sessionAccountResponseSchema = z.object({
-  sessions: z.array(z.object({ sessionId: z.string(), adAccountId: z.string().nullable() })),
-});
-
-/**
- * Which ad account a conversation belongs to, read from the brand-wide session list (the same
- * read the sidebar makes, without the account filter). Null when it cannot be told — the caller
- * then links without an account rather than not linking at all.
- */
-export async function resolveJainaSessionAdAccount(
-  input: { brandId: string; sessionId: string },
-  fetchImpl: typeof fetch = fetch,
-): Promise<string | null> {
-  try {
-    const params = new URLSearchParams({ brandId: input.brandId, sessionsLimit: '100' });
-    const response = await fetchImpl(`/api/agents/jaina/chat/conversations?${params}`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!response.ok) return null;
-    const parsed = sessionAccountResponseSchema.safeParse(await response.json());
-    if (!parsed.success) return null;
-    const session = parsed.data.sessions.find((row) => row.sessionId === input.sessionId);
-    return session?.adAccountId ?? null;
-  } catch {
-    return null;
-  }
 }

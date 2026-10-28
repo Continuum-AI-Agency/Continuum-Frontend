@@ -407,6 +407,11 @@ export const chartTypeSchema = z.enum([
   'doughnut',
   'stacked_bar',
   'radar',
+  // An opening total, the signed contributions that moved it, a closing total: one row per
+  // cause, `{ [category_key]: cause, [value key]: delta }`, with `start` / `end` on the block.
+  'waterfall',
+  // Stages of one flow in flow order, one row per stage; read as each stage's share of the last.
+  'funnel',
 ]);
 export type ChartType = z.infer<typeof chartTypeSchema>;
 
@@ -415,6 +420,35 @@ export const chartSeriesConfigSchema = z.object({
   color: z.string(),
 });
 export type ChartSeriesConfig = z.infer<typeof chartSeriesConfigSchema>;
+
+/** A value axis of a cartesian chart. The right one exists only when a series is put on it. */
+export const chartValueAxisSchema = z.enum(['left', 'right']);
+export type ChartValueAxis = z.infer<typeof chartValueAxisSchema>;
+
+/** A goal, target or benchmark drawn across the value axis — the standard's dashed target line. */
+export const chartReferenceLineSchema = z.object({
+  value: z.number(),
+  label: z.string().min(1),
+  /** The value axis it is read against; absent = left. */
+  axis: chartValueAxisSchema.optional(),
+  style: z.enum(['dashed', 'solid']).default('dashed'),
+});
+export type ChartReferenceLine = z.infer<typeof chartReferenceLineSchema>;
+
+/** One category called out on the category axis: "today", "the outlier". */
+export const chartMarkerSchema = z.object({
+  /** The `category_key` value of the row it marks. */
+  category: z.union([z.string(), z.number()]),
+  label: z.string().min(1),
+});
+export type ChartMarker = z.infer<typeof chartMarkerSchema>;
+
+/** A waterfall's opening or closing total, drawn as a full bar from zero. */
+export const chartWaterfallTotalSchema = z.object({
+  label: z.string().min(1),
+  value: z.number(),
+});
+export type ChartWaterfallTotal = z.infer<typeof chartWaterfallTotalSchema>;
 
 // Exported (like `blockBaseSchema`) so consumers can compose render-specific
 // fields on top — e.g. the Frontend widens `priority`/`value_format` and rebuilds
@@ -446,7 +480,158 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
   // The Frontend looks these up by the row's `category_key` value to render
   // datapoint tooltips. Null when no dataset backs the chart.
   data_meta: z.array(z.record(z.string(), z.unknown())).nullable().default(null),
+  // The vocabulary of the presentation standard §4. Every field is optional and absent means
+  // the chart as it always drew, so a block written before them parses unchanged.
+  /** Goal and target lines across the value axis. */
+  reference_lines: z.array(chartReferenceLineSchema).optional(),
+  /** The value axis each series is read against; a series not named is on the left. */
+  series_axis: z.record(z.string(), chartValueAxisSchema).optional(),
+  /** Bars and lines on one chart (spend bars, a cost line); a series not named draws as `chart_type`. */
+  series_kind: z.record(z.string(), z.enum(['bar', 'line'])).optional(),
+  /** `horizontal` lays a bar chart's categories down the side: a ranking. */
+  orientation: z.enum(['vertical', 'horizontal']).optional(),
+  /** Bar order by value; absent or null keeps the rows' order. */
+  sort: z.enum(['desc', 'asc']).nullable().optional(),
+  /** Categories called out on the category axis. */
+  markers: z.array(chartMarkerSchema).optional(),
+  /** Print each bar's or point's value on it. */
+  show_values: z.boolean().optional(),
+  /** Waterfall only: the totals its deltas run between. */
+  start: chartWaterfallTotalSchema.optional(),
+  end: chartWaterfallTotalSchema.optional(),
 });
+
+/** Charts with a category axis and a value axis: what a goal line, a marker or a second axis sits on. */
+export const CARTESIAN_CHART_TYPES: ReadonlySet<string> = new Set([
+  'bar',
+  'line',
+  'area',
+  'stacked_bar',
+]);
+/** Charts whose bars a ranking can reorder and lay on their side. A line's order is its trend. */
+export const RANKABLE_CHART_TYPES: ReadonlySet<string> = new Set(['bar', 'stacked_bar']);
+
+type ChartInvariantInput = Pick<
+  z.infer<typeof chartBlockBaseSchema>,
+  | 'chart_type'
+  | 'data'
+  | 'chart_config'
+  | 'category_key'
+  | 'value_key'
+  | 'reference_lines'
+  | 'series_axis'
+  | 'series_kind'
+  | 'orientation'
+  | 'sort'
+  | 'markers'
+  | 'start'
+  | 'end'
+>;
+
+/** The one measure a waterfall or a funnel plots: `value_key`, else its only series. */
+export const singleSeriesKeyOf = (
+  block: Pick<ChartInvariantInput, 'value_key' | 'chart_config'>,
+): string | null => {
+  if (block.value_key) return block.value_key;
+  const keys = Object.keys(block.chart_config);
+  return keys.length === 1 ? (keys[0] ?? null) : null;
+};
+
+/**
+ * The renderability rules of the §4 vocabulary. Each one is a chart that would draw a lie: a
+ * goal line, a marker or an axis the reader is told about and cannot see, a trend reordered
+ * by value, a waterfall whose bars do not meet.
+ */
+const addChartVocabularyIssues = (block: ChartInvariantInput, ctx: z.RefinementCtx): void => {
+  const issue = (path: Array<string | number>, message: string): void => {
+    ctx.addIssue({ code: 'custom', path, message });
+  };
+  const type = block.chart_type;
+  const cartesian = CARTESIAN_CHART_TYPES.has(type);
+
+  if (block.reference_lines?.length && !cartesian && type !== 'waterfall') {
+    issue(['reference_lines'], `a ${type} chart has no value axis to draw a reference line on`);
+  }
+  if (block.markers?.length && !cartesian) {
+    issue(['markers'], `a ${type} chart has no category axis to mark`);
+  }
+  for (const field of ['series_axis', 'series_kind'] as const) {
+    const roles = block[field];
+    if (!roles) continue;
+    if (!cartesian && Object.keys(roles).length > 0) {
+      issue([field], `a ${type} chart draws one kind of series on one axis`);
+    }
+    for (const key of Object.keys(roles)) {
+      if (!Object.hasOwn(block.chart_config, key)) {
+        issue([field, key], `${field} names "${key}", which is not a chart_config series`);
+      }
+    }
+  }
+  if (block.orientation === 'horizontal' && !RANKABLE_CHART_TYPES.has(type)) {
+    issue(['orientation'], `only a bar chart lies on its side; this is a ${type} chart`);
+  }
+  if (block.sort && !RANKABLE_CHART_TYPES.has(type)) {
+    issue(['sort'], `sorting a ${type} chart by value scrambles the order it is read in`);
+  }
+
+  const hasRightSeries = Object.values(block.series_axis ?? {}).includes('right');
+  block.reference_lines?.forEach((line, index) => {
+    if (line.axis === 'right' && !hasRightSeries) {
+      issue(
+        ['reference_lines', index, 'axis'],
+        'no series is on the right axis to read it against',
+      );
+    }
+  });
+
+  const categories = new Set(block.data.map((row) => String(row[block.category_key])));
+  block.markers?.forEach((marker, index) => {
+    if (!categories.has(String(marker.category))) {
+      issue(
+        ['markers', index, 'category'],
+        `marker category "${marker.category}" is not a ${block.category_key} in the data`,
+      );
+    }
+  });
+
+  if (type !== 'waterfall' && (block.start || block.end)) {
+    issue([block.start ? 'start' : 'end'], 'start and end are the totals of a waterfall');
+  }
+  if (type !== 'waterfall' && type !== 'funnel') return;
+
+  const valueKey = singleSeriesKeyOf(block);
+  if (!valueKey) {
+    issue(['value_key'], `a ${type} plots one measure: set value_key or one chart_config series`);
+    return;
+  }
+  const values = block.data.map((row) => row[valueKey]);
+  const numeric = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  );
+  if (numeric.length !== values.length) {
+    issue(['data'], `every ${type} row needs a number at "${valueKey}"`);
+    return;
+  }
+  if (type === 'waterfall' && block.start && block.end) {
+    // The bars must meet: the deltas carry the opening total to the closing one. Within 1% of
+    // the move, and never stricter than every figure rounded to the cent — rounding, not a
+    // missing cause. Measured against the move, not the totals: a $0.35 cause left out of a
+    // $5.40 rise is 6% of the story even when it is 1% of a $46.60 total.
+    const moved = numeric.reduce((total, delta) => total + delta, 0);
+    const expected = block.end.value - block.start.value;
+    const swing = Math.max(
+      Math.abs(expected),
+      numeric.reduce((total, delta) => total + Math.abs(delta), 0),
+    );
+    const tolerance = Math.max(swing * 0.01, 0.005 * (numeric.length + 2));
+    if (Math.abs(moved - expected) > tolerance + 1e-9) {
+      issue(
+        ['data'],
+        `waterfall deltas sum to ${moved}, but end − start is ${expected} (${block.end.value} − ${block.start.value})`,
+      );
+    }
+  }
+};
 
 /**
  * Chart-renderability invariants — net-new validation the parallel copies never
@@ -458,16 +643,18 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
  *      the series draws nothing and the legend lies). This does NOT apply to
  *      pie/doughnut, where `chart_config` is keyed by slice-label *values*
  *      (matching `fill: var(--color-{slice})`), not by data-row column keys.
+ *   3. The §4 vocabulary (`addChartVocabularyIssues`): a reference line has a numeric
+ *      value (the schema) and a cartesian chart to sit on, a waterfall's deltas sum to
+ *      `end − start` when both are given, and every named series, marker and axis exists.
  *
- * Shared by `chartBlockSchema` and the union's chart branch so both enforce the
- * same rules without re-parsing.
+ * Shared by `chartBlockSchema`, the union's chart branch and the Frontend's render
+ * union (whose `priority` is a rank, hence the Pick) so all enforce the same rules
+ * without re-parsing.
  */
 const SLICE_KEYED_CHART_TYPES = new Set(['pie', 'doughnut']);
 
-const addChartInvariantIssues = (
-  block: z.infer<typeof chartBlockBaseSchema>,
-  ctx: z.RefinementCtx,
-): void => {
+export const addChartInvariantIssues = (block: ChartInvariantInput, ctx: z.RefinementCtx): void => {
+  addChartVocabularyIssues(block, ctx);
   const rows = block.data;
   const missingCategory = rows.some((row) => !Object.hasOwn(row, block.category_key));
   if (missingCategory) {
@@ -1673,6 +1860,26 @@ export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
             });
           }
         });
+        // A goal line and a waterfall's totals print their figure like any point does.
+        looseArray(block.reference_lines).forEach((line, i) => {
+          const rec = looseRecord(line);
+          out.push({
+            value: rec.value,
+            where: `${id}.reference_lines[${i}].value`,
+            label: typeof rec.label === 'string' ? rec.label : 'reference_line',
+            format: formatOf(block.value_format, 'number'),
+          });
+        });
+        for (const total of ['start', 'end'] as const) {
+          const rec = block[total] == null ? null : looseRecord(block[total]);
+          if (!rec) continue;
+          out.push({
+            value: rec.value,
+            where: `${id}.${total}.value`,
+            label: typeof rec.label === 'string' ? rec.label : total,
+            format: formatOf(block.value_format, 'number'),
+          });
+        }
         break;
       }
       case 'goal_pacing':
@@ -1727,6 +1934,8 @@ export const headersOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
         label: null,
         format: 'text',
       });
+      labelled(looseArray(block.reference_lines), 'reference_lines');
+      labelled(looseArray(block.markers), 'markers');
     }
   }
   return out;

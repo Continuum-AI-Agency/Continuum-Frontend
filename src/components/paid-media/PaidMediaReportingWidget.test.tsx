@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
+import { type PaidMetricsResponse, PaidMetricsResponseSchema } from '@/lib/schemas/paidMetrics';
 import {
   deriveMetricTrendValue,
   MetricsPanel,
@@ -206,5 +206,57 @@ describe('MetricsPanel — delta colour follows the metric, not the sign', () =>
       />,
     );
     expect(deltaClassFor('+0.0%')).toContain('text-muted-foreground');
+  });
+});
+
+// A Google campaign whose goals name no single result: the edge nulls cpa (handler.ts daily
+// scopes) and says why in result_basis. Parsed the way the route parses it.
+describe('MetricsPanel — Google ambiguous result basis', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const ambiguous = PaidMetricsResponseSchema.parse({
+    scope: 'campaign',
+    currency: 'MXN',
+    metrics: {
+      spend: 79.82,
+      roas: 0,
+      impressions: 2100,
+      clicks: 64,
+      ctr: 3.0476,
+      cpc: 1.2472,
+      cpa: null,
+    },
+    result_basis: { rule: 'google_conversion_rule_v1', bucket: null, unambiguous: false },
+    comparison: { spend: { current: 79.82, previous: 70, percentageChange: 14.0286 }, cpa: null },
+    trends: [
+      {
+        date: '2026-10-20',
+        spend: 79.82,
+        clicks: 64,
+        impressions: 2100,
+        conversions: null,
+        roas: 0,
+        cpa: null,
+      },
+    ],
+    range: { since: '2026-10-20', until: '2026-10-26', preset: 'last_7d' },
+  });
+
+  it('prints CPA as "—" with the reason, never as a zero cost', () => {
+    render(<MetricsPanel data={ambiguous} expandedMetric="spend" onMetricSelect={() => {}} />);
+
+    const tile = screen.getByTestId('paid-widget-cpa');
+    expect(tile.textContent).toBe('CPA—No single result defined');
+    expect(tile.getAttribute('title')).toBe('No single result defined');
+    expect(screen.getByText('$79.82 MXN')).toBeTruthy();
+  });
+
+  it('adds no CPA tile when the payload carries a CPA (Meta)', () => {
+    render(<MetricsPanel data={baseData} expandedMetric="spend" onMetricSelect={() => {}} />);
+
+    expect(screen.queryByTestId('paid-widget-cpa')).toBeNull();
+    expect(screen.queryByText('No single result defined')).toBeNull();
   });
 });

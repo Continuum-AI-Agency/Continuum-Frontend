@@ -52,7 +52,7 @@ export type JainaUIDataTypes = {
   'jaina-report-error': Record<string, unknown>;
   'jaina-objective': Record<string, unknown>;
   'jaina-delegation': Record<string, unknown>;
-  'jaina-clarification': Record<string, unknown>;
+  'jaina-clarification': import('./jaina-clarification').JainaClarificationFrameData;
   'jaina-scaffold': Record<string, unknown>;
   /**
    * The gate. `jaina-approval` carries the preview a `tool-approval-request` cannot — the SDK's

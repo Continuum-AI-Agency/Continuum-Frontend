@@ -67,6 +67,23 @@ function scopedField(field: string): { column: string; platform: string | null }
     : { column: field, platform: null };
 }
 
+/** The audited columns that hold money, in the unit the audit stored them: the portfolio row
+ *  keeps budgets and targets in MAJOR units ("100" → "79.82"), and max_daily_apply_minor
+ *  says its own. Printed bare they read "100 → 79.82"; they print as "$79.82 MXN" (M1). */
+const MONEY_SETTINGS: Record<string, 'major' | 'minor'> = {
+  cpa_target: 'major',
+  daily_total: 'major',
+  max_daily_apply_minor: 'minor',
+  period_budget: 'major',
+  scale_max_daily: 'major',
+};
+
+/** Which money unit an audited column is stored in; null for a column that holds no money. */
+export function settingMoneyUnit(field: string | null | undefined): 'major' | 'minor' | null {
+  if (!field) return null;
+  return MONEY_SETTINGS[scopedField(field).column] ?? null;
+}
+
 export function settingLabel(field: string | null | undefined): string {
   if (!field) return 'Setting';
   const { column, platform } = scopedField(field);

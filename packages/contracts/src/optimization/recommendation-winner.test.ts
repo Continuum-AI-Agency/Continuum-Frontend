@@ -57,3 +57,37 @@ describe('recommendationWinnerOf', () => {
     expect(recommendationWinnerOf(wire)).toBeNull();
   });
 });
+
+// P15 rows 1–2: S1's two counts and D1's missing day ride evidence as structured fields.
+describe('evidence.capBinding / evidence.missingSinceDay', () => {
+  const base = {
+    metric: 'days_absent',
+    value: 0,
+    comparator: 'not ACTIVE on Meta',
+    threshold: 7,
+    window: 'd7',
+    estImpactPerDay: null,
+    source: 'engine',
+  };
+
+  test('typed when present', () => {
+    const parsed = RecommendationEvidenceSchema.parse({
+      ...base,
+      capBinding: { atCap: 3, breached: 1, moves: 4 },
+      missingSinceDay: '2026-10-20',
+    });
+    expect(parsed.capBinding).toEqual({ atCap: 3, breached: 1, moves: 4 });
+    expect(parsed.missingSinceDay).toBe('2026-10-20');
+  });
+
+  test('absent on old rows, and a malformed value reads as absent without failing the parse', () => {
+    expect(RecommendationEvidenceSchema.parse(base).capBinding).toBeUndefined();
+    const parsed = RecommendationEvidenceSchema.parse({
+      ...base,
+      capBinding: { atCap: -1 },
+      missingSinceDay: '2026-10-20T06:00:00Z',
+    });
+    expect(parsed.capBinding).toBeUndefined();
+    expect(parsed.missingSinceDay).toBeUndefined();
+  });
+});

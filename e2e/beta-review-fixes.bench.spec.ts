@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -44,7 +44,13 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      the SAME cost per result (raw provenance value), the same distance to target, the same
 //      7-day spend (Overview row vs hero tile), from the same source. A figure the live read
 //      could not supply is the last cycle's and must carry its date ("as of Oct 15") on both
-//      surfaces, and its age past two days; it is never shown as current.
+//      surfaces, and its age past two days; it is never shown as current. A portfolio with a
+//      member paused inside the window (enrolled, not in the read's ACTIVE fleet) is priced LIVE
+//      once the read carries that member's windows in `inactiveWindows` (P15 row 4). Before the
+//      edge serves the field that hop is recorded SKIP by name. BETA_REVIEW_LOCAL_EDGE_DIR=<dir>
+//      (written by `bun run supabase/functions/paid-media-metrics/paused-member.bench.ts` with
+//      BENCH_LOCAL_EDGE_DIR) answers the page's adset_snapshots read with the LOCAL edge's
+//      envelope over the same real Meta accounts — the proof before the edge deploys.
 //
 // ── READ-ONLY ON PRODUCTION ──
 //   * Nothing here clicks Approve, Dismiss, Revert, Apply, Pause, Stop, Send, an offered
@@ -155,13 +161,25 @@ async function selectBrand(member: Member, brandId: string): Promise<void> {
   expect(data, `the ${member.email} bench session must render brand ${brandId}`).toBe(brandId);
 }
 
+/** The shared prod database aborts a pooled transaction or times out under load; a read is
+ *  retried twice on those, and anything else fails at once. */
+const TRANSIENT_DB = /statement timeout|transaction is aborted|fetch failed/i;
+async function readWithRetry<T extends { error: { message: string } | null }>(
+  read: () => PromiseLike<T>,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await read();
+    if (!result.error || attempt >= 3 || !TRANSIENT_DB.test(result.error.message)) return result;
+    await new Promise((done) => setTimeout(done, 2_000 * attempt));
+  }
+}
+
 async function moneyLedgerCounts(member: Member): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   for (const brandId of OPTIMIZER_BRANDS) {
-    const { data, error } = await memberClient(member).rpc('optimizer_list_actions', {
-      p_brand_id: brandId,
-      p_limit: 500,
-    });
+    const { data, error } = await readWithRetry(() =>
+      memberClient(member).rpc('optimizer_list_actions', { p_brand_id: brandId, p_limit: 500 }),
+    );
     if (error) throw new Error(`optimizer_list_actions(${brandId}): ${error.message}`);
     const rows = Array.isArray(data) ? (data as Array<{ family?: unknown }>) : [];
     counts.set(brandId, rows.filter((row) => row.family === 'money').length);
@@ -200,9 +218,9 @@ type PortfolioListRow = {
 };
 
 async function listPortfolios(member: Member, brandId: string): Promise<PortfolioListRow[]> {
-  const { data, error } = await memberClient(member).rpc('optimizer_list_portfolios', {
-    p_brand_id: brandId,
-  });
+  const { data, error } = await readWithRetry(() =>
+    memberClient(member).rpc('optimizer_list_portfolios', { p_brand_id: brandId }),
+  );
   if (error) throw new Error(`optimizer_list_portfolios(${brandId}): ${error.message}`);
   return (data ?? []) as PortfolioListRow[];
 }
@@ -228,6 +246,23 @@ async function optimizerAccountFor(member: Member, brandId: string): Promise<str
   const metaHolder = portfolios.find((p) => (p.platforms ?? ['meta']).includes('meta'));
   if (metaHolder?.ad_account_id) return metaHolder.ad_account_id;
   return (await listMetaAccounts(member, brandId))[0] ?? null;
+}
+
+/** A portfolio's enrolled Meta roster, the read the page prices its figure over. */
+async function rosterOf(member: Member, portfolioId: string): Promise<string[]> {
+  const { data, error } = await readWithRetry(() =>
+    memberClient(member).rpc('optimizer_list_portfolio_adsets', { p_portfolio_id: portfolioId }),
+  );
+  if (error) throw new Error(`optimizer_list_portfolio_adsets(${portfolioId}): ${error.message}`);
+  return ((data ?? []) as Array<{ adset_id: string }>).map((row) => row.adset_id);
+}
+
+/** The local edge's adset_snapshots envelope for an account (test 6's local-edge mode), or null. */
+function localEdgeEnvelope(account: string): unknown {
+  const dir = process.env.BETA_REVIEW_LOCAL_EDGE_DIR;
+  if (!dir) return null;
+  const file = resolve(dir, `act_${bare(account)}.json`);
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
 }
 
 const pendingWork = (p: PortfolioListRow) =>
@@ -414,14 +449,6 @@ test.describe('beta-review fixes — live', () => {
   }) => {
     const runsTable = admin.schema('brand_profiles').from('jaina_conversation_runs');
     const events = admin.schema('brand_profiles').from('jaina_conversation_run_events');
-    const { data: asked, error } = await events
-      .select('run_id,user_email,payload')
-      .eq('event_type', 'response.clarification_request')
-      .in('user_email', [VIVO_EMAIL, EASYFIT_EMAIL])
-      .order('id', { ascending: false })
-      .limit(40);
-    if (error) throw new Error(`clarification lookup failed: ${error.message}`);
-
     type Premise = {
       kind: 'answered' | 'pending';
       email: string;
@@ -432,44 +459,63 @@ test.describe('beta-review fixes — live', () => {
       question: string;
       options: string[];
     };
+    // By run, then by event: an `event_type` scan of the whole run-event log has no index and
+    // times out on the shared prod database. The run row names its result type, the run_id index
+    // finds its frames, and the walk stops at the first premise of each kind.
+    const { data: askedRuns, error } = await readWithRetry(() =>
+      runsTable
+        .select('run_id,user_email,session_id,brand_id,ad_account_id,created_at')
+        .eq('result_type', 'clarification_request')
+        .in('user_email', [VIVO_EMAIL, EASYFIT_EMAIL])
+        .order('created_at', { ascending: false })
+        .limit(40),
+    );
+    if (error) throw new Error(`clarification lookup failed: ${error.message}`);
     const premises: Premise[] = [];
-    for (const row of (asked ?? []) as Array<{
+    for (const run of (askedRuns ?? []) as Array<{
       run_id: string;
       user_email: string;
-      payload: { clarification?: { question?: string } };
+      session_id: string;
+      brand_id: string;
+      ad_account_id: string | null;
+      created_at: string;
     }>) {
-      const { data: run } = await runsTable
-        .select('session_id,brand_id,ad_account_id,created_at')
-        .eq('run_id', row.run_id)
-        .single();
-      if (!run) continue;
-      const { count: later } = await runsTable
-        .select('run_id', { count: 'exact', head: true })
-        .eq('session_id', run.session_id)
-        .gt('created_at', run.created_at);
+      if (premises.length === 2) break;
+      const { count: later } = await readWithRetry(() =>
+        runsTable
+          .select('run_id', { count: 'exact', head: true })
+          .eq('session_id', run.session_id)
+          .gt('created_at', run.created_at),
+      );
       const kind = (later ?? 0) === 0 ? 'pending' : 'answered';
       // The established bench member's answered clarification, and the one clarification in
       // production nobody has answered yet (the card's case), whoever asked it.
-      if (kind === 'answered' && row.user_email !== VIVO_EMAIL) continue;
+      if (kind === 'answered' && run.user_email !== VIVO_EMAIL) continue;
       if (premises.some((premise) => premise.kind === kind)) continue;
-      const { data: blocks } = await events
-        .select('payload')
-        .eq('run_id', row.run_id)
-        .eq('event_type', 'response.block.delta');
-      const survey = (blocks ?? [])
+      const { data: frames } = await readWithRetry(() =>
+        events
+          .select('event_type,payload')
+          .eq('run_id', run.run_id)
+          .in('event_type', ['response.clarification_request', 'response.block.delta']),
+      );
+      const asked = (frames ?? []).find(
+        (frame) => frame.event_type === 'response.clarification_request',
+      )?.payload as { clarification?: { question?: string } } | undefined;
+      if (!asked) continue;
+      const survey = (frames ?? [])
         .map(
-          (block) =>
-            (block.payload as { block?: { category?: string; alternatives?: string[] } }).block,
+          (frame) =>
+            (frame.payload as { block?: { category?: string; alternatives?: string[] } }).block,
         )
         .find((block) => block?.category === 'survey');
       premises.push({
         kind,
-        email: row.user_email,
-        runId: row.run_id,
+        email: run.user_email,
+        runId: run.run_id,
         sessionId: run.session_id,
         brandId: run.brand_id,
         adAccountId: run.ad_account_id,
-        question: row.payload.clarification?.question ?? '',
+        question: asked.clarification?.question ?? '',
         options: survey?.alternatives ?? [],
       });
     }
@@ -942,6 +988,23 @@ test.describe('beta-review fixes — live', () => {
           rawBoolean.length === 0 && snake.length === 0 && rawIds.length === 0,
           `raw true/false ${JSON.stringify(rawBoolean.slice(0, 3).map((r) => r.line))}; snake_case ${JSON.stringify(snake.slice(0, 4).map((r) => `${r.line} | ${r.change}`))}; raw ids in before → after ${JSON.stringify(rawIds.slice(0, 3).map((r) => `${r.line} | ${r.change}`))}`,
         );
+        // Money is "$79.82 MXN" (M1): a budget or target row never prints a bare number.
+        const MONEY_LABEL =
+          /^(Daily budget|Total daily budget|CPA target|Period budget|Scale ceiling \(daily\)|Max daily auto-apply)\b/;
+        const money = rows.filter((row) => MONEY_LABEL.test(row.label) && row.change);
+        // The arrow is an icon, so the text reads "$100 MXN $79.82 MXN −20%": every amount carries
+        // its code, and no token is a bare number.
+        const bareMoney = money.filter((row) => {
+          const change = row.change ?? '';
+          return (
+            !/\b[A-Z]{3}\b/.test(change) || change.split(' ').some((t) => /^\d[\d,.]*$/.test(t))
+          );
+        });
+        check(
+          `activity.${tag}.money-currency`,
+          bareMoney.length === 0,
+          `${money.length} money row(s); bare ${JSON.stringify(bareMoney.slice(0, 3).map((r) => `${r.line} | ${r.change}`))}; sample ${JSON.stringify(money.slice(0, 2).map((r) => r.change))}`,
+        );
         const settingLines = rows
           .filter(
             (row) =>
@@ -977,7 +1040,32 @@ test.describe('beta-review fixes — live', () => {
       if (hero) return Number(hero[2]) * (hero[1] === '+' ? 1 : -1);
       return text === 'on target' ? 0 : null;
     };
+    /** The hero's figure once its reads land: the anchor has held still for 6s. */
+    const settledHero = async (page: Page) => {
+      let last = '';
+      let stableSince = Date.now();
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        const now = `${await raw(page, 'anchor.cost')}|${await raw(page, 'tiles.spend')}|${await page.getByTestId('anchor-as-of').count()}`;
+        if (now !== last) {
+          last = now;
+          stableSince = Date.now();
+        } else if (Date.now() - stableSince > 6_000) break;
+        await page.waitForTimeout(1_000);
+      }
+      const vs = page.getByTestId('anchor-vs-target');
+      const asOf = page.getByTestId('anchor-as-of');
+      return {
+        cost: await raw(page, 'anchor.cost'),
+        spend: await raw(page, 'tiles.spend'),
+        pct: (await vs.count()) > 0 ? signedPct((await vs.innerText()).trim()) : null,
+        asOf: (await asOf.count()) > 0 ? (await asOf.innerText()).trim() : null,
+      };
+    };
     let compared = 0;
+    let googleCompared = 0;
+    let pausedSeen = 0;
+    let pausedLive = 0;
     for (const brandId of OPTIMIZER_BRANDS) {
       const tag = brandId.slice(0, 8);
       await selectBrand(vivo, brandId);
@@ -995,7 +1083,35 @@ test.describe('beta-review fixes — live', () => {
         continue;
       }
       const context = await memberContext(browser, vivo);
+      const localEdge = localEdgeEnvelope(account);
+      if (localEdge) {
+        await context.route('**/functions/v1/paid-media-metrics', async (route) => {
+          const body = route.request().postDataJSON() as { scope?: string } | null;
+          if (route.request().method() !== 'POST' || body?.scope !== 'adset_snapshots')
+            return route.fallback();
+          const response = await route.fetch();
+          await route.fulfill({ response, json: localEdge });
+        });
+      }
       const page = await context.newPage();
+      // The adset_snapshots envelope the page actually read, off the wire.
+      let fleetRead: { fleet: Set<string>; inactive: Set<string> | null } | null = null;
+      page.on('response', async (response) => {
+        if (!response.url().includes('/functions/v1/paid-media-metrics')) return;
+        const sent = response.request().postDataJSON() as { scope?: string } | null;
+        if (sent?.scope !== 'adset_snapshots') return;
+        const envelope = (await response.json().catch(() => null)) as {
+          snapshots?: Array<{ id?: string }>;
+          inactiveWindows?: Array<{ id?: string }>;
+        } | null;
+        if (!envelope || !Array.isArray(envelope.snapshots)) return;
+        fleetRead = {
+          fleet: new Set(envelope.snapshots.map((row) => String(row.id))),
+          inactive: Array.isArray(envelope.inactiveWindows)
+            ? new Set(envelope.inactiveWindows.map((row) => String(row.id)))
+            : null,
+        };
+      });
       try {
         const base = `/scale?tab=performance&adAccountId=${encodeURIComponent(account)}`;
         // ── the Portfolios list ──
@@ -1029,6 +1145,38 @@ test.describe('beta-review fixes — live', () => {
           });
         }
         await shoot(page, `6-list-${tag}`);
+
+        // ── members paused inside the window: priced live once the read carries them ──
+        const read = fleetRead as { fleet: Set<string>; inactive: Set<string> | null } | null;
+        if (!read) {
+          recorder.record(`figure.${tag}.paused`, 'SKIP', 'the adset_snapshots read was not seen');
+        } else {
+          for (const p of inView.filter((row) => list.has(row.id))) {
+            const members = await rosterOf(vivo, p.id);
+            const paused = members.filter((id) => !read.fleet.has(id));
+            if (members.length === 0 || paused.length === 0) continue;
+            pausedSeen += 1;
+            const rowFigure = list.get(p.id) as ListFigure;
+            const label = `figure.${tag}.${p.name}.paused-member`;
+            const detail = `${paused.length} of ${members.length} members not ACTIVE; row [${rowFigure.source ?? 'none'}] ${rowFigure.asOf ?? ''}`;
+            if (!read.inactive) {
+              recorder.record(
+                label,
+                'SKIP',
+                `${detail} — the deployed paid-media-metrics predates inactiveWindows (P15 row 4)`,
+              );
+              continue;
+            }
+            if (paused.some((id) => !read.inactive?.has(id))) {
+              note(
+                `${label}: ${detail} — a member spent nothing in d14, the dated snapshot stands`,
+              );
+              continue;
+            }
+            pausedLive += rowFigure.source === 'live' ? 1 : 0;
+            check(label, rowFigure.source === 'live' && rowFigure.asOf == null, detail);
+          }
+        }
 
         // ── the Overview rows ──
         await page.goto(`${base}&optimizerView=overview`, { waitUntil: 'domcontentloaded' });
@@ -1067,25 +1215,12 @@ test.describe('beta-review fixes — live', () => {
             );
             continue;
           }
-          // The hero settles once its reads land: wait until the anchor holds still for 6s.
-          let last = '';
-          let stableSince = Date.now();
-          const deadline = Date.now() + 90_000;
-          while (Date.now() < deadline) {
-            const now = `${await raw(page, 'anchor.cost')}|${await raw(page, 'tiles.spend')}|${await page.getByTestId('anchor-as-of').count()}`;
-            if (now !== last) {
-              last = now;
-              stableSince = Date.now();
-            } else if (Date.now() - stableSince > 6_000) break;
-            await page.waitForTimeout(1_000);
-          }
-          const heroCost = await raw(page, 'anchor.cost');
-          const heroSpend = await raw(page, 'tiles.spend');
-          const vs = page.getByTestId('anchor-vs-target');
-          const heroPct = (await vs.count()) > 0 ? signedPct((await vs.innerText()).trim()) : null;
-          const heroAsOfNode = page.getByTestId('anchor-as-of');
-          const heroAsOf =
-            (await heroAsOfNode.count()) > 0 ? (await heroAsOfNode.innerText()).trim() : null;
+          const {
+            cost: heroCost,
+            spend: heroSpend,
+            pct: heroPct,
+            asOf: heroAsOf,
+          } = await settledHero(page);
           const heroLine = `hero cost ${heroCost} spend ${heroSpend} vs ${heroPct}% ${heroAsOf ?? '(live)'}`;
           const listLine =
             `list cost ${rowFigure.cost} ${rowFigure.chip} [${rowFigure.source ?? 'none'}] ${rowFigure.asOf ?? ''}`.trim();
@@ -1107,10 +1242,109 @@ test.describe('beta-review fixes — live', () => {
           );
         }
         await shoot(page, `6-hero-${tag}`);
+
+        // ── Google portfolios: the Google tab row and the hero print one figure (P15 row 5) ──
+        const onGoogle = (await listPortfolios(vivo, brandId)).filter((p) =>
+          (p.platforms ?? []).includes('google_ads'),
+        );
+        if (onGoogle.length > 0) {
+          await page.goto(`${base}&optimizerView=overview&platform=google_ads`, {
+            waitUntil: 'domcontentloaded',
+          });
+          await expect(
+            page.locator('[data-testid="optimizer-overview"][data-platform-tab="google_ads"]'),
+          ).toBeVisible({ timeout: 180_000 });
+          await page.waitForTimeout(8_000);
+          const rows = new Map<
+            string,
+            { cost: string | null; source: string | null; asOf: string | null }
+          >();
+          for (const p of onGoogle) {
+            const row = page.locator(`[data-portfolio-id="${p.id}"]`).first();
+            if ((await row.count()) === 0) {
+              note(`figure.${tag}.google.${p.name}: no row on the Google tab`);
+              continue;
+            }
+            const asOf = row.getByTestId('portfolio-figure-as-of');
+            rows.set(p.id, {
+              cost: await raw(page, `portfolio-row.${p.id}.cost`),
+              source: await row
+                .locator('[data-figure-source]')
+                .first()
+                .getAttribute('data-figure-source')
+                .catch(() => null),
+              asOf: (await asOf.count()) > 0 ? (await asOf.innerText()).trim() : null,
+            });
+          }
+          await shoot(page, `6-google-${tag}`);
+          for (const p of onGoogle.filter((row) => rows.has(row.id))) {
+            const row = rows.get(p.id) as {
+              cost: string | null;
+              source: string | null;
+              asOf: string | null;
+            };
+            await page.goto(`${base}&optimizerView=portfolios&portfolio=${p.id}`, {
+              waitUntil: 'domcontentloaded',
+            });
+            const appeared = await page
+              .getByTestId('portfolio-anchor')
+              .waitFor({ state: 'visible', timeout: 150_000 })
+              .then(() => true)
+              .catch(() => false);
+            const rowLine =
+              `row cost ${row.cost} [${row.source ?? 'none'}] ${row.asOf ?? ''}`.trim();
+            if (!appeared) {
+              recorder.record(
+                `figure.${tag}.google.${p.name}`,
+                'SKIP',
+                `no hero anchor — ${rowLine}`,
+              );
+              continue;
+            }
+            const hero = await settledHero(page);
+            // Google has no browser-readable live read: its figure is the stored one, dated.
+            const dated =
+              row.source === 'snapshot' && /^as of [A-Z][a-z]{2} \d{1,2}/.test(row.asOf ?? '');
+            googleCompared += 1;
+            check(
+              `figure.${tag}.google.${p.name}`,
+              hero.cost === row.cost && hero.asOf === row.asOf && (row.cost == null || dated),
+              `${rowLine} | hero cost ${hero.cost} ${hero.asOf ?? '(no as-of)'}`,
+            );
+            // G8 F16: the hero said "0 leads … no spend. Blocked: zero delivery" beside a page
+            // pricing $4,332 MXN / 176 leads — the Meta half read as the whole portfolio. Checked
+            // at the default range and at 14 days, the range G8 had open.
+            for (const range of ['', 'd14']) {
+              if (range) {
+                await page.goto(
+                  `${base}&optimizerView=portfolios&portfolio=${p.id}&range=${range}`,
+                  { waitUntil: 'domcontentloaded' },
+                );
+                await settledHero(page);
+              }
+              const hero = page.getByTestId('portfolio-hero');
+              const words = await hero.innerText();
+              const read = await hero.getAttribute('data-hero-read').catch(() => null);
+              const zeroBlocker = await page
+                .locator('[data-testid="headline-blocker"][data-blocker="zero_delivery"]')
+                .count();
+              const falseZero =
+                zeroBlocker > 0 ||
+                /zero delivery|no spend|\$0(\.00)? [A-Z]{3} spent|\b0 leads\b/i.test(words);
+              check(
+                `figure.${tag}.google.${p.name}.no-false-zero${range ? `.${range}` : ''}`,
+                row.cost == null || !falseZero,
+                `${rowLine} | hero read=${read ?? 'n/a'} ${falseZero ? 'claims zero delivery' : 'states no false zero'}: ${JSON.stringify(words.replace(/\s+/g, ' ').slice(0, 220))}`,
+              );
+            }
+          }
+        }
       } finally {
         await context.close();
       }
     }
     check('figure.compared', compared > 0, `${compared} portfolio(s) compared list ↔ hero`);
+    note(`figure: ${googleCompared} Google portfolio(s) compared tab row ↔ hero`);
+    note(`figure: ${pausedSeen} portfolio(s) with a paused member, ${pausedLive} priced live`);
   });
 });

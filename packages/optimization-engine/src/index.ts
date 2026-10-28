@@ -43,6 +43,7 @@ export {
   countDarkDays,
   DARK_DAYS_THRESHOLD,
   type DeliveryEvaluation,
+  calendarDayIn,
   evaluateDelivery,
   impressionsWeekOverWeek,
   OFF_META_FRESH_DAYS,

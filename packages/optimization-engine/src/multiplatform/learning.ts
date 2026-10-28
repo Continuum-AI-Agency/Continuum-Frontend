@@ -95,6 +95,13 @@ export function protectDaysFor(s: AdSetSnapshot, cfg: EngineConfig): number {
   return cfg.newItemProtectDays;
 }
 
+/** In a grace its platform makes longer than the engine's own (PMax). Such an entity keeps its
+ *  whole budget until the grace ends, so nothing may starve it: a trigger's or a rule's age gate
+ *  is the engine's 7 days, and a starve used to turn a 10-day PMax into a 35% cut (G8 F3). */
+export function isLongProtected(s: AdSetSnapshot, cfg: EngineConfig): boolean {
+  return s.status === 'grace' && protectDaysFor(s, cfg) > cfg.newItemProtectDays;
+}
+
 /** How far one cycle may move an entity's budget on its platform. */
 export type PlatformCaps = {
   platform: PlatformId;

@@ -62,32 +62,41 @@ export function evaluateSettings(
   const entities = collectionPlural(snapshots);
 
   // S1 — the velocity cap bound on most moves. "At the cap" is a change whose size is
-  // the cap itself (the one-shot clamp), or one the solver had to breach to conserve.
+  // the cap itself: the one-shot clamp held it there. A capBreached move is the opposite —
+  // the solver carried it PAST the cap (pacing and pool conservation may), so the cap did
+  // not bind it. Breaches are counted on their own and never toward the share: a cycle whose
+  // moves went past the cap but few sat at it is not a cap that binds, and S1 stays quiet.
   if (n >= 2) {
     const cap = cfg.velocityCapPct;
+    const breached = movable.filter((it) => it.capBreached).length;
     const atCap = movable.filter(
-      (it) => it.capBreached || Math.abs(Math.abs(it.changePct) - cap) < 1e-6,
-    );
-    const share = atCap.length / n;
+      (it) => !it.capBreached && Math.abs(Math.abs(it.changePct) - cap) < 1e-6,
+    ).length;
+    const share = atCap / n;
     if (share >= CAP_BINDING_SHARE) {
       const applyCap = ctx.applyCapPct ?? null;
       const canRaise = applyCap != null && applyCap > 0 && applyCap < cap;
       const capPct = Math.round(cap * 100);
+      const past =
+        breached > 0
+          ? ` ${breached} of ${n} moves went past the ±${capPct}% cap: pacing may exceed it.`
+          : '';
       recs.push({
         adSetId: scope,
         kind: 'settings',
         trigger: 'S1_velocity_cap_binding',
         severity: 'medium',
         reason: canRaise
-          ? `The ±${capPct}% velocity cap bound on ${atCap.length} of ${n} moves this cycle, and your autopilot holds anything over ${Math.round(applyCap * 100)}% for approval — so most of what the engine scored waits on you every cycle. Raising the hold threshold to the ${capPct}% the ${cfg.objective ?? 'objective'} profile is calibrated to lets reallocation complete as scored.`
-          : `The ±${capPct}% velocity cap bound on ${atCap.length} of ${n} moves this cycle: the engine scored bigger changes than the cap let through. That is the calibrated cap for ${cfg.objective ?? 'this objective'}; if the account needs faster moves, a shorter cycle or scale mode is the lever, not a looser cap.`,
+          ? `The ±${capPct}% velocity cap bound on ${atCap} of ${n} moves this cycle, and your autopilot holds anything over ${Math.round(applyCap * 100)}% for approval — so most of what the engine scored waits on you every cycle. Raising the hold threshold to the ${capPct}% the ${cfg.objective ?? 'objective'} profile is calibrated to lets reallocation complete as scored.${past}`
+          : `The ±${capPct}% velocity cap bound on ${atCap} of ${n} moves this cycle: the engine scored bigger changes than the cap let through. That is the calibrated cap for ${cfg.objective ?? 'this objective'}; if the account needs faster moves, a shorter cycle or scale mode is the lever, not a looser cap.${past}`,
         evidence: {
           metric: 'cap_binding_share',
           value: share,
-          comparator: `${atCap.length} of ${n} moves at the ±${capPct}% cap`,
+          comparator: `${atCap} of ${n} moves at the ±${capPct}% cap`,
           threshold: CAP_BINDING_SHARE,
           window: 'd3',
           estImpactPerDay: null,
+          capBinding: { atCap, breached, moves: n },
           // A settings recommendation has no money on it — the cost of a bound cap is the
           // moves that did not happen, which nothing here can price. Leading with a blank
           // is why the headline exists: the share IS the finding, and it is measured.
@@ -103,7 +112,7 @@ export function evaluateSettings(
             entity: PORTFOLIO_ENTITY,
             figure: Math.round(share * 100),
             unit: '% de los movimientos en el tope',
-            comparator: `${atCap.length} de ${n} al ±${capPct}%, sobre el piso de ${Math.round(CAP_BINDING_SHARE * 100)}%`,
+            comparator: `${atCap} de ${n} al ±${capPct}%, sobre el piso de ${Math.round(CAP_BINDING_SHARE * 100)}%`,
             window: 'd3',
           }),
           action: action(

@@ -5,6 +5,8 @@ import React, { useCallback, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Pill } from '@/components/kibo-ui/pill';
 import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
+import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
+import { NO_SINGLE_RESULT } from '@/components/paid-media/optimizer/sections/platforms/googleAdsOverviewModel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,11 +24,10 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { figureProps, formatCurrency } from '@/components/paid-media/optimizer/format';
-import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 
 type Props = {
   brandId: string;
@@ -822,7 +823,13 @@ export function MetricsPanel({
                         {...(item.format === 'currency'
                           ? figureProps(`home.widget.${item.key}`, item.value, currency, 'd7')
                           : COUNT_METRICS.has(item.key)
-                            ? figureProps(`home.widget.${item.key}`, item.value, null, 'd7', 'count')
+                            ? figureProps(
+                                `home.widget.${item.key}`,
+                                item.value,
+                                null,
+                                'd7',
+                                'count',
+                              )
                             : {})}
                       >
                         {formatValue(item.value, item.format, currency)}
@@ -843,6 +850,36 @@ export function MetricsPanel({
               </button>
             );
           })}
+          {/* A null CPA is the Google edge saying the account's goals name no single result
+              (result_basis.unambiguous false). Say so; never print it as 0. */}
+          {metrics.cpa === null ? (
+            <div
+              data-testid="paid-widget-cpa"
+              title={NO_SINGLE_RESULT}
+              className="flex min-h-[64px] flex-col items-center justify-center overflow-hidden rounded-lg border border-subtle bg-surface"
+            >
+              <div className="flex w-full flex-col items-center justify-center gap-0 p-2 text-center">
+                <span
+                  className="w-full truncate font-medium leading-none text-muted-foreground"
+                  style={{ fontSize: '0.66rem' }}
+                >
+                  CPA
+                </span>
+                <div
+                  className="w-full truncate font-semibold leading-tight tabular-nums"
+                  style={{ fontSize: '0.8rem' }}
+                >
+                  —
+                </div>
+                <span
+                  className="w-full truncate leading-none text-muted-foreground"
+                  style={{ fontSize: '0.66rem' }}
+                >
+                  {NO_SINGLE_RESULT}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

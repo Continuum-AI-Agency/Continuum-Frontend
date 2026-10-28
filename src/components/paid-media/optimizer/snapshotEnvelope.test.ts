@@ -43,6 +43,19 @@ describe('parseOptimizerSnapshotEnvelope', () => {
     expect(parsed.fetchedAt).toBeNull();
     expect(parsed.snapshots).toHaveLength(1);
     expect(parsed.targeting).toEqual([]);
+    expect(parsed.inactiveWindows).toEqual([]);
+    expect(parsed.timezone).toBeNull();
+  });
+
+  it('keeps ad sets paused inside the window beside the fleet, never in it', () => {
+    const windows = SNAPSHOT.windows;
+    const parsed = parseOptimizerSnapshotEnvelope({
+      snapshots: [SNAPSHOT],
+      inactiveWindows: [{ id: 'paused-1', windows }],
+    });
+
+    expect(parsed.inactiveWindows).toEqual([{ id: 'paused-1', windows }]);
+    expect(parsed.snapshots.map((s) => s.id)).toEqual([SNAPSHOT.id]);
   });
 
   it("keeps each ad set's targeting spec beside the fleet, never on a snapshot", () => {

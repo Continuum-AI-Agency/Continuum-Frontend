@@ -9,14 +9,18 @@
 import type { AdAccount } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
 import { useOptimizerAdAccounts } from '../../useOptimizerData';
+import {
+  type GoogleReadWindow,
+  invokeGoogleMetrics,
+  parseGoogleAccountOverview,
+  parseGoogleCampaigns,
+  rangeOf,
+} from '../google/googleReads';
 import {
   buildGoogleOverview,
   completeDaysWindow,
-  GoogleAccountOverviewSchema,
   type GoogleOverview,
-  GoogleTopCampaignsSchema,
 } from './googleAdsOverviewModel';
 import { accountsOn } from './platformTabsModel';
 
@@ -31,56 +35,23 @@ export type GoogleAdsOverviewState =
   | { status: 'error'; account: AdAccount | null; message: string }
   | { status: 'ready'; account: AdAccount; overview: GoogleOverview };
 
-/** The window a read covers, as ISO dates. */
-export type GoogleReadWindow = { since: string; until: string };
-
 export const googleAdsQueryKeys = {
   overview: (brandId: string, customerId: string, window: GoogleReadWindow) =>
     ['optimizer', 'google-ads-overview', brandId, customerId, window.since, window.until] as const,
   connection: () => ['optimizer', 'google-connection'] as const,
 };
 
-async function invokeGoogleMetrics(
-  window: GoogleReadWindow,
-  body: Record<string, unknown>,
-): Promise<unknown> {
-  const { data, error } = await createSupabaseBrowserClient().functions.invoke(
-    'paid-media-metrics',
-    {
-      body: {
-        platform: 'google-ads',
-        range: { preset: 'custom', since: window.since, until: window.until },
-        ...body,
-      },
-    },
-  );
-  if (error) {
-    throw new Error(await readEdgeErrorMessage(error, 'The Google Ads read did not answer.'));
-  }
-  return data;
-}
-
 export async function fetchGoogleAdsOverview(
   brandId: string,
   customerId: string,
   window: GoogleReadWindow,
 ): Promise<GoogleOverview> {
-  const base = { brandId, accountId: customerId };
+  const base = { brandId, accountId: customerId, range: rangeOf(window) };
   const [account, campaigns] = await Promise.all([
-    invokeGoogleMetrics(window, { ...base, scope: 'account_overview' }),
-    invokeGoogleMetrics(window, {
-      ...base,
-      scope: 'top_campaigns',
-      kpi: 'spend',
-      limit: CAMPAIGN_LIMIT,
-    }),
+    invokeGoogleMetrics({ ...base, scope: 'account_overview' }),
+    invokeGoogleMetrics({ ...base, scope: 'top_campaigns', kpi: 'spend', limit: CAMPAIGN_LIMIT }),
   ]);
-  const parsedAccount = GoogleAccountOverviewSchema.safeParse(account);
-  const parsedCampaigns = GoogleTopCampaignsSchema.safeParse(campaigns);
-  if (!parsedAccount.success || !parsedCampaigns.success) {
-    throw new Error('The Google Ads read came back in a shape this page does not know.');
-  }
-  return buildGoogleOverview(parsedAccount.data, parsedCampaigns.data);
+  return buildGoogleOverview(parseGoogleAccountOverview(account), parseGoogleCampaigns(campaigns));
 }
 
 /** Whether the signed-in user has a Google login at all. RLS scopes user_integrations to its

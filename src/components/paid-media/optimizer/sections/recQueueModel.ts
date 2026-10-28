@@ -202,12 +202,12 @@ export function daysSince(
 }
 
 // ── The velocity-cap settings finding, said truthfully ───────────────────────
-// S1 counts a move as "bound by the cap" when its size equals the cap OR when the solver had
-// to breach it (cap_breached). A pacing-driven cut of -37% to -60% is the second kind: the cap
-// did not bind it, pacing carried it past the cap, which pacing is allowed to do. The engine
-// reason still says "the ±30% velocity cap bound on 6 of 6 moves". Until it tells the two apart
-// (packages/optimization-engine/src/settings.ts, S1), the queue recounts from the cycle's own
-// items and says what happened.
+// S1 used to count a move as "bound by the cap" when its size equals the cap OR when the solver
+// had to breach it (cap_breached). A pacing-driven cut of -37% to -60% is the second kind: the
+// cap did not bind it, pacing carried it past the cap, which pacing is allowed to do — yet the
+// reason said "the ±30% velocity cap bound on 6 of 6 moves". The engine now counts the two apart
+// and carries both counts as `evidence.capBinding`; rows written before it did are recounted
+// here from the cycle's own items.
 
 const CAP_EPS = 0.005;
 
@@ -217,6 +217,8 @@ export function withHonestCapBinding<
   T extends Pick<RecommendationRow, 'trigger' | 'reason' | 'evidence'>,
 >(rec: T, items: ReadonlyArray<Pick<CycleItemRow, 'change_pct'>>): T {
   if (rec.trigger !== 'S1_velocity_cap_binding') return rec;
+  // The engine's own counts already say it right; the recount below is only the fallback for rows written before them.
+  if (rec.evidence?.capBinding) return rec;
   const capMatch = /±(\d+(?:\.\d+)?)%/.exec(rec.evidence?.comparator ?? rec.reason ?? '');
   if (!capMatch) return rec;
   const capPct = Number(capMatch[1]);

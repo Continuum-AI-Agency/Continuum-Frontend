@@ -15,7 +15,8 @@ export type PaidMetricsComparison = Record<
   }
 >;
 
-export type PaidMetricsTrendPoint = DailyMetric;
+/** `cpa` is null on a day the Google edge could name no single result for. */
+export type PaidMetricsTrendPoint = Omit<DailyMetric, 'cpa'> & { cpa?: number | null };
 
 type PerformanceDetailsProps = {
   comparison?: PaidMetricsComparison;

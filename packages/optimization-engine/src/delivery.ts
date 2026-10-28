@@ -194,11 +194,42 @@ export type DeliveryEvaluation = {
   suppressIds: Set<string>;
 };
 
-function daysBetween(fromIso: string, toIsoDay: string): number | null {
-  const from = Date.parse(fromIso);
-  const to = Date.parse(`${toIsoDay}T00:00:00Z`);
+/** Whole calendar days from one ISO day to another, never negative. Day against day, not a
+ *  timestamp against a midnight: that floored an ad set gone at 06:00 on the cycle's own day
+ *  to "-1 days", and froze the -1 into the stored recommendation. */
+function calendarDaysBetween(fromDay: string, toDay: string): number | null {
+  const from = Date.parse(`${fromDay}T00:00:00Z`);
+  const to = Date.parse(`${toDay}T00:00:00Z`);
   if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
-  return Math.floor((to - from) / dayMs);
+  return Math.max(0, Math.round((to - from) / dayMs));
+}
+
+/** The calendar day (YYYY-MM-DD) an instant falls on in `timeZone` — the ad account's IANA
+ *  zone, which Meta dates every window in — or in UTC when there is none or Intl cannot read
+ *  it. Null when the instant does not parse. A caller dates its `asOf` with this too, so an
+ *  absence and the cycle day it is counted to sit in one frame. */
+export function calendarDayIn(
+  iso: string | null | undefined,
+  timeZone?: string | null,
+): string | null {
+  const at = iso ? Date.parse(iso) : Number.NaN;
+  if (!Number.isFinite(at)) return null;
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(at);
+      const part = (type: Intl.DateTimeFormatPartTypes) =>
+        parts.find((p) => p.type === type)?.value;
+      return `${part('year')}-${part('month')}-${part('day')}`;
+    } catch {
+      // An unknown zone (RangeError) dates in UTC rather than failing the cycle.
+    }
+  }
+  return new Date(at).toISOString().slice(0, 10);
 }
 
 /** Quote Meta's blockers rather than paraphrase them: the provider naming
@@ -217,13 +248,16 @@ function weeklyEvents(s: AdSetSnapshot, kpiField: AdSetSnapshot['kpiField']): nu
 
 /** `currency` is the ad account's, for the budget a D2 reason prints; null prints bare.
  *  `kpiField` is the portfolio's, for the results a D3 title counts; an ad set's own
- *  declaration wins over it, and purchases stand in when neither says. */
+ *  declaration wins over it, and purchases stand in when neither says. `timeZone` is the
+ *  account's, which D1 dates an absence in; `asOf` must be that zone's day (calendarDayIn).
+ *  Null dates in UTC, the frame of a UTC `asOf`. */
 export function evaluateDelivery(
   snapshots: AdSetSnapshot[],
   absent: AbsentAdset[],
   asOf?: string,
   currency: string | null = null,
   kpiField?: AdSetSnapshot['kpiField'],
+  timeZone: string | null = null,
 ): DeliveryEvaluation {
   const recommendations: Recommendation[] = [];
   const reads = new Map<string, DeliveryRead>();
@@ -232,10 +266,12 @@ export function evaluateDelivery(
 
   // D1 — enrolled, and no longer in the account's ACTIVE fleet.
   for (const entry of absent) {
-    const age = asOf && entry.missingSince ? daysBetween(entry.missingSince, asOf) : null;
+    // The account-local day it went missing (UTC with no zone), counted to asOf in the same frame.
+    const sinceDay = calendarDayIn(entry.missingSince, timeZone);
+    const age = asOf && sinceDay ? calendarDaysBetween(sinceDay, asOf) : null;
     if (age !== null && age > OFF_META_FRESH_DAYS) continue;
     const name = entry.adsetName?.trim();
-    const since = entry.missingSince ? ` since ${entry.missingSince.slice(0, 10)}` : '';
+    const since = sinceDay ? ` since ${sinceDay}` : '';
     recommendations.push({
       adSetId: entry.adsetId,
       kind: 'restore_delivery',
@@ -245,7 +281,7 @@ export function evaluateDelivery(
       // The one figure an absence holds is how long it has lasted. Known only when the
       // cycle knows when it started; otherwise there is no title, because a title with
       // no figure is a label.
-      ...(age !== null
+      ...(age !== null && sinceDay
         ? {
             evidence: {
               metric: 'days_absent',
@@ -254,11 +290,12 @@ export function evaluateDelivery(
               threshold: OFF_META_FRESH_DAYS,
               window: 'd7',
               estImpactPerDay: null,
+              missingSinceDay: sinceDay,
               title: title({
                 entity: name || entry.adsetId,
                 figure: age,
                 unit: age === 1 ? 'día fuera de ACTIVE en Meta' : 'días fuera de ACTIVE en Meta',
-                comparator: `desde ${(entry.missingSince as string).slice(0, 10)}, con 0 de gasto`,
+                comparator: `desde ${sinceDay}, con 0 de gasto`,
                 window: 'd7',
               }),
               action: action('restore_delivery', cfg),

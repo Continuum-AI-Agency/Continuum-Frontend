@@ -89,12 +89,14 @@ test('S1 fires when the velocity cap binds on half the moves, with a patch when 
 
 test('S1 carries no patch when the hold threshold already matches the cap, and stays quiet under the share', () => {
   const cap = DEFAULT_CONFIG.velocityCapPct;
-  const binding = [item('a', { changePct: cap }), item('b', { capBreached: true }), item('c'), item('d')];
+  const binding = [item('a', { changePct: cap }), item('b', { changePct: -cap }), item('c'), item('d')];
   const noPatch = evaluateSettings(realloc(binding), [healthy], DEFAULT_CONFIG, {
     mode: 'balanced',
     applyCapPct: cap,
   });
-  expect(noPatch.find((r) => r.trigger === 'S1_velocity_cap_binding')?.patch).toBeUndefined();
+  const s1 = noPatch.find((r) => r.trigger === 'S1_velocity_cap_binding');
+  expect(s1).toBeDefined();
+  expect(s1?.patch).toBeUndefined();
 
   const quiet = evaluateSettings(
     realloc([item('a', { changePct: cap }), item('b'), item('c'), item('d')]),
@@ -103,6 +105,34 @@ test('S1 carries no patch when the hold threshold already matches the cap, and s
     { mode: 'balanced', applyCapPct: 0.2 },
   );
   expect(quiet.some((r) => r.trigger === 'S1_velocity_cap_binding')).toBe(false);
+});
+
+test('S1 never counts a breached move as bound by the cap — it went past it', () => {
+  // The live report: "±30% velocity cap bound on 6 of 6" over moves of −37% to −60%. Pacing
+  // carried them past the cap, which it may; the cap bound none of them.
+  const cap = DEFAULT_CONFIG.velocityCapPct;
+  const pastCap = (id: string, changePct: number) => item(id, { changePct, capBreached: true });
+  const allPast = [-0.37, -0.42, -0.45, -0.5, -0.55, -0.6].map((p, i) => pastCap(`p${i}`, p));
+  const quiet = evaluateSettings(realloc(allPast), [healthy], DEFAULT_CONFIG, { mode: 'balanced' });
+  expect(quiet.some((r) => r.trigger === 'S1_velocity_cap_binding')).toBe(false);
+
+  // Bound on most moves AND some went past: the share counts the bound ones only, and the
+  // breaches are said as what happened, with both counts structured on the evidence.
+  const mixed = [
+    item('a', { changePct: cap }),
+    item('b', { changePct: -cap }),
+    item('c', { changePct: cap }),
+    pastCap('d', -0.45),
+  ];
+  const s1 = evaluateSettings(realloc(mixed), [healthy], DEFAULT_CONFIG, {
+    mode: 'balanced',
+  }).find((r) => r.trigger === 'S1_velocity_cap_binding');
+  expect(s1?.evidence?.value).toBeCloseTo(0.75, 6);
+  expect(s1?.evidence?.capBinding).toEqual({ atCap: 3, breached: 1, moves: 4 });
+  expect(s1?.evidence?.comparator).toBe('3 of 4 moves at the ±30% cap');
+  expect(s1?.reason).toContain('bound on 3 of 4 moves');
+  expect(s1?.reason).toContain('1 of 4 moves went past the ±30% cap: pacing may exceed it.');
+  expect(s1?.evidence?.headline?.value).toBe(75);
 });
 
 test('S2 fires when floors were relaxed on 30% of the ad sets', () => {

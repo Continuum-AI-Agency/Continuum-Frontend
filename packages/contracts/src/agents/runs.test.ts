@@ -168,6 +168,33 @@ describe('agentRunDtoSchema', () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  // P14 row 7: the run toast's View opens the conversation on ITS account, not the brand default.
+  it('carries the ad account the conversation reads', () => {
+    const parsed = agentRunDtoSchema.parse({
+      runId: 'run_1',
+      agent: 'jaina',
+      sessionId: 'sess_1',
+      adAccountId: 'act_521903353286118',
+      status: 'completed',
+      createdAt: '2026-07-12T00:00:00.000Z',
+    });
+    expect(parsed.adAccountId).toBe('act_521903353286118');
+  });
+
+  // P14 rows 2–3: a run nobody stopped is `failed` with a reason, never `cancelled`.
+  it('names an infrastructure stop by code and refuses an unknown one', () => {
+    const run = {
+      runId: 'run_1',
+      agent: 'jaina',
+      sessionId: 'sess_1',
+      status: 'failed',
+      createdAt: '2026-07-12T00:00:00.000Z',
+    };
+    for (const errorCode of ['interrupted', 'infrastructure_interrupted'])
+      expect(agentRunDtoSchema.safeParse({ ...run, errorCode }).success).toBe(true);
+    expect(agentRunDtoSchema.safeParse({ ...run, errorCode: 'cancelled' }).success).toBe(false);
+  });
 });
 
 describe('activeAgentRunsQuerySchema', () => {

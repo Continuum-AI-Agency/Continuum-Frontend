@@ -6,6 +6,7 @@ import {
   agoWords,
   anchorOf,
   attributedRead,
+  blockerSentence,
   buildPortfolioHeadline,
   coveredDays,
   decisionsWaiting,
@@ -628,5 +629,36 @@ describe('ad sets in target, from the cycle’s own rows', () => {
       value: '—',
       state: 'none',
     });
+  });
+});
+
+// F16: a zero only means "nothing spent" when the growth is a read of the whole portfolio. A
+// Google portfolio with no metrics read for the range carries HeroView.unread, and its zeros are
+// "not read" — the status says why and neither spend blocker is claimed.
+describe('a zero that was never read is not zero delivery', () => {
+  const nothing: BriefGrowth = { ...quoted, spend: 0, results: 0, cost_per_result: null };
+  const unread = { reason: 'unavailable' as const, sentence: 'Not read for this range.' };
+
+  it('the status says why there is no read, with no figure', () => {
+    expect(text(statusSentence(nothing, LEADS, 'MXN', 14))).toBe('0 leads in 14 days, no spend.');
+    const sentence = statusSentence(nothing, LEADS, 'MXN', 14, unread);
+    expect(text(sentence)).toBe('Not read for this range.');
+    expect(figures(sentence)).toEqual([]);
+  });
+
+  it('no zero-delivery or no-signal blocker; a goal mismatch, read off the cycle, still blocks', () => {
+    const args = { growth: nothing, mismatch: null, words: LEADS, currency: 'MXN', days: 14 };
+    expect(blockerSentence(args)?.code).toBe('zero_delivery');
+    expect(blockerSentence({ ...args, unread })).toBeNull();
+    expect(blockerSentence({ ...args, growth: { ...nothing, spend: 900 }, unread })).toBeNull();
+    const mismatch = {
+      scope: 'all',
+      mismatched: 3,
+      total: 3,
+      bought: 'conversations',
+      measures: 'leads',
+      actions: [],
+    } as never;
+    expect(blockerSentence({ ...args, mismatch, unread })?.code).toBe('kpi_mismatch');
   });
 });

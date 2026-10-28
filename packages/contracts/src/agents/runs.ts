@@ -47,6 +47,19 @@ export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
 
 export const TERMINAL_AGENT_RUN_STATUSES = ['completed', 'failed', 'cancelled'] as const;
 
+/**
+ * Why a `failed` run failed, when nobody asked it to stop and the model did not fail it.
+ * `cancelled` is reserved for a person pressing Stop; these two are the infrastructure's doing,
+ * and before they existed both read "Run cancelled." to a reader who cancelled nothing.
+ *
+ *  - `interrupted`: the process running it went away (a deploy, a restart, a crash). Found by the
+ *    shutdown drain, or by a sweep that sees its heartbeat go stale.
+ *  - `infrastructure_interrupted`: the process stayed up but lost the right to run it (its lease
+ *    or heartbeat write failed), so it stopped rather than race another owner.
+ */
+export const agentRunErrorCodeSchema = z.enum(['interrupted', 'infrastructure_interrupted']);
+export type AgentRunErrorCode = z.infer<typeof agentRunErrorCodeSchema>;
+
 const TERMINAL_SET: ReadonlySet<AgentRunStatus> = new Set(TERMINAL_AGENT_RUN_STATUSES);
 
 /** A run in a terminal state will emit no further events; the FE can stop tailing it. */
@@ -75,11 +88,17 @@ export const agentRunDtoSchema = z.object({
   agent: agentKindSchema,
   sessionId: z.string().min(1),
   brandId: z.string().nullable().optional(),
+  /**
+   * The ad account the conversation reads. A run toast's "View" needs it to open the
+   * conversation on its own account rather than the brand's default one.
+   */
+  adAccountId: z.string().nullable().optional(),
   status: agentRunStatusSchema,
   createdAt: z.string(),
   startedAt: z.string().nullable().optional(),
   finishedAt: z.string().nullable().optional(),
   errorMessage: z.string().nullable().optional(),
+  errorCode: agentRunErrorCodeSchema.nullable().optional(),
   lastSeq: z.number().int().nonnegative().nullable().optional(),
   /** Session title, carried so a completion toast can name the conversation it came from. */
   title: z.string().nullable().optional(),

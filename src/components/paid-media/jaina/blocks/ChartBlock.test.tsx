@@ -82,7 +82,9 @@ describe('ChartBlock', () => {
       ],
     };
 
-    chartWidth = 320;
+    // A name past 18 characters gives the chart a 640px minimum, so that is the narrowest it is
+    // ever measured at; its ticks wrap to the band that width gives them.
+    chartWidth = 640;
     render(<ChartBlock block={block} isStreaming={false} />);
 
     expect(screen.getByRole('heading', { name: 'Spend by Communication Angle' })).toBeTruthy();

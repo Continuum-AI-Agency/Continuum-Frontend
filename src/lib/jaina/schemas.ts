@@ -1,4 +1,5 @@
 import {
+  addChartInvariantIssues,
   addDataTableInvariantIssues,
   agentAttachmentSchema,
   agentDelegatedFrameSchema,
@@ -8,7 +9,6 @@ import {
   answerTemplateBlockSchema as contractAnswerTemplateBlockSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
-  chartBlockSchema as contractChartBlockSchema,
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
   comparisonBlockSchema as contractComparisonBlockSchema,
   comparisonPairSchema as contractComparisonPairSchema,
@@ -26,6 +26,7 @@ import {
   stepsBlockSchema as contractStepsBlockSchema,
   surveyBlockSchema as contractSurveyBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  jainaClarificationFrameDataSchema,
   jainaOperatorActionSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
@@ -613,35 +614,13 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   answerTemplateBlockV2Schema,
 ]);
 
-// Re-apply the contract's chart-renderability invariants (category_key present
-// on every row; for cartesian charts every chart_config series key appears in a
-// data row). The discriminated union can't hold a ZodEffects member, so the
-// chart branch is validated against the contract's refined `chartBlockSchema`.
+// Re-apply the contract's chart-renderability invariants (category_key on every row, every
+// cartesian series in the data, and the §4 vocabulary: reference lines, markers, axes, a
+// waterfall that meets). The discriminated union can't hold a ZodEffects member, so the
+// chart branch calls the contract's refinement directly; it reads no field the render
+// union widened (`priority`, `value_format`), so nothing needs normalizing first.
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
-  if (block.category !== 'chart') return;
-  // Re-parse against the contract's refined chart schema to re-apply the
-  // chart-renderability invariants. Our union has already projected
-  // `priority` (→ number) and `value_format` (→ render superset) onto shapes
-  // the contract's base would reject; a base-field rejection short-circuits
-  // the refine before the invariant checks run, so normalize those two fields
-  // to contract-valid values first, then forward only the invariant issues
-  // (data/chart_config paths).
-  const normalizedForInvariants = {
-    ...block,
-    priority: 'secondary' as const,
-    value_format: 'number' as const,
-  };
-  const chartResult = contractChartBlockSchema.safeParse(normalizedForInvariants);
-  if (chartResult.success) return;
-  const invariantPaths = new Set(['data', 'chart_config']);
-  for (const issue of chartResult.error.issues) {
-    if (issue.path.length > 0 && invariantPaths.has(String(issue.path[0]))) {
-      // Re-emit as a well-typed custom issue (forwarding the raw $ZodIssue
-      // union trips Zod 4's addIssue input typing on the unrecognized_keys
-      // variant). The invariant issues are all code:"custom" anyway.
-      ctx.addIssue({ code: 'custom', message: issue.message, path: [...issue.path] });
-    }
-  }
+  if (block.category === 'chart') addChartInvariantIssues(block, ctx);
 });
 export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
 
@@ -1031,17 +1010,10 @@ export const responseOutputItemDoneSchema = streamEventSchema(
   }),
 );
 
+/** The Backend nests the request under `clarification`; the shape is the contract's. */
 export const responseClarificationRequestSchema = streamEventSchema(
   'response.clarification_request',
-  z
-    .object({
-      id: z.string().optional(),
-      clarification_id: z.string().optional(),
-      question: z.string().optional(),
-      prompt: z.string().optional(),
-      message: z.string().optional(),
-    })
-    .passthrough(),
+  jainaClarificationFrameDataSchema,
 );
 
 const objectiveEventItemSchema = z

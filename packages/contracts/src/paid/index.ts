@@ -6,6 +6,8 @@ export * from './conversions-api';
 export * from './google-ads';
 // Google Ads change history (change_event) as the edge's change_history scope returns it.
 export * from './google-change-history';
+// The Optimizer's Google tab: the google-ads scopes the browser reads, and the G07/G11 constants.
+export * from './google-tab';
 export * from './hierarchy';
 export * from './insight-model';
 export * from './jaina-export';

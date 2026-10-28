@@ -4,6 +4,9 @@
 // Three stages read signals only Meta reports today: delivery (issues_info,
 // learning_stage_info, the ACTIVE roster), creative (the per-ad standing from
 // paid-creative-intel) and — on Google — fatigue (frequency and the Meta CTR series).
+// A fourth writes to Meta: the pause family (P1–P3 and every rule finding of kind pause),
+// whose Approve is a Meta ad-set status write. Fed a Google campaign it proposed pausing one
+// through the Meta writer with a Google id (G8 F2).
 // Fed a Google or TikTok entity they would not fire, and that silence would read as
 // "nothing wrong". So a family that cannot apply is skipped BY NAME, with the reason
 // 'not_applicable:<platform>', and the cycle carries the skip. Where the platform has its own
@@ -40,10 +43,11 @@ const META_ONLY_FAMILIES: Readonly<Record<PlatformId, readonly RuleFamily[]>> = 
   // Delivery reads Meta's blockers and roster, creative the per-ad standing from
   // paid-creative-intel, fatigue the Meta frequency and CTR series: Google's own rules
   // (GOOGLE_COVERAGE) judge the same families from Google's reads.
-  google_ads: ['delivery', 'fatigue', 'creative'],
+  google_ads: ['delivery', 'fatigue', 'creative', 'pause'],
   // F1/F2 port as-is (tiktok.html §4.1 rules 04–05). Delivery needs secondary_status mapped
-  // into DeliverySignals and creative needs AUCTION_AD reporting: neither exists yet.
-  tiktok_ads: ['delivery', 'creative'],
+  // into DeliverySignals and creative needs AUCTION_AD reporting: neither exists yet. P1–P3
+  // are planned as TikTok ad-group pauses (§4.1 rules 01–03), but no apply path writes one.
+  tiktok_ads: ['delivery', 'creative', 'pause'],
 };
 
 /** The platform rules that judge a family its Meta stage cannot, per platform. */
@@ -76,11 +80,23 @@ export function platformCapabilities(
     platform,
     automation,
     descendToGroups: !PLATFORM_CONTROLS_SUBUNITS.has(automation),
-    rules: { delivery: rule('delivery'), fatigue: rule('fatigue'), creative: rule('creative') },
+    rules: {
+      delivery: rule('delivery'),
+      fatigue: rule('fatigue'),
+      creative: rule('creative'),
+      pause: rule('pause'),
+    },
   };
 }
 
-const RULE_FAMILIES: readonly RuleFamily[] = ['delivery', 'fatigue', 'creative'];
+const RULE_FAMILIES: readonly RuleFamily[] = ['delivery', 'fatigue', 'creative', 'pause'];
+
+/** May this family judge this entity? Meta (and a snapshot with no platform) keeps every one.
+ *  The evaluators ask it themselves, so no caller can hand them an entity they cannot judge. */
+export function familyApplies(s: AdSetSnapshot, family: RuleFamily): boolean {
+  if (!s.platform || s.platform === 'meta') return true;
+  return platformCapabilities(s.platform, s.automation ?? 'manual').rules[family].applies;
+}
 
 /** Every (entity, family) pair the cycle must skip. Empty for a Meta-only roster. */
 export function ruleSkipsFor(snapshots: readonly AdSetSnapshot[]): RuleSkip[] {

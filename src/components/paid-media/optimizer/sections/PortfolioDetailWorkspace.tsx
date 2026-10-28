@@ -87,13 +87,19 @@ import { AskedProposalPanel } from './detail/AskedProposalPanel';
 import { adsetTableRows } from './detail/adsetTableRows';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { ByPlatform } from './detail/ByPlatform';
+import { GooglePortfolioCampaigns } from './detail/google/GooglePortfolioCampaigns';
 import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
 import { buildPortfolioHeadline } from './detail/headlineModel';
 import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
-import { buildHeroView, type HeroCta } from './detail/heroModel';
+import {
+  buildHeroView,
+  crossPlatformRead,
+  type HeroCta,
+  heroMetricsWindow,
+} from './detail/heroModel';
 import { PortfolioHeaderBar } from './detail/PortfolioHeaderLine';
 import { PortfolioHero } from './detail/PortfolioHero';
 import {
@@ -106,6 +112,7 @@ import {
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
+import { usePortfolioMetrics } from './detail/usePortfolioMetrics';
 import { vsTargetColumn } from './detail/vsTargetColumn';
 import {
   OptimizerActionsPortfolioGroup,
@@ -322,30 +329,43 @@ export function PortfolioDetailWorkspace({
     target: targetDisplay,
   });
   // At the default range the hero prints the portfolio's headline figure — the same
-  // `portfolioFigure()` over the same reads (account snapshots, roster, cycle series) its list
-  // row prints — so opening a portfolio never changes its number. Any other range the reader
-  // picks keeps the hero's range read (buildHeroView without a figure).
+  // `portfolioFigure()` over the same reads (account snapshots, roster, cycle series, and for a
+  // Google, TikTok or mixed portfolio its metrics read) its list or tab row prints — so opening
+  // a portfolio never changes its number. Any other range the reader picks keeps the hero's
+  // range read (buildHeroView without a figure) — except on a Google, TikTok or mixed
+  // portfolio, whose recap sums its Meta half only: there the figure is the metrics read at the
+  // range's window, and where no window covers the range the hero says so (HeroView.unread).
+  const heroWindow = heroMetricsWindow(resolvedRange);
+  const metricsState = usePortfolioMetrics(portfolio.id, heroWindow ?? 'd7');
+  const crossPlatform = crossPlatformRead({ portfolio, window: heroWindow, metrics: metricsState });
   const headlineFigure =
-    serializeRange(range) === serializeRange(DEFAULT_RANGE)
+    serializeRange(range) === serializeRange(DEFAULT_RANGE) || (crossPlatform && heroWindow)
       ? portfolioFigureFromReads({
           portfolio,
           snapshots: snapshotsQuery.isSuccess ? snapshotsQuery.data : null,
+          inactiveWindows: snapshotsQuery.inactiveWindows,
           readAt: snapshotsQuery.fetchedAt,
           memberIds: enrolledQuery.isSuccess ? enrolledIds : null,
           series: cpaSeriesQuery.data,
+          metrics: metricsState.status === 'ready' ? metricsState.metrics : null,
         })
       : null;
+  // A figure from the metrics read is in the portfolio's currency, not the Meta account's (null
+  // there prints the figure without a symbol, never another account's code).
+  const heroCurrency =
+    headlineFigure?.currency !== undefined ? headlineFigure.currency : (currency ?? null);
   const heroView = buildHeroView({
     report: currentReport,
     recap,
     figure: headlineFigure,
     flightPacing,
     metric,
-    currency: currency ?? null,
+    currency: heroCurrency,
     portfolio,
     target: targetDisplay ?? null,
     window: resolvedRange.window,
     firstCycle: !latestRun,
+    crossPlatform,
   });
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
   const heroHeader = buildHeroHeader({
@@ -354,7 +374,7 @@ export function PortfolioDetailWorkspace({
     lastCycleAt: latestRun?.cycle_ts ?? null,
     growth: heroView.brief.growth,
     metric,
-    currency: currency ?? null,
+    currency: heroCurrency,
   });
   // The news in sentences and tiles, and the window before beside the window after — every
   // figure from the same growth read, the same engine series and the same cycle rows the
@@ -364,7 +384,7 @@ export function PortfolioDetailWorkspace({
     report: currentReport,
     portfolio,
     metric,
-    currency: currency ?? null,
+    currency: heroCurrency,
     mismatch: heroHeader.mismatch,
   });
   // The windows read the engine's cycle series, the read the cost timeline draws: the
@@ -586,6 +606,7 @@ export function PortfolioDetailWorkspace({
   // Leads and cost both off the engine's interval: the snapshot read lists ACTIVE ad sets
   // only, so a paused one would print "—" beside its measured cost (./detail/adsetTableRows).
   const adsetRows = adsetTableRows(items, { metric, snapshotById, nameById: adsetNameById });
+  const holdsMeta = portfolioPlatforms(portfolio.platforms).includes('meta');
   // The table reads the distance to the target off a small bar per row, when there is one.
   const adsetColumns = [
     ...kpiColumns({ currency, maxCiCost: maxCiCpa, metric }),
@@ -743,9 +764,14 @@ export function PortfolioDetailWorkspace({
         {/* One text row per platform, with the attribution source named once (frontend.html §3). */}
         <ByPlatform portfolioId={portfolio.id} />
 
+        {/* Its Google campaigns against the goal, with G03/G07's proposals (P6 idea 8). */}
+        <GooglePortfolioCampaigns brandId={brandId} portfolio={portfolio} />
+
         {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
-            distance to the target is read off the bottom half of this table. */}
+            distance to the target is read off the bottom half of this table. A portfolio with
+            no Meta member has no ad set to rank. */}
         <OptimizerPanel
+          className={holdsMeta ? undefined : 'hidden'}
           meta={<>{costCiLegend(metric)} · expand a row for its creative verdicts</>}
           title={`${metric.costLabel} per ad set`}
         >
@@ -794,7 +820,7 @@ export function PortfolioDetailWorkspace({
           <p className="text-muted-foreground text-xs">
             <span className="font-semibold text-foreground">{resolvedRange.label}</span>
             {' · the charts below'}
-            {headline.days !== resolvedRange.days ? (
+            {headline.days !== resolvedRange.days && !heroView.unread ? (
               <span data-testid="range-line-hero-window">
                 {` · the read above covers ${headline.days} ${headline.days === 1 ? 'day' : 'days'}`}
               </span>

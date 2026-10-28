@@ -63,6 +63,7 @@ import { attributeTransfers, type TransferAttribution } from '../charts/chartDat
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
+import { platformName } from '../entityNoun';
 import { figureProps, formatCurrency } from '../format';
 import { itemWritable, proposalsOnlyNote } from '../platformWrites';
 import {
@@ -364,10 +365,16 @@ export function buildActionQueue(
  */
 export function pauseBlockedNote(
   rec: Pick<RecommendationRow, 'kind' | 'adset_id'>,
-  portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason'>,
+  portfolio: Pick<PortfolioListItem, 'roster_state' | 'withdrawn_reason' | 'platforms'>,
   movedNotes: ReadonlyMap<string, string>,
 ): string | null {
   if (actionRoute(rec.kind) !== 'pause') return null;
+  // This row's Approve drains into the Meta ad-set writer, and the engine's pause rules also
+  // fire on Google and TikTok entities: a portfolio with no Meta side cannot pause from here.
+  const platforms = portfolio.platforms ?? [];
+  if (platforms.length > 0 && !platforms.includes('meta')) {
+    return `Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in ${platformName({ platform: platforms[0], level: null })} if you agree.`;
+  }
   const moved = movedNotes.get(rec.adset_id);
   if (moved) return `Withdrawn: ${moved}.`;
   if (
@@ -1387,6 +1394,7 @@ export function OptimizerActionsPortfolioGroup({
               row={row}
               selected={selected.has(row.key)}
               settingsActions={settingsActions}
+              timeZone={snapshotsQuery.timezone}
               writesBlocked={writesBlocked}
             />
           </React.Fragment>
@@ -1647,8 +1655,10 @@ export function recRowLine(
   if (evidence?.metric === 'days_absent') {
     // The count is today's distance from the day the row names, not the engine's figure frozen
     // at cycle time — that one floored a mid-day timestamp against the cycle's midnight and
-    // printed "-1 days" (see recQueueModel.daysSince).
-    const since = /(\d{4}-\d{2}-\d{2})/.exec(evidence.comparator)?.[1] ?? null;
+    // printed "-1 days" (see recQueueModel.daysSince). The engine's structured day when the row
+    // carries it; the comparator's date only on rows written before it did.
+    const since =
+      evidence.missingSinceDay ?? /(\d{4}-\d{2}-\d{2})/.exec(evidence.comparator)?.[1] ?? null;
     const sinceAt = since ? Date.parse(`${since}T12:00:00Z`) : Number.NaN;
     const days = Number.isNaN(sinceAt)
       ? Math.max(0, Math.round(evidence.value))
@@ -2009,6 +2019,7 @@ function QueueRowView({
   onDismiss,
   settingsActions,
   evidence,
+  timeZone,
 }: {
   row: QueueRow;
   brandId: string;
@@ -2028,6 +2039,8 @@ function QueueRowView({
   onDismiss?: () => void;
   settingsActions: SettingsActions;
   evidence: EvidenceContext;
+  /** The Meta ad account's IANA zone (the snapshot read's): the day a delivery row counts to. */
+  timeZone: string | null;
 }) {
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
@@ -2095,7 +2108,7 @@ function QueueRowView({
               ) : null}
             </>
           ) : (
-            <RecWhy currency={currency} rec={row.rec} />
+            <RecWhy currency={currency} rec={row.rec} timeZone={timeZone} />
           )}
         </div>
 
@@ -2229,8 +2242,16 @@ function RowImpact({ row, currency }: { row: QueueRow; currency: string | null }
 /** The justification, in the row, always visible — never only behind a hover. The structured
  *  line first (the trigger's headline, or metric · value · comparison · window), the prose
  *  reason under it. A trader should be able to act from these two lines alone. */
-function RecWhy({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
-  const line = recRowLine(rec, currency);
+function RecWhy({
+  rec,
+  currency,
+  timeZone,
+}: {
+  rec: RecommendationRow;
+  currency: string | null;
+  timeZone: string | null;
+}) {
+  const line = recRowLine(rec, currency, undefined, timeZone ?? undefined);
   if (!line && !rec.reason) return null;
   return (
     <div className="mt-0.5 space-y-0.5 text-muted-foreground text-xs">
