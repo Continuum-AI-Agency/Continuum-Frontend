@@ -2,7 +2,7 @@
 // tab, or this node) means the node signs nothing more for it: the banner says why, Render waits,
 // and no preflight or createBatch is called.
 
-import { afterEach, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -46,6 +46,20 @@ const createJob = mock(
     status: 'queued',
   }),
 );
+// mock.module is process-wide and outlives this file: what is mocked here is put back after it,
+// or a file run next in the same process reads this file's user and API as its own.
+const realModules = {
+  '@/StudioCanvas/nodes/api-render/apiRendersApi': {
+    ...(await import('@/StudioCanvas/nodes/api-render/apiRendersApi')),
+  },
+  '@/components/providers/ActiveBrandProvider': {
+    ...(await import('@/components/providers/ActiveBrandProvider')),
+  },
+  '@/lib/supabase/realtime': { ...(await import('@/lib/supabase/realtime')) },
+};
+afterAll(() => {
+  for (const [path, real] of Object.entries(realModules)) mock.module(path, () => real);
+});
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listTemplates: async () => ({ items: [TEMPLATE], nextCursor: null, workspace: null }),
