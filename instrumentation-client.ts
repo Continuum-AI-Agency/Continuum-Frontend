@@ -1,3 +1,4 @@
+import { afterLoadIdle } from '@/lib/observability/afterLoadIdle';
 import { bufferEarlyErrors } from '@/lib/observability/earlyErrorBuffer';
 
 // Analytics is not critical path.
@@ -33,15 +34,5 @@ if (process.env.NODE_ENV !== 'development') {
       });
   };
 
-  // requestIdleCallback is still absent in Safari, hence the timeout fallback.
-  const schedule = () => {
-    if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(start, { timeout: 4_000 });
-    } else {
-      window.setTimeout(start, 1_500);
-    }
-  };
-
-  if (document.readyState === 'complete') schedule();
-  else window.addEventListener('load', schedule, { once: true });
+  afterLoadIdle(start);
 }

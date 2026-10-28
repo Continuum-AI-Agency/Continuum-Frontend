@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { afterLoadIdle } from '@/lib/observability/afterLoadIdle';
 
 const MIXPANEL_TOKEN = 'c4c6970ea649d1a205fbf340cdbb97d7';
 
@@ -18,6 +19,9 @@ let hasInitialized = false;
  * Nothing else in the app imports `mixpanel-browser` — autocapture and session recording are
  * the only behaviour, and both begin at `init`. The effect already ran after hydration, so
  * what moves is one chunk fetch, not whether a session is recorded.
+ *
+ * The fetch itself waits for `load` and an idle main thread, as posthog's does: started at
+ * hydration it took ~95 KiB of a slow connection at the moment the page's own reads begin.
  */
 export function MixpanelInit() {
   useEffect(() => {
@@ -25,18 +29,20 @@ export function MixpanelInit() {
     // Claim the guard before awaiting: two mounts in the same tick must not both init.
     hasInitialized = true;
 
-    void import('mixpanel-browser')
-      .then(({ default: mixpanel }) => {
-        mixpanel.init(MIXPANEL_TOKEN, {
-          autocapture: true,
-          record_sessions_percent: 100,
+    afterLoadIdle(() => {
+      void import('mixpanel-browser')
+        .then(({ default: mixpanel }) => {
+          mixpanel.init(MIXPANEL_TOKEN, {
+            autocapture: true,
+            record_sessions_percent: 100,
+          });
+        })
+        .catch(() => {
+          // Analytics failing to load must not take the dashboard down with it. Allow a later
+          // mount to retry rather than leaving the session permanently unreported.
+          hasInitialized = false;
         });
-      })
-      .catch(() => {
-        // Analytics failing to load must not take the dashboard down with it. Allow a later
-        // mount to retry rather than leaving the session permanently unreported.
-        hasInitialized = false;
-      });
+    });
   }, []);
 
   return null;

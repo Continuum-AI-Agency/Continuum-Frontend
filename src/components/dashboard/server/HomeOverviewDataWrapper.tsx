@@ -1,3 +1,5 @@
+// Static, not from lazyViews: the default view must hydrate from the HTML, and a dynamic
+// import arrives only after hydration, flashing the page skeleton over the rendered view.
 import { HomeOverview } from '@/components/dashboard/overview/HomeOverview';
 import type { HomeAdAccount } from '@/components/dashboard/overview/useHomeOverviewData';
 import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
@@ -52,7 +54,11 @@ export async function HomeOverviewDataWrapper({ brandId }: { brandId: string }) 
     const id = account.externalAccountId ?? account.integrationAccountId;
     if (seen.has(id)) continue;
     seen.add(id);
-    adAccounts.push({ id, name: account.alias ?? account.name, currency: currencies.get(id) ?? null });
+    adAccounts.push({
+      id,
+      name: account.alias ?? account.name,
+      currency: currencies.get(id) ?? null,
+    });
   }
 
   const organicCandidates: SnapshotAccountRef[] = [

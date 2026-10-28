@@ -1,4 +1,4 @@
-import { OrganicDashboardView } from '@/components/dashboard/views/OrganicDashboardView';
+import { OrganicDashboardView } from '@/components/dashboard/views/lazyViews';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import type {

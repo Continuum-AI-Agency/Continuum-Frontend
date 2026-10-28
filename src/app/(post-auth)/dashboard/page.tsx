@@ -9,7 +9,7 @@ import {
   PaidWidgetSkeleton,
   WidgetSkeleton,
 } from '@/components/dashboard/skeletons/DashboardSkeletons';
-import { PaidDashboardView } from '@/components/dashboard/views/PaidDashboardView';
+import { PaidDashboardView } from '@/components/dashboard/views/lazyViews';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
