@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
+import type { GoogleReadWindow } from '../google/googleReads';
+import { GoogleOwnViews } from '../google/views/GoogleOwnViews';
 import {
   type CampaignGroup,
   costPerConversion,
@@ -29,11 +31,7 @@ import {
 import { PlatformChip } from './PlatformChip';
 import { PlatformConnectLink } from './PlatformConnectLink';
 import { PlatformReadingNote } from './PlatformReadingNote';
-import {
-  type GoogleAdsOverviewState,
-  type GoogleReadWindow,
-  useGoogleAdsOverview,
-} from './useGoogleAdsOverview';
+import { type GoogleAdsOverviewState, useGoogleAdsOverview } from './useGoogleAdsOverview';
 
 /** Said once, where the window is named, when no source names the account's currency. */
 const UNKNOWN_CURRENCY = 'currency not reported by Google';
@@ -377,7 +375,8 @@ export function GoogleAdsTab({
    *  when it has none; 'pending' while it is still answering (nothing is read yet). */
   window?: GoogleReadWindow | null | 'pending';
   readingNote?: boolean;
-  /** What sits under the read; held until the read settles, so the read never pushes it. */
+  /** What sits under the read and Google's own views; held until the read settles, so the
+   *  read never pushes it. */
   children?: ReactNode;
 }) {
   const state = useGoogleAdsOverview(brandId, window);
@@ -388,6 +387,14 @@ export function GoogleAdsTab({
       ) : (
         <GoogleAdsTabView readingNote={readingNote} state={state} />
       )}
+      {state.status === 'ready' ? (
+        <GoogleOwnViews
+          brandId={brandId}
+          currency={state.account.currency}
+          customerId={state.account.account_id}
+          window={{ since: state.overview.since, until: state.overview.until }}
+        />
+      ) : null}
       {state.status === 'loading' ? null : children}
     </>
   );

@@ -9,71 +9,21 @@
 // figure and what that figure is compared with; grouped by campaign type — Search, Performance
 // Max, YouTube/Demand Gen — because that is the unit a Google buyer decides in.
 
-import { z } from 'zod';
+import {
+  type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
+  type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
+} from '@continuum/contracts';
 import type { FigureWindow } from '../../format';
 
-const ComparisonValueSchema = z.object({
-  current: z.number(),
-  previous: z.number(),
-  percentageChange: z.number().nullable().optional(),
-});
-
-const RangeSchema = z.object({ since: z.string(), until: z.string() });
-
-/** The customer's currency code, when the edge carries it (Google reports money in it). */
-const CurrencyFields = {
-  currency: z.string().nullable().optional(),
-  currency_code: z.string().nullable().optional(),
+// The two reads' shapes are contracts (paid/google-tab), shared with the tab's own views.
+export {
+  type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
+  type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
 };
-
-/**
- * Which business result the edge counted as a conversion (`google_conversion_rule_v1`). When the
- * account's goals name no single result — leads AND purchases, or neither — `unambiguous` is
- * false and the edge nulls every conversion count and CPA rather than add unlike things.
- * Optional: payloads cached before the edge carried it have none.
- */
-const ResultBasisSchema = z.object({
-  rule: z.string(),
-  bucket: z.string().nullable(),
-  unambiguous: z.boolean(),
-});
-
-export const GoogleAccountOverviewSchema = z.object({
-  metrics: z.object({
-    spend: z.number(),
-    impressions: z.number(),
-    clicks: z.number(),
-    ctr: z.number(),
-    /** Null when the result basis is ambiguous. */
-    cpa: z.number().nullable(),
-  }),
-  comparison: z.object({ spend: ComparisonValueSchema }).partial().optional(),
-  result_basis: ResultBasisSchema.optional(),
-  range: RangeSchema,
-  ...CurrencyFields,
-});
-export type GoogleAccountOverview = z.infer<typeof GoogleAccountOverviewSchema>;
-
-export const GoogleTopCampaignsSchema = z.object({
-  rows: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      labels: z.record(z.string(), z.string()).optional(),
-      metrics: z.object({
-        spend: z.number(),
-        impressions: z.number(),
-        clicks: z.number(),
-        /** Null when the result basis is ambiguous. */
-        conversions: z.number().nullable(),
-      }),
-    }),
-  ),
-  result_basis: ResultBasisSchema.optional(),
-  range: RangeSchema,
-  ...CurrencyFields,
-});
-export type GoogleTopCampaigns = z.infer<typeof GoogleTopCampaignsSchema>;
 
 export type CampaignTypeKey = 'search' | 'pmax' | 'video' | 'display' | 'shopping' | 'other';
 
