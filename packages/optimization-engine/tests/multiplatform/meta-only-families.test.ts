@@ -71,7 +71,10 @@ const isPFamily = (trigger: string | undefined) => /^(rule:)?P[123]_/.test(trigg
 
 describe('F2 — the pause family judges Meta entities only', () => {
   test('a Google-only cycle proposes no pause on a Google campaign', () => {
-    const cycle = runCycle(roster, { objective: 'lead', config: { currency: 'MXN', cpaTarget: 50 } });
+    const cycle = runCycle(roster, {
+      objective: 'lead',
+      config: { currency: 'MXN', cpaTarget: 50 },
+    });
     expect(cycle.recommendations.filter((r) => r.kind === 'pause')).toEqual([]);
     expect(cycle.recommendations.some((r) => isPFamily(r.trigger))).toBe(false);
     // Skipped by name, like every other family a Google entity cannot be judged by.
@@ -144,6 +147,45 @@ describe('F3 — a PMax inside its 14-day protection is never cut', () => {
     expect(item.finalBudget).toBeGreaterThanOrEqual(pmax.currentBudget);
   });
 
+  test('G8 F3 shape: 13 days, P2-poor, beside a Meta winner — no cut is possible; day 14 it is', () => {
+    // Vivo's SALES-PMAX-OCTUBRE was 13.2 days old (ingest floors it to 13) with a cost per
+    // result far over the portfolio's best: P2 used to starve it, and the solver's lower bound
+    // was the normal -35% (292.5 of 450).
+    const poorPmax = (ageDays: number) =>
+      mapped(
+        google(
+          'pmax-f3',
+          { d3: window(150, 0), d7: window(350, 1), d14: window(700, 2) },
+          { automation: 'pmax', name: 'SALES-PMAX-OCTUBRE' },
+        ),
+        ageDays,
+        'PERFORMANCE_MAX',
+      );
+    const metaWinner: AdSetSnapshot = {
+      id: 'meta-winner',
+      status: 'active',
+      currentBudget: 300,
+      ageDays: 30,
+      kpiField: 'leads',
+      windows: { d3: window(300, 12), d7: window(700, 28), d14: window(1400, 56) },
+    };
+    const cycleAt = (ageDays: number) =>
+      runCycle([metaWinner, healthy, poorPmax(ageDays)], {
+        objective: 'lead',
+        config: { currency: 'MXN', cpaTarget: 50 },
+      });
+
+    const graced = cycleAt(13);
+    expect(graced.recommendations.filter((r) => r.adSetId === 'pmax-f3')).toEqual([]);
+    const held = graced.reallocation.items.find((i) => i.id === 'pmax-f3')!;
+    expect(held.status).toBe('grace');
+    expect(held.lowerBound).toBeGreaterThanOrEqual(held.currentBudget);
+
+    const ended = cycleAt(14).reallocation.items.find((i) => i.id === 'pmax-f3')!;
+    expect(ended.status).not.toBe('grace');
+    expect(ended.lowerBound).toBeLessThan(ended.currentBudget);
+  });
+
   test('with the parity rules and the built-in triggers, no pause and no cut', () => {
     const cfg = resolveConfig({ objective: 'lead', cpaTarget: 50 });
     const cycle = runCycle([healthy, pmax], {
@@ -151,9 +193,9 @@ describe('F3 — a PMax inside its 14-day protection is never cut', () => {
       config: { currency: 'MXN', cpaTarget: 50 },
       rules: seedParityRules(cfg),
     });
-    expect(cycle.recommendations.filter((r) => r.adSetId === pmax.id && r.kind === 'pause')).toEqual(
-      [],
-    );
+    expect(
+      cycle.recommendations.filter((r) => r.adSetId === pmax.id && r.kind === 'pause'),
+    ).toEqual([]);
     const item = cycle.reallocation.items.find((i) => i.id === pmax.id)!;
     expect(item.finalBudget).toBeGreaterThanOrEqual(pmax.currentBudget);
   });
