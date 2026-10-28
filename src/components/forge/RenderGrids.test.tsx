@@ -341,7 +341,7 @@ import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
 import { RenderRequestsGrid } from './RenderRequestsGrid';
-import { CONFIRM_UNKNOWN } from './RenderReviewTray';
+import { CONFIRM_UNKNOWN, HELD_EDITED, HELD_EXPIRED } from './RenderReviewTray';
 
 const render = (
   ui: React.ReactNode,
@@ -1547,6 +1547,96 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
     expect(createBatchMock.mock.calls[2]?.[0].confirmationToken).toBe(held);
   }, 30_000);
+
+  describe('a held token after a confirm with no answer', () => {
+    const renderableSet = () => ({
+      ...NEWEST,
+      rows: [{ ...NEWEST.rows[0]!, overrides: { headline: 'Hola mundo' } }],
+    });
+    const holdOne = async () => {
+      listRenderSetsMock.mockImplementation(async () => ({
+        items: [renderableSet()],
+        nextCursor: null,
+      }));
+      let minted = 0;
+      batchPreflightMock.mockImplementation(async () => ({
+        ...BATCH_READY,
+        confirmationToken: `token-${++minted}`,
+      }));
+      createBatchMock.mockImplementationOnce(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      const view = render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      fireEvent.click((await screen.findAllByLabelText('Select row'))[0]!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Render 1 row · 1 file' }));
+      await screen.findByRole('region', { name: 'Review and render' });
+      await press('Next: delivery');
+      await press('Render 1 file');
+      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+      return view;
+    };
+    const closeReview = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Close review' }));
+      await waitFor(() =>
+        expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0),
+      );
+    };
+    const heldKey = () =>
+      Object.keys(localStorage).find((key) => key.startsWith('forge:unconfirmed-render:'))!;
+
+    test('an edit since: Render waits for the ledger, then signs afresh', async () => {
+      await holdOne();
+      const held = createBatchMock.mock.calls[0]?.[0].confirmationToken;
+      await closeReview();
+      fireEvent.change(screen.getByDisplayValue('Hola mundo'), {
+        target: { value: 'Hola otra vez' },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Render 1 row · 1 file' }));
+      const tray = await screen.findByRole('region', { name: 'Review and render' });
+      expect(await within(tray).findByText(HELD_EDITED)).toBeTruthy();
+      await press('Next: delivery');
+      expect(
+        within(tray).getByRole<HTMLButtonElement>('button', { name: 'Render 1 file' }).disabled,
+      ).toBe(true);
+      fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
+      await press('Render 1 file');
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+      expect(createBatchMock.mock.calls[1]?.[0].confirmationToken).not.toBe(held);
+      expect(heldKey()).toBeUndefined();
+    }, 30_000);
+
+    test('a reload still knows; after 30 minutes the token is said to have expired', async () => {
+      const view = await holdOne();
+      const key = heldKey();
+      // Only the token, a hash of what it signed, and when: no rows, no values.
+      expect(Object.keys(JSON.parse(localStorage.getItem(key)!)).sort()).toEqual([
+        'heldAt',
+        'snapshot',
+        'token',
+      ]);
+      view.unmount();
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Open Render ledger' })).toBeTruthy();
+      cleanup();
+
+      const hold = JSON.parse(localStorage.getItem(key)!);
+      localStorage.setItem(key, JSON.stringify({ ...hold, heldAt: Date.now() - 31 * 60_000 }));
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      expect(await screen.findByText(HELD_EXPIRED)).toBeTruthy();
+      cleanup();
+
+      // A day on, the hold is gone.
+      localStorage.setItem(key, JSON.stringify({ ...hold, heldAt: Date.now() - 25 * 3_600_000 }));
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      expect(screen.queryAllByText(CONFIRM_UNKNOWN)).toHaveLength(0);
+      expect(localStorage.getItem(key)).toBeNull();
+    }, 30_000);
+  });
 
   test('an intent loads its render set over the newest one', async () => {
     withSavedSets();

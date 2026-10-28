@@ -26,6 +26,14 @@ describe('render discovery copy', () => {
     );
   });
 
+  test('a confirmation that expired or no longer matches says what to do, never the raw code', () => {
+    for (const code of ['expired_confirmation', 'invalid_confirmation']) {
+      const thrown = new ApiError(code, 409, undefined, { error: code });
+      expect(describeRenderDiscoveryFailure(thrown)).not.toContain(code);
+      expect(describeRenderDiscoveryFailure(thrown)).toContain('Review the rows again');
+    }
+  });
+
   test('a template revision refusal names the revision step, never the raw code', () => {
     for (const code of [
       ...templateRevisionErrorCodeSchema.options.filter(

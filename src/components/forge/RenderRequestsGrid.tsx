@@ -66,7 +66,12 @@ import {
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
-import { CONFIRM_UNKNOWN, RenderReviewTray } from '@/components/forge/RenderReviewTray';
+import {
+  CONFIRM_UNKNOWN,
+  type HeldConfirm,
+  heldMessage,
+  RenderReviewTray,
+} from '@/components/forge/RenderReviewTray';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -268,6 +273,54 @@ const refusalKey = (
 
 /** A refusal about the set or its revision, not the row: the set moved, not the row's values. */
 const SET_LEVEL_CODE = /render_set|revision/;
+
+/**
+ * A confirm token held after a createBatch that failed without a refusal, kept in this browser so
+ * a reload still knows. Only the token, a hash of what it signed, and when: dropped on success, on
+ * Open Render ledger, or after a day.
+ */
+type StoredHold = { token: string; snapshot: string; heldAt: number };
+const HOLD_KEEP_MS = 24 * 60 * 60 * 1000;
+/** A confirmation token is good for 30 minutes; after that only the ledger can say what it made. */
+const TOKEN_LIFE_MS = 30 * 60 * 1000;
+const holdStorageKey = (brandId: string, setId: string, templateKey: string) =>
+  `forge:unconfirmed-render:${brandId}:${setId}:${templateKey}`;
+
+function readHold(key: string): StoredHold | null {
+  try {
+    const hold = JSON.parse(localStorage.getItem(key) ?? 'null') as StoredHold | null;
+    if (hold && typeof hold.token === 'string' && Date.now() - hold.heldAt < HOLD_KEEP_MS)
+      return hold;
+    localStorage.removeItem(key);
+  } catch {
+    // Unreadable or storage off: nothing is held across a reload.
+  }
+  return null;
+}
+
+/** FNV-1a: a short stand-in for what a token signed, so the rows themselves are never stored. */
+const hashOf = (text: string) => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+  return (hash >>> 0).toString(36);
+};
+
+/** What a confirm signs, as far as an edit can change it: the rows rendered, their values, the pin. */
+const renderSnapshot = (
+  rows: RequestRow[],
+  rowIds: string[],
+  set: ForgeRenderSet | null,
+  contract: ApiRenderTemplateContract | null,
+  templateRef: string | null,
+) =>
+  hashOf(
+    JSON.stringify([
+      reviewSignature(rows, rowIds, set?.revision ?? null, allOutputIdsOf(contract)),
+      templateRef,
+      set?.templateRevision?.revisionId ?? null,
+      contract?.template.contractHash ?? null,
+    ]),
+  );
 
 /**
  * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
@@ -1144,19 +1197,11 @@ export function RenderRequestsGrid({
   // A confirm that got no answer: its token, re-sent until the person opens the Render ledger. Held
   // per render set and template, so Render in another set signs its own batch and never re-sends
   // this one; the message waits on its own set.
-  const [unconfirmed, setUnconfirmed] = useState<ReadonlyMap<string, string>>(new Map());
-  const tokenScope = activeSet && contract ? `${activeSet.id}|${contract.template.key}` : null;
-  const unconfirmedToken = tokenScope ? (unconfirmed.get(tokenScope) ?? null) : null;
-  /** Holds or lets go of the token for the set the tray was opened on (its render's scope). */
-  const holdToken = (token: string | null) => {
-    if (!tokenScope) return;
-    setUnconfirmed((previous) => {
-      const next = new Map(previous);
-      if (token) next.set(tokenScope, token);
-      else next.delete(tokenScope);
-      return next;
-    });
-  };
+  const holdKey =
+    activeSet && contract ? holdStorageKey(brandId, activeSet.id, contract.template.key) : null;
+  // This page's word on each key; a key it has not touched yet is read from storage.
+  const [holds, setHolds] = useState<ReadonlyMap<string, StoredHold | null>>(new Map());
+  const stored = holdKey ? (holds.has(holdKey) ? holds.get(holdKey)! : readHold(holdKey)) : null;
   const liveRefusals = useMemo(
     () =>
       new Map(
@@ -2423,6 +2468,43 @@ export function RenderRequestsGrid({
       ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
       : null;
 
+  // The held token, and whether Render may re-send it: not once it has expired, and not when the
+  // rows under review are no longer the ones it signed (an edit, another selection, a re-pin).
+  const held: HeldConfirm | null = stored
+    ? {
+        token: stored.token,
+        blocked:
+          Date.now() - stored.heldAt >= TOKEN_LIFE_MS
+            ? 'expired'
+            : review &&
+                stored.snapshot !==
+                  renderSnapshot(rows, review.rowIds, activeSet, contract, templateRef)
+              ? 'edited'
+              : null,
+      }
+    : null;
+  /** Holds or lets go of the token for the set this render opened on (its own render's scope). */
+  const holdToken = (next: { token: string; expired?: true } | null) => {
+    if (!holdKey) return;
+    const hold: StoredHold | null = next
+      ? {
+          token: next.token,
+          snapshot: next.expired
+            ? (stored?.snapshot ?? '')
+            : renderSnapshot(rows, review?.rowIds ?? [], activeSet, contract, templateRef),
+          // An expired token is kept as one past its life: nothing more is stored to say so.
+          heldAt: next.expired ? Date.now() - TOKEN_LIFE_MS : Date.now(),
+        }
+      : null;
+    try {
+      if (hold) localStorage.setItem(holdKey, JSON.stringify(hold));
+      else localStorage.removeItem(holdKey);
+    } catch {
+      // Storage full or off: the hold still lasts as long as this page.
+    }
+    setHolds((previous) => new Map(previous).set(holdKey, hold));
+  };
+
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -2928,11 +3010,11 @@ export function RenderRequestsGrid({
         renderCount={selectedReady.length}
         skipNote={skipNote}
       />
-      {unconfirmedToken && !review ? (
+      {held && !review ? (
         // Back on the set whose confirm got no answer: said here until the ledger is opened.
         <Alert variant="destructive" className="shrink-0 py-2">
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-            <span>{CONFIRM_UNKNOWN}</span>
+            <span>{heldMessage(held) ?? CONFIRM_UNKNOWN}</span>
             <Button
               type="button"
               size="xs"
@@ -3341,8 +3423,8 @@ export function RenderRequestsGrid({
                   rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
-                  unconfirmedToken={unconfirmedToken}
-                  onUnconfirmed={holdToken}
+                  held={held}
+                  onHold={holdToken}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}
                   onDeliveryChange={(rowId, delivery) => {

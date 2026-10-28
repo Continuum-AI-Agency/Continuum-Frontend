@@ -30,6 +30,10 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
     'This set is pinned to another template revision. Use “Change set template revision” to move it, then render.',
   render_set_revision_outputs_unresolved:
     'Some rows use formats the chosen revision does not have. Pick their formats again, then change the revision.',
+  // A confirmation token is good for 30 minutes and signs exactly the rows it was reviewed for.
+  expired_confirmation: 'This review has expired. Review the rows again, then render.',
+  invalid_confirmation:
+    'This review no longer matches the rows. Review the rows again, then render.',
   // The server's catch-all: it hit an error it has no code for, and said nothing more.
   api_render_failed:
     'The render service hit an unexpected error. Try again; if it keeps failing, tell your Continuum contact.',

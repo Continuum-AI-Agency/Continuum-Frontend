@@ -129,11 +129,13 @@ export type RenderReviewTrayProps = {
   /** Why this person cannot ask for a Final render. Null when they can. */
   finalBlocked: string | null;
   /**
-   * A confirmation token whose createBatch got no answer, so its jobs may exist. Kept by the
-   * caller, so it outlives this tray: until the ledger is opened, Render re-sends it, never a new one.
+   * A confirmation token whose createBatch failed without a 4xx, so some of its jobs may exist.
+   * Kept by the caller, per set, so it outlives this tray and a reload. While it is held Render
+   * re-sends it, never a new one; `blocked` says why it cannot (the rows changed, or it expired),
+   * and then only the ledger lets go of it.
    */
-  unconfirmedToken: string | null;
-  onUnconfirmed: (token: string | null) => void;
+  held: HeldConfirm | null;
+  onHold: (next: { token: string; expired?: true } | null) => void;
   onRecheck: () => void;
   /**
    * Review was refused for something other than fonts; these rows' own checks can say which.
@@ -179,11 +181,30 @@ type Destinations =
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-/** A confirm that failed with no answer (an outage, a cut, a timeout) after its retries may
- *  still have made the jobs: the same token is the same batch, so this sends the person to the
- *  ledger rather than to the button. */
+export type HeldConfirm = { token: string; blocked: 'edited' | 'expired' | null };
+
+/** A confirm that failed without a refusal (an outage, a cut, a timeout, a 5xx) may still have
+ *  made some jobs: the same token is the same batch, so this sends the person to the ledger
+ *  rather than to the button. */
 export const CONFIRM_UNKNOWN =
   'Couldn’t confirm with the render service — Open Render ledger to check before rendering again';
+export const HELD_EDITED =
+  'Your last Render wasn’t confirmed. Open Render ledger to check it before rendering your edits.';
+export const HELD_EXPIRED =
+  'Your last Render wasn’t confirmed and its request has expired. Open Render ledger to check it, then Render again.';
+
+/** The re-sent token was too old, or no longer matched: only the ledger can say what it made. */
+const TOKEN_GONE = new Set(['expired_confirmation', 'invalid_confirmation']);
+
+/** What a held token's banner says: why Render cannot re-send it, or that it will. */
+export const heldMessage = (held: HeldConfirm | null): string | null =>
+  !held
+    ? null
+    : held.blocked === 'edited'
+      ? HELD_EDITED
+      : held.blocked === 'expired'
+        ? HELD_EXPIRED
+        : null;
 
 function describeFailure(error: unknown): {
   message: string;
@@ -276,8 +297,8 @@ export function RenderReviewTray({
   recheckBlocked,
   rechecking,
   finalBlocked,
-  unconfirmedToken,
-  onUnconfirmed,
+  held,
+  onHold,
   onRecheck,
   onRefused,
   onPassed,
@@ -551,9 +572,10 @@ export function RenderReviewTray({
   /** Fires every row, or — to resend what the render API refused — only the rows named. */
   const confirm = async (only?: number[]) => {
     // The records below are rebuilt from the rows on screen; a review of other rows signs nothing.
-    // A token that got no answer is re-sent as it is, whatever is on screen: the backend hands back
-    // the jobs it already made for it, and a fresh token could make them twice.
-    if (stale && !unconfirmedToken) {
+    // A held token is re-sent as it is: each row dedupes on its request_id, so the backend hands
+    // back the jobs it already made, where a fresh token would make them twice.
+    if (held?.blocked) return;
+    if (stale && !held) {
       setStep('review');
       return;
     }
@@ -562,13 +584,13 @@ export function RenderReviewTray({
     setProblem(null);
     setApprovalWarning(null);
     let confirming = false;
-    let token = unconfirmedToken;
+    let token = held?.token ?? null;
     try {
       if (!token) token = await signBatch(indexes);
       confirming = true;
       const batch = await apiRendersApi.createBatch({ confirmationToken: token });
       confirming = false;
-      if (unconfirmedToken) onUnconfirmed(null);
+      if (held) onHold(null);
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -588,12 +610,23 @@ export function RenderReviewTray({
       setStep('running');
       onFired(batch.jobs.map((job) => job.id));
     } catch (error) {
-      // No answer: a network failure, a timeout, a 5xx with no backend code. A 5xx that names one
-      // (503 `render_fonts_unverifiable` at dispatch) is an answer, and keeps its own words.
-      const answered = error instanceof ApiError && (error.status < 500 || hasBackendError(error));
-      if (confirming && !answered && token) {
-        onUnconfirmed(token);
-        setProblem(CONFIRM_UNKNOWN);
+      const code = error instanceof ApiError ? error.payload?.error : undefined;
+      if (held && typeof code === 'string' && TOKEN_GONE.has(code)) {
+        onHold({ token: held.token, expired: true });
+        setProblem(null);
+        return;
+      }
+      // Only a 4xx is a refusal that made nothing. Anything else — a 5xx with or without a code
+      // (the backend makes rows 1..k-1 and then throws on row k), a network failure, a timeout —
+      // may have made some rows, so the token is held and re-sent, never signed afresh.
+      const refused = error instanceof ApiError && error.status >= 400 && error.status < 500;
+      if (confirming && !refused && token) {
+        onHold({ token });
+        setProblem(
+          error instanceof ApiError && hasBackendError(error)
+            ? describeFailure(error).message
+            : CONFIRM_UNKNOWN,
+        );
         return;
       }
       const { message, details } = describeFailure(error);
@@ -650,7 +683,8 @@ export function RenderReviewTray({
           }
         : {
             label: `Render ${plural(fileCount, 'file')}`,
-            disabled: firing || (stale && !unconfirmedToken) || deliverBlockers.length > 0,
+            disabled:
+              firing || Boolean(held?.blocked) || (stale && !held) || deliverBlockers.length > 0,
             run: () => void confirm(),
             fires: true,
           };
@@ -753,30 +787,35 @@ export function RenderReviewTray({
           </li>
         ))}
       </ul>
-      {/* A token held from an earlier tray on this set says so here too, until the ledger is opened. */}
-      {problem || unconfirmedToken ? (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center gap-2 px-[var(--card-pad)] py-1.5 text-destructive"
-        >
-          <p>{problem ?? CONFIRM_UNKNOWN}</p>
-          {unconfirmedToken ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() => {
-                onUnconfirmed(null);
-                onOpenLedger([]);
-              }}
-            >
-              Open Render ledger
-            </Button>
-          ) : null}
-        </div>
+      {problem && !held ? (
+        <p role="alert" className="px-[var(--card-pad)] py-1.5 text-destructive">
+          {problem}
+        </p>
       ) : null}
     </>
   );
+
+  // A held token is said at the top of every step, from this tray or an earlier one on this set,
+  // until the ledger is opened.
+  const heldBanner = held ? (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-2 border-b border-border px-[var(--card-pad)] py-1.5 text-destructive"
+    >
+      <p>{heldMessage(held) ?? problem ?? CONFIRM_UNKNOWN}</p>
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        onClick={() => {
+          onHold(null);
+          onOpenLedger([]);
+        }}
+      >
+        Open Render ledger
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <section
@@ -876,6 +915,7 @@ export function RenderReviewTray({
       ) : (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {heldBanner}
             {stale && step === 'review' ? (
               <div
                 role="status"

@@ -198,7 +198,13 @@ import {
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { forgeQueryKeys } from './queryKeys';
-import { CONFIRM_UNKNOWN, type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
+import {
+  CONFIRM_UNKNOWN,
+  HELD_EXPIRED,
+  type HeldConfirm,
+  type RenderPreflightRow,
+  RenderReviewTray,
+} from './RenderReviewTray';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
 // would swallow every other file's toasts.
@@ -277,12 +283,14 @@ function Harness({
   handlers: ReturnType<typeof trayHandlers>;
 }) {
   const [rows, setRows] = useState(initialRows);
-  // Kept above the tray, as the grid keeps it.
-  const [unconfirmedToken, setUnconfirmedToken] = useState<string | null>(null);
+  // Kept above the tray, as the grid keeps it (the grid also compares it with the rows).
+  const [held, setHeld] = useState<HeldConfirm | null>(null);
   return (
     <RenderReviewTray
-      unconfirmedToken={unconfirmedToken}
-      onUnconfirmed={setUnconfirmedToken}
+      held={held}
+      onHold={(next) =>
+        setHeld(next ? { token: next.token, blocked: next.expired ? 'expired' : null } : null)
+      }
       brandId={BRAND}
       bindingId={bindingId}
       templateKey="133"
@@ -720,20 +728,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
       cleanup();
     }
-    // A 5xx that names a backend code is an answer too: its own words, not the job list.
-    createBatchMock.mockImplementationOnce(async () => {
-      throw new ApiError('The workers could not verify the template’s fonts.', 503, undefined, {
-        error: 'render_fonts_unverifiable',
-        message: 'The workers could not verify the template’s fonts.',
-      });
-    });
-    renderTray(null);
-    await press('Next: delivery');
-    await press('Render 3 files');
-    expect(await screen.findByText(/could not verify the template’s fonts/)).toBeTruthy();
-    expect(screen.queryByText(CONFIRM_UNKNOWN)).toBeNull();
-    cleanup();
-    // A refusal is an answer: its own words still show.
+    // A 4xx refusal made nothing: its own words, and the next Render signs afresh.
     createBatchMock.mockImplementationOnce(async () => {
       throw new ApiError('This confirmation has expired. Review again.', 409, undefined, {
         error: 'render_confirmation_expired',
@@ -745,6 +740,77 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await press('Render 3 files');
     expect(await screen.findByText(/This confirmation has expired/)).toBeTruthy();
     expect(screen.queryByText(CONFIRM_UNKNOWN)).toBeNull();
+    expect(screen.queryAllByRole('button', { name: 'Open Render ledger' })).toHaveLength(0);
+  }, 30_000);
+
+  // The backend makes rows 1..k-1, then throws when row k never got one: re-signing would make
+  // those rows twice, re-sending the same token hands them back.
+  test('a 5xx with a backend code mid-batch keeps its words, holds the token, and Render re-sends it', async () => {
+    let minted = 0;
+    batchPreflightMock.mockImplementation(async () => ({
+      confirmationToken: `token-${++minted}`,
+      readiness: READY,
+    }));
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('A render job could not be created.', 500, undefined, {
+        error: 'render_job_create_failed',
+        message: 'A render job could not be created.',
+      });
+    });
+    try {
+      renderTray(null);
+      await press('Next: delivery');
+      await press('Render 3 files');
+      expect(await screen.findByText('A render job could not be created.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Open Render ledger' })).toBeTruthy();
+      const signed = batchPreflightMock.mock.calls.length;
+      await press('Render 3 files');
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+      expect(createBatchMock.mock.calls[1]?.[0]).toEqual(createBatchMock.mock.calls[0]?.[0]);
+      expect(batchPreflightMock.mock.calls.length).toBe(signed);
+    } finally {
+      batchPreflightMock.mockImplementation(async () => ({
+        confirmationToken: 'batch-token',
+        readiness: READY,
+      }));
+    }
+  }, 30_000);
+
+  test('a held token the server calls expired is no dead end: the ledger, then a fresh Render', async () => {
+    let minted = 0;
+    batchPreflightMock.mockImplementation(async () => ({
+      confirmationToken: `token-${++minted}`,
+      readiness: READY,
+    }));
+    createBatchMock
+      .mockImplementationOnce(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+      .mockImplementationOnce(async () => {
+        throw new ApiError('expired_confirmation', 409, undefined, {
+          error: 'expired_confirmation',
+        });
+      });
+    try {
+      renderTray(null);
+      await press('Next: delivery');
+      await press('Render 3 files');
+      await screen.findByText(CONFIRM_UNKNOWN);
+      await press('Render 3 files');
+      expect(await screen.findByText(HELD_EXPIRED)).toBeTruthy();
+      expect(document.body.textContent).not.toContain('expired_confirmation');
+      // Render waits for the ledger: nothing can be re-sent, and nothing new signed over it.
+      expect(primaryDisabled('Render 3 files')).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Open Render ledger' }));
+      await press('Render 3 files');
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
+      expect(createBatchMock.mock.calls[2]?.[0]).not.toEqual(createBatchMock.mock.calls[0]?.[0]);
+    } finally {
+      batchPreflightMock.mockImplementation(async () => ({
+        confirmationToken: 'batch-token',
+        readiness: READY,
+      }));
+    }
   }, 30_000);
 
   test('Final is signed into the render’s preflight; the review never asks for one', async () => {
