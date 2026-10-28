@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { mapNotificationRow, type NotificationRow } from '@/lib/notifications/notifications';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 const FEED_LIMIT = 30;
 
@@ -57,14 +57,11 @@ export function useNotifications(): UseNotificationsResult {
     };
     void load();
 
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `notifications-${userId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `notifications:${userId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: 'brand_profiles',
-          table: 'notifications',
-          filter: `recipient_user_id=eq.${userId}`,
           onRow: (row) => {
             const mapped = mapNotificationRow(row as NotificationRow);
             if (!mapped) return;
