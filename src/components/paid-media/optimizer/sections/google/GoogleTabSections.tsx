@@ -5,6 +5,7 @@
 // detail sheet, and the bidding panel. One window for the three, 14 or 30 complete days: the
 // goal is judged on volume, and the tab's 7 days are too few conversions for most campaigns.
 
+import type { GoogleResultBucket } from '@continuum/contracts';
 import { useState } from 'react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useOptimizerPlatformCards } from '../../useOptimizerData';
@@ -31,14 +32,17 @@ export function GoogleTabSections({
   brandId,
   customerId,
   currency,
+  resultBucket = null,
 }: {
   brandId: string;
   customerId: string;
   currency: string | null;
+  /** The portfolios' goal result the tab counts (useGoogleAdsOverview); null when none. */
+  resultBucket?: GoogleResultBucket | null;
 }) {
   const [days, setDays] = useState<WindowDays>(14);
   const window = completeDaysWindow(days);
-  const target = { brandId, customerId };
+  const target = { brandId, customerId, resultBucket };
   const campaigns = useGoogleCampaigns({ ...target, window });
   const goals = useGoogleCampaignGoals(brandId);
   const historyQuery = useGoogleChangeHistory({ ...target, window: changeHistoryWindow() });

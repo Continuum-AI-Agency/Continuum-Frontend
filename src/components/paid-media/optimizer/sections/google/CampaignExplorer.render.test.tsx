@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
-import { BEFORE_E1, EKATAR, EMPTY, GOALS, WITH_E1 } from './__fixtures__/googleTab';
+import {
+  AMBIGUOUS_BY_RESULT,
+  BEFORE_E1,
+  EKATAR,
+  EMPTY,
+  GOALS,
+  WITH_E1,
+} from './__fixtures__/googleTab';
 import { CampaignExplorer } from './CampaignExplorer';
 import { campaignViews } from './campaignExplorerModel';
 import { NOT_IN_THIS_READ } from './googleReads';
@@ -64,6 +71,22 @@ describe('CampaignExplorer', () => {
       .map((dash) => dash.getAttribute('data-reason'));
     expect(reasons).toEqual([NOT_IN_THIS_READ, NOT_IN_THIS_READ, NOT_IN_THIS_READ]);
     expect(getByTestId('missing-reasons').textContent).toContain(NOT_IN_THIS_READ);
+  });
+
+  it("with no single result, each campaign's conversions cell lists its own results", () => {
+    const { getAllByTestId } = mount(AMBIGUOUS_BY_RESULT, new Map());
+    const conversions = getAllByTestId('google-explorer-row').map(
+      (row) => row.querySelectorAll('td')[2]?.textContent,
+    );
+    expect(conversions).toEqual([
+      '26 leads · 2 sign-ups',
+      '22 leads',
+      '6 leads',
+      '3 leads',
+      '0',
+      '48 leads',
+      '18 leads',
+    ]);
   });
 
   it('says there is no target when no portfolio holds a campaign, and nothing spent when empty', () => {

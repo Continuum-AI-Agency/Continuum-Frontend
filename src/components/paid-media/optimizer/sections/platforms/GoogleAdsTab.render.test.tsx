@@ -5,6 +5,7 @@ import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
 import {
   ambiguousAccountOverview,
   ambiguousTopCampaigns,
+  ambiguousTopCampaignsByResult,
 } from './__fixtures__/googleAmbiguousResultBasis';
 import { GoogleAdsTabView, GoogleCampaignTypeBreakdown } from './GoogleAdsTab';
 import {
@@ -271,5 +272,45 @@ describe('an account with no single business result', () => {
         sub: '$10,492 MXN spent · 19% of spend · no single result defined',
       },
     ]);
+  });
+});
+
+// Ramiro, 2026-10-28: with no portfolio goal and campaigns whose goals name several results,
+// each result type is counted with its own cost: never "—" across every campaign type.
+describe('no portfolio goal: each result type apart', () => {
+  const apart = buildGoogleOverview(
+    GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
+    GoogleTopCampaignsSchema.parse(ambiguousTopCampaignsByResult),
+  );
+  const state = { status: 'ready', account: VIVO_47, overview: apart, resultBucket: null } as const;
+
+  it('names each result and its cost in the sentence and on every tile', () => {
+    const { getByTestId } = render(<GoogleAdsTabView state={state} />);
+    expect(getByTestId('google-headline').textContent).toBe(
+      'Google spent $55,205 MXN: 122 leads at $453 MXN each and 2 sign-ups at $27,603 MXN each, counted apart because no single result is defined for this account.',
+    );
+    expect([...getByTestId('google-tiles').children].map(tileText).slice(1)).toEqual([
+      {
+        label: 'Conversions',
+        value: '122 leads · 2 sign-ups',
+        sub: '$453 MXN per lead · $27,603 MXN per sign-up · counted apart',
+      },
+      {
+        label: 'Search · 3 campaigns',
+        value: '34 leads · 2 sign-ups',
+        sub: '$1,315 MXN per lead · $22,356 MXN per sign-up · 81% of spend',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '88 leads · 0 sign-ups',
+        sub: '$119 MXN per lead · no sign-up yet · 19% of spend',
+      },
+    ]);
+  });
+
+  it('no campaign type tile reads "—" under the multi-platform frame either', () => {
+    const { getAllByTestId } = render(<GoogleCampaignTypeBreakdown state={state} />);
+    const values = getAllByTestId('google-tile-group').map((tile) => tileText(tile).value);
+    expect(values).toEqual(['34 leads · 2 sign-ups', '88 leads · 0 sign-ups']);
   });
 });

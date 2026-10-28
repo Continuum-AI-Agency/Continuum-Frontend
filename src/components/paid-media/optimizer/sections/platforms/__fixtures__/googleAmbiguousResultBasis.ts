@@ -55,3 +55,24 @@ export const ambiguousTopCampaigns = {
     metrics: { ...row.metrics, conversions: null, cpa: null, costPerConversion: null },
   })),
 };
+
+/** The same read from an edge that counts each business result apart (`metrics.byResult`, Ramiro
+ *  2026-10-28): Vivo 47's first Search campaign also counts 2 sign-ups (EKATAR's GA4
+ *  file_download), so with no portfolio goal there is no single result to count. */
+const BY_RESULT: Readonly<Record<string, { leads: number; purchases: number; signups: number }>> = {
+  '20775796216': { leads: 26, purchases: 0, signups: 2 },
+  '21287529107': { leads: 22, purchases: 0, signups: 0 },
+  '19954538151': { leads: 5.5, purchases: 0, signups: 0 },
+  '21985307202': { leads: 2.5, purchases: 0, signups: 0 },
+  '22364972636': { leads: 0, purchases: 0, signups: 0 },
+  '22706302206': { leads: 48, purchases: 0, signups: 0 },
+  '22404522468': { leads: 18, purchases: 0, signups: 0 },
+};
+
+export const ambiguousTopCampaignsByResult = {
+  ...ambiguousTopCampaigns,
+  rows: ambiguousTopCampaigns.rows.map((row) => ({
+    ...row,
+    metrics: { ...row.metrics, byResult: BY_RESULT[row.id] },
+  })),
+};

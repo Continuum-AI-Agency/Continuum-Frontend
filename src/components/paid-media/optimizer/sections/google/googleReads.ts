@@ -16,6 +16,7 @@ import {
   GoogleChangeHistorySchema,
   type GoogleKeywordQualityRead,
   GoogleKeywordQualityReadSchema,
+  type GoogleResultBucket,
   type GoogleSignalBlock,
   type GoogleSignalsRead,
   GoogleSignalsReadSchema,
@@ -34,8 +35,14 @@ const ROW_LIMIT = 50;
 
 /** The window a read covers, as ISO dates. */
 export type GoogleReadWindow = { since: string; until: string };
-/** The account a read is for: the brand and its granted Google Ads customer. */
-export type GoogleReadTarget = { brandId: string; customerId: string };
+/** The account a read is for: the brand and its granted Google Ads customer, and the result its
+ *  conversions count: the brand's Google portfolios' goal (useGoogleAdsOverview). Without one the
+ *  edge decides, and each row still counts every result apart (`metrics.byResult`). */
+export type GoogleReadTarget = {
+  brandId: string;
+  customerId: string;
+  resultBucket?: GoogleResultBucket | null;
+};
 
 export async function invokeGoogleMetrics(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await createSupabaseBrowserClient().functions.invoke(
@@ -105,21 +112,29 @@ const account = (target: GoogleReadTarget) => ({
   accountId: target.customerId,
 });
 
+/** For the reads that count results: the result they count, when the tab names one. */
+const resultOf = (target: GoogleReadTarget) =>
+  target.resultBucket ? { resultBucket: target.resultBucket } : {};
+
 /** Every campaign that spent in the window, by spend, with E1's `google` block when the edge
  *  read it (absent on a payload cached before it did: see campaignField). */
 export function useGoogleCampaigns(
   args: GoogleReadTarget & { window: GoogleReadWindow },
 ): UseQueryResult<GoogleTopCampaigns> {
-  return useGoogleRead(args, ['top_campaigns', args.window.since, args.window.until], async () =>
-    parseGoogleCampaigns(
-      await invokeGoogleMetrics({
-        ...account(args),
-        scope: 'top_campaigns',
-        kpi: 'spend',
-        limit: ROW_LIMIT,
-        range: rangeOf(args.window),
-      }),
-    ),
+  return useGoogleRead(
+    args,
+    ['top_campaigns', args.window.since, args.window.until, args.resultBucket ?? 'auto'],
+    async () =>
+      parseGoogleCampaigns(
+        await invokeGoogleMetrics({
+          ...account(args),
+          ...resultOf(args),
+          scope: 'top_campaigns',
+          kpi: 'spend',
+          limit: ROW_LIMIT,
+          range: rangeOf(args.window),
+        }),
+      ),
   );
 }
 
@@ -192,11 +207,13 @@ export function useGoogleBreakdown(
       args.window.until,
       dimensions.join(','),
       args.campaignId ?? 'account',
+      args.resultBucket ?? 'auto',
     ],
     async () =>
       parseGoogleBreakdown(
         await invokeGoogleMetrics({
           ...account(args),
+          ...resultOf(args),
           scope: 'breakdown',
           dimensions,
           range: rangeOf(args.window),

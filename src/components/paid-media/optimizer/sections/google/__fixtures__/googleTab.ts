@@ -14,6 +14,7 @@ import {
   GoogleTopCampaignsSchema,
 } from '@continuum/contracts';
 import recorded from '../../platforms/__fixtures__/google-vivo47-paid-media-metrics.json';
+import { ambiguousTopCampaignsByResult } from '../../platforms/__fixtures__/googleAmbiguousResultBasis';
 import type { CampaignGoal } from '../campaignExplorerModel';
 
 export const NOW = new Date('2026-10-28T12:00:00Z');
@@ -83,6 +84,12 @@ export const AMBIGUOUS: GoogleTopCampaigns = GoogleTopCampaignsSchema.parse({
     metrics: { ...row.metrics, conversions: null, cpa: null, costPerConversion: null },
   })),
 });
+
+/** No portfolio goal, from an edge that counts each result apart (`metrics.byResult`): EKATAR
+ *  also counts 2 sign-ups, so there is no single result. */
+export const AMBIGUOUS_BY_RESULT: GoogleTopCampaigns = GoogleTopCampaignsSchema.parse(
+  ambiguousTopCampaignsByResult,
+);
 
 export const EMPTY: GoogleTopCampaigns = GoogleTopCampaignsSchema.parse({
   ...recorded.top_campaigns,

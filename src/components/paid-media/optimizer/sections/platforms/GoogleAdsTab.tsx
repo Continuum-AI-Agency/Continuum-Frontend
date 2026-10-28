@@ -22,6 +22,7 @@ import { GoogleOwnViews } from '../google/views/GoogleOwnViews';
 import {
   type CampaignGroup,
   costPerConversion,
+  costPerResult,
   figureWindowOf,
   formatConversions,
   type GoogleOverview,
@@ -29,6 +30,9 @@ import {
   MIN_TILES,
   NO_SINGLE_RESULT,
   percentAgainst,
+  RESULT_WORDS,
+  resultCountLabel,
+  resultsApartLabel,
   windowRangeLabel,
 } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
@@ -43,6 +47,21 @@ function signedPct(pct: number): string {
   return pct > 0 ? `+${pct}%` : `${pct}%`;
 }
 
+/** "$33.07 MXN per lead · no sign-up yet": each result type's own cost, when counted apart. */
+function costsApart(
+  item: Pick<CampaignGroup, 'spend' | 'byResult'>,
+  overview: GoogleOverview,
+  currency: string | null,
+): string {
+  return overview.resultTypes
+    .map((bucket) => {
+      const cost = costPerResult(item.spend, item.byResult, bucket);
+      const word = RESULT_WORDS[bucket].one;
+      return cost == null ? `no ${word} yet` : `${formatCurrency(cost, currency)} per ${word}`;
+    })
+    .join(' · ');
+}
+
 /** "18% below the account's 452 MXN" — the group's cost against Google's own average. */
 function costComparison(
   group: CampaignGroup,
@@ -50,6 +69,9 @@ function costComparison(
   currency: string | null,
 ): string {
   if (group.conversions == null) {
+    if (overview.resultTypes.length > 0 && group.byResult) {
+      return `${costsApart(group, overview, currency)} · ${group.sharePct}% of spend`;
+    }
     return `${formatCurrency(group.spend, currency)} spent · ${group.sharePct}% of spend · ${NO_SINGLE_RESULT.toLowerCase()}`;
   }
   const cost = costPerConversion(group);
@@ -66,9 +88,11 @@ function costComparison(
   return `${formatCurrency(cost, currency)} each${against} · ${group.sharePct}% of spend`;
 }
 
-/** The group's count, or an honest dash when the account has no single result to count. */
-function groupValue(group: CampaignGroup): string {
-  return group.conversions == null ? '—' : `${formatConversions(group.conversions)} conv.`;
+/** The group's count; with no single result each result type apart; a dash only when the read
+ *  carried neither. */
+function groupValue(group: CampaignGroup, overview: GoogleOverview): string {
+  if (group.conversions != null) return `${formatConversions(group.conversions)} conv.`;
+  return resultsApartLabel(group.byResult, overview.resultTypes) ?? '—';
 }
 
 function groupLabel(group: CampaignGroup, byType: boolean): string {
@@ -82,8 +106,15 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
   const converting = overview.groups
     .filter((group) => group.conversions != null && group.conversions > 0)
     .slice(0, 3);
+  const apart = overview.resultTypes.map((bucket) => {
+    const count = overview.byResult?.[bucket] ?? 0;
+    const cost = costPerResult(overview.spend, overview.byResult, bucket);
+    return `${resultCountLabel(bucket, count)}${cost == null ? '' : ` at ${formatCurrency(cost, currency)} each`}`;
+  });
   const ending = !overview.resultsDefined
-    ? '. Conversions are not shown: no single result is defined for this account.'
+    ? apart.length > 0
+      ? `: ${apart.join(' and ')}, counted apart because no single result is defined for this account.`
+      : '. Conversions are not shown: no single result is defined for this account.'
     : overview.spend > 0
       ? ' and recorded no conversions.'
       : '.';
@@ -168,13 +199,19 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
         label="Conversions"
         sub={
           overview.conversions == null
-            ? NO_SINGLE_RESULT
+            ? overview.resultTypes.length > 0
+              ? `${costsApart(overview, overview, currency)} · counted apart`
+              : NO_SINGLE_RESULT
             : overview.costPerConversion != null
               ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
               : 'none recorded in the window'
         }
         testId="google-tile-conversions"
-        value={overview.conversions == null ? '—' : formatConversions(overview.conversions)}
+        value={
+          overview.conversions == null
+            ? (resultsApartLabel(overview.byResult, overview.resultTypes) ?? '—')
+            : formatConversions(overview.conversions)
+        }
       />
       {groups.map((group) => (
         <KpiTile
@@ -189,7 +226,7 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
           label={groupLabel(group, overview.byType)}
           sub={costComparison(group, overview, currency)}
           testId="google-tile-group"
-          value={groupValue(group)}
+          value={groupValue(group, overview)}
         />
       ))}
       {showClicks ? (
@@ -356,7 +393,7 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
             label={groupLabel(group, overview.byType)}
             sub={costComparison(group, overview, account.currency)}
             testId="google-tile-group"
-            value={groupValue(group)}
+            value={groupValue(group, overview)}
           />
         ))}
       </div>
@@ -396,11 +433,13 @@ export function GoogleAdsTab({
             brandId={brandId}
             currency={state.account.currency}
             customerId={state.account.account_id}
+            resultBucket={state.resultBucket}
           />
           <GoogleOwnViews
             brandId={brandId}
             currency={state.account.currency}
             customerId={state.account.account_id}
+            resultBucket={state.resultBucket}
             window={{ since: state.overview.since, until: state.overview.until }}
           />
         </>

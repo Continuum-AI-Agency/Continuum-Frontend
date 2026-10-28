@@ -15,6 +15,7 @@ import {
   type GoogleCampaignRow,
   type GoogleChange,
   type GoogleChangeHistory,
+  type GoogleResultCounts,
   type GoogleTopCampaigns,
   type PlatformCard,
   type PortfolioListItem,
@@ -23,6 +24,7 @@ import { formatCurrency } from '../../format';
 import { minorToMajor } from '../actionRows';
 import { codeLabel, percentLabel, platformCardOf } from '../platformCards/platformCardModel';
 import {
+  addResults,
   CAMPAIGN_TYPE_LABELS,
   campaignTypeOf,
   NO_SINGLE_RESULT,
@@ -137,6 +139,8 @@ export type CampaignView = {
   conversions: number | null;
   /** Spend per conversion; null without a conversion or without a single result. */
   cost: number | null;
+  /** Each business result counted apart; null on a read from before the edge sent them. */
+  byResult: GoogleResultCounts | null;
   goal: CampaignGoal | null;
   band: GoalBand;
   budgetPerDay: Figure;
@@ -183,6 +187,7 @@ export function campaignViews(
         spend: row.metrics.spend,
         conversions,
         cost,
+        byResult: row.metrics.byResult ?? null,
         goal,
         band:
           !goal && unknownGoal && conversions != null
@@ -198,14 +203,25 @@ export function campaignViews(
     .sort((a, b) => b.spend - a.spend);
 }
 
-export type Totals = { spend: number; conversions: number | null; cost: number | null };
+export type Totals = {
+  spend: number;
+  conversions: number | null;
+  cost: number | null;
+  byResult: GoogleResultCounts | null;
+};
 
-export function totalsOf(rows: readonly Pick<CampaignView, 'spend' | 'conversions'>[]): Totals {
+export function totalsOf(
+  rows: readonly Pick<CampaignView, 'spend' | 'conversions' | 'byResult'>[],
+): Totals {
   const spend = rows.reduce((sum, row) => sum + row.spend, 0);
   const conversions = rows.some((row) => row.conversions == null)
     ? null
     : rows.reduce((sum, row) => sum + (row.conversions ?? 0), 0);
-  return { spend, conversions, cost: costOf(spend, conversions) };
+  const byResult = rows.reduce<GoogleResultCounts | null>(
+    (sum, row) => addResults(sum, row.byResult),
+    {},
+  );
+  return { spend, conversions, cost: costOf(spend, conversions), byResult };
 }
 
 /** The one goal every campaign that has one shares, or null when they disagree or none has one. */

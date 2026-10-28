@@ -25,9 +25,11 @@ const CurrencyFields = {
 };
 
 /**
- * Which business result the edge counted as a conversion (`google_conversion_rule_v1`). When the
- * account's goals name no single result, `unambiguous` is false and the edge nulls every
- * conversion count and CPA rather than add unlike things. Optional: older cached payloads lack it.
+ * Which business result the edge counted as a conversion (`google_conversion_rule_v1`): the read's
+ * `resultBucket` when it names one, else the one result the goals of the account's ENABLED
+ * campaigns that delivered in the window name. When they name none or several, `unambiguous` is
+ * false and the edge nulls every conversion count and CPA rather than add unlike things (each
+ * row's `metrics.byResult` still counts them apart). Optional: older cached payloads lack it.
  */
 export const GoogleResultBasisSchema = z.object({
   rule: z.string(),
@@ -35,6 +37,36 @@ export const GoogleResultBasisSchema = z.object({
   unambiguous: z.boolean(),
 });
 export type GoogleResultBasis = z.infer<typeof GoogleResultBasisSchema>;
+
+/** The business results the edge counts, and what a read's `resultBucket` may name. */
+export const GOOGLE_RESULT_BUCKETS = ['leads', 'purchases', 'signups'] as const;
+export type GoogleResultBucket = (typeof GOOGLE_RESULT_BUCKETS)[number];
+
+const OBJECTIVE_RESULTS = new Map<string, GoogleResultBucket>([
+  ['lead', 'leads'],
+  ['purchase', 'purchases'],
+  ['signup', 'signups'],
+]);
+
+/**
+ * The result the Google tab counts (Ramiro, 2026-10-28): the one business result the brand's
+ * portfolios with a Google side are held to, from their objectives. Null when there is no such
+ * portfolio, one is held to no business result (traffic, awareness…), or they disagree; the tab
+ * then shows each result type in its own column. Goals on the account's campaigns never decide it.
+ */
+export function googlePortfolioResult(
+  objectives: readonly (string | null | undefined)[],
+): GoogleResultBucket | null {
+  const results = new Set(objectives.map((objective) => OBJECTIVE_RESULTS.get(objective ?? '')));
+  const [only] = results;
+  return results.size === 1 && only ? only : null;
+}
+
+/** Each business result's count over the window, whatever the basis. */
+export const GoogleResultCountsSchema = z
+  .object({ leads: z.number(), purchases: z.number(), signups: z.number() })
+  .partial();
+export type GoogleResultCounts = z.infer<typeof GoogleResultCountsSchema>;
 
 const ComparisonValueSchema = z.object({
   current: z.number(),
@@ -72,6 +104,9 @@ export const GoogleEntityMetricsSchema = z.object({
   ctr: z.number().optional(),
   cpc: z.number().optional(),
   cpm: z.number().optional(),
+  /** Every business result the campaign counted, ambiguous basis or not: with no portfolio goal
+   *  the tab shows one column per result. Absent on payloads cached before the edge sent it. */
+  byResult: GoogleResultCountsSchema.optional(),
 });
 export type GoogleEntityMetrics = z.infer<typeof GoogleEntityMetricsSchema>;
 

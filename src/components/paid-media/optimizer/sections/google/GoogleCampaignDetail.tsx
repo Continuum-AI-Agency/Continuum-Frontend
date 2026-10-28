@@ -16,7 +16,11 @@ import {
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { formatCurrency } from '../../format';
 import { googleAdsCampaignHref, percentLabel } from '../platformCards/platformCardModel';
-import { formatConversions, NO_SINGLE_RESULT } from '../platforms/googleAdsOverviewModel';
+import {
+  formatConversions,
+  NO_SINGLE_RESULT,
+  ownResultsLabel,
+} from '../platforms/googleAdsOverviewModel';
 import { cooldownText, lastChangeText } from './BiddingPanel';
 import { statusWords } from './CampaignExplorer';
 import {
@@ -85,11 +89,9 @@ export function GoogleCampaignDetailBody({
           {formatCurrency(campaign.spend, currency)}
         </Row>
         <Row label="Conversions">
-          {campaign.conversions == null ? (
-            <Missing reason={NO_SINGLE_RESULT} />
-          ) : (
-            formatConversions(campaign.conversions)
-          )}
+          {campaign.conversions == null
+            ? (ownResultsLabel(campaign.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
+            : formatConversions(campaign.conversions)}
         </Row>
         <Row label="Cost per conversion">
           {campaign.cost != null ? (

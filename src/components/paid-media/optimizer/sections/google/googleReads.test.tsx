@@ -85,6 +85,38 @@ describe('useGoogleCampaigns', () => {
   });
 });
 
+// The tab's portfolio goal (Ramiro, 2026-10-28) rides on the target to the reads that count.
+describe("the tab's goal result on the read target", () => {
+  it('top_campaigns counts the goal; google_signals, which counts no result, is not asked to', async () => {
+    answer = (body) =>
+      body.scope === 'top_campaigns'
+        ? recorded.top_campaigns
+        : {
+            scope: 'google_signals',
+            accountId: '3710693645',
+            timezone: null,
+            fetched_at: '2026-10-28T18:00:00.000Z',
+            blocks: ['bid_targets'],
+            signals: null,
+            skipped: {},
+            rejected: [],
+          };
+    const target = { ...TARGET, resultBucket: 'leads' as const };
+    const campaigns = renderHook(() => useGoogleCampaigns({ ...target, window: WINDOW }), {
+      wrapper: wrapper(),
+    });
+    const signals = renderHook(() => useGoogleSignals({ ...target, blocks: ['bid_targets'] }), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(campaigns.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(signals.result.current.isSuccess).toBe(true));
+    expect(sent.find((body) => body.scope === 'top_campaigns')).toMatchObject({
+      resultBucket: 'leads',
+    });
+    expect(sent.find((body) => body.scope === 'google_signals')).not.toHaveProperty('resultBucket');
+  });
+});
+
 describe('useGoogleSignals', () => {
   it('asks google_signals for the sorted blocks only, and names a shape it does not know', async () => {
     answer = () => ({ scope: 'google_signals', signals: 'nope' });

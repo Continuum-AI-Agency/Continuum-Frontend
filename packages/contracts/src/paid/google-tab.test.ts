@@ -3,6 +3,7 @@ import {
   GoogleBreakdownReadSchema,
   GoogleSignalsReadSchema,
   GoogleTopCampaignsSchema,
+  googlePortfolioResult,
 } from './google-tab';
 
 const range = { since: '2026-10-21', until: '2026-10-27' };
@@ -36,6 +37,29 @@ describe('GoogleTopCampaignsSchema', () => {
     expect(GoogleTopCampaignsSchema.safeParse({ rows: [row({ google })], range }).success).toBe(
       false,
     );
+  });
+
+  test('keeps each result type apart when the basis is ambiguous', () => {
+    const metrics = { ...row().metrics, byResult: { leads: 245.5, signups: 2 } };
+    const parsed = GoogleTopCampaignsSchema.parse({ rows: [row({ metrics })], range });
+    expect(parsed.rows[0]?.metrics.conversions).toBeNull();
+    expect(parsed.rows[0]?.metrics.byResult).toEqual({ leads: 245.5, signups: 2 });
+  });
+});
+
+describe('googlePortfolioResult', () => {
+  test("the one business result the brand's Google portfolios are held to", () => {
+    expect(googlePortfolioResult(['lead', 'lead'])).toBe('leads');
+    expect(googlePortfolioResult(['purchase'])).toBe('purchases');
+    expect(googlePortfolioResult(['signup'])).toBe('signups');
+  });
+
+  test('no single goal: none, disagreeing, or one held to no business result', () => {
+    expect(googlePortfolioResult([])).toBeNull();
+    expect(googlePortfolioResult(['lead', 'purchase'])).toBeNull();
+    expect(googlePortfolioResult(['lead', 'traffic'])).toBeNull();
+    expect(googlePortfolioResult(['awareness'])).toBeNull();
+    expect(googlePortfolioResult([null, 'toString'])).toBeNull();
   });
 });
 

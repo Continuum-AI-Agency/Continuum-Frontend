@@ -24,7 +24,7 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { fetchGoogleAdsOverview } = await import('./useGoogleAdsOverview');
+const { fetchGoogleAdsOverview, portfolioGoalOf } = await import('./useGoogleAdsOverview');
 
 const WINDOW = { since: '2026-09-30', until: '2026-10-06' };
 
@@ -85,5 +85,29 @@ describe('fetchGoogleAdsOverview', () => {
     await expect(fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW)).rejects.toThrow(
       'shape this page does not know',
     );
+  });
+});
+
+describe("the portfolios' goal result (Ramiro, 2026-10-28)", () => {
+  it('names it on both reads, so the header and the campaign types count the same result', async () => {
+    calls.length = 0;
+    invoke = async (_name, { body }) => ({
+      data: body.scope === 'account_overview' ? recorded.account_overview : recorded.top_campaigns,
+      error: null,
+    });
+    await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW, 'leads');
+    expect(calls.map((call) => call.body.resultBucket)).toEqual(['leads', 'leads']);
+    calls.length = 0;
+    await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW, null);
+    expect(calls.every((call) => !('resultBucket' in call.body))).toBe(true);
+  });
+
+  it("is the one result the brand's live Google portfolios are held to", () => {
+    const portfolio = (objective: string, status = 'active') => ({ objective, status });
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('lead')])).toBe('leads');
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('purchase', 'archived')])).toBe('leads');
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('purchase')])).toBeNull();
+    expect(portfolioGoalOf([portfolio('traffic')])).toBeNull();
+    expect(portfolioGoalOf([])).toBeNull();
   });
 });

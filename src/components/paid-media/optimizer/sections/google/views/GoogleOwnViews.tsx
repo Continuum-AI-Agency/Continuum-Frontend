@@ -5,6 +5,7 @@
 // window. Each waits behind a text disclosure so the tab stays short at 375px, and makes its reads
 // only once opened: the search-term read alone can be 27k rows.
 
+import type { GoogleResultBucket } from '@continuum/contracts';
 import { type ReactNode, useState } from 'react';
 import { TEXT_DISCLOSURE } from '../../../components/disclosure';
 import type { GoogleReadWindow } from '../googleReads';
@@ -19,6 +20,8 @@ export type GoogleOwnViewsProps = {
   /** The customer's currency code, or null when no source reports it. */
   currency: string | null;
   window: GoogleReadWindow;
+  /** The portfolios' goal result the tab counts (useGoogleAdsOverview); null when none. */
+  resultBucket?: GoogleResultBucket | null;
 };
 
 function ViewSection({
@@ -49,8 +52,14 @@ function ViewSection({
   );
 }
 
-export function GoogleOwnViews({ brandId, customerId, currency, window }: GoogleOwnViewsProps) {
-  const target = { brandId, customerId, currency };
+export function GoogleOwnViews({
+  brandId,
+  customerId,
+  currency,
+  window,
+  resultBucket = null,
+}: GoogleOwnViewsProps) {
+  const target = { brandId, customerId, currency, resultBucket };
   return (
     <section aria-label="Google's own views" className="space-y-3" data-testid="google-own-views">
       <h3 className="font-semibold text-sm">Google's own views</h3>

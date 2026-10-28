@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { cleanup, render, within } from '@testing-library/react';
-import { AMBIGUOUS, EMPTY, GOALS, WITH_E1 } from './__fixtures__/googleTab';
+import { AMBIGUOUS, AMBIGUOUS_BY_RESULT, EMPTY, GOALS, WITH_E1 } from './__fixtures__/googleTab';
 import { AccountReadByType } from './AccountReadByType';
 import { campaignViews, typeRows } from './campaignExplorerModel';
 
@@ -60,6 +60,52 @@ describe('AccountReadByType', () => {
     );
     expect(getByTestId('google-account-by-type-summary').textContent).toContain(
       'Search: conversions not counted',
+    );
+  });
+
+  // Ramiro, 2026-10-28: with no portfolio goal, each result type in its own column, own cost.
+  it('gives each result type its own count and cost columns when there is no single result', () => {
+    const { getByTestId } = mount(AMBIGUOUS_BY_RESULT);
+    const section = getByTestId('google-account-by-type');
+    expect(
+      within(section)
+        .getAllByRole('columnheader')
+        .map((th) => th.textContent),
+    ).toEqual([
+      'Campaign type',
+      'Spend · MXN',
+      'Share',
+      'Leads',
+      'Cost / lead · MXN',
+      'Sign-ups',
+      'Cost / sign-up · MXN',
+      'Goal · MXN',
+      'vs goal',
+    ]);
+    const [search, display] = within(section).getAllByTestId('google-by-type-row');
+    expect(cells(search as Element).slice(0, 7)).toEqual([
+      'Search3 campaigns',
+      '$44,713',
+      '81%',
+      '34',
+      '$1,315',
+      '2',
+      '$22,356',
+    ]);
+    expect(cells(display as Element).slice(3, 7)).toEqual([
+      '88',
+      '$119',
+      '0',
+      '— No sign-up in the window to price',
+    ]);
+    expect(cells(getByTestId('google-by-type-total')).slice(3, 7)).toEqual([
+      '122',
+      '$453',
+      '2',
+      '$27,603',
+    ]);
+    expect(getByTestId('google-account-by-type-summary').textContent).toBe(
+      'Search: $1,315 MXN per lead, $22,356 MXN per sign-up; Display: $119 MXN per lead, no sign-up yet.',
     );
   });
 

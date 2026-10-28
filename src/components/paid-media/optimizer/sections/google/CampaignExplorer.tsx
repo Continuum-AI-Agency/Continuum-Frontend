@@ -7,7 +7,11 @@
 
 import { currencyColumnSuffix, formatCurrency, formatCurrencyInColumn } from '../../format';
 import { percentLabel } from '../platformCards/platformCardModel';
-import { formatConversions, NO_SINGLE_RESULT } from '../platforms/googleAdsOverviewModel';
+import {
+  formatConversions,
+  NO_SINGLE_RESULT,
+  ownResultsLabel,
+} from '../platforms/googleAdsOverviewModel';
 import { type CampaignView, type Figure, sharedGoal } from './campaignExplorerModel';
 import {
   BandText,
@@ -199,11 +203,9 @@ export function CampaignExplorer({
                   </td>
                   <td className={TD_NUM}>{formatCurrencyInColumn(row.spend, currency)}</td>
                   <td className={TD_NUM}>
-                    {row.conversions == null ? (
-                      <Missing reason={NO_SINGLE_RESULT} />
-                    ) : (
-                      formatConversions(row.conversions)
-                    )}
+                    {row.conversions == null
+                      ? (ownResultsLabel(row.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
+                      : formatConversions(row.conversions)}
                   </td>
                   <td className={TD_NUM}>
                     {row.cost != null ? (
