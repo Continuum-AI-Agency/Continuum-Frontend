@@ -139,6 +139,7 @@ export function AiDraftDialog({
   brandId,
   bindingId,
   contract,
+  renderSetId,
   parent,
   initialVaryKeys,
   maxRows = API_RENDER_SUGGEST_ROWS_MAX,
@@ -155,6 +156,11 @@ export function AiDraftDialog({
   /** Named only when the brand has more than one render workspace. */
   bindingId: string | null;
   contract: ApiRenderTemplateContract;
+  /**
+   * The saved set the rows will join. The server reads it — its name, brief and existing rows —
+   * so the draft neither repeats a row nor drifts from the set's style.
+   */
+  renderSetId?: string | null;
   /** Set: draft variations of this row. Unset: draft new rows. */
   parent: AiDraftParent | null;
   /** What the path that opened this already decided may change — a cell ticks only its own key. */
@@ -446,6 +452,7 @@ export function AiDraftDialog({
         documentIds,
         mediaAssetIds: files.filter((file) => file.kind === 'media').map((file) => file.id),
         forksPerRow: 0,
+        ...(renderSetId ? { renderSetId } : {}),
         ...(parent
           ? { parent, ...(initialVaryKeys?.length ? { varyKeys: initialVaryKeys } : {}) }
           : {}),
@@ -461,7 +468,7 @@ export function AiDraftDialog({
         );
         return;
       }
-      setPrompt('');
+      // The brief stays: the next draft is usually this one, adjusted — "shorter", "more playful".
       // A source-backed draft is reviewed in the grid; only a legacy flagged gate adds a step.
       if (!response.rows.some(flaggedRow)) {
         onDrafted(response);

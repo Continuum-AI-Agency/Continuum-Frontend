@@ -24,7 +24,6 @@ import {
   Loader2,
   Play,
   Plus,
-  Save,
   Settings2,
   Sparkles,
   Upload,
@@ -63,9 +62,9 @@ import type { CheckpointGraph } from './templateCheckpoints';
 import { shortSha } from './templateVersion';
 
 // The Render tab's toolbar: four controls, left to right in the order a person uses them —
-// which template, add rows, import rows, save and render. Which set the rows belong to is the
-// rail beside the grid (RenderSetRail); everything else a row can do lives on the row (its hover
-// buttons and menu) or on the selection (the bar under this).
+// which template, add rows, import rows, and render (edits save themselves; ⌘S saves now). Which
+// set the rows belong to is the tab strip over the grid (RenderSetTabs); everything else a row can
+// do lives on the row (its hover buttons and menu) or on the selection (the bar under this).
 
 export const templateLabel = (template: ApiRenderTemplateSummary): string =>
   template.displayName ?? templateDisplayName(template.name);
@@ -239,16 +238,12 @@ export function RenderToolbar({
   onDownloadTemplate,
   dirty,
   saveStatus,
-  canSave,
-  onSave,
   selectedCount,
   files,
   readyToFire,
   fireHint,
   busy,
   onRender,
-  renderCount,
-  skipNote,
   heldLabel,
 }: {
   templates: ApiRenderTemplateSummary[];
@@ -287,15 +282,20 @@ export function RenderToolbar({
   dirty: boolean;
   /**
    * What autosave is doing: writing now, written at a time, or failed — with why, and whether it
-   * retries by itself or waits for a change or Save. Null while there is nothing saved or to save.
+   * retries by itself or waits for a change or ⌘S. Null while there is nothing saved or to save.
    */
   saveStatus:
     | { phase: 'saving' }
     | { phase: 'saved'; at: string }
-    | { phase: 'failed'; reason: string; retrying: boolean; onRepair?: () => void }
+    | {
+        phase: 'failed';
+        reason: string;
+        retrying: boolean;
+        onRepair?: () => void;
+        /** Saves now — what the Save button was, only where a save is stuck. */
+        onRetry?: () => void;
+      }
     | null;
-  canSave: boolean;
-  onSave: () => void;
   selectedCount: number;
   /** Every file the selection renders, and how many of them come out in each ratio. */
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -303,11 +303,7 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
-  /** The selected rows that can render: what Render's label counts. */
-  renderCount?: number;
-  /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
-  skipNote?: string | null;
-  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
   heldLabel?: string;
 }) {
   const current = templates.find(
@@ -532,32 +528,17 @@ export function RenderToolbar({
               <Button type="button" size="xs" variant="outline" onClick={saveStatus.onRepair}>
                 Open template
               </Button>
+            ) : saveStatus?.phase === 'failed' && !saveStatus.retrying && saveStatus.onRetry ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={saveStatus.onRetry}
+              >
+                Retry save
+              </Button>
             ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="relative gap-1.5"
-              disabled={!canSave || busy !== null}
-              title={dirty ? 'Save now (⌘S) — edits also save by themselves' : 'Saved'}
-              onClick={onSave}
-            >
-              {busy === 'saving' ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Save className="size-3.5" aria-hidden />
-              )}
-              Save
-              {dirty ? (
-                <>
-                  <span
-                    className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary"
-                    aria-hidden
-                  />
-                  <span className="sr-only">(unsaved edits)</span>
-                </>
-              ) : null}
-            </Button>
             <RenderButton
               selectedCount={selectedCount}
               files={files}
@@ -565,8 +546,6 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
-              renderCount={renderCount}
-              skipNote={skipNote}
               heldLabel={heldLabel}
             />
           </Control>
@@ -664,8 +643,6 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
-  renderCount,
-  skipNote,
   heldLabel,
 }: {
   selectedCount: number;
@@ -674,11 +651,7 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
-  /** The selected rows that can render: what Render's label counts. */
-  renderCount?: number;
-  /** Selected rows left out of the batch, said beside Render; the review lists each and why. */
-  skipNote?: string | null;
-  /** A held batch: Render opens it, and says so instead of counting the selection. */
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
   heldLabel?: string;
 }) {
   const hintId = useId();
@@ -700,41 +673,37 @@ function RenderButton({
       )}
       {heldLabel
         ? heldLabel
-        : (renderCount ?? selectedCount)
-          ? `Render ${plural(renderCount ?? selectedCount, 'row')} · ${plural(files.total, 'file')}`
+        : selectedCount
+          ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
           : 'Render'}
     </Button>
   );
-  const content = !selectedCount ? (
-    button
-  ) : (
-    <Tooltip>
-      <TooltipTrigger render={button} />
-      <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
-        {files.byRatio.map(([ratio, count], index) => (
-          <Fragment key={ratio}>
-            {index > 0 ? <span aria-hidden>·</span> : null}
-            <RatioGlyph ratio={ratio} />
-            {ratio} ×{count}
-          </Fragment>
-        ))}
-        {files.replacements ? (
-          <span>
-            {files.byRatio.length ? '· ' : ''}
-            {plural(files.replacements, 'ad replacement')}, one file each
-          </span>
-        ) : null}
-      </TooltipContent>
-    </Tooltip>
-  );
+  const content =
+    heldLabel || !selectedCount ? (
+      button
+    ) : (
+      <Tooltip>
+        <TooltipTrigger render={button} />
+        <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
+          {files.byRatio.map(([ratio, count], index) => (
+            <Fragment key={ratio}>
+              {index > 0 ? <span aria-hidden>·</span> : null}
+              <RatioGlyph ratio={ratio} />
+              {ratio} ×{count}
+            </Fragment>
+          ))}
+          {files.replacements ? (
+            <span>
+              {files.byRatio.length ? '· ' : ''}
+              {plural(files.replacements, 'ad replacement')}, one file each
+            </span>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    );
   return (
     <div className="flex max-w-md flex-col items-start gap-1">
       {content}
-      {!disabled && skipNote ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {skipNote}
-        </p>
-      ) : null}
       {showHint ? (
         <p id={hintId} role="status" className="text-xs text-muted-foreground">
           {fireHint}

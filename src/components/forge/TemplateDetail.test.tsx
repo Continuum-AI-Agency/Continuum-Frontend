@@ -5,7 +5,7 @@
  * from the variables response's edits, and the checks say what they found where the facts are.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bun:test';
 import type {
   ApiRenderJob,
   ApiRenderOutput,
@@ -322,6 +322,21 @@ import {
 import { TemplateDetail } from './TemplateDetail';
 
 installPickerDomGlobals();
+
+// happy-dom never fetches an image, so every image element reads as finished with no pixels — what
+// a broken image looks like to the render frame's pre-commit check (`imageFailed`). Here images decode.
+let imagePrototype: object | null = null;
+let naturalWidth: PropertyDescriptor | undefined;
+beforeAll(() => {
+  imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
+  naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
+  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+});
+afterAll(() => {
+  if (imagePrototype && naturalWidth) {
+    Object.defineProperty(imagePrototype, 'naturalWidth', naturalWidth);
+  }
+});
 
 afterEach(() => {
   cleanup();

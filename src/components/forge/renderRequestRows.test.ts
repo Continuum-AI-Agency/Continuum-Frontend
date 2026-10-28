@@ -24,12 +24,12 @@ import {
   HISTORY_LIMIT,
   IMPORT_SKIP,
   isDefaultValue,
-  isFontPreflightRefusal,
   isRenderable,
   keepProposed,
   mergeSetRows,
   missingInputs,
   moveRow,
+  overrideFor,
   ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
@@ -447,6 +447,15 @@ describe('CSV', () => {
     expect(autoMapHeaders(['Titré', 'Région'], [title, region])).toEqual({
       Titré: 'title',
       Région: 'region',
+    });
+  });
+
+  test('an accent-folded label cannot take another variable exact header', () => {
+    const accented = variable({ key: 'accented', label: 'Région' });
+    const plain = variable({ key: 'plain', label: 'Region' });
+    expect(autoMapHeaders(['Region', 'Région'], [accented, plain])).toEqual({
+      Region: 'plain',
+      Région: 'accented',
     });
   });
 
@@ -1233,26 +1242,27 @@ describe('applyAssistOps', () => {
 
 describe('font override reachability', () => {
   test('nonblocking findings do not conceal font consent', () => {
-    expect(isFontPreflightRefusal('render_fonts_missing')).toBe(true);
+    expect(overrideFor('render_fonts_missing')).toBe('acceptMissingFonts');
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
         { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+        { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'warn' },
       ]),
-    ).toBe(true);
+    ).toBe('acceptMissingFonts');
   });
   test('another blocking finding must be corrected', () => {
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
         { code: 'ASSET_UNREADABLE', severity: 'block' },
       ]),
-    ).toBe(false);
+    ).toBeNull();
     expect(
-      isFontPreflightRefusal('render_brand_guardrail_blocked', [
+      overrideFor('render_brand_guardrail_blocked', [
         { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
       ]),
-    ).toBe(false);
+    ).toBeNull();
   });
 });
 
@@ -1269,24 +1279,19 @@ describe('rowStatusOf: a row read with no request', () => {
   const fit = (...verdicts: ApiRenderFitVerdict[]) => new Map(verdicts.map((v) => [v.key, v]));
 
   test('its own errors make it Invalid, whatever else is known', () => {
-    const status = rowStatusOf({ headline: 'Required' }, fit(verdict({})), {
-      message: 'Use a brand colour.',
-      font: false,
-    });
+    const status = rowStatusOf({ headline: 'Required' }, fit(verdict({})), 'Use a brand colour.');
     expect(status).toEqual({ state: 'invalid', errors: { headline: 'Required' } });
     expect(isRenderable(status)).toBe(false);
   });
 
-  test('a refusal a review found will not render; missing fonts render in substitutes', () => {
-    const refused = rowStatusOf({}, fit(verdict({})), {
-      message: 'Use a brand colour.',
-      font: false,
-    });
+  test('a refusal the confirmation found will not render; a call renders once ticked', () => {
+    const refused = rowStatusOf({}, fit(verdict({})), 'Use a brand colour.');
     expect(refused).toEqual({ state: 'refused', reason: 'Use a brand colour.' });
     expect(isRenderable(refused)).toBe(false);
-    const fonts = rowStatusOf({}, undefined, { message: 'Brand Sans is missing.', font: true });
-    expect(fonts).toEqual({ state: 'fonts', reason: 'Brand Sans is missing.' });
-    expect(isRenderable(fonts)).toBe(true);
+    const calls = [{ override: 'acceptLinkedLineMismatch' as const, message: 'Two lines, three layers.' }];
+    const call = rowStatusOf({}, undefined, undefined, calls);
+    expect(call).toEqual({ state: 'call', calls });
+    expect(isRenderable(call)).toBe(true);
   });
 
   test('Ready only when the fit was measured and lands', () => {

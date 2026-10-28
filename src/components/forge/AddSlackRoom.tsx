@@ -28,7 +28,7 @@ import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 // Turns one Slack channel into a room this brand posts to. The channel list comes only from the
 // Slack workspaces connected to this brand, so a brand user never sees another tenant's channels.
 //
-// One component, two callers: the Forge review tray offers ops/client while choosing where a
+// One component, two callers: the Forge set settings offer ops/client while choosing where a
 // render goes, and the brand admin's Settings section offers alerts as well. Which roles are on
 // offer is the caller's decision — the panel itself is the same panel.
 

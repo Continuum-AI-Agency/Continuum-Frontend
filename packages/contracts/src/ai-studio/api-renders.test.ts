@@ -545,7 +545,34 @@ const batch = (extra: Record<string, unknown>) => ({
   ...extra,
 });
 
+describe('render-anyway overrides', () => {
+  it('parse on the single and the batch preflight, next to acceptMissingFonts', () => {
+    const flags = { acceptLinkedLineMismatch: true, acceptOffPaletteColor: true };
+    expect(
+      apiRenderBatchPreflightRequestSchema.parse(batch({ records: [record()], ...flags })),
+    ).toMatchObject(flags);
+    expect(
+      apiRenderPreflightRequestSchema.parse({
+        brandId: BRAND,
+        templateKey: '133',
+        contractHash: 'hash',
+        variables: {},
+        ...flags,
+      }),
+    ).toMatchObject(flags);
+  });
+});
+
 describe('delivery targets', () => {
+  it('pins explicit micro-only fallback behavior through batch preflight', () => {
+    expect(apiRenderBatchPreflightRequestSchema.parse(batch({
+      records: [record()], renderer: 'experimental', microFallbackPolicy: 'fail',
+    })).microFallbackPolicy).toBe('fail');
+    expect(apiRenderBatchPreflightRequestSchema.safeParse(batch({
+      records: [record()], microFallbackPolicy: 'fail',
+    })).success).toBe(false);
+  });
+
   it('still reads a pre-union create target and fills its defaults', () => {
     expect(apiRenderDeliveryTargetSchema.parse(createTarget)).toEqual({
       ...createTarget,
@@ -987,6 +1014,29 @@ describe('linked fields take their value from their source', () => {
 
   it('leaves an unset source alone: the fields keep what the file says', () => {
     expect(expandLinkedValues([headline, outline, front], {}).values).toEqual({});
+  });
+
+  it('marks only the line-count problem as one a person may render through', () => {
+    const [problem] = expandLinkedValues([headline, front], { headline: 'ONE LINE' }).problems;
+    expect(problem?.overridable).toBe(true);
+    const gap = field('gap', { key: 'headline', line: 3 });
+    expect(expandLinkedValues([headline, gap], { headline: 'A\nB' }).problems[0]?.overridable)
+      .toBeUndefined();
+  });
+
+  it('with the override, joins extra lines onto the last layer and leaves missing ones empty', () => {
+    const lenient = { lenientLineCount: true };
+    const back = field('back', { key: 'headline', line: 3 });
+    expect(
+      expandLinkedValues([headline, front], { headline: 'TRAIN\nHARD\nFEEL STRONG' }, lenient),
+    ).toEqual({ values: { headline: 'TRAIN', front: 'HARD FEEL STRONG' }, problems: [] });
+    expect(expandLinkedValues([headline, front, back], { headline: 'TRAIN' }, lenient)).toEqual({
+      values: { headline: 'TRAIN', front: '', back: '' },
+      problems: [],
+    });
+    // A template that links wrongly is still refused: the override is about the text, not the file.
+    const gap = field('gap', { key: 'headline', line: 3 });
+    expect(expandLinkedValues([headline, gap], { headline: 'A' }, lenient).problems).toHaveLength(1);
   });
 });
 

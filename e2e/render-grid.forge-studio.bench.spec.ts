@@ -28,7 +28,7 @@ import {
 } from './support/forge-studio-fixtures';
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
-// forge:studio:e2e:bench — the Render tab's grid and its review tray, in a real Chrome.
+// forge:studio:e2e:bench — the Render tab's grid and its confirmation, in a real Chrome.
 //
 // Same harness as forge-studio.bench.spec.ts: a real minted StarCraft session, the server-rendered
 // /forge page, every /api/ai-studio/** call answered by contract-parsed fixtures and the backend a
@@ -41,11 +41,10 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //
 // At 1280×800 and 1920×1200 it proves: a row's hover buttons add a variation and a row below
 // without touching the selection; inheritance reads as guide lines and `inherits · N changed`;
-// every row shows the ratios it renders; Render totals rows × files; the review tray docks under
-// the grid with no dialog and the grid still usable; an edit after review sends the tray back to
-// Review and re-checks by itself, with nothing to render until it has; one press of the tray's
-// primary button posts exactly one batch; Running lists the fired jobs. A new set's seed row is
-// "Base".
+// every row shows the ratios it renders; Render totals rows × files; Render opens one confirmation
+// that checks the batch once on open; an edit made after cancelling is saved and checked once more
+// on the next open; one press of Render files posts exactly one batch; the grid's Status follows
+// exactly the fired rows. A new set's seed row is "Base".
 //
 // It does NOT exercise the Fastify backend, the render fleet, Slack or Meta — the envelope says so.
 //
@@ -203,6 +202,8 @@ const variables = [
     sample: 'In the Koprulu sector',
   },
   { key: 'price', label: 'Price', kind: 'number', required: false, sample: '19.99' },
+  // The saved set's rows write an accent: a contract without it reads as an older template.
+  { key: 'accent', label: 'Accent colour', kind: 'color', required: false, sample: '#1e90ff' },
   { key: 'hero', label: 'Hero image', kind: 'image', required: false },
 ];
 
@@ -355,17 +356,8 @@ async function shoot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: resolve(SHOTS_DIR, `grid-${name}.png`) }).catch(() => undefined);
 }
 
-const currentStep = (tray: Locator) =>
-  tray.getByRole('list', { name: 'Pre-flight steps' }).locator('li[aria-current="step"]');
-
-/** The tray's one way forward: the last button in its footer, named for the step it takes. */
-const primary = (tray: Locator) => tray.locator('footer').getByRole('button').last();
-
-async function pressPrimary(tray: Locator, name: string) {
-  await expect(primary(tray)).toHaveText(name);
-  await expect(primary(tray)).toBeEnabled();
-  await primary(tray).click();
-}
+const batchPreflights = (fixtures: ForgeFixtures) =>
+  fixtures.calls('POST', /\/renders\/batch-preflight$/).length;
 
 // --- the run -------------------------------------------------------------------------------
 
@@ -405,7 +397,7 @@ test.describe('Render grid — fixtures', () => {
   for (const viewport of VIEWPORTS) {
     const size = `${viewport.width}x${viewport.height}`;
 
-    test(`GRID1 · ${size} · quick adds keep the selection; formats, totals, and the docked tray to one batch`, async ({
+    test(`GRID1 · ${size} · quick adds keep the selection; formats, totals, and one confirmation to one batch`, async ({
       browser,
     }) => {
       const { page, fixtures } = await openRenderTab(browser, viewport, 'three');
@@ -466,7 +458,9 @@ test.describe('Render grid — fixtures', () => {
       // Render totals the selection: Root 3 files + the variation 1.
       await expect(variation.getByText('Ready', { exact: true })).toBeVisible();
       await variation.getByRole('checkbox', { name: 'Select row' }).click();
-      const render = page.getByRole('button', { name: 'Render 2 rows · 4 files', exact: true });
+      const render = page
+        .getByRole('toolbar', { name: 'Render' })
+        .getByRole('button', { name: 'Render 2 rows · 4 files', exact: true });
       await expect(render).toBeEnabled();
       await render.hover();
       await expect(page.getByText('16:9 ×1')).toBeVisible();
@@ -474,28 +468,23 @@ test.describe('Render grid — fixtures', () => {
       await shoot(page, `${size}-render-total`);
       await render.click();
 
-      // The tray docks under the grid: no dialog, and the grid is still there to use.
-      const tray = page.getByRole('region', { name: 'Review and render' });
-      await expect(tray).toBeVisible();
-      await expect(page.locator('[role="dialog"], [role="alertdialog"]')).toHaveCount(0);
-      await expect(tray.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
-      await expect(tray.getByText(`${PROMO.title} · 4 files`)).toBeVisible();
-      const gridBox = await page.getByRole('table').boundingBox();
-      const trayBox = await tray.boundingBox();
-      expect(gridBox && trayBox && gridBox.y + 40 < trayBox.y, 'the grid sits above the tray').toBe(
-        true,
-      );
-      await expect(root).toBeVisible();
-      await root.getByRole('cell').last().click();
-      await shoot(page, `${size}-tray-review`);
+      // One confirmation, checked once on open: the template, the files, each row's formats.
+      const confirm = page.getByRole('dialog', { name: 'Render 2 rows · 4 files' });
+      await expect(confirm).toBeVisible();
+      await expect(confirm.getByText(PROMO.title, { exact: true })).toBeVisible();
+      await expect(
+        confirm.getByRole('list', { name: 'Output per row' }).getByRole('listitem'),
+      ).toHaveCount(2);
+      await expect(
+        confirm.getByRole('button', { name: 'Render 4 files', exact: true }),
+      ).toBeEnabled();
+      expect(batchPreflights(fixtures)).toBe(1);
+      await shoot(page, `${size}-confirm`);
 
-      // Walk to the last step (no Meta target, so Deliver), then change a row: back to Review,
-      // and nothing renders until the tray has re-checked by itself.
-      await pressPrimary(tray, 'Next: delivery');
-      await expect(primary(tray)).toHaveText('Render 4 files');
-      await expect(primary(tray)).toBeEnabled();
+      // Cancel, change a row, render again: the edit is saved, and checked once more on open.
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(confirm).toBeHidden();
       const puts = fixtures.calls('PUT', /\/renders\/sets\//).length;
-      const reviews = fixtures.calls('POST', /\/renders\/batch-preflight$/).length;
       const name = variation.getByRole('textbox', { name: 'Row name', exact: true });
       await name.click();
       // Not press('End'): on macOS Chromium it scrolls instead of moving the caret.
@@ -503,22 +492,14 @@ test.describe('Render grid — fixtures', () => {
         input.setSelectionRange(input.value.length, input.value.length),
       );
       await name.pressSequentially(' EU');
-      await expect(tray.getByText('Rows changed since review')).toBeVisible();
-      await expect(currentStep(tray)).toHaveText('Review');
-      await expect(primary(tray)).toHaveText('Next: delivery');
-      await expect(primary(tray)).toBeDisabled();
-      // A re-check that can run needs no button: it only shows, disabled, when one is blocked.
-      await expect(tray.getByRole('button', { name: 'Re-check', exact: true })).toHaveCount(0);
-      await shoot(page, `${size}-tray-stale`);
-      await expect(tray.getByText('Rows changed since review')).toBeHidden();
-      // The re-check saved the renamed row, then reviewed the new revision.
       await expect.poll(() => fixtures.calls('PUT', /\/renders\/sets\//).length).toBe(puts + 1);
-      await expect
-        .poll(() => fixtures.calls('POST', /\/renders\/batch-preflight$/).length)
-        .toBe(reviews + 1);
-
-      await pressPrimary(tray, 'Next: delivery');
-      await pressPrimary(tray, 'Render 4 files');
+      await expect(gridRow(page, 'Root · C EU').getByText('Ready', { exact: true })).toBeVisible();
+      await render.click();
+      await expect(confirm).toBeVisible();
+      const fire = confirm.getByRole('button', { name: 'Render 4 files', exact: true });
+      await expect(fire).toBeEnabled();
+      expect(batchPreflights(fixtures)).toBe(2);
+      await fire.click();
       await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
       const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
         ?.body as ApiRenderBatchPreflightRequest;
@@ -528,15 +509,18 @@ test.describe('Render grid — fixtures', () => {
         ['square'],
       ]);
 
-      // Running follows exactly the fired jobs, still on the Render tab.
-      const fired = tray.getByRole('list', { name: 'Fired renders' });
-      await expect(fired.getByRole('listitem')).toHaveCount(2);
-      await expect(fired.getByRole('button', { name: 'Root · C EU', exact: true })).toBeVisible();
+      // The dialog closes; the grid's Status follows exactly the fired rows, still on Render.
+      await expect(confirm).toBeHidden();
+      await expect(root.getByText('Rendering', { exact: true })).toBeVisible();
+      await expect(
+        gridRow(page, 'Root · C EU').getByText('Rendering', { exact: true }),
+      ).toBeVisible();
+      await expect(sibling.getByText('Rendering', { exact: true })).toHaveCount(0);
       await expect(page.getByRole('tab', { name: 'Render', exact: true })).toHaveAttribute(
         'aria-selected',
         'true',
       );
-      await shoot(page, `${size}-tray-running`);
+      await shoot(page, `${size}-running`);
       expect(fixtures.calls('POST', /\/renders\/batches$/)).toHaveLength(1);
     });
 
@@ -562,7 +546,9 @@ test.describe('Render grid — fixtures', () => {
       await expect.poll(() => ratiosIn(variation)).toEqual(THREE_RATIOS);
       await expect(selectedCount(page)).toHaveText('1 selected');
 
-      const render = page.getByRole('button', { name: 'Render 1 row · 3 files', exact: true });
+      const render = page
+        .getByRole('toolbar', { name: 'Render' })
+        .getByRole('button', { name: 'Render 1 row · 3 files', exact: true });
       await expect(render).toBeEnabled();
       await shoot(page, `${size}-zero-output`);
       await render.click();
@@ -572,29 +558,25 @@ test.describe('Render grid — fixtures', () => {
         (fixtures.calls('POST', /\/renders\/sets$/)[0]?.body as { name?: string } | undefined)
           ?.name,
       ).toBe('Untitled set');
-      const tray = page.getByRole('region', { name: 'Review and render' });
-      await expect(tray.getByText('StarCraft 133 · 3 files')).toBeVisible();
-      await expect(page.locator('[role="dialog"], [role="alertdialog"]')).toHaveCount(0);
+      const confirm = page.getByRole('dialog', { name: 'Render 1 row · 3 files' });
+      await expect(confirm).toBeVisible();
+      await expect(confirm.getByText('StarCraft 133', { exact: true })).toBeVisible();
       await expect
         .poll(() =>
-          tray
-            .getByRole('list', { name: 'Rows to render' })
+          confirm
+            .getByRole('list', { name: 'Output per row' })
             .locator('[data-ratio]')
             .evaluateAll((chips) => chips.map((chip) => (chip as HTMLElement).dataset.ratio)),
         )
         .toEqual(THREE_RATIOS);
-      await expect(tray.getByText('3 files', { exact: true })).toBeVisible();
-      await pressPrimary(tray, 'Next: delivery');
-      await pressPrimary(tray, 'Render 3 files');
+      await confirm.getByRole('button', { name: 'Render 3 files', exact: true }).click();
       await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
       const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
         ?.body as ApiRenderBatchPreflightRequest;
       // No outputs to name: the record asks for none, and the server renders every ratio.
       expect(confirmed.records).toHaveLength(1);
       expect(confirmed.records[0]?.outputIds).toBeUndefined();
-      await expect(
-        tray.getByRole('list', { name: 'Fired renders' }).getByRole('listitem'),
-      ).toHaveCount(1);
+      await expect(root.getByText('Rendering', { exact: true })).toBeVisible();
       await shoot(page, `${size}-zero-running`);
     });
   }

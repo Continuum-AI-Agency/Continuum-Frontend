@@ -7,7 +7,7 @@
  * made, the row is drawn into the picked format's slot boxes and overflow is flagged live.
  */
 
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import type {
   ApiRenderJob,
   ApiRenderTemplateContract,
@@ -327,6 +327,21 @@ const composedOver = (over: Partial<ForgeRenderPreview> = {}): ForgeRenderPrevie
 const composeWith = (answer: ForgeRenderPreview) =>
   composePreviewMock.mockImplementation(async () => answer);
 
+// happy-dom never fetches an image, so every image element reads as finished with no pixels — what
+// a broken image looks like to the render frame's pre-commit check (`imageFailed`). Here images decode.
+let imagePrototype: object | null = null;
+let naturalWidth: PropertyDescriptor | undefined;
+beforeAll(() => {
+  imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
+  naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
+  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+});
+afterAll(() => {
+  if (imagePrototype && naturalWidth) {
+    Object.defineProperty(imagePrototype, 'naturalWidth', naturalWidth);
+  }
+});
+
 afterEach(() => {
   cleanup();
   subscription = null;
@@ -406,7 +421,7 @@ describe('RenderPreviewPanel', () => {
     );
   });
 
-  test('in a set, a row a refused review found refusing is not proofed until it would render', async () => {
+  test('in a set, a row the confirmation found refusing is not proofed until it would render', async () => {
     const contract = {
       ...CONTRACT,
       template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
@@ -414,13 +429,13 @@ describe('RenderPreviewPanel', () => {
     } as ApiRenderTemplateContract;
     const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: SET, rows: rowWith('Hola') };
     const { rerender } = render(
-      <RenderPreviewPanel {...props} refusal={{ message: 'Use a brand colour.', font: false }} />,
+      <RenderPreviewPanel {...props} refusal="Use a brand colour." />,
     );
     // Past the proof's own debounce: a row that will not render is never proofed.
     await act(async () => await new Promise((resolve) => setTimeout(resolve, 1800)));
     expect(startMotionProofMock).not.toHaveBeenCalled();
-    // Substituted fonts still render, so that row is proofed.
-    rerender(<RenderPreviewPanel {...props} refusal={{ message: 'Brand Sans', font: true }} />);
+    // An edit retires the refusal, and the row is proofed.
+    rerender(<RenderPreviewPanel {...props} />);
     await waitFor(() => expect(startMotionProofMock).toHaveBeenCalled(), { timeout: 3000 });
   });
 
@@ -508,7 +523,7 @@ describe('RenderPreviewPanel', () => {
     );
     expect(slot(container, 'headline')?.textContent).toContain('4.10');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
-    expect(screen.queryByText(/overflows its box/)).toBeNull();
+    expect(screen.queryByText(/may shrink or clip/)).toBeNull();
   });
 
   test('draws text in its box and flags actual layout overflow live from props', () => {
@@ -519,13 +534,13 @@ describe('RenderPreviewPanel', () => {
 
     expect(slot(container, 'headline')?.textContent).toContain('Una oferta');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBe('true');
-    expect(screen.getByText(/Headline overflows its box \(fits only at/)).toBeTruthy();
+    expect(screen.getByText(/Will render · Headline may shrink or clip \(fits only at/)).toBeTruthy();
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
 
     expect(slot(container, 'headline')?.textContent).toContain('Hola');
     expect(slot(container, 'headline')?.getAttribute('data-overflow')).toBeNull();
-    expect(screen.queryByText(/overflows its box/)).toBeNull();
+    expect(screen.queryByText(/may shrink or clip/)).toBeNull();
     expect(slot(container, 'logo')?.textContent).toContain('Continuum fills this');
   });
 
@@ -662,7 +677,9 @@ describe('RenderPreviewPanel', () => {
     expect(caption(container)).toBe(
       "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
     );
-    expect(warning(container)).toBe('Headline overflows its box · Not previewed: Background');
+    expect(warning(container)).toBe(
+      'Will render · Headline may shrink or clip · Not previewed: Background',
+    );
     // The second argument is the query's abort signal: a superseded composition is cancelled.
     expect(composePreviewMock).toHaveBeenCalledWith(
       {

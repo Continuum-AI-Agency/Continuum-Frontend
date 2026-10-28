@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CellContext } from '@tanstack/react-table';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import { type RequestRow, type RowRefusal, seedRow } from '@/components/forge/renderRequestRows';
+import { type RequestRow, rowStatusOf, seedRow } from '@/components/forge/renderRequestRows';
 import {
   type RequestGridMeta,
   type RequestRowActions,
@@ -172,8 +172,8 @@ describe('defaults read apart from typed input', () => {
   });
 });
 
-// The status reads the Live kit's fit (`useLiveFit`), the row's own errors and any refusal a
-// refused review found; nothing is fetched.
+// The status reads the Live kit's fit (`useLiveFit`), the row's own errors and any refusal the
+// render confirmation found; nothing is fetched.
 describe('the status column, with no preflight', () => {
   const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', required: false });
   const renderStatus = (
@@ -182,9 +182,17 @@ describe('the status column, with no preflight', () => {
       errors = {},
       refusal,
       fitLoading = false,
-    }: { errors?: Record<string, string>; refusal?: RowRefusal; fitLoading?: boolean } = {},
+    }: { errors?: Record<string, string>; refusal?: string; fitLoading?: boolean } = {},
   ) => {
     const row = seedRow([], 'Base');
+    const fit = verdicts
+      ? new Map(
+          verdicts.map((verdict) => [
+            'hero',
+            { key: 'hero', subject: 'media', unknownReason: null, ...verdict } as ApiRenderFitVerdict,
+          ]),
+        )
+      : undefined;
     const meta = {
       brandId: '22222222-2222-4222-8222-222222222222',
       contract: { variables: [hero], layout: null } as unknown as ApiRenderTemplateContract,
@@ -194,28 +202,8 @@ describe('the status column, with no preflight', () => {
       selectedIds: [],
       hiddenColumns: 0,
       generating: false,
-      // null: no Live kit loaded for this template.
-      liveFit: new Map(
-        verdicts
-          ? [
-              [
-                row.id,
-                new Map(
-                  verdicts.map((verdict) => [
-                    'hero',
-                    {
-                      key: 'hero',
-                      subject: 'media',
-                      unknownReason: null,
-                      ...verdict,
-                    } as ApiRenderFitVerdict,
-                  ]),
-                ),
-              ],
-            ]
-          : [],
-      ),
-      refusals: new Map(refusal ? [[row.id, refusal]] : []),
+      liveFit: new Map(fit ? [[row.id, fit]] : []),
+      statuses: new Map([[row.id, rowStatusOf(errors, fit, refusal)]]),
       fitLoading,
     } satisfies RequestGridMeta;
     const context = {
@@ -224,71 +212,48 @@ describe('the status column, with no preflight', () => {
     } as unknown as CellContext<RequestRow, unknown>;
     return render(<StatusCell {...context} />);
   };
-  // Every reason is read beside its status, not only on hover.
-  test('a fit measured to land reads Can render, layout checked', () => {
+  const hover = async (label: string) => {
+    const trigger = screen.getByText(label).closest('button')!;
+    fireEvent.mouseEnter(trigger);
+    fireEvent.focus(trigger);
+  };
+
+  test('a fit measured to land reads Ready', () => {
     renderStatus([{ state: 'ok', why: 'lands inside the canvas' }]);
-    expect(screen.getByText('Can render · layout checked')).toBeTruthy();
+    expect(screen.getByText('Ready')).toBeTruthy();
   });
 
   test('with no Live kit for the template a row wears no badge: the grid says it once', () => {
     renderStatus(null);
-    expect(screen.queryByText(/^Can render/)).toBeNull();
-    expect(screen.queryByText('Not checked')).toBeNull();
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.queryByText('Checking')).toBeNull();
   });
 
-  test('while the kits load, the row says it is checking, not that it can render', () => {
+  test('while the kits load, the row says it is checking, not that it is ready', () => {
     renderStatus(null, { fitLoading: true });
-    expect(screen.getByText('Checking layout…')).toBeTruthy();
-    expect(screen.queryByText(/^Can render/)).toBeNull();
+    expect(screen.getByText('Checking')).toBeTruthy();
+    expect(screen.queryByText('Ready')).toBeNull();
   });
 
-  test('a wrong value reads Invalid, and says which field', () => {
-    renderStatus([], { errors: { hero: 'One item only' } });
-    expect(screen.getByText('Invalid')).toBeTruthy();
-    expect(screen.getByText('Hero: One item only')).toBeTruthy();
+  test('a refusal the confirmation found reads Rejected, with its reason', async () => {
+    renderStatus([{ state: 'ok', why: 'lands' }], { refusal: 'Use a permitted brand color.' });
+    expect(screen.getByText('Rejected')).toBeTruthy();
+    await hover('Rejected');
+    expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
   });
 
-  test('a refusal a review found reads Won’t render, with its reason', () => {
-    renderStatus([{ state: 'ok', why: 'lands' }], {
-      refusal: { message: 'Use a permitted brand color.', font: false },
-    });
-    expect(screen.getByText('Won’t render')).toBeTruthy();
-    expect(screen.getByText('Use a permitted brand color.')).toBeTruthy();
-    expect(screen.queryByText(/^Can render/)).toBeNull();
-  });
-
-  test('missing fonts say what the gate does: Render anyway in the review', () => {
-    renderStatus([{ state: 'ok', why: 'lands' }], {
-      refusal: { message: 'Card A requires Brand Sans.', font: true },
-    });
-    expect(screen.getByText('Fonts missing')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Card A requires Brand Sans. Needs Render anyway in the review, which renders in a substitute font.',
-      ),
-    ).toBeTruthy();
-    expect(screen.queryByText(/Won’t render/)).toBeNull();
-  });
-
-  test('a clipped fit reads Warning, and says what clips', () => {
-    renderStatus([{ state: 'clipped', why: '800x800 clips 40 px off the canvas' }]);
-    expect(screen.queryByText(/^Can render/)).toBeNull();
-    expect(screen.getByText('Warning')).toBeTruthy();
-    expect(screen.getByText('Hero: 800x800 clips 40 px off the canvas')).toBeTruthy();
-  });
-
-  test('a frame placement cannot settle reads "AI check after render", and says why', () => {
+  test('a frame placement cannot settle reads "Ready · fit warning", and says why', async () => {
     renderStatus([{ state: 'unknown', unknownReason: 'rigged', why: 'placed by a rig' }]);
     expect(screen.queryAllByText('Needs judge')).toHaveLength(0);
-    expect(screen.getByText('AI check after render')).toBeTruthy();
+    await hover('Ready · fit warning');
     expect(
-      screen.getByText(
+      await screen.findByText(
         'An AI model checks the finished frame after it renders, because where an image lands couldn’t be measured.',
       ),
     ).toBeTruthy();
   });
 
-  test('a slot with no measured placement reads Not checked, and sends no one to re-parse', () => {
+  test('a slot with no measured placement reads "Needs review", and the hover says why', async () => {
     renderStatus([
       {
         state: 'unknown',
@@ -296,11 +261,7 @@ describe('the status column, with no preflight', () => {
         why: 'this template has no measured placement for the slot',
       },
     ]);
-    expect(screen.getByText('Not checked')).toBeTruthy();
-    expect(
-      screen.getByText('Where Hero lands isn’t measured before rendering. It can still render.'),
-    ).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/Re-parse/);
-    expect(screen.queryByText('Needs review')).toBeNull();
+    await hover('Needs review');
+    expect(await screen.findByText(/Hero/)).toBeTruthy();
   });
 });

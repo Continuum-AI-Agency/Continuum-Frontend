@@ -38,7 +38,13 @@ export function pageRenditionRole(page: number): PageRenditionRole {
  * The video playback ladder, largest first. `preview_video` stays the default SDR playback
  * (about 720/1080); `hdr_proxy` is H.265 Main 10 for HDR sources.
  */
-export const PROXY_LADDER_ROLES = ['proxy_2160', 'proxy_1080', 'proxy_540', 'proxy_360'] as const;
+export const PROXY_LADDER_ROLES = [
+  'proxy_2160',
+  'proxy_1080',
+  'proxy_540',
+  'proxy_480',
+  'proxy_360',
+] as const;
 
 export const FIXED_RENDITION_ROLES = [
   'thumbnail',

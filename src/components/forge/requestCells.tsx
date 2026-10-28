@@ -2,15 +2,18 @@
 
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderDeliveryTarget,
   type ApiRenderFitReport,
   type ApiRenderFitVerdict,
   type ApiRenderInputValue,
+  type ApiRenderJob,
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
   classifyLibraryFile,
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
+  type ForgeRenderSetSettings,
   isLayerSwitch,
   type MediaAsset,
   readableLayerName,
@@ -24,13 +27,13 @@ import {
   CornerDownRight,
   GripVertical,
   ImageIcon,
+  Info,
   Library,
   Loader2,
   type LucideIcon,
   MoreHorizontal,
   Plus,
   RotateCcw,
-  TriangleAlert,
   Upload,
   Video,
   X,
@@ -46,11 +49,19 @@ import {
 } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import type { DataGridRowProps } from '@/components/forge/DataGrid';
+import {
+  adSetName,
+  DeliveryTargetPicker,
+  isUnresolvedTarget,
+  type MetaPickerState,
+  type ReplaceFormats,
+} from '@/components/forge/DeliveryTargetPicker';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import { explainFinding, type LabelOf } from '@/components/forge/readinessCopy';
+import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
   clipShortBy,
   effectiveEvidence,
@@ -63,14 +74,15 @@ import {
   MAX_BATCH_ROWS,
   missingInputs,
   ownChangeCount,
+  RENDER_OVERRIDES,
+  type RenderOverride,
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
-  type RowRefusal,
   type RowStatus,
   rowBreadcrumb,
-  rowStatusOf,
   seededValue,
+  toPreflightDelivery,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +95,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -157,10 +170,31 @@ export type RequestGridMeta = {
   generating: boolean;
   /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
-  /** What a refused review found each row's own preflight refusing, while the row is unchanged. */
-  refusals?: ReadonlyMap<string, RowRefusal>;
-  /** The Live kits are still on their way: no row's fit is known yet. */
+  /** Per row, what the browser can tell about it (`rowStatusOf`): an edit asks the server nothing. */
+  statuses?: ReadonlyMap<string, RowStatus>;
+  /** A format's Live kit is still on its way: a row with nothing else to say is being measured. */
   fitLoading?: boolean;
+  /**
+   * Per row, the refusals a person may render through, each with what it is about. Not errors:
+   * the row still renders once someone says so at Render.
+   */
+  calls?: ReadonlyMap<
+    string,
+    ReadonlyArray<{ override: RenderOverride; message: string; key?: string }>
+  >;
+  /** Where each row's renders go, and the set's default for rows with no target of their own. */
+  destination?: DestinationMeta;
+  /** Each rendered row's newest job, while the row is still what was rendered. */
+  runs?: ReadonlyMap<string, ApiRenderJob>;
+};
+
+export type DestinationMeta = {
+  meta: MetaPickerState;
+  outputs: ReplaceFormats;
+  /** The set's default ad set (new paused ads), or null: rows with no target go to the Library. */
+  setDefault: ForgeRenderSetSettings['metaTarget'];
+  onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
+  onFormatChange: (rowId: string, outputId: string) => void;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -401,92 +435,91 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-/** What the Live kit could not measure, without sending anyone to re-parse a template. */
-function uncheckedWhy(findings: Array<{ variableKey?: string | null }>, labelOf: LabelOf): string {
-  const names = [
-    ...new Set(findings.map((finding) => labelOf(finding.variableKey ?? undefined) ?? 'A slot')),
-  ];
-  return `Where ${names.join(', ')} ${names.length === 1 ? 'lands' : 'land'} isn’t measured before rendering. It can still render.`;
-}
-
-/** A status word and its reason in words beside it: the reason is read, never hover-only. */
-function StatusLine({
-  variant,
-  label,
-  reason,
-}: {
-  variant: 'destructive' | 'warning' | 'muted' | 'success';
-  label: string;
-  reason?: string;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-start gap-0.5">
-      <Badge variant={variant}>{label}</Badge>
-      {reason ? (
-        <span className="line-clamp-2 text-2xs leading-snug text-muted-foreground" title={reason}>
-          {reason}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
 function StatusBadge({
   status,
   invalidReason,
-  labelOf,
+  fitWarning,
   fitLoading,
+  labelOf,
 }: {
   status: RowStatus;
-  invalidReason: string;
-  labelOf: LabelOf;
+  invalidReason?: string;
+  /** Text the Live kit says will not fit as typed: it still renders, shrunk or clipped. */
+  fitWarning: string | null;
   fitLoading: boolean;
+  labelOf: LabelOf;
 }) {
   switch (status.state) {
     case 'invalid':
-      return <StatusLine variant="destructive" label="Invalid" reason={invalidReason} />;
+      return (
+        <Explained why={invalidReason ?? ''}>
+          <Badge variant="destructive">Invalid</Badge>
+        </Explained>
+      );
     case 'refused':
-      return <StatusLine variant="destructive" label="Won’t render" reason={status.reason} />;
-    case 'fonts':
-      // What today's gate does: the review refuses these faces until Render anyway is pressed.
       return (
-        <StatusLine
-          variant="warning"
-          label="Fonts missing"
-          reason={`${status.reason} Needs Render anyway in the review, which renders in a substitute font.`}
-        />
+        <Explained why={status.reason}>
+          <Badge variant="destructive">Rejected</Badge>
+        </Explained>
       );
-    case 'warning':
+    // A refusal a person may render through is a question for Render, not an error in the row.
+    case 'call':
       return (
-        <StatusLine
-          variant="warning"
-          label="Warning"
-          reason={[
-            ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
-          ].join(' ')}
-        />
-      );
-    case 'ai-check':
-      return (
-        <StatusLine
-          variant="warning"
-          label="AI check after render"
-          reason={aiCheckWhy(status.fit)}
-        />
+        <Explained
+          why={status.calls
+            .map((call) => `${RENDER_OVERRIDES[call.override].title}: ${call.message}`)
+            .join(' ')}
+        >
+          <Badge variant="warning">Needs your call</Badge>
+        </Explained>
       );
     case 'unchecked':
-      // No kit for the template (or not every format's yet): the grid says so once, not per row.
       if (status.findings.length)
         return (
-          <StatusLine
-            variant="muted"
-            label="Not checked"
-            reason={uncheckedWhy(status.findings, labelOf)}
-          />
+          <Explained
+            why={[
+              ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+            ].join(' ')}
+          >
+            <Badge variant="warning">Needs review</Badge>
+          </Explained>
         );
-      return fitLoading ? <StatusLine variant="muted" label="Checking layout…" /> : null;
+      // No kit for the template: the readiness line says so once, not per row.
+      return fitLoading ? (
+        <Badge variant="muted">
+          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
+        </Badge>
+      ) : null;
+    case 'warning':
+    case 'ai-check':
+      return (
+        <Explained
+          why={[
+            fitWarning,
+            status.state === 'ai-check'
+              ? aiCheckWhy(status.fit)
+              : [...new Set(status.findings.map((finding) => explainFinding(finding, labelOf)))].join(
+                  ' ',
+                ),
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <Badge variant="warning">
+            <Info className="size-3" aria-hidden /> Ready · fit warning
+          </Badge>
+        </Explained>
+      );
     default:
-      return <StatusLine variant="success" label="Can render · layout checked" />;
+      return fitWarning ? (
+        <Explained why={fitWarning}>
+          <Badge variant="warning">
+            <Info className="size-3" aria-hidden /> Ready · fit warning
+          </Badge>
+        </Explained>
+      ) : (
+        <Badge variant="success">Ready</Badge>
+      );
   }
 }
 
@@ -632,12 +665,16 @@ export function VariableCell({
   table,
 }: CellContext<RequestRow, unknown>) {
   const { variable } = column.columnDef.meta as VariableColumnMeta;
-  const { brandId, contract, rows, clientErrors, actions, liveFit } = gridMeta(table);
-  const error = clientErrors.get(row.id)?.[variable.key];
+  const { brandId, contract, rows, clientErrors, calls, actions, liveFit } = gridMeta(table);
+  const clientError = clientErrors.get(row.id)?.[variable.key];
+  // A call is said on the cell too — never red: the row still renders once someone says so.
+  const error =
+    clientError ?? calls?.get(row.id)?.find((call) => call.key === variable.key)?.message;
   const value = effectiveValues(rows, row.id)[variable.key];
   const fit = liveFit.get(row.id)?.get(variable.key);
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
-  const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
+  const invalid =
+    clientError !== undefined && !(variable.required && isEmptyInput(variable, value));
   const inheritance = (
     <InheritanceAction row={row} variable={variable} value={value} actions={actions} />
   );
@@ -825,8 +862,9 @@ export function VariableCell({
         )}
       </div>
       {misfit ? (
-        <Explained why={`Doesn’t fit the design: ${misfit}`}>
-          <TriangleAlert className="size-3.5 text-warning" aria-label="Doesn’t fit the design" />
+        // A warning, never a block: the render still runs, and the AI check reads the frame.
+        <Explained why={`Will render · may shrink or clip — ${misfit}`}>
+          <Info className="size-3.5 text-warning" aria-label="Will render · may shrink or clip" />
         </Explained>
       ) : null}
       {defaultTag}
@@ -860,14 +898,6 @@ function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function deliveryNote(row: RequestRow): string | null {
-  const delivery = row.delivery;
-  if (!delivery) return null;
-  if (delivery.action === 'replace')
-    return `Replaces ad ${'adName' in delivery && delivery.adName ? delivery.adName : delivery.adId}`;
-  return `New ad in ${delivery.adsetName ?? delivery.adsetId}`;
 }
 
 /**
@@ -921,7 +951,6 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
   const { rows, actions } = meta;
   const row = tableRow.original;
   const breadcrumb = rowBreadcrumb(rows, row.id).slice(0, -1).join(' / ');
-  const note = deliveryNote(row);
   const full =
     rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
   return (
@@ -985,11 +1014,6 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
             )
           }
         />
-        {note ? (
-          <p className="truncate text-3xs text-muted-foreground" title={note}>
-            {note}
-          </p>
-        ) : null}
       </div>
       {/* Over the end of the name while the row is hovered, so they cost the name no width. */}
       <div className="invisible absolute inset-y-0 right-7 flex items-center gap-0.5 rounded-md bg-card/95 px-0.5 group-hover/row:visible">
@@ -1178,28 +1202,155 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
   );
 }
 
+/** What a row's chip says: its own target, else the set's default, else the Library only. */
+export function destinationLabel(
+  delivery: ApiRenderDeliveryTarget | undefined,
+  setDefault: ForgeRenderSetSettings['metaTarget'],
+): { text: string; own: boolean } {
+  if (!delivery)
+    return setDefault
+      ? { text: `Set default · ${adSetName(setDefault)}`, own: false }
+      : { text: 'Library only', own: false };
+  if (delivery.action === 'create')
+    return { text: `New ad · ${delivery.adsetName ?? delivery.adsetId}`, own: true };
+  return {
+    text: isUnresolvedTarget(delivery)
+      ? `Replace · ad ${delivery.adId}`
+      : `Replace · ${delivery.adName ?? delivery.adId}`,
+    own: true,
+  };
+}
+
+/**
+ * Where this row's renders go, editable in place: replace an ad, a new ad in another ad set, or
+ * back to the set's default. The row is the source of truth — the choice is saved with the set.
+ */
+export function DestinationCell({
+  row: { original: row },
+  table,
+}: CellContext<RequestRow, unknown>) {
+  const { brandId, rows, destination } = gridMeta(table);
+  if (!destination) return null;
+  const label = destinationLabel(toPreflightDelivery(row.delivery), destination.setDefault);
+  const name = row.label.trim() || 'Untitled';
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            aria-label={`Destination for ${name}: ${label.text}`}
+            title={label.text}
+            className={cn(
+              'h-6 max-w-full justify-start truncate px-1.5 text-xs font-normal',
+              label.own ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            <span className="truncate">{label.text}</span>
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-96 p-2">
+        <DeliveryTargetPicker
+          brandId={brandId}
+          meta={destination.meta}
+          rows={[
+            {
+              rowId: row.id,
+              label: name,
+              labelPath: rowBreadcrumb(rows, row.id),
+              outputIds: effectiveOutputIds(rows, row.id),
+              ...(row.delivery ? { delivery: toPreflightDelivery(row.delivery) } : {}),
+            },
+          ]}
+          outputs={destination.outputs}
+          fallback={destinationLabel(undefined, destination.setDefault).text}
+          onDeliveryChange={destination.onDeliveryChange}
+          onFormatChange={destination.onFormatChange}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A fired row's render, where it is now: the grid's Status cell follows it until it settles. */
+function RunBadge({ job }: { job: ApiRenderJob }) {
+  const steps = jobSteps(job);
+  const now =
+    steps.find((item) => item.state === 'error') ??
+    steps.find((item) => item.state === 'active') ??
+    steps.findLast((item) => item.state === 'done');
+  const where = now ? [now.label, now.detail].filter(Boolean).join(' · ') : 'Queued';
+  if (job.status === 'finished')
+    return (
+      <Explained why={where}>
+        {job.approval?.status === 'awaiting_approval' ? (
+          <Badge variant="warning">Awaiting approval</Badge>
+        ) : (
+          <Badge variant="success">Rendered</Badge>
+        )}
+      </Explained>
+    );
+  if (job.status === 'failed')
+    return (
+      <Explained
+        why={
+          job.taskUid
+            ? where
+            : 'The render service refused it. Select the row and Render again to resend it.'
+        }
+      >
+        <Badge variant="destructive">{job.taskUid ? 'Render failed' : 'Not sent'}</Badge>
+      </Explained>
+    );
+  return (
+    <Explained why={where}>
+      <Badge variant="muted">
+        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden /> Rendering
+      </Badge>
+    </Explained>
+  );
+}
+
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors, liveFit, refusals, fitLoading } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit, runs, statuses, fitLoading } = gridMeta(table);
+  const run = runs?.get(row.id);
+  if (run) return <RunBadge job={run} />;
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
-  const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
+  const values = effectiveValues(rows, row.id);
+  const missing = missingInputs(contract.variables, values);
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
     const names = missing.map((key) =>
       readableLayerName(contract.variables.find((item) => item.key === key)?.label ?? key),
     );
     return (
-      <StatusLine variant="muted" label="Needs input" reason={`Fill in ${names.join(', ')}`} />
+      <Badge variant="muted" title={`Fill in ${names.join(', ')}`}>
+        Needs input
+      </Badge>
     );
   }
   const labelOf: LabelOf = (key) => {
     const label = contract.variables.find((variable) => variable.key === key)?.label;
     return label ? readableLayerName(label) : undefined;
   };
+  const misfits = [...(liveFit.get(row.id) ?? new Map()).entries()].filter(
+    ([, verdict]) => verdict.subject === 'text' && verdict.state === 'clipped',
+  );
+  // The warning the text cell shows: the design's measure. A character budget is only a reference
+  // length, so going past it is never a warning on its own.
+  const warned = misfits.map(([key]) => key);
+  const fitWarning = warned.length
+    ? `Will render · ${warned.map((key) => labelOf(key) ?? key).join(', ')} may shrink or clip.`
+    : null;
   return (
     <StatusBadge
-      status={rowStatusOf(errors, liveFit.get(row.id), refusals?.get(row.id))}
+      status={statuses?.get(row.id) ?? { state: 'unchecked', findings: [] }}
       labelOf={labelOf}
+      fitWarning={fitWarning}
       fitLoading={fitLoading ?? false}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
