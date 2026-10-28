@@ -9,7 +9,9 @@ import {
   heldCopy,
   holdKeyOf,
   isHeld,
+  oneJobId,
   RenderHeldError,
+  resendHeld,
   readHold,
   retryHeld,
   type SignedBatch,
@@ -136,6 +138,28 @@ describe('renderHold', () => {
     await retryHeld(SCOPE, readHold(SCOPE)!, async (token) => sent.push(token));
     expect(sent).toEqual(['token-secret']);
     expect(isHeld(SCOPE)).toBe(false);
+  });
+
+  test('a held one-row confirm is re-sent as one job, a batch as a batch', async () => {
+    const sent: string[] = [];
+    const api = {
+      createBatch: async (input: { confirmationToken: string }) => {
+        sent.push(`batch:${input.confirmationToken}`);
+        return { jobs: ['a', 'b'] };
+      },
+      createJob: async (input: { confirmationToken: string }) => {
+        sent.push(`job:${input.confirmationToken}`);
+        return 'a';
+      },
+    };
+    const base = { heldAt: 0, signed: SIGNED, reason: { kind: 'no-answer' as const } };
+    expect(await resendHeld({ ...base, batchId: oneJobId('f'.repeat(64)) }, 't1', api)).toEqual({
+      jobs: ['a'],
+    });
+    expect(await resendHeld({ ...base, batchId: 'batch-1' }, 't2', api)).toEqual({
+      jobs: ['a', 'b'],
+    });
+    expect(sent).toEqual(['job:t1', 'batch:t2']);
   });
 
   test('a hold from days ago is still held: only the ledger lets it go', () => {

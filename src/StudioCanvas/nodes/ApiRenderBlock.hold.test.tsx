@@ -4,9 +4,10 @@
 
 import { afterEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { ApiError } from '@/lib/api/errors';
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const USER = '77777777-7777-4777-8777-777777777777';
@@ -28,8 +29,17 @@ const TEMPLATE = {
 
 const batchPreflight = mock(async () => ({ confirmationToken: 't', batchId: 'b', expiresAt: '' }));
 const createBatch = mock(async () => ({ jobs: [] }));
-const preflight = mock(async () => ({ confirmationToken: 't' }));
-const createJob = mock(async () => ({ id: 'job' }));
+const preflight = mock(async () => ({
+  confirmationToken: 'job-token',
+  confirmationHash: 'a'.repeat(64),
+  expiresAt: '2099-01-01T00:00:00.000Z',
+}));
+const createJob = mock(
+  async (_input: { confirmationToken: string }): Promise<unknown> => ({
+    id: 'job',
+    status: 'queued',
+  }),
+);
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listTemplates: async () => ({ items: [TEMPLATE], nextCursor: null, workspace: null }),
@@ -69,17 +79,12 @@ const { forgetPageSession, holdKeyOf } = await import('@/components/forge/render
 
 afterEach(() => {
   cleanup();
+  for (const fn of [batchPreflight, createBatch, preflight, createJob]) fn.mockClear();
   forgetPageSession();
   localStorage.clear();
 });
 
-test('a held template shows the banner, and Render signs nothing for it', async () => {
-  useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
-  // Held by another surface or tab: only the stored hold is known here.
-  localStorage.setItem(
-    holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
-    JSON.stringify({ batchId: 'batch-1', heldAt: Date.now() }),
-  );
+const mountNode = () =>
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -98,6 +103,15 @@ test('a held template shows the banner, and Render signs nothing for it', async 
       </ToastProvider>
     </QueryClientProvider>,
   );
+
+test('a held template shows the banner, and Render signs nothing for it', async () => {
+  useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
+  // Held by another surface or tab: only the stored hold is known here.
+  localStorage.setItem(
+    holdKeyOf({ userId: USER, brandId: BRAND, bindingId: null, templateKey: '133' }),
+    JSON.stringify({ batchId: 'batch-1', heldAt: Date.now() }),
+  );
+  mountNode();
   const banner = await screen.findByRole('alert');
   expect(banner.textContent).toContain(
     'Retry isn’t available after a reload. Some or all rows may already be rendering. Open Render ledger to check before rendering again.',
@@ -110,4 +124,31 @@ test('a held template shows the banner, and Render signs nothing for it', async 
   expect(createBatch).not.toHaveBeenCalled();
   expect(preflight).not.toHaveBeenCalled();
   expect(createJob).not.toHaveBeenCalled();
+});
+
+// The canvas's one-row path (preflight then createJob) is held like a batch of one.
+test('a createJob that gets no answer holds the template; Retry re-sends the same single token', async () => {
+  useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] } as never);
+  createJob.mockImplementationOnce(async () => {
+    throw new ApiError('Service Unavailable', 503, undefined, { error: 'Service Unavailable' });
+  });
+  mountNode();
+  fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
+  const banner = await screen.findByRole('alert');
+  expect(banner.textContent).toContain(
+    'Couldn’t confirm with the render service. Some or all rows may already be rendering.',
+  );
+  // Render waits, and signs nothing more: one preflight, one createJob.
+  const renderButton = screen.getByRole<HTMLButtonElement>('button', { name: 'Render 1' });
+  expect(renderButton.disabled).toBe(true);
+  fireEvent.click(renderButton);
+  expect(preflight).toHaveBeenCalledTimes(1);
+  expect(createJob).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry this batch' }));
+  await waitFor(() => expect(createJob).toHaveBeenCalledTimes(2));
+  expect(createJob.mock.calls[1]?.[0]).toEqual({ confirmationToken: 'job-token' });
+  expect(createJob.mock.calls[1]?.[0]).toEqual(createJob.mock.calls[0]?.[0]);
+  expect(createBatch).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryAllByRole('alert')).toHaveLength(0));
+  expect(preflight).toHaveBeenCalledTimes(1);
 });

@@ -77,6 +77,7 @@ import {
   heldCopy,
   isHeld,
   RenderHeldError,
+  resendHeld,
   retryHeld,
   SIGNED_OUT,
   type SignedBatch,
@@ -1491,9 +1492,7 @@ export function HeldBatchView({
     setRetrying(true);
     try {
       // Still held on any failure; a token the server no longer takes cannot be retried.
-      const batch = await retryHeld(scope, held, (token) =>
-        apiRendersApi.createBatch({ confirmationToken: token }),
-      );
+      const batch = await retryHeld(scope, held, (token) => resendHeld(held, token, apiRendersApi));
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       toast.success(`${plural(batch.jobs.length, 'render')} queued`);

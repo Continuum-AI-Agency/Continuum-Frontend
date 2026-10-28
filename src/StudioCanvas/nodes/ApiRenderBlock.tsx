@@ -29,6 +29,8 @@ import {
   confirmUnderHold,
   heldCopy,
   isHeld,
+  oneJobId,
+  resendHeld,
   retryHeld,
   SIGNED_OUT,
   useRenderHold,
@@ -550,9 +552,27 @@ export function ApiRenderBlock({
           ? { ...base, inputSetId: data.inputSetId }
           : { ...base, variables: variations.records[0]?.variables ?? {} };
         const preflight = await apiRendersApi.preflight(request);
-        const job = await apiRendersApi.createJob({
-          confirmationToken: preflight.confirmationToken,
-        });
+        // A one-row batch to the hold: written ahead, cleared on success, held on any failure.
+        const job = await confirmUnderHold(
+          holdScope,
+          {
+            token: preflight.confirmationToken,
+            request: {
+              ...base,
+              records: [
+                {
+                  label: data.templateName ?? 'Canvas render',
+                  ...(data.inputSetId
+                    ? { inputSetId: data.inputSetId }
+                    : { variables: request.variables ?? {} }),
+                },
+              ],
+            },
+            expiresAt: preflight.expiresAt,
+            batchId: oneJobId(preflight.confirmationHash),
+          },
+          () => apiRendersApi.createJob({ confirmationToken: preflight.confirmationToken }),
+        );
         patchData({
           latestJobId: job.id,
           jobIds: [...new Set([...(data.jobIds ?? []), job.id])],
@@ -833,7 +853,7 @@ export function ApiRenderBlock({
                     disabled={busy}
                     onClick={() =>
                       void retryHeld(holdScope, held, (token) =>
-                        apiRendersApi.createBatch({ confirmationToken: token }),
+                        resendHeld(held, token, apiRendersApi),
                       )
                         .then(async (batch) => {
                           patchData({

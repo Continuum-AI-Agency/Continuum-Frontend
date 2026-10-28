@@ -197,6 +197,24 @@ export async function retryHeld<T>(
   }
 }
 
+/** A held one-row confirm (preflight then createJob) is told apart by its id, not its shape. */
+const ONE_JOB = 'job:';
+export const oneJobId = (confirmationHash: string) => `${ONE_JOB}${confirmationHash}`;
+
+/** Re-sends a held token the way it was first sent: one job, or a batch. */
+export function resendHeld<J>(
+  held: HeldBatch,
+  token: string,
+  api: {
+    createBatch(input: { confirmationToken: string }): Promise<{ jobs: J[] }>;
+    createJob(input: { confirmationToken: string }): Promise<J>;
+  },
+): Promise<{ jobs: J[] }> {
+  return held.batchId?.startsWith(ONE_JOB)
+    ? api.createJob({ confirmationToken: token }).then((job) => ({ jobs: [job] }))
+    : api.createBatch({ confirmationToken: token });
+}
+
 /** Retry is the identical batch: only while its token is in memory, unexpired, and could land. */
 export const canRetry = (held: HeldBatch, now = Date.now()): boolean =>
   held.signed !== null &&
