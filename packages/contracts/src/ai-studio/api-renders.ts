@@ -304,17 +304,28 @@ export const apiRenderVariableSchema = z
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
 
 /**
+ * A linked-field problem. `overridable` marks the one a person may render through on purpose —
+ * a split headline with the wrong number of lines (`acceptLinkedLineMismatch`). A link the
+ * template itself gets wrong is never overridable.
+ */
+export type LinkedValueProblem = { key: string; message: string; overridable?: true };
+
+/**
  * Fill every linked field from its source, exactly as the render will: a line split first (the
  * source keeps line 1, each linked line field its own), then whole-value copies of what each
  * source now shows. A source that must split into N lines and does not is a problem naming the
  * fields — never a guessed split, a dropped word, or a line silently left empty.
+ *
+ * `lenientLineCount` is the explicit override of that one problem: extra lines join onto the
+ * last layer (with a space — a layer is one line), and lines the text does not have render empty.
  */
 export function expandLinkedValues<V>(
   variables: ReadonlyArray<Pick<ApiRenderVariable, 'key' | 'label' | 'derivedFrom'>>,
   values: Readonly<Record<string, V>>,
-): { values: Record<string, V | string>; problems: Array<{ key: string; message: string }> } {
+  options: { lenientLineCount?: boolean } = {},
+): { values: Record<string, V | string>; problems: LinkedValueProblem[] } {
   const expanded: Record<string, V | string> = { ...values };
-  const problems: Array<{ key: string; message: string }> = [];
+  const problems: LinkedValueProblem[] = [];
   const byKey = new Map(variables.map((variable) => [variable.key, variable]));
   const linesBySource = new Map<string, Array<{ key: string; label: string; line: number }>>();
   const copies: Array<{ key: string; from: string }> = [];
@@ -348,15 +359,19 @@ export function expandLinkedValues<V>(
     const text = values[sourceKey];
     if (typeof text !== 'string') continue;
     const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
-    if (lines.length !== ordered.length + 1) {
+    const wanted = ordered.length + 1;
+    if (lines.length !== wanted && !options.lenientLineCount) {
       problems.push({
         key: sourceKey,
         message:
-          `${sourceLabel} needs ${ordered.length + 1} lines — one for itself and one each for ` +
+          `${sourceLabel} needs ${wanted} lines — one for itself and one each for ` +
           `${ordered.map((field) => field.label).join(', ')} — and has ${lines.length}.`,
+        overridable: true,
       });
       continue;
     }
+    if (lines.length > wanted) lines.splice(wanted - 1, Infinity, lines.slice(wanted - 1).join(' '));
+    while (lines.length < wanted) lines.push('');
     expanded[sourceKey] = lines[0];
     for (const field of ordered) expanded[field.key] = lines[field.line - 1];
   }
@@ -380,10 +395,10 @@ export function effectiveRenderValues(
     >
   >,
   values: Readonly<Record<string, ApiRenderInputValue>>,
-  options: { fallback: boolean } = { fallback: false },
+  options: { fallback: boolean; lenientLineCount?: boolean } = { fallback: false },
 ): {
   values: Record<string, ApiRenderInputValue>;
-  problems: Array<{ key: string; message: string }>;
+  problems: LinkedValueProblem[];
 } {
   const filled: Record<string, ApiRenderInputValue> = { ...values };
   for (const variable of variables) {
@@ -393,7 +408,7 @@ export function effectiveRenderValues(
     else if (options.fallback && variable.exposed === false && variable.fallback !== null)
       filled[variable.key] = variable.fallback;
   }
-  return expandLinkedValues(variables, filled);
+  return expandLinkedValues(variables, filled, { lenientLineCount: options.lenientLineCount });
 }
 
 /**
@@ -1244,6 +1259,8 @@ const finalField = z.boolean().optional();
 export const RENDERERS = ['after_effects', 'experimental'] as const;
 export type Renderer = (typeof RENDERERS)[number];
 const rendererField = z.enum(RENDERERS).optional();
+/** Explicit experimental renders may fail closed instead of handing unsupported work to AE. */
+export const microFallbackPolicySchema = z.enum(['after_effects', 'fail']);
 
 export const apiRenderPreflightRequestSchema = z
   .object({
@@ -1293,11 +1310,28 @@ export const apiRenderPreflightRequestSchema = z
      * the face deliberately; use this when a file now beats a file in the right typeface.
      */
     acceptMissingFonts: z.boolean().optional(),
+    /**
+     * Render a split headline whose line count does not match its layers: extra lines join onto
+     * the last layer, missing ones render empty. Without it the render is refused by name
+     * (`render_linked_value`). Same shape and scope as `acceptMissingFonts`: asked per render,
+     * signed into the confirmation token, recorded on the run.
+     */
+    acceptLinkedLineMismatch: z.boolean().optional(),
+    /**
+     * Render a colour outside the brand palette. Without it `BRAND_COLOR_OUTSIDE_PALETTE` blocks;
+     * with it the finding is kept as a warning. Recorded on the run like the font override.
+     */
+    acceptOffPaletteColor: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
     renderer: rendererField,
+    microFallbackPolicy: microFallbackPolicySchema.optional(),
   })
   .strict()
+  .refine((value) => !value.microFallbackPolicy || value.renderer === 'experimental', {
+    message: 'microFallbackPolicy requires renderer=experimental',
+    path: ['microFallbackPolicy'],
+  })
   .refine(oneVariableSource, oneVariableSourceMessage)
   .refine((value) => replaceNeedsOneOutput(value.delivery, value.outputIds), {
     message: REPLACE_NEEDS_ONE_OUTPUT,
@@ -1396,11 +1430,28 @@ export const apiRenderBatchPreflightRequestSchema = z
      * batch half-refused on fonts is a batch nobody can reason about.
      */
     acceptMissingFonts: z.boolean().optional(),
+    /**
+     * Render a split headline whose line count does not match its layers: extra lines join onto
+     * the last layer, missing ones render empty. Without it the render is refused by name
+     * (`render_linked_value`). Same shape and scope as `acceptMissingFonts`: asked per render,
+     * signed into the confirmation token, recorded on the run.
+     */
+    acceptLinkedLineMismatch: z.boolean().optional(),
+    /**
+     * Render a colour outside the brand palette. Without it `BRAND_COLOR_OUTSIDE_PALETTE` blocks;
+     * with it the finding is kept as a warning. Recorded on the run like the font override.
+     */
+    acceptOffPaletteColor: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
     renderer: rendererField,
+    microFallbackPolicy: microFallbackPolicySchema.optional(),
   })
   .strict()
+  .refine((value) => !value.microFallbackPolicy || value.renderer === 'experimental', {
+    message: 'microFallbackPolicy requires renderer=experimental',
+    path: ['microFallbackPolicy'],
+  })
   .superRefine((value, ctx) => {
     value.records.forEach((record, index) => {
       if (!replaceNeedsOneOutput(record.delivery ?? value.delivery, record.outputIds)) {
@@ -1440,6 +1491,12 @@ export const apiRenderOutputSchema = z
     // never stored. Lists draw this instead of the video: a <video> per row fetched every render
     // to paint a 36 px tile. Absent until the poster exists, and on image outputs.
     posterUrl: z.string().url().optional(),
+    // The low-res rungs a screen loads before the full file, signed per read like the poster.
+    // `thumbnailUrl` is the 480p of the same kind (a video's `proxy_480`, an image's `thumbnail`)
+    // for cards and grids; `previewUrl` is a video's 720p `preview_video`, what a player starts
+    // on before it upgrades to `libraryUrl`. Each is absent until its rendition is ready.
+    thumbnailUrl: z.string().url().optional(),
+    previewUrl: z.string().url().optional(),
     // The Library copy of this exact version, signed per read and never stored: storage behind a
     // CDN, so it plays and downloads far faster than `url` (the fleet's bucket, one far region).
     // Download-disposed — a <video> ignores that, an <a> saves it. Absent until the copy exists;
@@ -1571,6 +1628,10 @@ export const apiRenderJobSchema = z
     renderInput: apiRenderVariableMapSchema.nullable().default(null),
     /** Explicit per-render consent to let the worker substitute missing fonts. */
     acceptMissingFonts: z.boolean().optional(),
+    /** Explicit per-render consent to render a split headline whose line count did not match. */
+    acceptLinkedLineMismatch: z.boolean().optional(),
+    /** Explicit per-render consent to render a colour outside the brand palette. */
+    acceptOffPaletteColor: z.boolean().optional(),
     /** Server-evaluated advisories frozen at review and recorded during submission. */
     warnings: z.array(apiRenderWarningSchema).optional(),
 
@@ -1950,6 +2011,11 @@ export const apiRenderSuggestRowsRequestSchema = z
     mediaAssetIds: z.array(z.string().uuid()).max(API_RENDER_DRAFT_MEDIA_MAX).default([]),
     /** Variations drafted under each new row, each changing one or two of its values. */
     forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
+    /**
+     * The saved set these rows will join. The server reads it itself (brand-scoped) so the draft
+     * sees the set's name, description and existing rows — and does not repeat them.
+     */
+    renderSetId: z.string().uuid().optional(),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */
     seed: apiRenderVariableMapSchema.optional(),
     /** Only these may change — "vary only the headline". Absent means every proposable one. */

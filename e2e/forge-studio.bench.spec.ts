@@ -539,31 +539,24 @@ const svgSlotText = (page: Page, slot: string) =>
     .locator(`g[data-slot="${slot}"] text`)
     .evaluate((node) => (node.textContent ?? '').replace(/\s+/g, ''));
 
-async function openPreflight(page: Page, rowCount: number): Promise<Locator> {
-  const render = page.getByRole('button', {
-    name: new RegExp(`^Render ${rowCount} rows? · \\d+ files?$`),
-  });
+/** The toolbar's Render opens the one confirmation; it is named for what it renders. */
+async function openConfirm(page: Page, rowCount: number): Promise<Locator> {
+  const name = new RegExp(`^Render ${rowCount} rows? · \\d+ files?$`);
+  const render = page.getByRole('toolbar', { name: 'Render' }).getByRole('button', { name });
   await expect(render).toBeEnabled();
   await render.click();
-  // The review is a tray docked under the grid, never a modal over it.
-  const tray = page.getByRole('region', { name: 'Review and render' });
-  await expect(tray).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  return tray;
+  const confirm = page.getByRole('dialog', { name });
+  await expect(confirm).toBeVisible();
+  return confirm;
 }
 
-/** The tray's one way forward: the last button in its footer, named for the step it takes. */
-async function pressPrimary(tray: Locator, name: string | RegExp, timeout?: number) {
-  const primary = tray.locator('footer').getByRole('button').last();
-  await expect(primary).toHaveText(name);
-  await expect(primary).toBeEnabled({ timeout });
-  await primary.click();
-}
-
-/** Deliver folds its defaults into one line; this opens the full form when it is folded. */
-async function openDeliveryForm(tray: Locator): Promise<void> {
-  const change = tray.getByRole('button', { name: 'Change delivery', exact: true });
-  if (await change.isVisible()) await change.click();
+/** The open set's delivery settings, from its actions menu. */
+async function openSetSettings(page: Page, setName: string): Promise<Locator> {
+  await page.getByRole('button', { name: `Actions for ${setName}`, exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Settings…', exact: true }).click();
+  const settings = page.getByRole('dialog', { name: `Delivery for “${setName}”` });
+  await expect(settings).toBeVisible();
+  return settings;
 }
 
 /** A shadcn Select: open the trigger, then press the option in its listbox. */
@@ -953,71 +946,83 @@ test.describe('Forge Studio — fixtures', () => {
     await shoot(page, 'd13-imported');
   });
 
-  test('D14 · pre-flight reviews rows × formats, picks Slack, and forces one format per ad replacement', async ({
+  test('D14 · delivery is chosen before render: Slack on the set, one format per ad replacement on the row', async ({
     browser,
   }) => {
     const { page, fixtures } = await openFixtureForge(browser, {
       meta: 'not_connected',
       approvalRoom: true,
     });
-    const { promo, slack, meta } = FORGE_FIXTURE;
+    const { slack, meta } = FORGE_FIXTURE;
+    const setName = FORGE_FIXTURE.set.name;
     await openTab(page, 'Render');
+    await expect(gridRow(page, ROWS.root).getByText('Ready', { exact: true })).toBeVisible();
+
+    // No ad account: the set's settings say so, and still offer Slack.
+    let settings = await openSetSettings(page, setName);
+    await expect(
+      settings.getByText('No Meta ad account is connected to this brand', { exact: false }),
+    ).toBeVisible();
+    await expect(settings.getByRole('combobox', { name: 'Slack channel', exact: true })).toBeVisible();
+    await expect(settings.locator('select')).toHaveCount(0);
+    await shoot(page, 'd14-no-ad-account');
+    await settings.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(settings).toBeHidden();
+
+    // Connected (read fresh): the set posts to Slack, and one row replaces an ad.
+    fixtures.state.meta = 'connected';
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await openTab(page, 'Render');
+    await expect(gridRow(page, ROWS.root).getByText('Ready', { exact: true })).toBeVisible();
+    settings = await openSetSettings(page, setName);
+    await chooseOption(settings, 'Slack channel', new RegExp(`^#${escapeRegExp(slack.channelName)} · `));
+    await settings.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(settings).toBeHidden();
+
+    const launch = gridRow(page, ROWS.launch);
+    await launch.getByRole('button', { name: new RegExp(`^Destination for ${ROWS.launch}:`) }).click();
+    // The popover holds the row's picker; its button reads "Change the ad" once an ad is picked.
+    const popover = page.getByRole('dialog').filter({
+      has: page.getByRole('button', {
+        name: new RegExp(`^(Replace an ad|Change the ad) for ${escapeRegExp(ROWS.launch)}$`),
+      }),
+    });
+    await popover.getByRole('button', { name: `Replace an ad for ${ROWS.launch}`, exact: true }).click();
+    await popover
+      .getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.campaign.name)}`) })
+      .click();
+    await popover.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.adset.name)}`) }).click();
+    await popover.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.ad.name)}`) }).click();
+    // A replacement swaps exactly one file: the row says which.
+    await chooseOption(popover, `Format for ${ROWS.launch}`, FORGE_FIXTURE.outputs.square);
+    await page.keyboard.press('Escape');
+    await expect(
+      launch.getByRole('button', { name: `Destination for ${ROWS.launch}: Replace · ${meta.ad.name}` }),
+    ).toBeVisible();
+
     for (const label of [ROWS.root, ROWS.launch]) {
       const row = gridRow(page, label);
       await expect(row.getByText('Ready', { exact: true })).toBeVisible();
       await row.getByRole('checkbox', { name: 'Select row' }).click();
     }
-
-    // Review: exactly the selected rows × their formats.
-    const review = await openPreflight(page, 2);
-    await expect(review.getByText(`${promo.title} · 4 files`)).toBeVisible();
-    await expect(review.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
-    for (const label of [ROWS.root, ROWS.launch]) {
-      const item = review.getByRole('listitem').filter({ hasText: new RegExp(`^${label}`) });
-      await expect(item.locator('[data-ratio]')).toHaveCount(2);
-      await expect(item).toContainText('2 files');
-    }
-    await pressPrimary(review, 'Next: delivery');
-    await openDeliveryForm(review);
-    await expect(review.getByText('No ad account connected')).toBeVisible();
-    await expect(review.getByRole('combobox', { name: 'Slack channel', exact: true })).toBeVisible();
-    await expect(review.locator('select')).toHaveCount(0);
-    await shoot(page, 'd14-no-ad-account');
-    await review.getByRole('button', { name: 'Close review', exact: true }).click();
-    await expect(review).toBeHidden();
-
-    // Connected: Slack destination, then campaign → ad set → ad for one row.
-    fixtures.state.meta = 'connected';
-    const tray = await openPreflight(page, 2);
-    await expect(tray.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
-    await pressPrimary(tray, 'Next: delivery');
-    await openDeliveryForm(tray);
-    await chooseOption(tray, 'Slack channel', new RegExp(`^#${escapeRegExp(slack.channelName)} · `));
-    await expect(tray.getByRole('combobox', { name: 'Slack channel', exact: true })).toContainText(
-      `#${slack.channelName}`,
-    );
-    await tray
-      .getByRole('button', { name: `Replace an ad for ${ROWS.launch}`, exact: true })
-      .click();
-    await tray
-      .getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.campaign.name)}`) })
-      .click();
-    await tray.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.adset.name)}`) }).click();
-    await tray.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.ad.name)}`) }).click();
-    // A Meta target adds the Confirm step, and it waits on one format for the replacement.
-    await expect(tray.getByText('Choose one format for each ad replacement.')).toBeVisible();
-    const primary = tray.locator('footer').getByRole('button').last();
-    await expect(primary).toHaveText('Next: confirm');
-    await expect(primary).toBeDisabled();
-    await chooseOption(tray, `Format for ${ROWS.launch}`, FORGE_FIXTURE.outputs.square);
-    // The replacing row now renders one file: 2 (Root) + 1 (Launch).
-    await expect(tray.getByText(`${promo.title} · 3 files`)).toBeVisible();
-    await pressPrimary(tray, 'Next: confirm');
-    await expect(tray).toContainText(`#${slack.channelName}`);
-    await expect(tray).toContainText('1 ad replacement held for approval');
-    await expect(tray).toContainText(`#${APPROVAL_ROOM.name} approval`);
+    // The replacing row renders one file: 2 (Root) + 1 (Launch).
+    const confirm = await openConfirm(page, 2);
+    await expect(confirm.getByRole('heading', { name: 'Render 2 rows · 3 files' })).toBeVisible();
+    const outputs = confirm.getByRole('list', { name: 'Output per row' });
+    await expect(
+      outputs.getByRole('listitem').filter({ hasText: new RegExp(`^${ROWS.root}`) }).locator('[data-ratio]'),
+    ).toHaveCount(2);
+    await expect(
+      outputs.getByRole('listitem').filter({ hasText: new RegExp(`^${ROWS.launch}`) }).locator('[data-ratio]'),
+    ).toHaveCount(1);
+    await expect(confirm).toContainText(`#${slack.channelName}`);
+    await expect(confirm).toContainText(`replaces ${meta.ad.name}`);
+    await expect(confirm).toContainText(`#${APPROVAL_ROOM.name} approval`);
+    await expect(confirm.locator('select')).toHaveCount(0);
     await shoot(page, 'd14-confirm');
-    await pressPrimary(tray, 'Render 3 files');
+    const fire = confirm.getByRole('button', { name: 'Render 3 files', exact: true });
+    await expect(fire).toBeEnabled();
+    await fire.click();
     await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
 
     const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
@@ -1504,9 +1509,9 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     await selectLiveTemplate(page);
 
     // A set of the bench's own, so the Render click's save never rewrites someone's saved set.
-    // Named for a person reading the rail; deleted by id in afterAll.
+    // Named for a person reading the tabs; deleted by id in afterAll.
     const setName = `Bench · Studio ${RUN_ID}`;
-    await page.getByRole('button', { name: 'New set', exact: true }).click();
+    await page.getByRole('button', { name: 'New render set', exact: true }).click();
     const discard = page.getByRole('alertdialog', { name: 'Discard unsaved edits?' });
     const nameDialog = page.getByRole('dialog', { name: 'New render set' });
     await expect(discard.or(nameDialog)).toBeVisible();
@@ -1522,34 +1527,18 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     expect(created.ok(), `createRenderSet → ${created.status()}`).toBe(true);
     createdSetIds.push(forgeRenderSetSchema.parse(await created.json()).id);
     await expect(
-      page.getByRole('button', { name: `Open ${setName}`, exact: true }),
-    ).toHaveAttribute('aria-current', 'true', { timeout: 60_000 });
+      page
+        .getByRole('tablist', { name: 'Render sets' })
+        .getByRole('tab')
+        .filter({ hasText: setName }),
+    ).toHaveAttribute('aria-selected', 'true', { timeout: 60_000 });
 
     const names = await importLiveRows(page, contract, 'Example');
     for (const name of names) {
       await gridRow(page, name).getByRole('checkbox', { name: 'Select row' }).click();
     }
-    const render = page.getByRole('button', {
-      name: new RegExp(`^Render ${names.length} rows? · \\d+ files?$`),
-    });
-    await expect(render, 'every selected row passes the real preflight').toBeEnabled({
-      timeout: 180_000,
-    });
-    await render.click();
-    const tray = page.getByRole('region', { name: 'Review and render' });
-    await expect(tray).toBeVisible();
-    const description =
-      (await tray.locator('header').getByText(/ · \d+ files?$/).textContent()) ?? '';
-    const renderCount = Number(/(\d+) files?$/.exec(description)?.[1] ?? Number.NaN);
-    expect(
-      renderCount,
-      `the pre-flight renders ≤ FORGE_STUDIO_MAX_RENDERS (${description})`,
-    ).toBeLessThanOrEqual(MAX_RENDERS);
-
-    // Review re-checks on its own; the one button moves on once it is not blocked.
-    await pressPrimary(tray, 'Next: delivery', 120_000);
-    await openDeliveryForm(tray);
-    // The picker names rooms, not ids: find the destination's channel through the same read.
+    // Where it goes is the set's: the Slack room is chosen in its settings, before render. The
+    // picker names rooms, not ids: find the destination's channel through the same read.
     const { slack } = apiRenderDeliveryDestinationsResponseSchema.parse(
       await liveGet(`/api/ai-studio/renders/destinations?${brandQuery}`),
     );
@@ -1559,26 +1548,47 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
       `StarCraft's Slack destinations: ${slack.destinations.map((item) => `#${item.channelName}`).join(', ')}`,
     ).toBeTruthy();
     const channelName = destination?.channelName ?? '';
-    await chooseOption(tray, 'Slack channel', new RegExp(`^#${escapeRegExp(channelName)} · `));
+    const settings = await openSetSettings(page, setName);
+    await chooseOption(settings, 'Slack channel', new RegExp(`^#${escapeRegExp(channelName)} · `));
     console.log(
-      `[forge-studio-bench] LIVE Meta: ${(await tray.getByText('No ad account connected').isVisible()) ? 'no ad account connected' : 'an ad account is connected (not targeted)'}`,
+      `[forge-studio-bench] LIVE Meta: ${(await settings.getByText('No Meta ad account is connected', { exact: false }).isVisible()) ? 'no ad account connected' : 'an ad account is connected (not targeted)'}`,
     );
-    // No Meta target, so Deliver is the last step: its foot reads Proof and where renders go.
-    await expect(tray.locator('footer')).toContainText(`#${channelName}`);
+    await settings.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(settings).toBeHidden({ timeout: 60_000 });
 
+    const render = page.getByRole('toolbar', { name: 'Render' }).getByRole('button', {
+      name: new RegExp(`^Render ${names.length} rows? · \\d+ files?$`),
+    });
+    await expect(render, 'no selected row is left with something to fix').toBeEnabled({
+      timeout: 180_000,
+    });
+    // The confirmation checks the batch once, on open, with the set's Slack room in it.
     const signed = page.waitForRequest(
       (request) =>
         request.method() === 'POST' &&
         new URL(request.url()).pathname === '/api/ai-studio/renders/batch-preflight' &&
         Boolean((request.postDataJSON() as ApiRenderBatchPreflightRequest | null)?.slack),
     );
+    await render.click();
+    const confirm = page.getByRole('dialog', { name: /^Render \d+ rows? · \d+ files?$/ });
+    await expect(confirm).toBeVisible();
+    const description = (await confirm.getByRole('heading').first().textContent()) ?? '';
+    const renderCount = Number(/(\d+) files?$/.exec(description)?.[1] ?? Number.NaN);
+    expect(
+      renderCount,
+      `the confirmation renders ≤ FORGE_STUDIO_MAX_RENDERS (${description})`,
+    ).toBeLessThanOrEqual(MAX_RENDERS);
+    await expect(confirm).toContainText(`#${channelName}`);
+
     const batchResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
         new URL(response.url()).pathname === '/api/ai-studio/renders/batches',
       { timeout: 120_000 },
     );
-    await pressPrimary(tray, /^Render \d+ files?$/);
+    const fire = confirm.getByRole('button', { name: /^Render \d+ files?$/ });
+    await expect(fire, 'the real batch preflight signed a token').toBeEnabled({ timeout: 120_000 });
+    await fire.click();
     expect(
       ((await signed).postDataJSON() as ApiRenderBatchPreflightRequest).slack,
       'the signed pre-flight names the chosen Slack destination',

@@ -32,7 +32,7 @@ import {
 // `{assetId, versionId}`. `media` is the local sidecar for those pins (pixel size for the fit
 // check, a thumbnail for the cell); `pinnedRenderAssetSchema` is strict, so it lives beside
 // the value rather than inside it. An edit asks the server nothing: a row's status is what the
-// browser can tell (`rowStatusOf`), and Review is the one preflight.
+// browser can tell (`rowStatusOf`), and the render confirmation is the one preflight.
 
 /** The largest batch the server signs in one token (`apiRenderBatchPreflightRequestSchema`). */
 export const MAX_BATCH_ROWS = 50;
@@ -53,19 +53,60 @@ export function duplicateMappedVariable(
   return null;
 }
 
-export function isFontPreflightRefusal(
+/**
+ * The refusals a person may render through on purpose, each by the flag that does it. Everything
+ * else a preflight refuses — a stale revision, an asset that is not the brand's, a Meta target that
+ * moved — is a thing to fix, never a thing to override.
+ */
+export type RenderOverride =
+  | 'acceptMissingFonts'
+  | 'acceptLinkedLineMismatch'
+  | 'acceptOffPaletteColor';
+
+export const RENDER_OVERRIDES: Record<RenderOverride, { title: string; consequence: string }> = {
+  acceptMissingFonts: {
+    title: 'A typeface isn’t held',
+    consequence:
+      'The worker may substitute missing fonts. To choose the fonts, use the template’s Fonts check.',
+  },
+  acceptLinkedLineMismatch: {
+    title: 'A split headline has the wrong number of lines',
+    consequence:
+      'Extra lines join onto the last layer; layers with no line of their own render empty.',
+  },
+  acceptOffPaletteColor: {
+    title: 'A colour is outside the brand palette',
+    consequence: 'The colour renders as typed, outside the palette.',
+  },
+};
+
+/** Which override, if any, would let this refusal through. */
+export function overrideFor(
   code?: string,
   findings: readonly { code: string; severity?: string }[] = [],
-): boolean {
+): RenderOverride | null {
+  if (code === 'render_fonts_missing') return 'acceptMissingFonts';
+  if (code === 'render_linked_line_count') return 'acceptLinkedLineMismatch';
+  if (code !== 'render_brand_guardrail_blocked') return null;
+  // Only a block refuses: an `unknown` or `warn` finding beside it never vetoes the override.
   const blocking = findings.filter(
     (finding) => finding.severity === undefined || finding.severity === 'block',
   );
-  if (blocking.some((finding) => finding.code !== 'TEMPLATE_FONT_MISSING')) return false;
-  return (
-    code === 'render_fonts_missing' ||
-    (code === 'render_brand_guardrail_blocked' && blocking.length > 0)
-  );
+  if (!blocking.length) return null;
+  if (blocking.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+    return 'acceptMissingFonts';
+  if (blocking.every((finding) => finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'))
+    return 'acceptOffPaletteColor';
+  return null;
 }
+
+/** A guardrail finding a person may render through: what keeps it from being a hard block. */
+export const overridableFinding = (finding: { code: string }): RenderOverride | null =>
+  finding.code === 'TEMPLATE_FONT_MISSING'
+    ? 'acceptMissingFonts'
+    : finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'
+      ? 'acceptOffPaletteColor'
+      : null;
 
 export type RequestRowMedia = {
   w?: number;
@@ -521,24 +562,21 @@ export function validateRow(
   return errors;
 }
 
-/** What one row's own preflight refused, found only after a review's batch was refused. */
-export type RowRefusal = {
-  message: string;
-  /** Only missing faces: the row still renders, in substitutes, through the review's override. */
-  font: boolean;
-};
+/** A refusal a person may render through, asked at Render: the override and why it is needed. */
+export type RowCall = { override: RenderOverride; message: string };
 
 /**
  * A row's status from what the browser already has: its own errors (`validateRow` and what the
- * render reads from the values), the Live kit's fit per variable (`useLiveFit`; undefined until
- * every format's kit has landed) and a refusal a review found. A row's status is worked out in the
- * browser; a server refusal shows only after a review. Ready only when the fit was measured in
- * every format and lands; what was not measured says so, and still renders.
+ * render reads from the values), what a person may render through (`calls`), the Live kit's fit
+ * per variable (`useLiveFit`; undefined until every format's kit has landed) and what the render
+ * confirmation found this row's own preflight refusing (`refusal`). An edit asks the server
+ * nothing; the confirmation's batch preflight is the server's word. Measured only when every
+ * format's kit landed; what was not measured says so, and still renders.
  */
 export type RowStatus =
   | { state: 'invalid'; errors: Record<string, string> }
   | { state: 'refused'; reason: string }
-  | { state: 'fonts'; reason: string }
+  | { state: 'call'; calls: readonly RowCall[] }
   | { state: 'warning'; findings: ApiRenderReadinessFinding[] }
   | { state: 'ai-check'; fit: ApiRenderFitReport }
   | { state: 'unchecked'; findings: ApiRenderReadinessFinding[] }
@@ -547,10 +585,12 @@ export type RowStatus =
 export function rowStatusOf(
   errors: Record<string, string>,
   verdicts?: ReadonlyMap<string, ApiRenderFitVerdict>,
-  refusal?: RowRefusal,
+  refusal?: string,
+  calls: readonly RowCall[] = [],
 ): RowStatus {
   if (Object.keys(errors).length) return { state: 'invalid', errors };
-  if (refusal) return { state: refusal.font ? 'fonts' : 'refused', reason: refusal.message };
+  if (refusal) return { state: 'refused', reason: refusal };
+  if (calls.length) return { state: 'call', calls };
   if (!verdicts) return { state: 'unchecked', findings: [] };
   const fit = planFitCheck({ comp: null, slots: [...verdicts.values()] });
   const findings = readinessFindings({ fit });
@@ -561,7 +601,7 @@ export function rowStatusOf(
   return unmeasured.length ? { state: 'unchecked', findings: unmeasured } : { state: 'ready' };
 }
 
-/** Everything but a wrong value and a server refusal renders; a warning is said, not a stop. */
+/** Everything but a wrong value and a refusal no tick overrides renders; a call is asked at Render. */
 export const isRenderable = (status: RowStatus): boolean =>
   status.state !== 'invalid' && status.state !== 'refused';
 
@@ -691,12 +731,13 @@ export function autoMapHeaders(
 ): Record<string, string> {
   const importable = importableVariables(variables);
   const byName = new Map<string, string>();
+  const byFoldedName = new Map<string, string>();
   // "Région" is the same column as "Region": accents fold away as a fallback, never over an exact name.
   const unaccent = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '');
   const register = (name: string, target: string) => {
     const lower = name.trim().toLowerCase();
     if (!byName.has(lower)) byName.set(lower, target);
-    if (!byName.has(unaccent(lower))) byName.set(unaccent(lower), target);
+    if (!byFoldedName.has(unaccent(lower))) byFoldedName.set(unaccent(lower), target);
   };
   for (const field of IMPORT_FIELDS) register(field.header, field.target);
   for (const variable of importable)
@@ -710,7 +751,7 @@ export function autoMapHeaders(
   const mapped = Object.fromEntries(
     headers.map((header) => {
       const lower = header.trim().toLowerCase();
-      const target = byName.get(lower) ?? byName.get(unaccent(lower));
+      const target = byName.get(lower) ?? byFoldedName.get(unaccent(lower));
       if (!target || used.has(target)) return [header, IMPORT_SKIP];
       used.add(target);
       return [header, target];
@@ -1342,10 +1383,6 @@ export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): For
  * delivers is chosen during the review, and a thumbnail loading is nothing
  * the server signs, so none of those make a review stale.
  */
-/** The rows and selection a signature names, without the set's revision: a rename moves only that. */
-export const rowsOfSignature = (signature: string): string =>
-  JSON.stringify((JSON.parse(signature) as unknown[]).slice(0, 2));
-
 export const reviewSignature = (
   rows: RequestRow[],
   selectedIds: string[],

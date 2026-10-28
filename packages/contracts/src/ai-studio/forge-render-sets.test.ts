@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import {
   createForgeRenderSetRequestSchema,
+  crossForgeRenderSetRows,
+  diffForgeRenderSetRows,
+  diffResolvedForgeRenderSetRows,
   forgeRenderSetRowsSchema,
   forgeRenderSetSchema,
+  forgeRenderSetSettingsSchema,
+  labelForgeRenderSetRows,
   resolveForgeRenderSetRows,
   updateForgeRenderSetRequestSchema,
-  crossForgeRenderSetRows
 } from './forge-render-sets';
 
 const rootId = '00000000-0000-4000-8000-000000000001';
@@ -318,5 +322,128 @@ describe('crossForgeRenderSetRows', () => {
       id,
     });
     expect(rows.every((r) => r.parentId === id(99))).toBe(true);
+  });
+});
+
+describe('Forge render-set diff', () => {
+  const grandchildId = '00000000-0000-4000-8000-000000000003';
+  const base = [
+    {
+      id: rootId,
+      parentId: null,
+      label: 'Root',
+      overrides: { headline: 'Root', price: 10 },
+      clearedKeys: [],
+      outputIds: ['square'],
+      encode: { default: { fps: 25, audio: { channels: 2 } } },
+    },
+    {
+      id: childId,
+      parentId: rootId,
+      label: 'Child',
+      overrides: { headline: 'Child' },
+      clearedKeys: [],
+      outputIds: [],
+    },
+  ];
+
+  test('an inherited change shows on the child that renders it, and an untouched set is empty', () => {
+    expect(diffForgeRenderSetRows(base, base)).toEqual({ added: [], removed: [], changed: [] });
+    const after = [{ ...base[0]!, overrides: { headline: 'Root', price: 12 } }, base[1]!];
+    expect(diffForgeRenderSetRows(base, after).changed).toEqual([
+      { id: rootId, label: 'Root', variables: [{ key: 'price', from: 10, to: 12 }], settings: [] },
+      {
+        id: childId,
+        label: 'Child',
+        variables: [{ key: 'price', from: 10, to: 12 }],
+        settings: [],
+      },
+    ]);
+  });
+
+  test('a cleared key, a new row, a removed row, a relabel and an encode change', () => {
+    const after = [
+      { ...base[0]!, encode: { default: { audio: { channels: 2 }, fps: 30 } } },
+      { ...base[1]!, label: 'Kid', clearedKeys: ['price'] },
+      {
+        id: grandchildId,
+        parentId: rootId,
+        label: 'New',
+        overrides: {},
+        clearedKeys: [],
+        outputIds: [],
+      },
+    ];
+    const diff = diffForgeRenderSetRows(base, after);
+    expect(diff.added).toEqual([{ id: grandchildId, label: 'New' }]);
+    expect(diff.removed).toEqual([]);
+    const kid = diff.changed.find((row) => row.id === childId)!;
+    expect(kid.labelFrom).toBe('Child');
+    expect(kid.variables).toEqual([{ key: 'price', from: 10 }]);
+    expect(kid.settings.map((change) => change.key)).toEqual(['encode']);
+    expect(diffForgeRenderSetRows(after, base).removed).toEqual([
+      { id: grandchildId, label: 'New' },
+    ]);
+  });
+
+  test('settings merged in another key order are the same settings', () => {
+    const reordered = [
+      { ...base[0]!, encode: { default: { audio: { channels: 2 }, fps: 25 } } },
+      base[1]!,
+    ];
+    expect(diffForgeRenderSetRows(base, reordered).changed).toEqual([]);
+  });
+
+  test('two rows of one set compare as they render', () => {
+    const [root, child] = labelForgeRenderSetRows(base);
+    expect(diffResolvedForgeRenderSetRows(root!, child!)).toEqual({
+      id: childId,
+      label: 'Child',
+      labelFrom: 'Root',
+      parentId: { from: null, to: rootId },
+      variables: [{ key: 'headline', from: 'Root', to: 'Child' }],
+      settings: [],
+    });
+  });
+});
+
+describe('render-set settings', () => {
+  const target = { adAccountId: 'act_1', campaignId: 'c1', adsetId: 's1' };
+
+  test('default to Library only, Proof, no rooms', () => {
+    expect(forgeRenderSetSettingsSchema.parse({})).toEqual({
+      metaTarget: null,
+      slackDestinationId: null,
+      approvalDestinationIds: [],
+      final: false,
+    });
+  });
+
+  test('a default ad set only ever creates a PAUSED ad', () => {
+    expect(forgeRenderSetSettingsSchema.parse({ metaTarget: target }).metaTarget).toEqual({
+      ...target,
+      action: 'create',
+      adStatus: 'PAUSED',
+    });
+    // Replacing an ad needs exactly one output, so it stays a per-row choice.
+    expect(
+      forgeRenderSetSettingsSchema.safeParse({
+        metaTarget: { ...target, action: 'replace', adId: 'ad_1' },
+      }).success,
+    ).toBe(false);
+    expect(
+      forgeRenderSetSettingsSchema.safeParse({ metaTarget: { ...target, adStatus: 'ACTIVE' } })
+        .success,
+    ).toBe(false);
+  });
+
+  test('an update may carry settings alone', () => {
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId: rootId,
+        expectedRevision: 1,
+        settings: { final: true },
+      }).success,
+    ).toBe(true);
   });
 });

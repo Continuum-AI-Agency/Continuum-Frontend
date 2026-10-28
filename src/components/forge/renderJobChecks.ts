@@ -475,6 +475,32 @@ export function renderJobChecks(
           },
         ]
       : []),
+    ...(job.acceptLinkedLineMismatch
+      ? [
+          {
+            name: 'Line-count override',
+            what: 'Whether a split headline rendered with a line count its layers did not match.',
+            state: 'warn' as const,
+            result: 'Line-count check bypassed',
+            lines: [
+              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; extra lines joined onto the last layer, missing ones rendered empty.`,
+            ],
+          },
+        ]
+      : []),
+    ...(job.acceptOffPaletteColor
+      ? [
+          {
+            name: 'Palette override',
+            what: 'Whether a colour outside the brand palette was rendered on purpose.',
+            state: 'warn' as const,
+            result: 'Brand-palette check bypassed',
+            lines: [
+              `Explicitly accepted${job.createdByEmail ? ` by ${job.createdByEmail}` : ''}; a colour renders outside the brand palette.`,
+            ],
+          },
+        ]
+      : []),
     ...(job.warnings?.length
       ? [
           {

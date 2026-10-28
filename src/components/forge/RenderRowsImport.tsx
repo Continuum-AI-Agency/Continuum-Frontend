@@ -830,10 +830,9 @@ export function RenderRowsImport({
               <Button
                 type="button"
                 variant="ghost"
-                disabled={contract.variables.length === 0}
                 onClick={() => downloadTemplateCsv(contract, 'render-rows-template.csv')}
               >
-                Download blank template
+                Download CSV template
               </Button>
             </div>
             {/* A drop takes the same review path as the picker. A label carries the drop and clicks
@@ -846,14 +845,14 @@ export function RenderRowsImport({
                 dragOver && 'border-primary bg-primary/5',
               )}
               onDragOver={(event) => {
-                if (busy) return;
                 event.preventDefault();
+                if (busy) return;
                 setDragOver(true);
               }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(event) => {
-                if (busy) return;
                 event.preventDefault();
+                if (busy) return;
                 setDragOver(false);
                 const file = event.dataTransfer.files?.[0];
                 if (file) void loadFile(file);

@@ -54,6 +54,7 @@ import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
 import type { LayerDraftChange } from '@/components/forge/layerDraft';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -89,7 +90,6 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
-import { Video } from '@/components/ui/video';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -1530,23 +1530,14 @@ export function TemplateDetail({
                     return {
                       mode: 'rendered',
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
-                      node:
-                        rendered.kind === 'video' ? (
-                          <Video
-                            src={rendered.url}
-                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
-                            muted
-                            className="aspect-auto! size-full rounded-none border-0"
-                            videoClassName="object-contain"
-                          />
-                        ) : (
-                          // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-                          <img
-                            src={rendered.url}
-                            alt={`${name} · ${picked.ratio ?? picked.label}`}
-                            className="size-full object-contain"
-                          />
-                        ),
+                      node: (
+                        <OutputFile
+                          key={fullSrc(rendered)}
+                          output={rendered}
+                          alt={`${name} · ${picked.ratio ?? picked.label}`}
+                          muted
+                        />
+                      ),
                       estimate,
                       caption: rendered.fileName,
                     };

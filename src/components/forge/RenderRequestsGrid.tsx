@@ -3,6 +3,7 @@
 import {
   API_RENDER_MEDIA_LIST_MAX,
   type ApiRenderBatchRecord,
+  type ApiRenderDeliveryTarget,
   type ApiRenderInputSet,
   type ApiRenderInputValue,
   type ApiRenderJob,
@@ -10,12 +11,13 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
-  apiRenderPreflightResponseSchema,
   effectiveRenderValues,
+  FORGE_RENDER_SET_DEFAULT_SETTINGS,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   type ForgeRenderSetRow,
+  type ForgeRenderSetSettings,
   isWebTemplateKey,
   type MediaAsset,
   readableLayerName,
@@ -45,11 +47,17 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardPaste, Loader2, Send, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
+import { useDefaultLayout } from 'react-resizable-panels';
 import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
+import {
+  AdDrillDown,
+  DeliveryTargetPicker,
+  useDeliveryDestinations,
+  useReplaceFormats,
+} from '@/components/forge/DeliveryTargetPicker';
 import { previewFormats } from '@/components/forge/FormatPreview';
 import {
   ActionMenuItems,
@@ -66,29 +74,20 @@ import {
   templateListQuery,
   templateLoadQueries,
 } from '@/components/forge/queryKeys';
+import { type FiredRow, RenderConfirmDialog } from '@/components/forge/RenderConfirmDialog';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
-import {
-  HeldBatchView,
-  LandedBatchView,
-  RenderReviewTray,
-  type RowsAsked,
-} from '@/components/forge/RenderReviewTray';
-import {
-  HELD_SET,
-  heldConfirmCopy,
-  type HoldScope,
-  isHeld,
-  isSetChanged,
-  SIGNED_OUT,
-  useRenderHold,
-} from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
   RenderRowsImport,
 } from '@/components/forge/RenderRowsImport';
 import { NameDialog } from '@/components/forge/RenderSetMenu';
-import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail';
+import {
+  deliverySummary,
+  RenderSetSettingsDialog,
+  useSetApprovalRooms,
+} from '@/components/forge/RenderSetSettingsDialog';
+import { RenderSetTabs, templateJobsKey } from '@/components/forge/RenderSetTabs';
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import { explainFinding } from '@/components/forge/readinessCopy';
 import {
@@ -97,8 +96,8 @@ import {
   applyFormats,
   applyValue,
   clearKey,
-  descendantsOf,
   discardProposed,
+  descendantsOf,
   draftStorageKey,
   duplicateLabel,
   effectiveEncode,
@@ -108,9 +107,7 @@ import {
   emptyHistory,
   forkLabel,
   fromRenderSetRows,
-  isFontPreflightRefusal,
   isRenderable,
-  isResolvedDelivery,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -121,15 +118,14 @@ import {
   parseDelimited,
   proposedIds,
   pushHistory,
+  type RenderOverride,
   type RequestRow,
   type RowDrop,
-  type RowRefusal,
+  type RowStatus,
   rebaseRows,
   renderedRatios,
   resetKey,
   restoreRows,
-  reviewSignature,
-  rowsOfSignature,
   rootRowId,
   rowBreadcrumb,
   rowDepth,
@@ -144,6 +140,7 @@ import {
   validateRow,
 } from '@/components/forge/renderRequestRows';
 import {
+  DestinationCell,
   DragHandleCell,
   EncodeCell,
   FormatsCell,
@@ -172,6 +169,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
@@ -188,13 +186,14 @@ import {
   describeRenderDiscoveryFailure,
   needsTemplateRepair,
 } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
+import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 
 // Render requests as a spreadsheet.
 //
 // One row per render, one column per variable the template exposes. The canvas node fills ONE
 // of these per node; a campaign fills fifty, and fifty forms is what NocoBase offered. Every
-// cell validates as you type and an edit asks the server nothing: Render's review is the one
-// preflight, and the selection renders as one batch — the same `records[]` the node sends, so
+// cell validates as you type, every row is dry-run against the server the moment it is
+// complete, and the selection renders as one batch — the same `records[]` the node sends, so
 // there is one batching model and this is only a wider view of it.
 //
 // Named sets persist on the server; localStorage is only an unsaved-draft recovery copy.
@@ -204,11 +203,6 @@ import {
 // (requestCells.tsx): anything that changes per keystroke reaches them through the table's
 // `meta`. A column set that depended on `rows` remounted every cell on every keystroke.
 
-/** The review tray folded down to its one strip: the readiness line. Render opens it. */
-const TRAY_COLLAPSED_SIZE = '2.5rem';
-const TRAY_OPEN_SIZE = '40%';
-/** The sets rail folded to its one button and the open set's name, set on its side. */
-const RAIL_COLLAPSED_SIZE = '2.25rem';
 /** How long an edit settles before autosave writes it; how long after a failed save it retries. */
 const AUTOSAVE_MS = 1500;
 const AUTOSAVE_RETRY_MS = 5000;
@@ -239,16 +233,14 @@ function readDrafts(key: string): RequestRow[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Persisted;
     if (!Array.isArray(parsed.rows)) return null;
-    // A draft saved by a build that kept a per-row dry-run still carries its `check`; drop it.
-    return parsed.rows.map(
-      ({ check: _check, ...row }: RequestRow & { check?: unknown }, index) => ({
-        ...row,
-        parentId: row.parentId ?? null,
-        clearedKeys: row.clearedKeys ?? [],
-        outputIds: row.outputIds ?? [],
-        label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
-      }),
-    );
+    // The server's verdict does not survive a reload — tokens expire, contracts move.
+    return parsed.rows.map((row, index) => ({
+      ...row,
+      parentId: row.parentId ?? null,
+      clearedKeys: row.clearedKeys ?? [],
+      outputIds: row.outputIds ?? [],
+      label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
+    }));
   } catch {
     return null;
   }
@@ -266,46 +258,13 @@ const seededRows = (contract: ApiRenderTemplateContract): RequestRow[] => [
 const signatureOf = (rows: RequestRow[], contract: ApiRenderTemplateContract | null) =>
   JSON.stringify(toRenderSetRows(rows, allOutputIdsOf(contract)));
 
-/** Everything a row's own preflight is asked about: a refusal holds only while all of it holds. */
-const refusalKey = (
-  rows: RequestRow[],
-  id: string,
-  templateRef: string | null,
-  contract: ApiRenderTemplateContract | null,
-  revision: number | null,
-) =>
+/** Inputs, not a render, so the snapshot is everything the dry-run is asked about. */
+const preflightSnapshot = (rows: RequestRow[], id: string) =>
   JSON.stringify([
     effectiveValues(rows, id),
     effectiveEncode(rows, id) ?? null,
     effectiveOutputIds(rows, id),
-    templateRef,
-    contract?.template.contractHash ?? null,
-    revision,
   ]);
-
-/**
- * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
- * (guardrails, fonts). Anything else (an outage, a throttle, a malformed request, a set that
- * moved) is no answer about the row, and is not kept.
- */
-function refusalOf(error: unknown): RowRefusal | null {
-  if (!(error instanceof ApiError) || error.status !== 422) return null;
-  const code =
-    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
-  if (isSetChanged(error)) return null;
-  const parsed = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
-    error.payload?.guardrails,
-  );
-  const guardrails = (parsed.success ? parsed.data : undefined) ?? [];
-  const detail = typeof error.payload?.detail === 'string' ? error.payload.detail : null;
-  return {
-    font: isFontPreflightRefusal(code, guardrails),
-    message:
-      detail ??
-      guardrails.find((finding) => finding.severity === 'block')?.message ??
-      describeRenderDiscoveryFailure(error),
-  };
-}
 
 const rowStepCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
   if (event.code === 'ArrowDown')
@@ -359,51 +318,54 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...(contract.encode && !isStillsOnly(contract)
       ? [{ id: 'encode', size: 160, header: 'Output', cell: EncodeCell }]
       : []),
-    // Wide enough for a status and its reason in words, not only on hover.
-    { id: 'status', size: 200, header: 'Status', cell: StatusCell },
+    // Where each row goes, editable in place; a web component lands in the Library only.
+    ...(isWebTemplateKey(contract.template.key)
+      ? []
+      : [{ id: 'destination', size: 170, header: 'Destination', cell: DestinationCell }]),
+    { id: 'status', size: 130, header: 'Status', cell: StatusCell },
   ];
 }
 
-/** "4 of 6 rows can render · 1 needs fixing · 1 not checked" — no state word to decode. */
+/** "4 of 6 rows ready to render · 1 needs fixing · 1 still checking" — no state word to decode. */
 function readinessSummary(
   counts: {
-    renderable: number;
+    ready: number;
     blocked: number;
     needsInput: number;
-    refused: number;
-    fonts: number;
-    warned: number;
-    unchecked: number;
-    fitUnmeasured: boolean;
-    fitLoading: boolean;
+    call: number;
+    review: number;
+    checking: number;
   },
   total: number,
 ): string {
-  // Until the kits land, nothing else is known well enough to count.
-  if (counts.fitLoading && total) return 'Checking layout…';
   const needs = (count: number, what: string) =>
     count ? `${count} ${count === 1 ? 'needs' : 'need'} ${what}` : null;
   return [
     total === 0
       ? 'No rows to render'
-      : counts.renderable === total
-        ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
-        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
+      : counts.ready === total
+        ? `${total === 1 ? 'The row is' : `All ${total} rows are`} ready to render`
+        : `${counts.ready} of ${total} ${total === 1 ? 'row' : 'rows'} ready to render`,
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
-    counts.refused ? `${counts.refused} won’t render` : null,
-    counts.fonts
-      ? `${counts.fonts} need${counts.fonts === 1 ? 's' : ''} Render anyway for missing fonts`
-      : null,
-    counts.warned ? `${counts.warned} with a warning` : null,
-    counts.unchecked ? `${counts.unchecked} not checked` : null,
-    counts.fitUnmeasured && total
-      ? 'Layout fit isn’t measured for this template — rows can still render'
-      : null,
+    needs(counts.call, 'your call'),
+    needs(counts.review, 'a review'),
+    counts.checking ? `${counts.checking} still checking` : null,
   ]
     .filter(Boolean)
     .join(' · ');
 }
+
+/**
+ * What a refusal the render confirmation found is about: the row as it was asked, of the template
+ * as it was asked. An edit to the row, to what it inherits, or a different checkpoint retires it.
+ */
+const refusalKey = (
+  rows: RequestRow[],
+  id: string,
+  templateRef: string | null,
+  contractHash: string | null,
+) => JSON.stringify([preflightSnapshot(rows, id), templateRef, contractHash]);
 
 /** "Deleted 3 rows, 2 variations included" — variations are named only when nobody picked them. */
 function deletedMessage(picked: number, all: number): string {
@@ -474,6 +436,7 @@ type NameRequest = {
 
 export function RenderRequestsGrid({
   brandId,
+  metaWritesAllowed,
   onFired,
   intent,
   onIntentConsumed,
@@ -481,6 +444,8 @@ export function RenderRequestsGrid({
   active = true,
 }: {
   brandId: string;
+  /** The brand's arming switch for real Meta writes, as the page read it. */
+  metaWritesAllowed?: boolean;
   /**
    * Whether the Render tab is showing. The grid stays mounted across tabs (unsaved rows live
    * here), so a rename, publish or adoption made on Templates reaches the picker only by
@@ -488,9 +453,9 @@ export function RenderRequestsGrid({
    */
   active?: boolean;
   /**
-   * Called with a queued batch's job ids when the person opens the Render ledger from the review
-   * tray — the tab shell switches to it. Queuing alone keeps the Render tab, where the tray follows
-   * the jobs.
+   * Called with a queued batch's job ids when the person opens the Render ledger from the queued
+   * toast — the tab shell switches to it. Queuing alone keeps the Render tab, where each row's
+   * Status follows its job.
    */
   onFired?: (jobIds: string[]) => void;
   /** Each new intent selects its template and loads its render set, over the newest-set default. */
@@ -542,6 +507,9 @@ export function RenderRequestsGrid({
     () => (lineage.data ? checkpointGraph(lineage.data) : null),
     [lineage.data],
   );
+  const pinCheckpoint = (ref: string | null) => {
+    setTemplateRef(ref);
+  };
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
@@ -598,19 +566,22 @@ export function RenderRequestsGrid({
   const [preloadedSheet, setPreloadedSheet] = useState<{ file: File } | null>(null);
   const [nameRequest, setNameRequest] = useState<NameRequest | null>(null);
   const [dropHint, setDropHint] = useState<RowDrop | null>(null);
-  // The open review: `key` is the snapshot the tray reviews, `signature` what it was taken of.
-  const [review, setReview] = useState<{
-    key: number;
-    signature: string;
+  /** The render confirmation is open on the rows selected when Render was clicked. */
+  const [confirming, setConfirming] = useState(false);
+  /** The rows Render opened the confirmation on, and the selected rest with why they stay behind. */
+  const [subset, setSubset] = useState<{
     rowIds: string[];
     skippedRows: { label: string; message: string }[];
   } | null>(null);
-  const trayPanel = usePanelRef();
-  const railPanel = usePanelRef();
-  const [railCollapsed, setRailCollapsed] = useState(false);
-  // Panel widths, and whether the sets rail is folded, are the person's — remembered in this browser.
+  /** "Send to ad set…" is open over the selected rows. */
+  const [sendingTo, setSendingTo] = useState(false);
+  /** The set whose delivery settings are open. */
+  const [settingsFor, setSettingsFor] = useState<ForgeRenderSet | null>(null);
+  /** Each rendered row's newest job, and the row as it was rendered: an edit ends its run view. */
+  const [fired, setFired] = useState<Record<string, { jobId: string; snapshot: string }>>({});
+  // Panel widths are the person's — remembered in this browser. v2: the sets rail became tabs.
   const panelsLayout = useDefaultLayout({
-    id: 'forge-render-panels',
+    id: 'forge-render-panels-v2',
     storage: typeof window === 'undefined' ? undefined : localStorage,
   });
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -778,7 +749,7 @@ export function RenderRequestsGrid({
       setRowSelection({});
       setPreviewRowId(null);
       setExpanded(true);
-      setReview(null);
+      setConfirming(false);
       void rehydrateMedia(next);
     },
     [rehydrateMedia],
@@ -1121,69 +1092,37 @@ export function RenderRequestsGrid({
     [updateRow],
   );
 
-  // --- what the browser can tell about each row, with no request ------------------------
   const variables = contract?.variables;
-  const clientErrors = useMemo(
-    () =>
-      new Map(
-        rows.map((row) => {
-          // What the render will fill: a saved default satisfies a required field, and a headline
-          // split across layers needs exactly its lines — the render refuses otherwise.
-          const rendered = effectiveRenderValues(
-            [...(variables ?? []), ...linkedFields],
-            effectiveValues(rows, row.id),
-          );
-          const errors = validateRow(variables ?? [], rendered.values);
-          for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
-          return [row.id, errors] as const;
-        }),
-      ),
-    [rows, variables, linkedFields],
-  );
-
-  // What a refused review's rows said when asked alone (askRowsAlone, below), until an edit to the
-  // row, or to what it inherits, retires it.
-  const [refusals, setRefusals] = useState<ReadonlyMap<string, RowRefusal & { key: string }>>(
-    new Map(),
-  );
-  // A batch whose createBatch failed is held per user, brand, binding, template and render set
-  // (renderHold.ts), in every tab: while it is, the set's Render opens it, never a new review. With
-  // no user id there is no key to hold under, so Render is disabled.
-  const userId = useActiveBrandContext().user?.id ?? null;
-  const holdOf = (renderSetId: string): HoldScope | null =>
-    userId && contract
-      ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
-      : null;
-  const holdScope = activeSet ? holdOf(activeSet.id) : null;
-  /**
-   * A held set warns, never blocks: Duplicate, Delete, Restore as new set, Change set template
-   * revision, Run on other variants, Update to current template (rail and banner) and Import
-   * browser draft each ask one confirm while it is held (read fresh), then go. Retry still sends
-   * the frozen batch; a copy starts with no hold. Rename, describe and row edits never ask.
-   * True when it asked: the caller returns, and `run` goes on Continue.
-   */
-  const [heldConfirm, setHeldConfirm] = useState<{ copy: boolean; run: () => void } | null>(null);
-  const askIfHeld = (set: { id: string } | null, run: () => void, copy = false): boolean => {
-    const scope = set ? holdOf(set.id) : null;
-    if (!scope || !isHeld(scope)) return false;
-    setHeldConfirm({ copy, run });
-    return true;
-  };
-  const held = useRenderHold(holdScope);
-  // A held batch that a Retry landed: its jobs, shown until closed.
-  const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);
-  const liveRefusals = useMemo(
-    () =>
-      new Map(
-        [...refusals].filter(
-          ([id, refusal]) =>
-            rows.some((row) => row.id === id) &&
-            refusal.key ===
-              refusalKey(rows, id, templateRef, contract, activeSet?.revision ?? null),
-        ),
-      ),
-    [refusals, rows, templateRef, contract, activeSet?.revision],
-  );
+  // Per row: what is wrong with it (`clientErrors`, which keeps it from rendering), and what a
+  // person may render through on purpose (`calls`, decided at Render, never an error in the row).
+  const { clientErrors, calls } = useMemo(() => {
+    const errorsByRow = new Map<string, Record<string, string>>();
+    const callsByRow = new Map<
+      string,
+      Array<{ override: RenderOverride; message: string; key?: string }>
+    >();
+    for (const row of rows) {
+      // What the render will fill: a saved default satisfies a required field, and a headline
+      // split across layers needs exactly its lines — or someone saying "render anyway".
+      const rendered = effectiveRenderValues(
+        [...(variables ?? []), ...linkedFields],
+        effectiveValues(rows, row.id),
+      );
+      const errors = validateRow(variables ?? [], rendered.values);
+      const rowCalls: Array<{ override: RenderOverride; message: string; key?: string }> = [];
+      for (const problem of rendered.problems)
+        if (problem.overridable)
+          rowCalls.push({
+            override: 'acceptLinkedLineMismatch',
+            message: problem.message,
+            key: problem.key,
+          });
+        else errors[problem.key] ??= problem.message;
+      errorsByRow.set(row.id, errors);
+      if (rowCalls.length) callsByRow.set(row.id, rowCalls);
+    }
+    return { clientErrors: errorsByRow, calls: callsByRow };
+  }, [rows, variables, linkedFields]);
 
   // --- row operations ---------------------------------------------------------------------
   // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
@@ -1275,7 +1214,7 @@ export function RenderRequestsGrid({
     input.focus();
   }, [rows, expanded]);
 
-  /** A row named elsewhere — the review tray — brought into view and previewed. */
+  /** A row named elsewhere — an intent, a menu — brought into view and previewed. */
   const showRow = (id: string) => {
     setPreviewRowId(id);
     gridBox.current
@@ -1382,9 +1321,9 @@ export function RenderRequestsGrid({
   const pinnedRevisionLabel = revisionVariants
     ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
     .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
-  const changeRevision = async (confirmed = false) => {
+  const changeRevision = async () => {
     const picked = publishedRevisions.find((item) => item.id === pickedRevision);
-    if (!picked || (!confirmed && askIfHeld(activeSet, () => void changeRevision(true)))) return;
+    if (!picked) return;
     setRevisionChangeBusy(true);
     try {
       if (activeSet) {
@@ -1456,9 +1395,8 @@ export function RenderRequestsGrid({
         ? [{ variant, head, target }]
         : [];
     }) ?? [];
-  const runOnVariants = async (confirmed = false) => {
-    if (!activeSet || (!confirmed && askIfHeld(activeSet, () => void runOnVariants(true), true)))
-      return;
+  const runOnVariants = async () => {
+    if (!activeSet) return;
     setRevisionChangeBusy(true);
     const made: string[] = [];
     const refused: string[] = [];
@@ -1729,6 +1667,8 @@ export function RenderRequestsGrid({
             documentIds: [],
             mediaAssetIds: [],
             forksPerRow: 0,
+            // The set's own name, description and rows, read by the server: no repeats.
+            ...(activeSetRef.current ? { renderSetId: activeSetRef.current.id } : {}),
             parent: {
               id: row.id,
               label: row.label.trim() || 'Untitled',
@@ -1812,14 +1752,14 @@ export function RenderRequestsGrid({
   const updateRequired = rebaseDrops.length > 0;
   const needsSave = dirty || olderTemplate || updateRequired;
   const proposed = proposedIds(rows);
-  // Autosave waits while a review signs the set's revision, while a conflict is unresolved, and
+  // Autosave waits while a confirmation signs the set's revision, while a conflict is unresolved, and
   // while the set waits on "Update set".
   const autosaveBlocked =
     !contract ||
     !bindingId ||
     rows.length === 0 ||
     (!activeSet && (renderSetLoad.initialFailed || renderSetLoad.unassignedDraft)) ||
-    review !== null ||
+    confirming ||
     conflict !== null ||
     updateRequired;
 
@@ -1919,11 +1859,13 @@ export function RenderRequestsGrid({
     {
       announce = true,
       description,
+      settings,
       revisionRef,
       rethrow = false,
     }: {
       announce?: boolean;
       description?: string | null;
+      settings?: ForgeRenderSetSettings;
       revisionRef?: TemplateRevisionRef;
       /** Hand a failure to the caller instead of toasting it: autosave reports in the toolbar. */
       rethrow?: boolean;
@@ -1936,6 +1878,7 @@ export function RenderRequestsGrid({
         bindingId,
         name,
         ...(description ? { description } : {}),
+        ...(settings ? { settings } : {}),
         templateKey: contract.template.key,
         contractHash: contract.template.contractHash,
         ...((revisionRef ?? templateRevision)
@@ -2030,7 +1973,7 @@ export function RenderRequestsGrid({
         return saved;
       } catch (error) {
         const message = error instanceof Error ? error.message : '';
-        if (set && isSetChanged(error)) {
+        if (set && message.includes('render_set_revision_conflict')) {
           const merged = await resolveConflict(set, submitted);
           setSaveState({ phase: 'idle' });
           return merged;
@@ -2154,7 +2097,11 @@ export function RenderRequestsGrid({
   /** A name or description change, queued behind any row save so both keep their revision. */
   const updateSetDetails = async (
     set: ForgeRenderSet,
-    change: { name: string } | { description: string | null },
+    change:
+      | { name: string }
+      | { description: string | null }
+      | { settings: ForgeRenderSetSettings },
+    { rethrow = false } = {},
   ) => {
     if (inFlight.current) await inFlight.current;
     const current = set.id === activeSetRef.current?.id ? activeSetRef.current : set;
@@ -2172,19 +2119,19 @@ export function RenderRequestsGrid({
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-      if (isSetChanged(error)) {
+      if (message.includes('render_set_revision_conflict')) {
         const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
         if (fresh)
           setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
         toast.error('This set changed elsewhere. Reload it before saving again.');
       } else toast.error(describeRenderDiscoveryFailure(message));
+      if (rethrow) throw error;
     }
   };
 
   /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
-  const duplicateSet = async (set: ForgeRenderSet, confirmed = false) => {
-    if (!contract || (!confirmed && askIfHeld(set, () => void duplicateSet(set, true), true)))
-      return;
+  const duplicateSet = async (set: ForgeRenderSet) => {
+    if (!contract) return;
     const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
     const copy = rebaseRows(
       source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
@@ -2193,6 +2140,7 @@ export function RenderRequestsGrid({
     const created = await createSet(duplicateLabel(set.name), copy, {
       announce: false,
       description: set.description,
+      settings: set.settings,
     });
     if (!created) return;
     showRows(copy, copy, contract);
@@ -2200,12 +2148,8 @@ export function RenderRequestsGrid({
   };
 
   /** A kept version as a new set. The set it came from is never written back over. */
-  const restoreRevision = async (revision: ForgeRenderSetRevision, confirmed = false) => {
-    if (
-      !contract ||
-      (!confirmed && askIfHeld(historyFor, () => void restoreRevision(revision, true), true))
-    )
-      return;
+  const restoreRevision = async (revision: ForgeRenderSetRevision) => {
+    if (!contract) return;
     if (
       revision.templateRevision &&
       (revision.templateRevision.templateKey !== contract.template.key ||
@@ -2239,8 +2183,8 @@ export function RenderRequestsGrid({
     toast.success(`Restored as “${created.name}”`);
   };
 
-  const deleteSet = async (set: ForgeRenderSet, confirmed = false) => {
-    if (!contract || (!confirmed && askIfHeld(set, () => void deleteSet(set, true)))) return;
+  const deleteSet = async (set: ForgeRenderSet) => {
+    if (!contract) return;
     try {
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
@@ -2281,81 +2225,147 @@ export function RenderRequestsGrid({
     formats: fitFormats,
     enabled: Boolean(contract) && !web,
   });
-  const fitOf = fit.state === 'measured' ? fit.fitOf : null;
-  // Nothing to measure with — a web component, or a format's kit that failed — is said once for
-  // the template, not as a badge on every row.
-  const fitUnmeasured = contract !== null && fit.state === 'unmeasured';
   const liveFit = useMemo(
     () =>
       new Map(
-        fitOf
+        fit.state === 'measured'
           ? rows.map((row) => {
               const media = effectiveMedia(rows, row.id);
               const sizeOf = (key: string) => {
                 const dims = media[key];
                 return dims?.w && dims.h ? { w: dims.w, h: dims.h } : null;
               };
-              return [row.id, fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
+              return [row.id, fit.fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
             })
           : [],
       ),
-    [fitOf, rows],
+    [fit, rows],
   );
-  // The status column's verdicts, counted: the same findings and words as each row's badge.
+  const fitLoading = fit.state === 'loading';
+  // What the render confirmation found a row's own preflight refusing: kept while the row is what
+  // was refused (refusalKey), so an edit retires it. Nothing else here asks the server anything.
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, { message: string; key: string }>>(
+    () => new Map(),
+  );
+  const contractHash = contract?.template.contractHash ?? null;
+  const statuses = useMemo(
+    () =>
+      new Map(
+        rows.map((row) => {
+          const refusal = refusals.get(row.id);
+          return [
+            row.id,
+            rowStatusOf(
+              clientErrors.get(row.id) ?? {},
+              liveFit.get(row.id),
+              refusal?.key === refusalKey(rows, row.id, templateRef, contractHash)
+                ? refusal.message
+                : undefined,
+              calls.get(row.id),
+            ),
+          ] as const;
+        }),
+      ),
+    [rows, clientErrors, liveFit, refusals, calls, templateRef, contractHash],
+  );
+  const statusOf = (id: string): RowStatus =>
+    statuses.get(id) ?? { state: 'unchecked', findings: [] };
+  const onRowsRefused = (found: ReadonlyArray<{ rowId: string; message: string }>) =>
+    setRefusals((previous) => {
+      const next = new Map(previous);
+      for (const { rowId, message } of found)
+        next.set(rowId, {
+          message,
+          key: refusalKey(latestRows.current, rowId, templateRef, contractHash),
+        });
+      return next;
+    });
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
-    const counts = {
-      renderable: 0,
-      blocked: 0,
-      needsInput: 0,
-      refused: 0,
-      fonts: 0,
-      warned: 0,
-      unchecked: 0,
-    };
+    const counts = { blocked: 0, needsInput: 0, call: 0, review: 0, checking: 0, ready: 0 };
     const labelOf = (key: string | undefined) => {
       const label = variables?.find((variable) => variable.key === key)?.label;
       return label ? readableLayerName(label) : undefined;
     };
-    const note = (key: string, message: string, row: RequestRow) => {
+    const note = (key: string, message: string, row: string) => {
       const finding = findings.get(key) ?? { message, rows: [] };
-      finding.rows.push(row.label || 'Untitled');
+      finding.rows.push(row);
       findings.set(key, finding);
     };
     for (const row of rows) {
-      const status = rowStatusOf(
-        clientErrors.get(row.id) ?? {},
-        liveFit.get(row.id),
-        liveRefusals.get(row.id),
-      );
-      // An AI proposal nobody kept is skipped by Render, so it is not counted as one that can.
-      if (isRenderable(status) && !proposed.has(row.id)) counts.renderable += 1;
-      if (status.state === 'invalid') {
+      const status = statuses.get(row.id);
+      const label = row.label || 'Untitled';
+      if (status?.state === 'invalid') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
-        if (Object.keys(status.errors).every((key) => missing.includes(key)))
-          counts.needsInput += 1;
+        if (Object.keys(status.errors).every((key) => missing.includes(key))) counts.needsInput += 1;
         else counts.blocked += 1;
-        for (const [key, message] of Object.entries(status.errors)) note(key, message, row);
-      } else if (status.state === 'refused') {
-        counts.refused += 1;
-        note(`refused:${status.reason}`, status.reason, row);
-      } else if (status.state === 'fonts') {
-        counts.fonts += 1;
-        note(`fonts:${status.reason}`, `Fonts missing: ${status.reason}`, row);
-      } else if (status.state === 'warning') {
-        counts.warned += 1;
+        for (const [key, message] of Object.entries(status.errors)) note(key, message, label);
+      } else if (status?.state === 'refused') {
+        counts.blocked += 1;
+        note(`server:${status.reason}`, status.reason, label);
+      } else if (status?.state === 'call') {
+        // Renders once someone says so at Render: a question, not a block.
+        counts.call += 1;
+        for (const call of status.calls) note(call.override, call.message, label);
+      } else if (status?.state === 'unchecked' && status.findings.length) {
+        counts.review += 1;
         for (const item of status.findings)
-          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), row);
-      } else if (status.state === 'unchecked' && status.findings.length) counts.unchecked += 1;
+          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), label);
+      } else if (status?.state === 'unchecked' && fitLoading) counts.checking += 1;
+      else counts.ready += 1;
     }
-    return {
-      ...counts,
-      fitUnmeasured,
-      fitLoading: fit.state === 'loading',
-      findings: [...findings.entries()],
-    };
-  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured, proposed, fit.state]);
+    return { ...counts, findings: [...findings.entries()] };
+  }, [rows, statuses, variables, fitLoading]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
+  // Where renders go: the brand's rooms and ad accounts, the open set's defaults, each row's own.
+  const destinations = useDeliveryDestinations(brandId);
+  const replaceFormats = useReplaceFormats(brandId, templateKey, contract);
+  const setSettings = activeSet?.settings ?? FORGE_RENDER_SET_DEFAULT_SETTINGS;
+  const slackName =
+    typeof destinations.slack === 'object' && 'destinations' in destinations.slack
+      ? (destinations.slack.destinations.find((room) => room.id === setSettings.slackDestinationId)
+          ?.channelName ?? null)
+      : null;
+  const roomNames = useSetApprovalRooms(
+    brandId,
+    web ? null : setSettings.approvalDestinationIds,
+  ).names;
+  /** The choice belongs to the rows, so the saved set keeps it; a dry-run checked nothing of it. */
+  const changeDelivery = (rowIds: string | string[], delivery: ApiRenderDeliveryTarget | null) => {
+    const ids = new Set(typeof rowIds === 'string' ? [rowIds] : rowIds);
+    record();
+    setRows((current) =>
+      current.map((row) => {
+        if (!ids.has(row.id)) return row;
+        const { delivery: _previous, ...rest } = row;
+        return delivery ? { ...rest, delivery } : rest;
+      }),
+    );
+  };
+  // Each rendered row's newest job, polled until it settles — shown in its Status cell for as long
+  // as the row still is what was rendered.
+  const firedIds = Object.values(fired).map((item) => item.jobId);
+  const { jobs: firedJobs, refreshJobs: refreshFired } = useApiRenderJobs({
+    brandId: firedIds.length ? brandId : null,
+    trackedIds: firedIds,
+  });
+  const firedKey = firedIds.join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new batch is a new read.
+  useEffect(() => {
+    // A failed read keeps the jobs the batch handed back; the hook's poll retries.
+    if (firedKey) refreshFired({ preferCache: true }).catch(() => undefined);
+  }, [firedKey]);
+  const runs = useMemo(() => {
+    const byId = new Map(firedJobs.map((job) => [job.id, job]));
+    const next = new Map<string, ApiRenderJob>();
+    for (const [rowId, item] of Object.entries(fired)) {
+      const job =
+        byId.get(item.jobId) ??
+        queryClient.getQueryData<ApiRenderJob>(forgeQueryKeys.renderJob(brandId, item.jobId));
+      if (job && preflightSnapshot(rows, rowId) === item.snapshot) next.set(rowId, job);
+    }
+    return next;
+  }, [fired, firedJobs, rows, brandId, queryClient]);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
   ).length;
@@ -2371,8 +2381,21 @@ export function RenderRequestsGrid({
         hiddenColumns,
         generating: generating !== null,
         liveFit,
-        fitLoading: fit.state === 'loading',
-        refusals: liveRefusals,
+        statuses,
+        fitLoading,
+        calls,
+        runs,
+        destination: web
+          ? undefined
+          : {
+              meta: destinations.meta,
+              outputs: replaceFormats,
+              setDefault: setSettings.metaTarget,
+              onDeliveryChange: changeDelivery,
+              onFormatChange: (rowId, outputId) =>
+                // A replace swaps one file, so the row renders that one format — and says so.
+                actions.updateRow(rowId, (current) => ({ ...current, outputIds: [outputId] })),
+            },
       }
     : undefined;
   const table = useReactTable({
@@ -2403,29 +2426,23 @@ export function RenderRequestsGrid({
   const actionContext: GridActionContext | null = contract
     ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
     : null;
-  const canFork =
-    selected.length > 0 &&
-    rows.length < MAX_BATCH_ROWS &&
-    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
-  // A row can render unless it has a wrong value, a refusal a review found, or is an AI proposal
-  // nobody kept. Render reviews the selected rows that can, and the review lists the rest and why.
-  /** Why a selected row is left out of the batch; undefined when it can render. */
-  const skipReason = (row: RequestRow): string | undefined => {
-    const [key, message] = Object.entries(clientErrors.get(row.id) ?? {})[0] ?? [];
-    if (key)
-      return `${readableLayerName(variables?.find((variable) => variable.key === key)?.label ?? key)}: ${message}`;
-    const refusal = liveRefusals.get(row.id);
-    if (refusal && !refusal.font) return refusal.message;
-    if (proposed.has(row.id)) return 'Proposed by AI. Keep or discard it first.';
-    return undefined;
+  // Render opens the confirmation over the selected rows that can render, and lists the rest with
+  // why: a wrong value, or a refusal no tick can override, leaves its row behind, never the batch.
+  // A row whose layout is still being measured, and one that needs a person's call, both go: the
+  // confirmation's one preflight is the server's answer.
+  const selectedReady = selected.filter((row) => isRenderable(statusOf(row.id)));
+  const skipped = selected.filter((row) => !isRenderable(statusOf(row.id)));
+  /** Why a selected row stays behind, in the words its Status cell uses. */
+  const skipReason = (row: RequestRow): string => {
+    const status = statusOf(row.id);
+    if (status.state === 'refused') return status.reason;
+    const [key, message] =
+      status.state === 'invalid' ? (Object.entries(status.errors)[0] ?? []) : [];
+    return key && message
+      ? `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`
+      : 'Fix this row before rendering.';
   };
-  const selectedReady = selected.filter((row) => skipReason(row) === undefined);
-  const readyToFire =
-    Boolean(userId) &&
-    !updateRequired &&
-    selectedReady.length > 0 &&
-    selectedReady.length <= MAX_BATCH_ROWS;
-  // What Render will make, counted the way the review tray counts it.
+  // What Render will make, counted the way the render confirmation counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
     for (const row of selectedReady) {
@@ -2436,25 +2453,26 @@ export function RenderRequestsGrid({
         for (const ratio of renderedRatios(contract, outputIds))
           files.byRatio.set(ratio, (files.byRatio.get(ratio) ?? 0) + 1);
     }
-
-  const skippedCount = selected.length - selectedReady.length;
-  const fireHint = !userId
-    ? SIGNED_OUT
-    : held
-      ? HELD_SET
-      : updateRequired
-        ? 'Update this set to the current template first'
-        : selected.length === 0
-          ? 'Select the rows to render'
+  const canFork =
+    selected.length > 0 &&
+    rows.length < MAX_BATCH_ROWS &&
+    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
+  const renderingProposed = selected.some((row) => proposed.has(row.id));
+  const canRender = !updateRequired && !renderingProposed && selected.length <= MAX_BATCH_ROWS;
+  const readyToFire = canRender && selectedReady.length > 0;
+  const fireHint = updateRequired
+    ? 'Update this set to the current template first'
+    : renderingProposed
+      ? 'Keep or discard the proposed rows first'
+      : selected.length === 0
+        ? 'Select the rows to render'
+        : selected.length > MAX_BATCH_ROWS
+          ? `At most ${MAX_BATCH_ROWS} renders per batch`
           : selectedReady.length === 0
-            ? (selected.map(skipReason).find(Boolean) ?? 'No selected row can render')
-            : selectedReady.length > MAX_BATCH_ROWS
-              ? `At most ${MAX_BATCH_ROWS} renders per batch`
+            ? skipReason(selected[0]!)
+            : skipped.length
+              ? `${skipped.length} selected ${skipped.length === 1 ? 'row' : 'rows'} can’t render and ${skipped.length === 1 ? 'is' : 'are'} skipped`
               : null;
-  const skipNote =
-    readyToFire && skippedCount
-      ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
-      : null;
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2521,17 +2539,9 @@ export function RenderRequestsGrid({
     setImportOpen(true);
   };
 
-  // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
-  // of Render, so it is silent — and a set with no edits is already saved, so opening the review
-  // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async () => {
-    // A pass about the review this replaces must not write into this one.
-    asking.current?.abort();
-    // A held batch is what Render opens until the ledger lets it go: read-only, nothing to sign.
-    if (held) {
-      trayPanel.current?.resize(TRAY_OPEN_SIZE);
-      return;
-    }
+  // Saves the set, then opens the render confirmation on the exact selection. The save is part of
+  // Render, so it is silent — and a set with no edits is already saved, so it writes no revision.
+  const openConfirm = async () => {
     if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
@@ -2540,31 +2550,79 @@ export function RenderRequestsGrid({
           ? activeSet
           : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
-      const current = latestRows.current;
-      const signature = reviewSignature(
-        current,
-        current.filter((row) => rowSelection[row.id]).map((row) => row.id),
-        submittedSet.revision,
-        allOutputIdsOf(contract),
-      );
-      const rowIds = selectedReady.map((row) => row.id);
-      // One line per row: its name and the one reason it is left out.
-      const skippedRows = selected.flatMap((row) => {
-        const message = skipReason(row);
-        return message ? [{ label: row.label.trim() || 'Untitled', message }] : [];
+      setSubset({
+        rowIds: selectedReady.map((row) => row.id),
+        skippedRows: skipped.map((row) => ({
+          label: row.label.trim() || 'Untitled',
+          message: skipReason(row),
+        })),
       });
-      setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature, rowIds, skippedRows }));
+      setConfirming(true);
     } finally {
       setBusy(null);
     }
   };
 
-  // The batch is rebuilt from the rows on screen every render, never kept from when the review
-  // opened: a stale review refuses to confirm, and a current one signs exactly these records.
+  /** A queued batch: each row shows its run in Status, and refused rows are one click from resend. */
+  const onBatchFired = (firedRows: FiredRow[]) => {
+    const current = latestRows.current;
+    setFired((previous) => ({
+      ...previous,
+      ...Object.fromEntries(
+        firedRows.map(({ rowId, job }) => [
+          rowId,
+          { jobId: job.id, snapshot: preflightSnapshot(current, rowId) },
+        ]),
+      ),
+    }));
+    setRowSelection({});
+    if (contract)
+      // The set's render count reads this; the fired jobs are its newest.
+      void queryClient.invalidateQueries({
+        queryKey: templateJobsKey(brandId, contract.template.key),
+        exact: true,
+      });
+    // Failed with no task: the render API never took it (UTEC 09-29: a 503 on row 18 of 24).
+    const unsent = firedRows.filter(({ job }) => job.status === 'failed' && !job.taskUid);
+    if (unsent.length)
+      toast.error(
+        `${unsent.length} ${unsent.length === 1 ? 'row was' : 'rows were'} not sent — the render service refused ${unsent.length === 1 ? 'it' : 'them'}.`,
+        {
+          action: {
+            label: `Resend ${unsent.length}`,
+            onClick: () => {
+              setRowSelection(Object.fromEntries(unsent.map(({ rowId }) => [rowId, true])));
+              setSubset(null);
+              setConfirming(true);
+            },
+          },
+        },
+      );
+  };
+
+  // The batch is rebuilt from the rows on screen every render, never kept from when the dialog
+  // opened: each record pins the saved revision, and the dialog re-checks what changed. A row the
+  // dialog finds its own preflight refusing leaves the batch for the skipped list.
   const batch = useMemo(() => {
-    if (!review || !activeSet) return { rows: [], records: [] as ApiRenderBatchRecord[] };
-    const chosen = rows.filter((row) => review.rowIds.includes(row.id));
+    if (!confirming || !activeSet)
+      return {
+        rows: [],
+        records: [] as ApiRenderBatchRecord[],
+        calls: [] as Array<{ override: RenderOverride; message: string }>,
+        skippedRows: [] as Array<{ label: string; message: string }>,
+      };
+    const picked = rows.filter((row) =>
+      subset ? subset.rowIds.includes(row.id) : rowSelection[row.id],
+    );
+    const refused = picked.flatMap((row) => {
+      const status = statuses.get(row.id);
+      return status?.state === 'refused'
+        ? [{ label: row.label.trim() || 'Untitled', message: status.reason }]
+        : [];
+    });
+    const chosen = picked.filter((row) => statuses.get(row.id)?.state !== 'refused');
     return {
+      skippedRows: [...(subset?.skippedRows ?? []), ...refused],
       rows: chosen.map((row) => ({
         rowId: row.id,
         label: row.label.trim() || 'Untitled',
@@ -2587,116 +2645,9 @@ export function RenderRequestsGrid({
           ...(effectiveEncode(rows, row.id) ? { encode: effectiveEncode(rows, row.id) } : {}),
         }),
       ),
+      calls: chosen.flatMap((row) => calls.get(row.id) ?? []),
     };
-  }, [review, activeSet, rows, rowSelection]);
-  const stale =
-    review !== null &&
-    contract !== null &&
-    review.signature !==
-      reviewSignature(rows, selectedIds, activeSet?.revision ?? null, allOutputIdsOf(contract));
-
-  // ponytail: legacy-batch bridge; delete when the tray sends render-advisories-v2 (E2)
-  // Today's batch preflight refuses all-or-nothing and names no row. On a whole-batch 422 no tick
-  // overrides, each row's own preflight is asked, three at a time and never retried; the review
-  // then runs again over the rows that passed, the refused ones listed as skipped. A pass is
-  // abandoned by a new pass, a new review (Render), Check again, closing the review or the grid;
-  // and it writes only into the review it started for.
-  const asking = useRef<AbortController | null>(null);
-  useEffect(() => {
-    if (!review) asking.current?.abort();
-  }, [review]);
-  useEffect(() => () => asking.current?.abort(), []);
-  const askRowsAlone = async (rowIds: string[]): Promise<RowsAsked> => {
-    const asked: RowsAsked = { refused: 0, unchecked: 0, setChanged: false };
-    if (!contract || !review) return asked;
-    const reviewKey = review.key;
-    asking.current?.abort();
-    const abort = new AbortController();
-    asking.current = abort;
-    const current = latestRows.current;
-    const keyOf = (id: string) =>
-      refusalKey(current, id, templateRef, contract, activeSet?.revision ?? null);
-    const queue = batch.records.filter((record) => rowIds.includes(record.renderSetRowId ?? ''));
-    const found = new Map<string, RowRefusal & { key: string }>();
-    const ask = async () => {
-      for (let record = queue.shift(); record && !abort.signal.aborted; record = queue.shift()) {
-        const rowId = record.renderSetRowId as string;
-        const { delivery: _delivery, ...alone } = record;
-        // The row's own delivery, as the batch sends it at confirm: a Meta refusal is the row's.
-        const own = current.find((row) => row.id === rowId)?.delivery;
-        try {
-          await apiRendersApi.preflight(
-            {
-              brandId,
-              ...(bindingId ? { bindingId } : {}),
-              templateKey: contract.template.key,
-              contractHash: contract.template.contractHash,
-              ...(templateRef ? { templateRef } : {}),
-              ...alone,
-              ...(isResolvedDelivery(own) ? { delivery: own } : {}),
-            },
-            { retry: false },
-          );
-        } catch (error) {
-          const refusal = refusalOf(error);
-          if (refusal) found.set(rowId, { ...refusal, key: keyOf(rowId) });
-          else if (isSetChanged(error)) asked.setChanged = true;
-          else asked.unchecked += 1;
-        }
-      }
-    };
-    await Promise.all([ask(), ask(), ask()]);
-    if (abort.signal.aborted) return asked;
-    setRefusals((previous) => {
-      const next = new Map([...previous].filter(([id]) => !rowIds.includes(id)));
-      for (const [id, refusal] of found) next.set(id, refusal);
-      return next;
-    });
-    // Missing fonts still render (Render anyway): only the rest leave the review.
-    const refused = rowIds.filter((id) => found.get(id) && !found.get(id)!.font);
-    asked.refused = refused.length;
-    const left = rowIds.filter((id) => !refused.includes(id));
-    if (refused.length && left.length && !asked.setChanged)
-      setReview((previous) =>
-        previous?.key === reviewKey
-          ? {
-              ...previous,
-              key: previous.key + 1,
-              rowIds: left,
-              skippedRows: [
-                ...previous.skippedRows,
-                ...refused.map((id) => ({
-                  label: current.find((row) => row.id === id)?.label.trim() || 'Untitled',
-                  message: found.get(id)!.message,
-                })),
-              ],
-            }
-          : previous,
-      );
-    return asked;
-  };
-
-  /** After a batch lands, from a confirm or a held batch's Retry: the same bookkeeping. */
-  const afterFire = () => {
-    setRowSelection({});
-    // The rail counts renders from this read; the fired jobs are its newest.
-    if (contract)
-      void queryClient.invalidateQueries({
-        queryKey: templateJobsKey(brandId, contract.template.key),
-        exact: true,
-      });
-  };
-
-  // The tray unfolds for a review or a held batch and folds back when neither is left; a drag that
-  // folds it ends a review.
-  const trayShown = review !== null || held !== null || landed !== null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only opening and closing move the panel.
-  useEffect(() => {
-    const panel = trayPanel.current;
-    if (!panel) return;
-    if (trayShown && panel.isCollapsed()) panel.resize(TRAY_OPEN_SIZE);
-    else if (!trayShown && !panel.isCollapsed()) panel.collapse();
-  }, [trayShown]);
+  }, [confirming, subset, activeSet, rows, rowSelection, calls, statuses]);
 
   // --- keyboard ---------------------------------------------------------------------------
   /** The same column's field one row down (or up), selected for typing over. */
@@ -2795,12 +2746,13 @@ export function RenderRequestsGrid({
   });
 
   // --- render -----------------------------------------------------------------------------
+  const ready = readiness.ready;
   // The pinned revision's own file when the set pins one, else the template's source.
   const settingsAssetId =
     pinnedRevisionLabel?.revision.sourceAssetId ?? contract?.template.sourceAssetId ?? null;
   const previewId = previewRowId ?? (selected.length === 1 ? selected[0]!.id : null);
   return (
-    // Bounded by the tab: the toolbar stays put, the rows and the review tray share the rest.
+    // Bounded by the tab: the toolbar and set tabs stay put, the rows take the rest.
     <div className="flex h-full min-h-0 flex-col gap-2">
       {publishedRevisions.length || activeSet?.templateRevision ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -2884,7 +2836,7 @@ export function RenderRequestsGrid({
         }}
         checkpoints={checkpoints}
         templateRef={templateRef}
-        onTemplateRefChange={setTemplateRef}
+        onTemplateRefChange={pinCheckpoint}
         ready={contract !== null}
         sourceVariants={revisionVariants ? [] : sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
@@ -2936,23 +2888,18 @@ export function RenderRequestsGrid({
                     saveState.repair && onOpenTemplate && settingsAssetId
                       ? () => onOpenTemplate({ assetId: settingsAssetId, tab: 'variants' })
                       : undefined,
+                  onRetry: () => void saveNow(),
                 }
               : activeSet
                 ? { phase: 'saved', at: activeSet.updatedAt }
                 : null
         }
-        canSave={Boolean(bindingId) && rows.length > 0}
-        onSave={saveNow}
-        selectedCount={selected.length}
+        selectedCount={selectedReady.length}
         files={{ ...files, byRatio: [...files.byRatio] }}
-        // While a batch is held, Render opens it: enabled whatever is selected.
-        readyToFire={readyToFire || held !== null}
+        readyToFire={readyToFire}
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
-        onRender={() => void openReview()}
-        renderCount={selectedReady.length}
-        skipNote={held ? null : skipNote}
-        heldLabel={held ? 'Unconfirmed render — check' : undefined}
+        onRender={() => void openConfirm()}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3020,16 +2967,13 @@ export function RenderRequestsGrid({
             size="xs"
             variant="outline"
             disabled={busy === 'saving'}
-            onClick={() => {
-              const update = async () => {
-                setBusy('saving');
-                try {
-                  await saveRenderSet();
-                } finally {
-                  setBusy(null);
-                }
-              };
-              if (!askIfHeld(activeSet, () => void update())) void update();
+            onClick={async () => {
+              setBusy('saving');
+              try {
+                await saveRenderSet();
+              } finally {
+                setBusy(null);
+              }
             }}
           >
             Update set
@@ -3115,6 +3059,60 @@ export function RenderRequestsGrid({
       ) : null}
       {contract ? (
         <>
+          <RenderSetTabs
+            brandId={brandId}
+            templateKey={contract.template.key}
+            contractHash={contract.template.contractHash}
+            sets={renderSets}
+            activeSet={activeSet}
+            activeRows={rows.length}
+            dirty={dirty}
+            confirmDiscard={confirmDiscard}
+            canCreate={Boolean(bindingId)}
+            draftAvailable={draftOffer !== null}
+            delivery={
+              activeSet ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="h-6 max-w-[60ch] truncate px-1.5 font-normal text-muted-foreground"
+                  title="Where this set's renders go — click to change"
+                  onClick={() => setSettingsFor(activeSet)}
+                >
+                  <span className="truncate">
+                    → {web ? 'Library' : deliverySummary(setSettings, slackName, roomNames)}
+                  </span>
+                </Button>
+              ) : null
+            }
+            onSwitch={loadRenderSet}
+            onNew={async (name) => {
+              const rowsToSave =
+                renderSetLoad.initialFailed || renderSetLoad.unassignedDraft
+                  ? latestRows.current
+                  : seededRows(contract);
+              const created = await createSet(name, rowsToSave, {
+                revisionRef: templateRevision ?? undefined,
+              });
+              if (created) showRows(rowsToSave, rowsToSave, contract);
+            }}
+            onRename={(set, name) => updateSetDetails(set, { name })}
+            onDescribe={(set, description) => updateSetDetails(set, { description })}
+            onDelete={deleteSet}
+            onDuplicate={(set) => void duplicateSet(set)}
+            onHistory={setHistoryFor}
+            onUpdate={() => void saveNow()}
+            onSettings={setSettingsFor}
+            onImportDraft={() => {
+              if (!draftOffer) return;
+              activeSetRef.current = null;
+              savedBase.current = [];
+              setActiveSet(null);
+              showRows(draftOffer, null, contract);
+              setDraftOffer(null);
+            }}
+          />
           <section
             aria-label="Selected rows"
             hidden={selected.length === 0}
@@ -3140,6 +3138,84 @@ export function RenderRequestsGrid({
                     </Button>
                   ))
               : null}
+            {web ? null : (
+              <>
+                <Popover open={sendingTo} onOpenChange={setSendingTo}>
+                  <PopoverTrigger
+                    render={
+                      <Button type="button" size="xs" variant="ghost">
+                        <Send data-icon="inline-start" /> Send to ad set…
+                      </Button>
+                    }
+                  />
+                  <PopoverContent align="start" className="w-96 p-2">
+                    <AdDrillDown
+                      brandId={brandId}
+                      adAccountId={
+                        setSettings.metaTarget?.adAccountId ??
+                        (destinations.meta !== 'loading' && destinations.meta !== 'unknown'
+                          ? (destinations.meta.adAccountId ?? undefined)
+                          : undefined)
+                      }
+                      createOnly
+                      onCancel={() => setSendingTo(false)}
+                      onPick={(target) => {
+                        changeDelivery(selectedIds, target);
+                        setSendingTo(false);
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  disabled={!selected.some((row) => row.delivery)}
+                  title={
+                    setSettings.metaTarget
+                      ? 'Back to the set’s default ad set'
+                      : 'Back to the Library only — this set has no default ad set'
+                  }
+                  onClick={() => changeDelivery(selectedIds, null)}
+                >
+                  <Undo2 data-icon="inline-start" /> Use set default
+                </Button>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Button type="button" size="xs" variant="ghost">
+                        <ClipboardPaste data-icon="inline-start" /> Ad targets…
+                      </Button>
+                    }
+                  />
+                  <PopoverContent
+                    align="start"
+                    className="max-h-[70vh] w-[28rem] overflow-y-auto p-2"
+                  >
+                    <DeliveryTargetPicker
+                      brandId={brandId}
+                      meta={destinations.meta}
+                      rows={selected.map((row) => ({
+                        rowId: row.id,
+                        label: row.label.trim() || 'Untitled',
+                        labelPath: rowBreadcrumb(rows, row.id),
+                        outputIds: effectiveOutputIds(rows, row.id),
+                        ...(row.delivery ? { delivery: toPreflightDelivery(row.delivery) } : {}),
+                      }))}
+                      outputs={replaceFormats}
+                      fallback={setSettings.metaTarget ? 'Set default ad set' : 'Library only'}
+                      onDeliveryChange={changeDelivery}
+                      onFormatChange={(rowId, outputId) =>
+                        actions.updateRow(rowId, (current) => ({
+                          ...current,
+                          outputIds: [outputId],
+                        }))
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
             <Button
               type="button"
               size="icon-xs"
@@ -3151,305 +3227,154 @@ export function RenderRequestsGrid({
               <X aria-hidden />
             </Button>
           </section>
-          <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
-            <ResizablePanel id="rows" minSize="30%" className="min-h-0">
-              <ResizablePanelGroup
-                orientation="horizontal"
-                className="items-stretch"
-                defaultLayout={panelsLayout.defaultLayout}
-                onLayoutChanged={panelsLayout.onLayoutChanged}
-              >
-                <ResizablePanel
-                  id="render-sets"
-                  panelRef={railPanel}
-                  collapsible
-                  collapsedSize={RAIL_COLLAPSED_SIZE}
-                  defaultSize="16%"
-                  minSize="12rem"
-                  maxSize="30%"
-                  className="min-w-0"
-                  onResize={() => setRailCollapsed(railPanel.current?.isCollapsed() ?? false)}
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="min-h-0 flex-1 items-stretch"
+            defaultLayout={panelsLayout.defaultLayout}
+            onLayoutChanged={panelsLayout.onLayoutChanged}
+          >
+            <ResizablePanel id="render-grid" defaultSize="72%" minSize="40%" className="min-w-0">
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: keys typed in the grid's own fields bubble here — Enter moves down a column, ⌘D fills down. */}
+              <div ref={gridBox} className="h-full min-h-0" onKeyDown={onGridKeyDown}>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  accessibility={{ announcements }}
+                  onDragMove={onDragMove}
+                  onDragEnd={onDragEnd}
+                  onDragCancel={() => setDropHint(null)}
                 >
-                  <RenderSetRail
-                    brandId={brandId}
-                    templateKey={contract.template.key}
-                    contractHash={contract.template.contractHash}
-                    sets={renderSets}
-                    activeSet={activeSet}
-                    activeRows={rows.length}
-                    confirmDiscard={confirmDiscard}
-                    canCreate={Boolean(bindingId)}
-                    draftAvailable={draftOffer !== null}
-                    collapsed={railCollapsed}
-                    onCollapsedChange={(collapse) =>
-                      collapse ? railPanel.current?.collapse() : railPanel.current?.expand()
-                    }
-                    onSwitch={loadRenderSet}
-                    onNew={async (name) => {
-                      const rowsToSave =
-                        renderSetLoad.initialFailed || renderSetLoad.unassignedDraft
-                          ? latestRows.current
-                          : seededRows(contract);
-                      const created = await createSet(name, rowsToSave, {
-                        revisionRef: templateRevision ?? undefined,
-                      });
-                      if (created) showRows(rowsToSave, rowsToSave, contract);
-                    }}
-                    onRename={(set, name) => updateSetDetails(set, { name })}
-                    onDescribe={(set, description) => updateSetDetails(set, { description })}
-                    onDelete={deleteSet}
-                    onDuplicate={(set) => void duplicateSet(set)}
-                    onHistory={setHistoryFor}
-                    onUpdate={() => {
-                      if (!askIfHeld(activeSet, () => void saveNow())) void saveNow();
-                    }}
-                    onImportDraft={() => {
-                      if (!draftOffer) return;
-                      const importDraft = () => {
-                        activeSetRef.current = null;
-                        savedBase.current = [];
-                        setActiveSet(null);
-                        showRows(draftOffer, null, contract);
-                        setDraftOffer(null);
-                      };
-                      if (!askIfHeld(activeSet, importDraft)) importDraft();
-                    }}
-                  />
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel
-                  id="render-grid"
-                  defaultSize="60%"
-                  minSize="40%"
-                  className="min-w-0"
-                >
-                  {/* biome-ignore lint/a11y/noStaticElementInteractions: keys typed in the grid's own fields bubble here — Enter moves down a column, ⌘D fills down. */}
-                  <div ref={gridBox} className="h-full min-h-0" onKeyDown={onGridKeyDown}>
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      accessibility={{ announcements }}
-                      onDragMove={onDragMove}
-                      onDragEnd={onDragEnd}
-                      onDragCancel={() => setDropHint(null)}
-                    >
-                      <SortableContext items={table.getRowModel().rows.map((row) => row.id)}>
-                        <RowDropHintContext.Provider value={dropHint}>
-                          <DataGrid
-                            table={table}
-                            className="max-h-full"
-                            onPaste={onPaste}
-                            onRowClick={(row) => setPreviewRowId(row.id)}
-                            RowComponent={SortableRequestRow}
-                            contextMenu={
-                              actionContext
-                                ? {
-                                    content: (target) => (
-                                      <ActionMenuItems
-                                        kind="context"
-                                        groups={menuFor(
-                                          actionContext,
-                                          target,
-                                          rowAbove(target.rowId),
-                                          HIDEABLE,
-                                        )}
-                                        focusAfter={menuFocus}
-                                      />
-                                    ),
-                                    finalFocus: takeFocusAfter(menuFocus),
-                                  }
-                                : undefined
-                            }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.fitLoading ? 'Checking layout…' : `${readiness.renderable} can render`} • ${selected.length} selected`}
-                            empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
-                          />
-                        </RowDropHintContext.Provider>
-                      </SortableContext>
-                    </DndContext>
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel
-                  id="render-preview"
-                  defaultSize="24%"
-                  minSize="20%"
-                  className="min-w-0"
-                >
-                  <div className="flex h-full min-h-0 flex-col">
-                    <div className="min-h-0 flex-1">
-                      <RenderPreviewPanel
-                        brandId={brandId}
-                        contract={contract}
-                        rows={rows}
-                        rowId={previewId}
-                        renderSetId={activeSet?.id ?? null}
-                        refusal={previewId ? liveRefusals.get(previewId) : undefined}
-                        onRowChange={setPreviewRowId}
+                  <SortableContext items={table.getRowModel().rows.map((row) => row.id)}>
+                    <RowDropHintContext.Provider value={dropHint}>
+                      <DataGrid
+                        table={table}
+                        className="max-h-full"
+                        onPaste={onPaste}
+                        onRowClick={(row) => setPreviewRowId(row.id)}
+                        RowComponent={SortableRequestRow}
+                        contextMenu={
+                          actionContext
+                            ? {
+                                content: (target) => (
+                                  <ActionMenuItems
+                                    kind="context"
+                                    groups={menuFor(
+                                      actionContext,
+                                      target,
+                                      rowAbove(target.rowId),
+                                      HIDEABLE,
+                                    )}
+                                    focusAfter={menuFocus}
+                                  />
+                                ),
+                                finalFocus: takeFocusAfter(menuFocus),
+                              }
+                            : undefined
+                        }
+                        groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${ready} ready • ${selected.length} selected`}
+                        empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                       />
-                    </div>
-                    {/* The previewed row's fields at the pane's full width: room for long copy. */}
-                    <section
-                      aria-label="Fields"
-                      className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        aria-expanded={fieldsOpen}
-                        className="h-8 shrink-0 justify-start gap-1.5 rounded-none px-[var(--card-pad)] text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-transparent hover:text-foreground"
-                        onClick={() => {
-                          setFieldsOpen(!fieldsOpen);
-                          writeStored(FIELDS_OPEN_KEY, !fieldsOpen);
-                        }}
-                      >
-                        {fieldsOpen ? (
-                          <ChevronDown className="size-3" aria-hidden />
-                        ) : (
-                          <ChevronRight className="size-3" aria-hidden />
-                        )}
-                        Fields
-                        <span className="min-w-0 truncate font-normal normal-case tracking-normal">
-                          {previewId
-                            ? (rows.find((row) => row.id === previewId)?.label ?? '')
-                            : 'Pick a row'}
-                        </span>
-                      </Button>
-                      {fieldsOpen && previewId ? (
-                        <div className="min-h-0 overflow-y-auto px-[var(--card-pad)] pb-2">
-                          <RowFields table={table} rowId={previewId} />
-                        </div>
-                      ) : null}
-                    </section>
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
+                    </RowDropHintContext.Provider>
+                  </SortableContext>
+                </DndContext>
+              </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel
-              id="review"
-              panelRef={trayPanel}
-              collapsible
-              collapsedSize={TRAY_COLLAPSED_SIZE}
-              defaultSize={TRAY_COLLAPSED_SIZE}
-              minSize="9rem"
-              className="min-h-0"
-              onResize={(_size, _id, previous) => {
-                if (previous && review && trayPanel.current?.isCollapsed()) setReview(null);
-              }}
-            >
-              {held && holdScope ? (
-                <HeldBatchView
-                  brandId={brandId}
-                  scope={holdScope}
-                  held={held}
-                  current={selectedReady.map((row) => ({
-                    id: row.id,
-                    label: row.label.trim() || 'Untitled',
-                  }))}
-                  // Rows and selection only: a rename moves the set revision, not the batch.
-                  currentSnapshot={rowsOfSignature(
-                    reviewSignature(rows, selectedIds, null, allOutputIdsOf(contract)),
-                  )}
-                  templateNow={{
-                    contractHash: contract.template.contractHash,
-                    templateRef: templateRef ?? null,
-                  }}
-                  // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
-                  // batchId once RenderJobsGrid can open one batch from outside
-                  onOpenLedger={() => onFired?.([])}
-                  onLanded={(jobs) => {
-                    setLanded(jobs);
-                    afterFire();
-                  }}
-                />
-              ) : landed ? (
-                <LandedBatchView
-                  brandId={brandId}
-                  jobs={landed}
-                  onShowRow={showRow}
-                  onOpenLedger={(jobIds) => onFired?.(jobIds)}
-                  onClose={() => setLanded(null)}
-                />
-              ) : review ? (
-                <RenderReviewTray
-                  brandId={brandId}
-                  bindingId={bindingId}
-                  templateKey={contract.template.key}
-                  contractHash={contract.template.contractHash}
-                  templateRef={templateRef}
-                  templateRevisionId={activeSet?.templateRevision?.revisionId ?? null}
-                  contract={contract}
-                  rows={batch.rows}
-                  skippedRows={review.skippedRows}
-                  records={batch.records}
-                  reviewKey={review.key}
-                  stale={stale}
-                  recheckBlocked={fireHint}
-                  rechecking={busy === 'firing'}
-                  finalBlocked={finalBlocked}
-                  onRecheck={() => void openReview()}
-                  holdScope={holdScope}
-                  reviewSnapshot={rowsOfSignature(review.signature)}
-                  onHeld={() => setReview(null)}
-                  onRefused={askRowsAlone}
-                  onCheckAgain={() => asking.current?.abort()}
-                  onPassed={(ids) =>
-                    setRefusals((previous) =>
-                      ids.some((id) => previous.has(id))
-                        ? new Map([...previous].filter(([id]) => !ids.includes(id)))
-                        : previous,
-                    )
-                  }
-                  onDeliveryChange={(rowId, delivery) => {
-                    // The choice belongs to the row, so the next review and the saved set keep it.
-                    // Not `updateRow`: where a render goes changes nothing the dry-run checked.
-                    record();
-                    setRows((current) =>
-                      current.map((row) => {
-                        if (row.id !== rowId) return row;
-                        const { delivery: _previous, ...rest } = row;
-                        return delivery ? { ...rest, delivery } : rest;
-                      }),
-                    );
-                  }}
-                  onClose={() => setReview(null)}
-                  onFired={afterFire}
-                  onOpenLedger={(jobIds) => onFired?.(jobIds)}
-                  onShowRow={showRow}
-                />
-              ) : (
-                <section aria-label="Readiness" className="flex h-full min-h-0 flex-col text-xs">
-                  {/* Only reports: Render in the toolbar is the one way into the review. */}
-                  <div className="flex h-10 shrink-0 items-center gap-3 px-[var(--card-pad)]">
-                    <p className="min-w-0 truncate font-medium">
-                      {readinessSummary(readiness, rows.length)}
-                    </p>
-                  </div>
-                  <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-[var(--card-pad)] pb-2 text-muted-foreground">
-                    {readiness.findings.length ? (
-                      <ul className="flex flex-col gap-0.5">
-                        {readiness.findings.map(([key, finding]) => (
-                          <li key={key}>
-                            {contract.variables.find((variable) => variable.key === key)?.label ??
-                              'Check'}
-                            : {finding.message} — {finding.rows.join(', ')}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <p>
-                      To add a field or change the layout, ask a designer to update the template.
-                      {contract.template.contractSource === 'template_forge'
-                        ? ''
-                        : ' This template sets no text limits, so check long text in the preview.'}
-                      {fireHint && selected.length ? ` ${fireHint}.` : ''}
-                    </p>
-                  </div>
+            <ResizablePanel id="render-preview" defaultSize="28%" minSize="20%" className="min-w-0">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="min-h-0 flex-1">
+                  <RenderPreviewPanel
+                    brandId={brandId}
+                    contract={contract}
+                    rows={rows}
+                    rowId={previewId}
+                    renderSetId={activeSet?.id ?? null}
+                    refusal={(() => {
+                      const status = previewId ? statusOf(previewId) : null;
+                      return status?.state === 'refused' ? status.reason : undefined;
+                    })()}
+                    onRowChange={setPreviewRowId}
+                  />
+                </div>
+                {/* The previewed row's fields at the pane's full width: room for long copy. */}
+                <section
+                  aria-label="Fields"
+                  className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={fieldsOpen}
+                    className="h-8 shrink-0 justify-start gap-1.5 rounded-none px-[var(--card-pad)] text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-transparent hover:text-foreground"
+                    onClick={() => {
+                      setFieldsOpen(!fieldsOpen);
+                      writeStored(FIELDS_OPEN_KEY, !fieldsOpen);
+                    }}
+                  >
+                    {fieldsOpen ? (
+                      <ChevronDown className="size-3" aria-hidden />
+                    ) : (
+                      <ChevronRight className="size-3" aria-hidden />
+                    )}
+                    Fields
+                    <span className="min-w-0 truncate font-normal normal-case tracking-normal">
+                      {previewId
+                        ? (rows.find((row) => row.id === previewId)?.label ?? '')
+                        : 'Pick a row'}
+                    </span>
+                  </Button>
+                  {fieldsOpen && previewId ? (
+                    <div className="min-h-0 overflow-y-auto px-[var(--card-pad)] pb-2">
+                      <RowFields table={table} rowId={previewId} />
+                    </div>
+                  ) : null}
                 </section>
-              )}
+              </div>
             </ResizablePanel>
           </ResizablePanelGroup>
+          {/* One line under the grid: what is ready, and on request every reason a row is not. */}
+          <details className="group shrink-0 rounded-md border text-xs">
+            <summary
+              aria-label="Readiness"
+              className="flex h-8 cursor-pointer list-none items-center gap-2 px-[var(--card-pad)]"
+            >
+              <ChevronRight
+                className="size-3 shrink-0 text-muted-foreground transition-transform group-open:rotate-90"
+                aria-hidden
+              />
+              <span className="min-w-0 truncate font-medium">
+                {readinessSummary(readiness, rows.length)}
+              </span>
+              {fit.state === 'unmeasured' && rows.length ? (
+                <span className="min-w-0 truncate text-muted-foreground">
+                  · Layout fit isn’t measured for this template — rows can still render
+                </span>
+              ) : null}
+              {fireHint && selected.length ? (
+                <span className="min-w-0 truncate text-muted-foreground">· {fireHint}</span>
+              ) : null}
+            </summary>
+            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto px-[var(--card-pad)] pb-2 text-muted-foreground">
+              {readiness.findings.length ? (
+                <ul className="flex flex-col gap-0.5">
+                  {readiness.findings.map(([key, finding]) => (
+                    <li key={key}>
+                      {contract.variables.find((variable) => variable.key === key)?.label ??
+                        'Check'}
+                      : {finding.message} — {finding.rows.join(', ')}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p>
+                To add a field or change the layout, ask a designer to update the template.
+                {contract.template.contractSource === 'template_forge'
+                  ? ''
+                  : ' This template sets no text limits, so check long text in the preview.'}
+              </p>
+            </div>
+          </details>
           <RenderRowsImport
             key={`${brandId}:${contract.template.key}:${contract.template.contractHash}`}
             brandId={brandId}
@@ -3481,6 +3406,7 @@ export function RenderRequestsGrid({
           brandId={brandId}
           bindingId={bindingId}
           contract={contract}
+          renderSetId={activeSet?.id}
           parent={aiDraft?.parent ?? null}
           initialVaryKeys={aiDraft?.varyKeys ?? null}
           maxRows={MAX_BATCH_ROWS - rows.length}
@@ -3496,11 +3422,51 @@ export function RenderRequestsGrid({
           }}
         />
       ) : null}
+      {contract && activeSet ? (
+        <RenderConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          brandId={brandId}
+          bindingId={bindingId}
+          templateRef={templateRef}
+          contract={contract}
+          rows={batch.rows}
+          skippedRows={batch.skippedRows}
+          records={batch.records}
+          settings={setSettings}
+          calls={batch.calls}
+          meta={destinations.meta}
+          slack={destinations.slack}
+          outputs={replaceFormats}
+          finalBlocked={finalBlocked}
+          metaWritesAllowed={metaWritesAllowed}
+          onDeliveryChange={changeDelivery}
+          onChangeSettings={() => setSettingsFor(activeSet)}
+          onFired={onBatchFired}
+          onOpenLedger={onFired}
+          onRowsRefused={onRowsRefused}
+        />
+      ) : null}
+      <RenderSetSettingsDialog
+        brandId={brandId}
+        set={settingsFor}
+        meta={destinations.meta}
+        slack={destinations.slack}
+        web={web}
+        finalBlocked={finalBlocked}
+        metaWritesAllowed={metaWritesAllowed}
+        onOpenChange={(open) => !open && setSettingsFor(null)}
+        onSave={(settings) =>
+          settingsFor
+            ? updateSetDetails(settingsFor, { settings }, { rethrow: true })
+            : Promise.resolve()
+        }
+      />
       <SetHistoryDialog
         brandId={brandId}
         set={historyFor}
         contractHash={contract?.template.contractHash ?? ''}
-        onRestore={(revision) => restoreRevision(revision)}
+        onRestore={restoreRevision}
         onOpenChange={(open) => !open && setHistoryFor(null)}
       />
       <NameDialog
@@ -3516,31 +3482,6 @@ export function RenderRequestsGrid({
           setNameRequest(null);
         }}
       />
-      <AlertDialog
-        open={heldConfirm !== null}
-        onOpenChange={(open) => !open && setHeldConfirm(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unconfirmed render</AlertDialogTitle>
-            <AlertDialogDescription>
-              {heldConfirmCopy(heldConfirm?.copy ?? false)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const action = heldConfirm;
-                setHeldConfirm(null);
-                action?.run();
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <AlertDialog
         open={pendingDiscard !== null}
         onOpenChange={(open) => !open && setPendingDiscard(null)}

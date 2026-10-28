@@ -350,11 +350,28 @@ describe('RenderRowsImport', () => {
     await waitFor(() => expect(screen.getByText('Dropped')).toBeTruthy());
   });
 
-  test('offers a blank template download inside the dialog', () => {
+  test('cancels browser file-drop navigation while another file is being read', async () => {
+    renderImport();
+    const zone = screen.getByText(/Drop a file here or choose one/).parentElement!;
+    const file = csv('Headline\nBusy\n');
+    let finish!: (bytes: ArrayBuffer) => void;
+    spyOn(file, 'arrayBuffer').mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    chooseFile(file);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Choose XLSX or CSV' }).hasAttribute('disabled')).toBe(true));
+    for (const type of ['dragover', 'drop']) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      fireEvent(zone, event);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    finish(new TextEncoder().encode('Headline\nBusy\n').buffer);
+    await waitFor(() => expect(screen.getByText('Busy')).toBeTruthy());
+  });
+
+  test('offers a CSV template download even when the contract has no variables', () => {
     const create = spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:template');
     spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-    renderImport();
-    fireEvent.click(screen.getByRole('button', { name: 'Download blank template' }));
+    renderImport({ contract: { ...contract, variables: [] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Download CSV template' }));
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
