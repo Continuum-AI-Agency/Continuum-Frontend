@@ -255,6 +255,7 @@ const refusalKey = (
   id: string,
   templateRef: string | null,
   contract: ApiRenderTemplateContract | null,
+  revision: number | null,
 ) =>
   JSON.stringify([
     effectiveValues(rows, id),
@@ -262,20 +263,26 @@ const refusalKey = (
     effectiveOutputIds(rows, id),
     templateRef,
     contract?.template.contractHash ?? null,
+    revision,
   ]);
 
+/** A refusal about the set or its revision, not the row: the set moved, not the row's values. */
+const SET_LEVEL_CODE = /render_set|revision/;
+
 /**
- * A row's own preflight refusing it: a 422 (guardrails, fonts) or 400 about its values. Anything
- * else (an outage, a throttle, a set that moved) is no answer about the row, and is not kept.
+ * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
+ * (guardrails, fonts). Anything else (an outage, a throttle, a malformed request, a set that
+ * moved) is no answer about the row, and is not kept.
  */
 function refusalOf(error: unknown): RowRefusal | null {
-  if (!(error instanceof ApiError) || ![400, 422].includes(error.status)) return null;
+  if (!(error instanceof ApiError) || error.status !== 422) return null;
+  const code =
+    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
+  if (SET_LEVEL_CODE.test(code)) return null;
   const parsed = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
     error.payload?.guardrails,
   );
   const guardrails = (parsed.success ? parsed.data : undefined) ?? [];
-  const code =
-    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message);
   const detail = typeof error.payload?.detail === 'string' ? error.payload.detail : null;
   return {
     font: isFontPreflightRefusal(code, guardrails),
@@ -338,17 +345,19 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...(contract.encode && !isStillsOnly(contract)
       ? [{ id: 'encode', size: 160, header: 'Output', cell: EncodeCell }]
       : []),
-    { id: 'status', size: 110, header: 'Status', cell: StatusCell },
+    // Wide enough for a status and its reason in words, not only on hover.
+    { id: 'status', size: 200, header: 'Status', cell: StatusCell },
   ];
 }
 
-/** "4 of 6 rows ready to render · 1 needs fixing · 1 not checked" — no state word to decode. */
+/** "4 of 6 rows can render · 1 needs fixing · 1 not checked" — no state word to decode. */
 function readinessSummary(
   counts: {
     renderable: number;
     blocked: number;
     needsInput: number;
     refused: number;
+    fonts: number;
     warned: number;
     unchecked: number;
     fitUnmeasured: boolean;
@@ -361,15 +370,18 @@ function readinessSummary(
     total === 0
       ? 'No rows to render'
       : counts.renderable === total
-        ? `${total === 1 ? 'The row is' : `All ${total} rows are`} ready to render`
-        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} ready to render`,
+        ? `${total === 1 ? 'The row' : `All ${total} rows`} can render`
+        : `${counts.renderable} of ${total} ${total === 1 ? 'row' : 'rows'} can render`,
     needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
     counts.refused ? `${counts.refused} won’t render` : null,
+    counts.fonts
+      ? `${counts.fonts} need${counts.fonts === 1 ? 's' : ''} Render anyway for missing fonts`
+      : null,
     counts.warned ? `${counts.warned} with a warning` : null,
     counts.unchecked ? `${counts.unchecked} not checked` : null,
     counts.fitUnmeasured && total
-      ? 'Layout fit isn’t measured for this template — rows still render'
+      ? 'Layout fit isn’t measured for this template — rows can still render'
       : null,
   ]
     .filter(Boolean)
@@ -1126,16 +1138,22 @@ export function RenderRequestsGrid({
   knownRefusals.current = refusals;
   // Once per review snapshot: a refusal the rows' own checks cannot reproduce must not loop.
   const refusalPassFor = useRef<string | null>(null);
+  // When a review last passed each row: a pass that started before it does not overrule it.
+  const passedAt = useRef(new Map<string, number>());
+  const events = useRef(0);
+  // A confirm that got no answer: its token, re-sent until the person opens the Render ledger.
+  const [unconfirmedToken, setUnconfirmedToken] = useState<string | null>(null);
   const liveRefusals = useMemo(
     () =>
       new Map(
         [...refusals].filter(
           ([id, refusal]) =>
             rows.some((row) => row.id === id) &&
-            refusal.key === refusalKey(rows, id, templateRef, contract),
+            refusal.key ===
+              refusalKey(rows, id, templateRef, contract, activeSet?.revision ?? null),
         ),
       ),
-    [refusals, rows, templateRef, contract],
+    [refusals, rows, templateRef, contract, activeSet?.revision],
   );
 
   // --- row operations ---------------------------------------------------------------------
@@ -2256,6 +2274,7 @@ export function RenderRequestsGrid({
       blocked: 0,
       needsInput: 0,
       refused: 0,
+      fonts: 0,
       warned: 0,
       unchecked: 0,
     };
@@ -2274,7 +2293,8 @@ export function RenderRequestsGrid({
         liveFit.get(row.id),
         liveRefusals.get(row.id),
       );
-      if (isRenderable(status)) counts.renderable += 1;
+      // An AI proposal nobody kept is skipped by Render, so it is not counted as one that can.
+      if (isRenderable(status) && !proposed.has(row.id)) counts.renderable += 1;
       if (status.state === 'invalid') {
         const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
         if (Object.keys(status.errors).every((key) => missing.includes(key)))
@@ -2283,10 +2303,10 @@ export function RenderRequestsGrid({
         for (const [key, message] of Object.entries(status.errors)) note(key, message, row);
       } else if (status.state === 'refused') {
         counts.refused += 1;
-        note(`refused:${status.reason}`, `Won’t render: ${status.reason}`, row);
+        note(`refused:${status.reason}`, status.reason, row);
       } else if (status.state === 'fonts') {
-        counts.warned += 1;
-        note(`fonts:${status.reason}`, `Fonts will be substituted: ${status.reason}`, row);
+        counts.fonts += 1;
+        note(`fonts:${status.reason}`, `Fonts missing: ${status.reason}`, row);
       } else if (status.state === 'warning') {
         counts.warned += 1;
         for (const item of status.findings)
@@ -2294,7 +2314,7 @@ export function RenderRequestsGrid({
       } else if (status.state === 'unchecked' && status.findings.length) counts.unchecked += 1;
     }
     return { ...counts, fitUnmeasured, findings: [...findings.entries()] };
-  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured]);
+  }, [rows, clientErrors, liveFit, liveRefusals, variables, fitUnmeasured, proposed]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -2311,6 +2331,7 @@ export function RenderRequestsGrid({
         hiddenColumns,
         generating: generating !== null,
         liveFit,
+        fitLoading: fit.state === 'loading',
         refusals: liveRefusals,
       }
     : undefined;
@@ -2342,10 +2363,29 @@ export function RenderRequestsGrid({
   const actionContext: GridActionContext | null = contract
     ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
     : null;
+  const canFork =
+    selected.length > 0 &&
+    rows.length < MAX_BATCH_ROWS &&
+    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
+  // A row can render unless it has a wrong value, a refusal a review found, or is an AI proposal
+  // nobody kept. Render reviews the selected rows that can, and the review lists the rest and why.
+  /** Why a selected row is left out of the batch; undefined when it can render. */
+  const skipReason = (row: RequestRow): string | undefined => {
+    const [key, message] = Object.entries(clientErrors.get(row.id) ?? {})[0] ?? [];
+    if (key)
+      return `${readableLayerName(variables?.find((variable) => variable.key === key)?.label ?? key)}: ${message}`;
+    const refusal = liveRefusals.get(row.id);
+    if (refusal && !refusal.font) return refusal.message;
+    if (proposed.has(row.id)) return 'Proposed by AI. Keep or discard it first.';
+    return undefined;
+  };
+  const selectedReady = selected.filter((row) => skipReason(row) === undefined);
+  const readyToFire =
+    !updateRequired && selectedReady.length > 0 && selectedReady.length <= MAX_BATCH_ROWS;
   // What Render will make, counted the way the review tray counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
-    for (const row of selected) {
+    for (const row of selectedReady) {
       const outputIds = effectiveOutputIds(rows, row.id);
       files.total += rowFileCount(contract, { outputIds, delivery: row.delivery });
       if (row.delivery?.action === 'replace') files.replacements += 1;
@@ -2353,49 +2393,21 @@ export function RenderRequestsGrid({
         for (const ratio of renderedRatios(contract, outputIds))
           files.byRatio.set(ratio, (files.byRatio.get(ratio) ?? 0) + 1);
     }
-  const canFork =
-    selected.length > 0 &&
-    rows.length < MAX_BATCH_ROWS &&
-    selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
-  const renderingProposed = selected.some((row) => proposed.has(row.id));
-  // Renderable is the browser's word: no `validateRow` or render-reading errors, and no refusal a
-  // review found. The review's batch preflight is the server's.
-  const valid = (row: RequestRow) =>
-    isRenderable(
-      rowStatusOf(clientErrors.get(row.id) ?? {}, liveFit.get(row.id), liveRefusals.get(row.id)),
-    );
-  const readyToFire =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length > 0 &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selected.every(valid);
-  const selectedReady = selected.filter(valid);
-  const canReviewReady =
-    !updateRequired &&
-    !renderingProposed &&
-    selected.length <= MAX_BATCH_ROWS &&
-    selectedReady.length > 0 &&
-    selectedReady.length < selected.length;
-  const refusedReason = (row: RequestRow) => {
-    const refusal = liveRefusals.get(row.id);
-    return refusal && !refusal.font ? `Won’t render: ${refusal.message}` : undefined;
-  };
-  const selectedProblem = selected.flatMap((row) => [
-    ...Object.values(clientErrors.get(row.id) ?? {}),
-    ...(refusedReason(row) ? [refusedReason(row) as string] : []),
-  ])[0];
+
+  const skippedCount = selected.length - selectedReady.length;
   const fireHint = updateRequired
     ? 'Update this set to the current template first'
-    : renderingProposed
-      ? 'Keep or discard the proposed rows first'
-      : selected.length === 0
-        ? 'Select the rows to render'
-        : selected.length > MAX_BATCH_ROWS
+    : selected.length === 0
+      ? 'Select the rows to render'
+      : selectedReady.length === 0
+        ? (selected.map(skipReason).find(Boolean) ?? 'No selected row can render')
+        : selectedReady.length > MAX_BATCH_ROWS
           ? `At most ${MAX_BATCH_ROWS} renders per batch`
-          : !readyToFire
-            ? (selectedProblem ?? 'Every selected row has to be Ready')
-            : null;
+          : null;
+  const skipNote =
+    readyToFire && skippedCount
+      ? `${skippedCount} selected ${skippedCount === 1 ? 'row can’t render and is' : 'rows can’t render and are'} skipped; the review lists why`
+      : null;
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2465,8 +2477,8 @@ export function RenderRequestsGrid({
   // Saves the set, then opens (or re-checks) the review of the exact selection. The save is part
   // of Render, so it is silent — and a set with no edits is already saved, so opening the review
   // again neither writes a new revision nor says "Saved" twice.
-  const openReview = async (readyOnly = false) => {
-    if (!contract || (!readyToFire && !(readyOnly && canReviewReady))) return;
+  const openReview = async () => {
+    if (!contract || !readyToFire) return;
     setBusy('firing');
     try {
       const submittedSet =
@@ -2481,20 +2493,12 @@ export function RenderRequestsGrid({
         submittedSet.revision,
         allOutputIdsOf(contract),
       );
-      const chosen = readyOnly ? selectedReady : selected;
-      const rowIds = chosen.map((row) => row.id);
-      const skippedRows = selected
-        .filter((row) => !rowIds.includes(row.id))
-        .map((row) => ({
-          label: row.label.trim() || 'Untitled',
-          message:
-            Object.entries(clientErrors.get(row.id) ?? {}).map(
-              ([key, message]) =>
-                `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
-            )[0] ??
-            refusedReason(row) ??
-            'Fix this row before rendering.',
-        }));
+      const rowIds = selectedReady.map((row) => row.id);
+      // One line per row: its name and the one reason it is left out.
+      const skippedRows = selected.flatMap((row) => {
+        const message = skipReason(row);
+        return message ? [{ label: row.label.trim() || 'Untitled', message }] : [];
+      });
       setReview((previous) => ({ key: (previous?.key ?? 0) + 1, signature, rowIds, skippedRows }));
     } finally {
       setBusy(null);
@@ -2537,19 +2541,28 @@ export function RenderRequestsGrid({
     review.signature !==
       reviewSignature(rows, selectedIds, activeSet?.revision ?? null, allOutputIdsOf(contract));
 
-  const findRefusals = async (rowIds: string[]) => {
-    if (!contract || !review || findingRefusals.current) return;
+  /** How many of these rows a pass has found refused on their own, as things stand. */
+  const refusedAmong = (rowIds: string[]) =>
+    rowIds.filter((id) => {
+      const refusal = liveRefusals.get(id);
+      return refusal && !refusal.font;
+    }).length;
+
+  const findRefusals = async (rowIds: string[]): Promise<number> => {
+    if (!contract || !review || findingRefusals.current) return refusedAmong(rowIds);
     const snapshot = JSON.stringify([
       review.signature,
       [...rowIds].sort(),
       templateRef,
       contract.template.contractHash,
     ]);
-    if (refusalPassFor.current === snapshot) return;
+    if (refusalPassFor.current === snapshot) return refusedAmong(rowIds);
     refusalPassFor.current = snapshot;
     findingRefusals.current = true;
+    const startedAt = ++events.current;
     const current = latestRows.current;
-    const keyOf = (rowId: string) => refusalKey(current, rowId, templateRef, contract);
+    const revision = activeSet?.revision ?? null;
+    const keyOf = (rowId: string) => refusalKey(current, rowId, templateRef, contract, revision);
     // A row already known refused, and unchanged, is not asked again.
     const queue = batch.records.filter(
       (record) =>
@@ -2587,38 +2600,55 @@ export function RenderRequestsGrid({
     } finally {
       findingRefusals.current = false;
     }
+    // A review that passed a row while this pass ran is newer than what the pass found about it.
+    for (const rowId of checked.keys())
+      if ((passedAt.current.get(rowId) ?? 0) > startedAt) checked.delete(rowId);
+    const merge = (previous: ReadonlyMap<string, RowRefusal & { key: string }>) => {
+      const merged = new Map(previous);
+      for (const [rowId, refusal] of checked)
+        if (refusal) merged.set(rowId, refusal);
+        else merged.delete(rowId);
+      return merged;
+    };
     const previous = knownRefusals.current;
-    const merged = new Map(previous);
-    for (const [rowId, refusal] of checked)
-      if (refusal) merged.set(rowId, refusal);
-      else merged.delete(rowId);
+    const next = merge(previous);
     const same = (a?: RowRefusal & { key: string }, b?: RowRefusal & { key: string }) =>
       a?.key === b?.key && a?.message === b?.message && a?.font === b?.font;
     const changed =
-      merged.size !== previous.size ||
-      [...merged].some(([id, item]) => !same(item, previous.get(id)));
-    if (!changed) return;
-    setRefusals(merged);
+      next.size !== previous.size || [...next].some(([id, item]) => !same(item, previous.get(id)));
+    const found = rowIds.filter((id) => {
+      const refusal = next.get(id);
+      return refusal && !refusal.font;
+    }).length;
+    if (!changed) return found;
+    // Merged into whatever is there by then, so a clear that landed meanwhile is not undone.
+    setRefusals(merge);
     setRefusalsFound((count) => count + 1);
+    return found;
   };
 
   /** A review that passed for these rows is the server's newer word: what a pass found is retired. */
-  const clearRefusals = (rowIds: string[]) =>
+  const clearRefusals = (rowIds: string[]) => {
+    const at = ++events.current;
+    for (const id of rowIds) passedAt.current.set(id, at);
     setRefusals((previous) =>
       rowIds.some((id) => previous.has(id))
         ? new Map([...previous].filter(([id]) => !rowIds.includes(id)))
         : previous,
     );
+  };
 
   // With the refusing rows known, the review goes on with the rest and lists those as skipped,
-  // once: when the rows that render are the ones already under review, it stays as it is.
+  // once: when the rows that render are the ones already under review, it stays as it is. Only a
+  // saved set is reopened, so reopening never writes one; an edit meanwhile re-checks by itself.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a pass that changed something reopens it.
   useEffect(() => {
-    if (!refusalsFound || !review || !canReviewReady) return;
+    if (!refusalsFound || !review || !readyToFire || !contract) return;
+    if (!activeSet || signatureOf(rows, contract) !== savedSignature) return;
     const next = selectedReady.map((row) => row.id);
     if (next.length === review.rowIds.length && next.every((id) => review.rowIds.includes(id)))
       return;
-    void openReview(true);
+    void openReview();
   }, [refusalsFound]);
 
   // The tray unfolds for a review and folds back when it ends; a drag that folds it ends it too.
@@ -2881,8 +2911,8 @@ export function RenderRequestsGrid({
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openReview()}
-        readyCount={selectedReady.length}
-        onReviewReady={canReviewReady ? () => void openReview(true) : undefined}
+        renderCount={selectedReady.length}
+        skipNote={skipNote}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3182,7 +3212,7 @@ export function RenderRequestsGrid({
                                   }
                                 : undefined
                             }
-                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.renderable} ready • ${selected.length} selected`}
+                            groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${readiness.renderable} can render • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
                         </RowDropHintContext.Provider>
@@ -3274,11 +3304,13 @@ export function RenderRequestsGrid({
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={canReviewReady ? null : fireHint}
+                  recheckBlocked={fireHint}
                   rechecking={busy === 'firing'}
                   finalBlocked={finalBlocked}
-                  onRecheck={() => void openReview(canReviewReady)}
-                  onRefused={(rowIds) => void findRefusals(rowIds)}
+                  onRecheck={() => void openReview()}
+                  unconfirmedToken={unconfirmedToken}
+                  onUnconfirmed={setUnconfirmedToken}
+                  onRefused={findRefusals}
                   onPassed={clearRefusals}
                   onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.

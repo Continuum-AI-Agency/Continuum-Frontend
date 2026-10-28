@@ -277,8 +277,12 @@ function Harness({
   handlers: ReturnType<typeof trayHandlers>;
 }) {
   const [rows, setRows] = useState(initialRows);
+  // Kept above the tray, as the grid keeps it.
+  const [unconfirmedToken, setUnconfirmedToken] = useState<string | null>(null);
   return (
     <RenderReviewTray
+      unconfirmedToken={unconfirmedToken}
+      onUnconfirmed={setUnconfirmedToken}
       brandId={BRAND}
       bindingId={bindingId}
       templateKey="133"
@@ -307,7 +311,7 @@ const trayHandlers = () => ({
   onFired: mock((_ids: string[]) => undefined),
   onClose: mock(() => undefined),
   onRecheck: mock(() => undefined),
-  onRefused: mock((_rowIds: string[]) => undefined),
+  onRefused: mock(async (_rowIds: string[]) => 0),
   onPassed: mock((_rowIds: string[]) => undefined),
   onOpenLedger: mock((_ids: string[]) => undefined),
   onShowRow: mock((_rowId: string) => undefined),
@@ -523,6 +527,13 @@ describe('RenderReviewTray · Review', () => {
     expect(primaryDisabled('Next: delivery')).toBe(true);
     // The refusal names no row, so the grid is asked to find which rows refuse.
     expect(onRefused).toHaveBeenCalledWith(['root', 'spain']);
+    // None does on its own: it is the batch that was refused, with the server's reason, and Retry.
+    expect(
+      await screen.findByText('No row is refused on its own, so nothing in the grid is marked.'),
+    ).toBeTruthy();
+    expect(screen.getByText(/^The render service refused this batch: /)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
   }, 30_000);
 
   test('closing — the button or Esc — fires nothing', async () => {
@@ -656,6 +667,43 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
     expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({ records: [RECORDS[1]] });
     await waitFor(() => expect(screen.queryByText(/not sent/)).toBeNull());
+  }, 30_000);
+
+  test('after a confirm with no answer, Render re-sends that same token until the ledger is opened', async () => {
+    let minted = 0;
+    batchPreflightMock.mockImplementation(async () => ({
+      confirmationToken: `token-${++minted}`,
+      readiness: READY,
+    }));
+    const noAnswer = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    createBatchMock.mockImplementationOnce(noAnswer).mockImplementationOnce(noAnswer);
+    try {
+      const { onOpenLedger } = renderTray(null);
+      await press('Next: delivery');
+      await press('Render 3 files');
+      expect(await screen.findByText(CONFIRM_UNKNOWN)).toBeTruthy();
+      const signed = batchPreflightMock.mock.calls.length;
+      const first = createBatchMock.mock.calls[0]?.[0];
+      // Render again: the very same token, and no fresh preflight to mint another one.
+      await press('Render 3 files');
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+      expect(createBatchMock.mock.calls[1]?.[0]).toEqual(first);
+      expect(batchPreflightMock.mock.calls.length).toBe(signed);
+      // Still no answer. Once the person opens the ledger, the next Render signs afresh.
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Render ledger' }));
+      expect(onOpenLedger).toHaveBeenCalledWith([]);
+      await press('Render 3 files');
+      await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(3));
+      expect(batchPreflightMock.mock.calls.length).toBe(signed + 1);
+      expect(createBatchMock.mock.calls[2]?.[0]).not.toEqual(first);
+    } finally {
+      batchPreflightMock.mockImplementation(async () => ({
+        confirmationToken: 'batch-token',
+        readiness: READY,
+      }));
+    }
   }, 30_000);
 
   test('a confirm that fails with no answer sends the person to the job list, not the button', async () => {

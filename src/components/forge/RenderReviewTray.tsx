@@ -128,9 +128,18 @@ export type RenderReviewTrayProps = {
   rechecking: boolean;
   /** Why this person cannot ask for a Final render. Null when they can. */
   finalBlocked: string | null;
+  /**
+   * A confirmation token whose createBatch got no answer, so its jobs may exist. Kept by the
+   * caller, so it outlives this tray: until the ledger is opened, Render re-sends it, never a new one.
+   */
+  unconfirmedToken: string | null;
+  onUnconfirmed: (token: string | null) => void;
   onRecheck: () => void;
-  /** Review was refused for something other than fonts; these rows' own checks can say which. */
-  onRefused?: (rowIds: string[]) => void;
+  /**
+   * Review was refused for something other than fonts; these rows' own checks can say which.
+   * Resolves to how many of them are refused on their own: none means no row is at fault.
+   */
+  onRefused?: (rowIds: string[]) => Promise<number>;
   /** Review passed for these rows: whatever an earlier refusal said about them is out of date. */
   onPassed?: (rowIds: string[]) => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
@@ -152,7 +161,14 @@ const STEPS: { id: Step; label: string }[] = [
 type Review =
   | { state: 'loading'; checking: number }
   | { state: 'ready'; readiness: ApiRenderBatchReadiness }
-  | { state: 'refused'; message: string; details: string[]; canOverrideFonts: boolean }
+  | {
+      state: 'refused';
+      message: string;
+      details: string[];
+      canOverrideFonts: boolean;
+      /** Rows refused on their own, once the caller has looked; 0 means none is at fault. */
+      rowsFound?: number;
+    }
   | { state: 'failed'; message: string };
 
 type Destinations =
@@ -167,7 +183,7 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  *  still have made the jobs: the same token is the same batch, so this sends the person to the
  *  ledger rather than to the button. */
 export const CONFIRM_UNKNOWN =
-  'Couldn’t confirm with the render service — check the job list before rendering again';
+  'Couldn’t confirm with the render service — Open Render ledger to check before rendering again';
 
 function describeFailure(error: unknown): {
   message: string;
@@ -260,6 +276,8 @@ export function RenderReviewTray({
   recheckBlocked,
   rechecking,
   finalBlocked,
+  unconfirmedToken,
+  onUnconfirmed,
   onRecheck,
   onRefused,
   onPassed,
@@ -416,7 +434,14 @@ export function RenderReviewTray({
             : { state: 'failed', message },
         );
         if (refusal && !canOverrideFonts)
-          refused.current?.(todo.flatMap(({ record }) => record.renderSetRowId ?? []));
+          void refused
+            .current?.(todo.flatMap(({ record }) => record.renderSetRowId ?? []))
+            .then((rowsFound) => {
+              if (mine !== latestReview.current) return;
+              setReview((current) =>
+                current.state === 'refused' ? { ...current, rowsFound } : current,
+              );
+            });
       }
     },
     [
@@ -526,7 +551,9 @@ export function RenderReviewTray({
   /** Fires every row, or — to resend what the render API refused — only the rows named. */
   const confirm = async (only?: number[]) => {
     // The records below are rebuilt from the rows on screen; a review of other rows signs nothing.
-    if (stale) {
+    // A token that got no answer is re-sent as it is, whatever is on screen: the backend hands back
+    // the jobs it already made for it, and a fresh token could make them twice.
+    if (stale && !unconfirmedToken) {
       setStep('review');
       return;
     }
@@ -535,39 +562,13 @@ export function RenderReviewTray({
     setProblem(null);
     setApprovalWarning(null);
     let confirming = false;
+    let token = unconfirmedToken;
     try {
-      const preflight = await apiRendersApi.batchPreflight({
-        brandId,
-        ...(bindingId ? { bindingId } : {}),
-        templateKey,
-        contractHash,
-        ...(templateRef ? { templateRef } : {}),
-        records: indexes.flatMap((index) => {
-          if (!records[index]) return [];
-          const { delivery: _delivery, ...record } = records[index];
-          const row = rows[index];
-          if (!row?.delivery) return record;
-          return row.delivery.action === 'replace'
-            ? { ...record, delivery: row.delivery, outputIds: rowOutputIds(row) }
-            : { ...record, delivery: row.delivery };
-        }),
-        ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
-        // Carried from the review: without it the fire is refused again on the same fonts the
-        // person already accepted, and the tray looks broken rather than protective.
-        ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
-        ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
-        // Signed into the token: a batch reviewed as a proof cannot be created as a final.
-        ...(final ? { final: true } : {}),
-        // Signed into the token too: the Backend decides per job whether it is eligible, and a
-        // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
-        ...(renderer === 'experimental' ? { renderer } : {}),
-      });
-      setApprovalWarning(preflight.approval?.warning ?? null);
+      if (!token) token = await signBatch(indexes);
       confirming = true;
-      const batch = await apiRendersApi.createBatch({
-        confirmationToken: preflight.confirmationToken,
-      });
+      const batch = await apiRendersApi.createBatch({ confirmationToken: token });
       confirming = false;
+      if (unconfirmedToken) onUnconfirmed(null);
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -576,7 +577,11 @@ export function RenderReviewTray({
       const refused = batch.jobs.filter((job) => job.status === 'failed' && !job.taskUid).length;
       if (refused > 0) toast.warning(`${batch.jobs.length - refused} queued · ${refused} not sent`);
       else toast.success(`${plural(batch.jobs.length, 'render')} queued`);
-      const submitted = batch.jobs.map((job, k) => ({ job, row: indexes[k] ?? k }));
+      // By the row each job names, so a re-sent token's jobs land beside their own rows.
+      const submitted = batch.jobs.map((job, k) => {
+        const at = rows.findIndex((row) => row.rowId === job.renderSetRowId);
+        return { job, row: at >= 0 ? at : (indexes[k] ?? k) };
+      });
       setFiredRows((previous) =>
         only ? [...previous.filter((item) => !only.includes(item.row)), ...submitted] : submitted,
       );
@@ -586,7 +591,8 @@ export function RenderReviewTray({
       // No answer: a network failure, a timeout, a 5xx with no backend code. A 5xx that names one
       // (503 `render_fonts_unverifiable` at dispatch) is an answer, and keeps its own words.
       const answered = error instanceof ApiError && (error.status < 500 || hasBackendError(error));
-      if (confirming && !answered) {
+      if (confirming && !answered && token) {
+        onUnconfirmed(token);
         setProblem(CONFIRM_UNKNOWN);
         return;
       }
@@ -595,6 +601,38 @@ export function RenderReviewTray({
     } finally {
       setFiring(false);
     }
+  };
+
+  /** The fire's own preflight: delivery, Slack, consent, Final and renderer signed into a token. */
+  const signBatch = async (indexes: number[]) => {
+    const preflight = await apiRendersApi.batchPreflight({
+      brandId,
+      ...(bindingId ? { bindingId } : {}),
+      templateKey,
+      contractHash,
+      ...(templateRef ? { templateRef } : {}),
+      records: indexes.flatMap((index) => {
+        if (!records[index]) return [];
+        const { delivery: _delivery, ...record } = records[index];
+        const row = rows[index];
+        if (!row?.delivery) return record;
+        return row.delivery.action === 'replace'
+          ? { ...record, delivery: row.delivery, outputIds: rowOutputIds(row) }
+          : { ...record, delivery: row.delivery };
+      }),
+      ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
+      // Carried from the review: without it the fire is refused again on the same fonts the
+      // person already accepted, and the tray looks broken rather than protective.
+      ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
+      ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
+      // Signed into the token: a batch reviewed as a proof cannot be created as a final.
+      ...(final ? { final: true } : {}),
+      // Signed into the token too: the Backend decides per job whether it is eligible, and a
+      // job it is not, or one the renderer refuses, goes to After Effects with the reason kept.
+      ...(renderer === 'experimental' ? { renderer } : {}),
+    });
+    setApprovalWarning(preflight.approval?.warning ?? null);
+    return preflight.confirmationToken;
   };
 
   const steps = goesToMeta ? STEPS : STEPS.filter((item) => item.id !== 'confirm');
@@ -612,7 +650,7 @@ export function RenderReviewTray({
           }
         : {
             label: `Render ${plural(fileCount, 'file')}`,
-            disabled: firing || stale || deliverBlockers.length > 0,
+            disabled: firing || (stale && !unconfirmedToken) || deliverBlockers.length > 0,
             run: () => void confirm(),
             fires: true,
           };
@@ -716,9 +754,25 @@ export function RenderReviewTray({
         ))}
       </ul>
       {problem ? (
-        <p role="alert" className="px-[var(--card-pad)] py-1.5 text-destructive">
-          {problem}
-        </p>
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 px-[var(--card-pad)] py-1.5 text-destructive"
+        >
+          <p>{problem}</p>
+          {unconfirmedToken ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => {
+                onUnconfirmed(null);
+                onOpenLedger([]);
+              }}
+            >
+              Open Render ledger
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </>
   );
@@ -864,7 +918,11 @@ export function RenderReviewTray({
                     role="alert"
                     className="border-b border-border px-[var(--card-pad)] py-1.5 text-destructive"
                   >
-                    <p className="font-medium">{review.message}</p>
+                    <p className="font-medium">
+                      {refusedOnFonts
+                        ? review.message
+                        : `The render service refused this batch: ${review.message}`}
+                    </p>
                     {review.details.map((detail) => (
                       <p key={detail}>{detail}</p>
                     ))}
@@ -891,9 +949,23 @@ export function RenderReviewTray({
                         </span>
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">
-                        Fix the row in the grid, then re-check.
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => void runReview(acceptMissingFonts, { fresh: true })}
+                        >
+                          Retry
+                        </Button>
+                        <span className="text-muted-foreground">
+                          {review.rowsFound === undefined
+                            ? 'Checking each row on its own…'
+                            : review.rowsFound === 0
+                              ? 'No row is refused on its own, so nothing in the grid is marked.'
+                              : `${plural(review.rowsFound, 'row')} won’t render on ${review.rowsFound === 1 ? 'its' : 'their'} own; the grid marks ${review.rowsFound === 1 ? 'it' : 'them'}.`}
+                        </span>
+                      </div>
                     )}
                   </div>
                 ) : review.state === 'failed' ? (

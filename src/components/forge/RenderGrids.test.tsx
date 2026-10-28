@@ -77,7 +77,7 @@ const noKit = async (): Promise<unknown> => {
 };
 const livePreviewMock = mock(noKit);
 /** The readiness line's one note for a template no kit measures. */
-const FIT_NOTE = /Layout fit isn’t measured for this template — rows still render/;
+const FIT_NOTE = /Layout fit isn’t measured for this template — rows can still render/;
 const listRenderSetsMock = mock(async (_brandId: string, _templateKey: string) => ({
   items: [] as unknown[],
   nextCursor: null,
@@ -618,14 +618,17 @@ describe('RenderRequestsGrid', () => {
     expect(openSetName()).toBe('Other set');
   });
 
-  test('ready rows can be reviewed while selected invalid rows stay explicitly skipped', async () => {
+  test('Render reviews the selected rows that can render; an invalid one is skipped, with why', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     await openMenu('Add', 'Blank row');
     await waitFor(() => expect(screen.getAllByLabelText('Select row')).toHaveLength(2));
     fireEvent.change(screen.getAllByLabelText('Headline')[1]!, { target: { value: '' } });
     for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
-    fireEvent.click(await screen.findByRole('button', { name: 'Review 1 ready row' }));
+    expect(
+      await screen.findByText('1 selected row can’t render and is skipped; the review lists why'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
     const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
     expect(skipped.textContent).toContain('Required');
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalled());
@@ -691,30 +694,50 @@ describe('RenderRequestsGrid', () => {
     // One pass over the refused batch, one preflight per row.
     await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(3));
     const offPalette = () => headline(1).closest('tr')!;
-    expect(await within(offPalette()).findByText(`Won’t render: ${palette}`)).toBeTruthy();
-    // Missing faces render in substitutes through the review's own override: still renderable.
-    expect(within(headline(2).closest('tr')!).getByText('Fonts will be substituted')).toBeTruthy();
-    // The review goes on with the rows that render, and lists the one that will not.
-    const skipped = await screen.findByRole('list', { name: 'Rows skipped from this batch' });
-    expect(skipped.textContent).toContain(`Won’t render: ${palette}`);
+    expect(await within(offPalette()).findByText('Won’t render')).toBeTruthy();
+    // The reason is read on the row, not only on hover.
+    expect(within(offPalette()).getByText(palette)).toBeTruthy();
+    // Missing faces still render, in substitutes, once Render anyway is pressed: the row says so.
+    const fontRow = () => headline(2).closest('tr')!;
+    expect(within(fontRow()).getByText('Fonts missing')).toBeTruthy();
+    expect(within(fontRow()).getByText(/Needs Render anyway in the review/)).toBeTruthy();
+    // The review goes on with the rows that render, and lists the one that will not: one line.
+    const skippedLines = async () =>
+      within(
+        await screen.findByRole('list', { name: 'Rows skipped from this batch' }),
+      ).getAllByRole('listitem');
+    let lines = await skippedLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.textContent).toContain(palette);
+    expect(lines[0]?.textContent).not.toContain('Won’t render');
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
     expect(
       (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
     ).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Review 2 ready rows' })).toBeTruthy();
+
+    // Render itself does the same from the toolbar: the 2 that can render, the refused 1 skipped.
+    fireEvent.click(screen.getByRole('button', { name: 'Close review' }));
+    await waitFor(() =>
+      expect(screen.queryAllByRole('region', { name: 'Review and render' })).toHaveLength(0),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Render 2 rows · 2 files' }));
+    await screen.findByRole('region', { name: 'Review and render' });
+    lines = await skippedLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.textContent).toContain(palette);
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(3));
+    expect(
+      (batchPreflightMock.mock.calls.at(-1)?.[0] as { records: unknown[] }).records,
+    ).toHaveLength(2);
     // A font refusal names no row to find; the tray's own override is the way past it.
     expect(preflightMock).toHaveBeenCalledTimes(3);
-    expect(within(headline(2).closest('tr')!).getByText('Fonts will be substituted')).toBeTruthy();
+    expect(within(fontRow()).getByText('Fonts missing')).toBeTruthy();
     // Once a review passes for that row, what the pass found about it is out of date.
     await press('Render anyway');
     // Lengths, not toBeNull: a failing element assert inside waitFor pretty-prints the fiber graph.
-    await waitFor(
-      () =>
-        expect(
-          within(headline(2).closest('tr')!).queryAllByText('Fonts will be substituted'),
-        ).toHaveLength(0),
-      { timeout: 5000 },
-    );
+    await waitFor(() => expect(within(fontRow()).queryAllByText('Fonts missing')).toHaveLength(0), {
+      timeout: 5000,
+    });
 
     // An edit retires what was found about that row, and asks the server nothing.
     fireEvent.change(headline(1), { target: { value: 'On palette' } });
@@ -727,7 +750,8 @@ describe('RenderRequestsGrid', () => {
 
   describe('a refused review that its rows’ own checks cannot pin on a row', () => {
     const palette = 'Use a permitted brand color.';
-    const setup = async (fontRefusedOnItsOwn: boolean) => {
+    /** `refuse` is each row's own preflight answer for the 'Missing face' row: null passes. */
+    const setup = async (refuse: (() => ApiError) | null) => {
       // Refused whole, every time: the per-row pass can never make it pass.
       batchPreflightMock.mockImplementation(async () => {
         throw new ApiError('render_brand_guardrail_blocked', 422, undefined, {
@@ -737,10 +761,7 @@ describe('RenderRequestsGrid', () => {
         });
       });
       preflightMock.mockImplementation(async (input) => {
-        if (fontRefusedOnItsOwn && input.variables.headline === 'Missing face')
-          throw new ApiError('render_fonts_missing', 422, undefined, {
-            detail: 'Card A requires Brand Sans.',
-          });
+        if (refuse && input.variables.headline === 'Missing face') throw refuse();
         return READY_RESPONSE;
       });
       render(<RenderRequestsGrid brandId={BRAND} />);
@@ -754,7 +775,7 @@ describe('RenderRequestsGrid', () => {
       fireEvent.change(headline(1), { target: { value: 'Missing face' } });
       fireEvent.change(headline(2), { target: { value: '' } });
       for (const box of screen.getAllByLabelText('Select row')) fireEvent.click(box);
-      fireEvent.click(await screen.findByRole('button', { name: 'Review 2 ready rows' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Render 2 rows · 2 files' }));
       const tray = await screen.findByRole('region', { name: 'Review and render' });
       await waitFor(() => expect(preflightMock).toHaveBeenCalledTimes(2));
       // Long enough for any reopen, re-review and second pass to have happened.
@@ -763,20 +784,44 @@ describe('RenderRequestsGrid', () => {
     };
 
     test('every row passes on its own: nothing is found, nothing reopens, the refusal stays', async () => {
-      const { tray, headline } = await setup(false);
+      const { tray, headline } = await setup(null);
       expect(preflightMock).toHaveBeenCalledTimes(2);
       expect(batchPreflightMock).toHaveBeenCalledTimes(1);
       expect(await within(tray).findByText(palette)).toBeTruthy();
+      // Said as the batch's refusal, with the server's reason; no row is blamed, and Retry is there.
       expect(
-        within(headline(1).closest('tr')!).queryAllByText(/Fonts will be|Won’t render/),
+        await within(tray).findByText(/^The render service refused this batch: /),
+      ).toBeTruthy();
+      expect(
+        within(tray).getByText('No row is refused on its own, so nothing in the grid is marked.'),
+      ).toBeTruthy();
+      expect(within(tray).getByRole('button', { name: 'Retry' })).toBeTruthy();
+      expect(
+        within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
+      ).toHaveLength(0);
+    }, 30_000);
+
+    test('a 422 about the set, not the row, marks no row', async () => {
+      const { headline } = await setup(
+        () =>
+          new ApiError('render_set_revision_conflict', 422, undefined, {
+            error: 'render_set_revision_conflict',
+            message: 'The set changed since this review.',
+          }),
+      );
+      expect(
+        within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
       ).toHaveLength(0);
     }, 30_000);
 
     test('a font row found on its own reopens nothing: the rows under review are the same', async () => {
-      const { tray, headline } = await setup(true);
-      expect(
-        await within(headline(1).closest('tr')!).findByText('Fonts will be substituted'),
-      ).toBeTruthy();
+      const { tray, headline } = await setup(
+        () =>
+          new ApiError('render_fonts_missing', 422, undefined, {
+            detail: 'Card A requires Brand Sans.',
+          }),
+      );
+      expect(await within(headline(1).closest('tr')!).findByText('Fonts missing')).toBeTruthy();
       // One pass, one review: no loop of re-reviews and re-passes.
       expect(preflightMock).toHaveBeenCalledTimes(2);
       expect(batchPreflightMock.mock.calls.length).toBeLessThanOrEqual(2);
@@ -801,13 +846,13 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.change(headline, { target: { value: '' } });
     const status = await screen.findByText('Needs input');
-    expect(status.getAttribute('title')).toBe('Fill in Headline');
+    expect(within(status.closest('td')!).getByText('Fill in Headline')).toBeTruthy();
     expect(screen.queryAllByText('Invalid')).toHaveLength(0);
     // The blank cell is not painted as an error; the row says what it waits for.
     expect(headline.classList.contains('border-destructive')).toBe(false);
     expect(
       screen.getByText(
-        '0 of 1 row ready to render · 1 needs input · Layout fit isn’t measured for this template — rows still render',
+        '0 of 1 row can render · 1 needs input · Layout fit isn’t measured for this template — rows can still render',
       ),
     ).toBeTruthy();
   });
@@ -1221,7 +1266,7 @@ describe('RenderRequestsGrid', () => {
     expect(await screen.findByText(FIT_NOTE)).toBeTruthy();
     expect(
       screen.getByText(
-        'The row is ready to render · Layout fit isn’t measured for this template — rows still render',
+        'The row can render · Layout fit isn’t measured for this template — rows can still render',
       ),
     ).toBeTruthy();
     expect(
@@ -2084,12 +2129,14 @@ describe('RenderRequestsGrid', () => {
     // Proposed rows make nothing to save: no edit timer, nothing written.
     await new Promise((resolve) => setTimeout(resolve, 1800));
     expect(updateRenderSetMock).not.toHaveBeenCalled();
-    // Selected, a proposed row cannot be rendered.
+    // Selected, a proposed row cannot be rendered, and Render says why in words.
     const drafted = screen.getByDisplayValue('Drafted').closest('tr')!;
     fireEvent.click(within(drafted).getByLabelText('Select row'));
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /^Render 1/ }).disabled).toBe(
-      true,
-    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    expect(
+      within(toolbar).getByRole<HTMLButtonElement>('button', { name: 'Render' }).disabled,
+    ).toBe(true);
+    expect(within(toolbar).getByText('Proposed by AI. Keep or discard it first.')).toBeTruthy();
 
     fireEvent.click(within(banner).getByRole('button', { name: 'Keep all' }));
     await waitFor(() =>
@@ -2195,7 +2242,7 @@ describe('RenderRequestsGrid', () => {
     // The Live kit's one read, cached: an edit is measured in the browser, not asked for.
     expect(livePreviewMock).toHaveBeenCalledTimes(1);
     expect(within(input.closest('tr')!).getByText('Ready')).toBeTruthy();
-    expect(screen.getByText('The row is ready to render')).toBeTruthy();
+    expect(screen.getByText('The row can render')).toBeTruthy();
     expect(document.activeElement).toBe(input);
     type(' vez');
     expect(input.isConnected).toBe(true);

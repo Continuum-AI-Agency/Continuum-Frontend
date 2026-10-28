@@ -159,6 +159,8 @@ export type RequestGridMeta = {
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
   /** What a refused review found each row's own preflight refusing, while the row is unchanged. */
   refusals?: ReadonlyMap<string, RowRefusal>;
+  /** The Live kits are still on their way: no row's fit is known yet. */
+  fitLoading?: boolean;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -404,64 +406,87 @@ function uncheckedWhy(findings: Array<{ variableKey?: string | null }>, labelOf:
   const names = [
     ...new Set(findings.map((finding) => labelOf(finding.variableKey ?? undefined) ?? 'A slot')),
   ];
-  return `Where ${names.join(', ')} ${names.length === 1 ? 'lands' : 'land'} isn’t measured before rendering. It still renders.`;
+  return `Where ${names.join(', ')} ${names.length === 1 ? 'lands' : 'land'} isn’t measured before rendering. It can still render.`;
+}
+
+/** A status word and its reason in words beside it: the reason is read, never hover-only. */
+function StatusLine({
+  variant,
+  label,
+  reason,
+}: {
+  variant: 'destructive' | 'warning' | 'muted' | 'success';
+  label: string;
+  reason?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-0.5">
+      <Badge variant={variant}>{label}</Badge>
+      {reason ? (
+        <span className="line-clamp-2 text-2xs leading-snug text-muted-foreground" title={reason}>
+          {reason}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function StatusBadge({
   status,
   invalidReason,
   labelOf,
+  fitLoading,
 }: {
   status: RowStatus;
   invalidReason: string;
   labelOf: LabelOf;
+  fitLoading: boolean;
 }) {
   switch (status.state) {
     case 'invalid':
-      return (
-        <Explained why={invalidReason}>
-          <Badge variant="destructive">Invalid</Badge>
-        </Explained>
-      );
+      return <StatusLine variant="destructive" label="Invalid" reason={invalidReason} />;
     case 'refused':
-      return (
-        <Explained why={status.reason}>
-          <Badge variant="destructive" className="max-w-full">
-            <span className="truncate">Won’t render: {status.reason}</span>
-          </Badge>
-        </Explained>
-      );
+      return <StatusLine variant="destructive" label="Won’t render" reason={status.reason} />;
     case 'fonts':
+      // What today's gate does: the review refuses these faces until Render anyway is pressed.
       return (
-        <Explained why={status.reason}>
-          <Badge variant="warning">Fonts will be substituted</Badge>
-        </Explained>
+        <StatusLine
+          variant="warning"
+          label="Fonts missing"
+          reason={`${status.reason} Needs Render anyway in the review, which renders in a substitute face.`}
+        />
       );
     case 'warning':
       return (
-        <Explained
-          why={[
+        <StatusLine
+          variant="warning"
+          label="Warning"
+          reason={[
             ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
           ].join(' ')}
-        >
-          <Badge variant="warning">Warning</Badge>
-        </Explained>
+        />
       );
     case 'ai-check':
       return (
-        <Explained why={aiCheckWhy(status.fit)}>
-          <Badge variant="warning">AI check after render</Badge>
-        </Explained>
+        <StatusLine
+          variant="warning"
+          label="AI check after render"
+          reason={aiCheckWhy(status.fit)}
+        />
       );
     case 'unchecked':
       // No kit for the template (or not every format's yet): the grid says so once, not per row.
-      return status.findings.length ? (
-        <Explained why={uncheckedWhy(status.findings, labelOf)}>
-          <Badge variant="muted">Not checked</Badge>
-        </Explained>
-      ) : null;
+      if (status.findings.length)
+        return (
+          <StatusLine
+            variant="muted"
+            label="Not checked"
+            reason={uncheckedWhy(status.findings, labelOf)}
+          />
+        );
+      return fitLoading ? <StatusLine variant="muted" label="Checking layout…" /> : null;
     default:
-      return <Badge variant="success">Ready</Badge>;
+      return <StatusLine variant="success" label="Ready" />;
   }
 }
 
@@ -1154,7 +1179,7 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors, liveFit, refusals } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit, refusals, fitLoading } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
@@ -1164,9 +1189,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       readableLayerName(contract.variables.find((item) => item.key === key)?.label ?? key),
     );
     return (
-      <Badge variant="muted" title={`Fill in ${names.join(', ')}`}>
-        Needs input
-      </Badge>
+      <StatusLine variant="muted" label="Needs input" reason={`Fill in ${names.join(', ')}`} />
     );
   }
   const labelOf: LabelOf = (key) => {
@@ -1177,6 +1200,7 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
     <StatusBadge
       status={rowStatusOf(errors, liveFit.get(row.id), refusals?.get(row.id))}
       labelOf={labelOf}
+      fitLoading={fitLoading ?? false}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
           const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;
