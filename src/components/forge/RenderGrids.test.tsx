@@ -851,6 +851,9 @@ describe('RenderRequestsGrid', () => {
         ),
       ).toBeTruthy();
       expect(tray.textContent).not.toMatch(/Couldn’t check/);
+      // The set moved: not the delivery's refusal, so no Change delivery and no delivery headline.
+      expect(within(tray).queryAllByRole('button', { name: 'Change delivery' })).toHaveLength(0);
+      expect(tray.textContent).not.toContain('refused this batch’s delivery');
       expect(
         within(headline(1).closest('tr')!).queryAllByText(/Fonts missing|Won’t render/),
       ).toHaveLength(0);
@@ -1629,6 +1632,61 @@ describe('RenderRequestsGrid', () => {
           .getAllByRole('button')
           .map((button) => button.textContent),
       ).toEqual(['Retry this batch', 'Open Render ledger']);
+    }, 30_000);
+
+    test('a rename while held moves only the set revision: the held view says nothing changed', async () => {
+      await setup(noAnswer);
+      expect((await heldView()).textContent).not.toContain('aren’t part of this batch');
+      await openMenu('Actions for Newest', /Rename/);
+      const dialog = await screen.findByRole('dialog', { name: 'Rename render set' });
+      fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summer' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
+      await waitFor(() => expect(updateRenderSetMock).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryAllByRole('dialog')).toHaveLength(0));
+      expect((await heldView()).textContent).not.toContain('aren’t part of this batch');
+    }, 30_000);
+
+    test('each set mutator reads the hold fresh: a hold written under an open menu or dialog stops it', async () => {
+      listRenderSetsMock.mockImplementation(async () => ({
+        items: [renderable(NEWEST), renderable(OLDER)],
+        nextCursor: null,
+      }));
+      render(<RenderRequestsGrid brandId={BRAND} />);
+      await screen.findByDisplayValue('Newest row');
+      // Written by another tab with no event this page hears: only a fresh read sees it.
+      const holdSilently = () =>
+        localStorage.setItem(
+          holdKeyOf({
+            userId: USER,
+            brandId: BRAND,
+            bindingId: TEMPLATE.bindingId,
+            templateKey: '133',
+            renderSetId: OLDER.id,
+          }),
+          JSON.stringify({ batchId: 'batch-o', heldAt: Date.now() }),
+        );
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Older' }));
+      const duplicate = await screen.findByRole('menuitem', { name: /Duplicate/ });
+      holdSilently();
+      const created = createRenderSetMock.mock.calls.length;
+      fireEvent.click(duplicate);
+      await act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(createRenderSetMock.mock.calls.length).toBe(created);
+      // Let go in that tab, heard here: the menu offers Delete again.
+      act(() => {
+        localStorage.clear();
+        window.dispatchEvent(Object.assign(new Event('storage'), { key: null }));
+      });
+      if (screen.queryAllByRole('menuitem').length) {
+        fireEvent.keyDown(screen.getAllByRole('menuitem')[0]!, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
+      }
+      await openMenu('Actions for Older', /Delete/);
+      const confirm = await screen.findByRole('alertdialog');
+      holdSilently();
+      fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+      await act(async () => await new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(deleteRenderSetMock).not.toHaveBeenCalled();
     }, 30_000);
 
     test('a value-only edit since the batch was sent is said apart from it', async () => {

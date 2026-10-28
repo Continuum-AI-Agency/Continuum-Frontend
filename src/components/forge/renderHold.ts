@@ -51,7 +51,11 @@ export type HoldReason =
   | { kind: 'no-answer' }
   | { kind: 'stopped'; message: string; retryable: boolean }
   /** A retry refused for the session: the token is the same user's, so it works after sign-in. */
-  | { kind: 'session' };
+  | { kind: 'session' }
+  /** A retry refused with a 403: this person may no longer render here. */
+  | { kind: 'permission' }
+  /** A retry refused because the set or its revision moved: some rows may exist. */
+  | { kind: 'set_changed' };
 
 export type HeldBatch = {
   batchId: string | null;
@@ -74,6 +78,10 @@ export const NOT_SAVED =
   'Your browser isn’t saving data for this site, so a reload won’t remember this send. If it doesn’t confirm, check the Render ledger before rendering again.';
 export const SESSION_EXPIRED = 'Your session expired. Sign in again, then Render.';
 export const SESSION_RETRY = 'Your session expired. Sign in again, then Retry.';
+export const SESSION_CHECK = 'Your session expired. Sign in again, then Check again.';
+export const SET_CHANGED = 'This set changed somewhere else. Reload it, then Render.';
+/** Why a held set's rows cannot be copied, deleted, re-pinned or replaced. */
+export const HELD_SET = 'Check the Render ledger first';
 /** How often an outstanding send says it is still on its way, and how long its silence means not. */
 export const BEAT_MS = 30_000;
 export const STALE_MS = 60_000;
@@ -94,6 +102,19 @@ export class RenderHeldError extends Error {
  */
 export const isSessionRefusal = (error: unknown): boolean =>
   error instanceof ApiError && (error.status === 401 || error.status === 403);
+
+/**
+ * A refusal about the render set or its revision, not the rows. createBatch raises none (its loop
+ * re-checks only the binding: Continuum-Backend service.ts createBatch/createJob, checked
+ * 2026-10-28 at 0825783d3); preflight does. So on a first send it made nothing.
+ */
+export const isSetChanged = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status >= 400 &&
+  error.status < 500 &&
+  /render_set|revision/.test(
+    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message),
+  );
 
 type Stored = { batchId: string | null; heldAt: number; inflight?: true };
 type Token = { signed: SignedBatch; reason: HoldReason | null; sending?: 'first' | 'retry' };
@@ -173,7 +194,9 @@ const reasonOf = (error: ApiError) =>
     .replace(/[.\s]+$/, '');
 
 export function holdReasonOf(error: unknown): HoldReason {
+  if (error instanceof ApiError && error.status === 403) return { kind: 'permission' };
   if (isSessionRefusal(error)) return { kind: 'session' };
+  if (isSetChanged(error)) return { kind: 'set_changed' };
   if (!(error instanceof ApiError)) return { kind: 'no-answer' };
   const refused = error.status >= 400 && error.status < 500 && error.status !== 429;
   if (!refused && !hasBackendError(error)) return { kind: 'no-answer' };
@@ -234,7 +257,7 @@ async function sendUnderHold<T>(
     clearHold(scope, batchId);
     return result;
   } catch (error) {
-    if (first && isSessionRefusal(error)) clearHold(scope, batchId);
+    if (first && (isSessionRefusal(error) || isSetChanged(error))) clearHold(scope, batchId);
     else heldAfter(key, batchId, heldAt, { signed, reason: holdReasonOf(error) });
     throw error;
   } finally {
@@ -265,6 +288,8 @@ export async function confirmUnderHold<T>(
 export const canRetry = (held: HeldBatch, now = Date.now()): boolean =>
   held.signed !== null &&
   !held.sending &&
+  held.reason?.kind !== 'permission' &&
+  held.reason?.kind !== 'set_changed' &&
   !sendingElsewhere(held, now) &&
   Date.parse(held.signed.expiresAt) > now &&
   !(held.reason?.kind === 'stopped' && !held.reason.retryable);
@@ -315,6 +340,10 @@ export function heldCopy(held: HeldBatch, now = Date.now()): string {
   if (sendingElsewhere(held, now))
     return 'A Render of this set is still being sent. Wait a moment, then check the Render ledger.';
   if (reason?.kind === 'session') return SESSION_RETRY;
+  if (reason?.kind === 'permission')
+    return 'You don’t have permission to render here any more. Open Render ledger to check what was sent.';
+  if (reason?.kind === 'set_changed')
+    return 'This set changed somewhere else while sending. Some rows may already be rendering. Open Render ledger to check, then reload the set.';
   // No token here: this page reloaded, or another tab sent it. The stored record does not say which,
   // so the copy is the same for both.
   if (!reason)

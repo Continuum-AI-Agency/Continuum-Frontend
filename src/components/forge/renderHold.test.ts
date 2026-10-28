@@ -353,24 +353,64 @@ describe('renderHold', () => {
     expect(localStorage.getItem(holdKeyOf(SCOPE))).toBeNull();
   });
 
-  test('a 401 or 403 on a retry keeps the hold and its Retry: sign in, then Retry', async () => {
-    for (const status of [401, 403]) {
-      await confirmUnderHold(SCOPE, SIGNED, async () => {
-        throw noAnswer();
-      }).catch(() => undefined);
-      await expect(
-        retryHeld(SCOPE, async () => {
-          throw new ApiError('Unauthorized', status);
-        }),
-      ).rejects.toBeInstanceOf(ApiError);
-      const held = readHold(SCOPE)!;
-      expect(held.reason).toEqual({ kind: 'session' });
-      expect(canRetry(held)).toBe(true);
-      expect(heldCopy(held)).toBe(SESSION_RETRY);
-      // Signed back in: the same token goes, and lands.
-      await retryHeld(SCOPE, async (token) => expect(token).toBe('token-secret'));
-      expect(isHeld(SCOPE)).toBe(false);
-    }
+  test('a 401 on a retry keeps the hold and its Retry: sign in, then Retry', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    await expect(
+      retryHeld(SCOPE, async () => {
+        throw new ApiError('Unauthorized', 401);
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    const held = readHold(SCOPE)!;
+    expect(canRetry(held)).toBe(true);
+    expect(heldCopy(held)).toBe(SESSION_RETRY);
+    // Signed back in: the same token goes, and lands.
+    await retryHeld(SCOPE, async (token) => expect(token).toBe('token-secret'));
+    expect(isHeld(SCOPE)).toBe(false);
+  });
+
+  test('a 403 on a retry keeps the hold without Retry: permission is not a sign-in away', async () => {
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    await expect(
+      retryHeld(SCOPE, async () => {
+        throw new ApiError('Forbidden', 403);
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    const held = readHold(SCOPE)!;
+    expect(isHeld(SCOPE)).toBe(true);
+    expect(canRetry(held)).toBe(false);
+    expect(heldCopy(held)).toBe(
+      'You don’t have permission to render here any more. Open Render ledger to check what was sent.',
+    );
+  });
+
+  test('a set code made nothing on a first send (not held); on a retry, rows may exist (held)', async () => {
+    const moved = () =>
+      new ApiError('render_set_revision_conflict', 409, undefined, {
+        error: 'render_set_revision_conflict',
+      });
+    await expect(
+      confirmUnderHold(SCOPE, SIGNED, async () => {
+        throw moved();
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(isHeld(SCOPE)).toBe(false);
+    await confirmUnderHold(SCOPE, SIGNED, async () => {
+      throw noAnswer();
+    }).catch(() => undefined);
+    await expect(
+      retryHeld(SCOPE, async () => {
+        throw moved();
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+    const held = readHold(SCOPE)!;
+    expect(canRetry(held)).toBe(false);
+    expect(heldCopy(held)).toBe(
+      'This set changed somewhere else while sending. Some rows may already be rendering. Open Render ledger to check, then reload the set.',
+    );
   });
 
   test('a scoped clear never removes another batch’s hold', async () => {

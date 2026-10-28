@@ -73,7 +73,14 @@ import {
   RenderReviewTray,
   type RowsAsked,
 } from '@/components/forge/RenderReviewTray';
-import { type HoldScope, isHeld, SIGNED_OUT, useRenderHold } from '@/components/forge/renderHold';
+import {
+  HELD_SET,
+  type HoldScope,
+  isHeld,
+  isSetChanged,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
 import {
   downloadTemplateCsv,
   fetchLibraryAsset,
@@ -121,6 +128,7 @@ import {
   resetKey,
   restoreRows,
   reviewSignature,
+  rowsOfSignature,
   rootRowId,
   rowBreadcrumb,
   rowDepth,
@@ -276,12 +284,6 @@ const refusalKey = (
 
 /** A refusal about the set or its revision, not the row: the set moved, not the row's values. */
 const SET_LEVEL_CODE = /render_set|revision/;
-const isSetLevelRefusal = (error: unknown) =>
-  error instanceof ApiError &&
-  error.status === 422 &&
-  SET_LEVEL_CODE.test(
-    error.code ?? (typeof error.payload?.error === 'string' ? error.payload.error : error.message),
-  );
 
 /**
  * A row's own preflight refusing it: a 422, as the tray's batch refusal is, about the row's values
@@ -1167,6 +1169,16 @@ export function RenderRequestsGrid({
       ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
       : null;
   const holdScope = activeSet ? holdOf(activeSet.id) : null;
+  /**
+   * The one gate for what would change what a held set renders, or what it is: its rows copied,
+   * deleted, re-pinned or replaced. Read fresh, so a dialog open in another tab is gated too.
+   * Rename and describe stay open.
+   */
+  const heldReasonOf = (set: { id: string } | null): string | null => {
+    const scope = set ? holdOf(set.id) : null;
+    return scope && isHeld(scope) ? HELD_SET : null;
+  };
+  const activeHeld = heldReasonOf(activeSet);
   const held = useRenderHold(holdScope);
   // A held batch that a Retry landed: its jobs, shown until closed.
   const [landed, setLanded] = useState<ApiRenderJob[] | null>(null);
@@ -1382,7 +1394,7 @@ export function RenderRequestsGrid({
     .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
   const changeRevision = async () => {
     const picked = publishedRevisions.find((item) => item.id === pickedRevision);
-    if (!picked) return;
+    if (!picked || heldReasonOf(activeSet)) return;
     setRevisionChangeBusy(true);
     try {
       if (activeSet) {
@@ -1455,7 +1467,7 @@ export function RenderRequestsGrid({
         : [];
     }) ?? [];
   const runOnVariants = async () => {
-    if (!activeSet) return;
+    if (!activeSet || heldReasonOf(activeSet)) return;
     setRevisionChangeBusy(true);
     const made: string[] = [];
     const refused: string[] = [];
@@ -2180,7 +2192,7 @@ export function RenderRequestsGrid({
 
   /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
   const duplicateSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+    if (!contract || heldReasonOf(set)) return;
     const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
     const copy = rebaseRows(
       source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
@@ -2197,7 +2209,7 @@ export function RenderRequestsGrid({
 
   /** A kept version as a new set. The set it came from is never written back over. */
   const restoreRevision = async (revision: ForgeRenderSetRevision) => {
-    if (!contract) return;
+    if (!contract || heldReasonOf(historyFor)) return;
     if (
       revision.templateRevision &&
       (revision.templateRevision.templateKey !== contract.template.key ||
@@ -2232,7 +2244,7 @@ export function RenderRequestsGrid({
   };
 
   const deleteSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+    if (!contract || heldReasonOf(set)) return;
     try {
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
@@ -2654,7 +2666,7 @@ export function RenderRequestsGrid({
           // An outage, a throttle or a cut says nothing about the row: it was not checked. A set
           // or revision that moved says it of the set, which is what to reload.
           if (refusal) checked.set(rowId, { ...refusal, key: keyOf(rowId) });
-          else if (isSetLevelRefusal(error)) setChanged = true;
+          else if (isSetChanged(error)) setChanged = true;
           else unchecked += 1;
         }
       }
@@ -2865,7 +2877,8 @@ export function RenderRequestsGrid({
           <Button
             size="xs"
             variant="outline"
-            disabled={!pickedRevision || revisionChangeBusy || needsSave}
+            disabled={!pickedRevision || revisionChangeBusy || needsSave || Boolean(activeHeld)}
+            title={activeHeld ?? undefined}
             onClick={() => void changeRevision()}
           >
             {activeSet ? 'Change set template revision' : 'Load template revision'}
@@ -2874,8 +2887,11 @@ export function RenderRequestsGrid({
             <Button
               size="xs"
               variant="outline"
-              disabled={revisionChangeBusy || needsSave}
-              title="Copies this set's rows to a new set on every other published variant, pinned to its published revision."
+              disabled={revisionChangeBusy || needsSave || Boolean(activeHeld)}
+              title={
+                activeHeld ??
+                "Copies this set's rows to a new set on every other published variant, pinned to its published revision."
+              }
               onClick={() => void runOnVariants()}
             >
               Run on{' '}
@@ -3229,14 +3245,13 @@ export function RenderRequestsGrid({
                     onDescribe={(set, description) => updateSetDetails(set, { description })}
                     onDelete={deleteSet}
                     onDuplicate={(set) => void duplicateSet(set)}
-                    heldReason={(set) => {
-                      const scope = holdOf(set.id);
-                      return scope && isHeld(scope) ? 'Check the Render ledger first' : null;
-                    }}
+                    heldReason={heldReasonOf}
                     onHistory={setHistoryFor}
-                    onUpdate={() => void saveNow()}
+                    onUpdate={() => {
+                      if (!heldReasonOf(activeSet)) void saveNow();
+                    }}
                     onImportDraft={() => {
-                      if (!draftOffer) return;
+                      if (!draftOffer || heldReasonOf(activeSet)) return;
                       activeSetRef.current = null;
                       savedBase.current = [];
                       setActiveSet(null);
@@ -3376,11 +3391,9 @@ export function RenderRequestsGrid({
                     id: row.id,
                     label: row.label.trim() || 'Untitled',
                   }))}
-                  currentSnapshot={reviewSignature(
-                    rows,
-                    selectedIds,
-                    activeSet?.revision ?? null,
-                    allOutputIdsOf(contract),
+                  // Rows and selection only: a rename moves the set revision, not the batch.
+                  currentSnapshot={rowsOfSignature(
+                    reviewSignature(rows, selectedIds, null, allOutputIdsOf(contract)),
                   )}
                   // ponytail: the ledger opens unfiltered (the view names the batch's time); pass
                   // batchId once RenderJobsGrid can open one batch from outside
@@ -3417,7 +3430,7 @@ export function RenderRequestsGrid({
                   finalBlocked={finalBlocked}
                   onRecheck={() => void openReview()}
                   holdScope={holdScope}
-                  reviewSnapshot={review.signature}
+                  reviewSnapshot={rowsOfSignature(review.signature)}
                   onHeld={() => setReview(null)}
                   onRefused={findRefusals}
                   onPassed={clearRefusals}
@@ -3521,6 +3534,7 @@ export function RenderRequestsGrid({
         set={historyFor}
         contractHash={contract?.template.contractHash ?? ''}
         onRestore={restoreRevision}
+        restoreBlocked={heldReasonOf(historyFor)}
         onOpenChange={(open) => !open && setHistoryFor(null)}
       />
       <NameDialog

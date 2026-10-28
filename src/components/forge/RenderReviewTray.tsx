@@ -78,13 +78,16 @@ import {
   heldCopy,
   isHeld,
   isSessionRefusal,
+  isSetChanged,
   NOT_SAVED,
   RenderHeldError,
   STALE_MS,
   sendingElsewhere,
   resendHeld,
   retryHeld,
+  SESSION_CHECK,
   SESSION_EXPIRED,
+  SET_CHANGED,
   SIGNED_OUT,
   type SignedBatch,
 } from '@/components/forge/renderHold';
@@ -470,7 +473,7 @@ export function RenderReviewTray({
         setReview(
           refusal
             ? { state: 'refused', message, details, canOverrideFonts }
-            : { state: 'failed', message: isSessionRefusal(error) ? SESSION_EXPIRED : message },
+            : { state: 'failed', message: isSessionRefusal(error) ? SESSION_CHECK : message },
         );
         if (refusal && !canOverrideFonts)
           // An explicit Check again asks the rows again, even when they were just asked.
@@ -504,7 +507,8 @@ export function RenderReviewTray({
     review.state === 'refused' &&
     !review.canOverrideFonts &&
     review.asked?.refused === 0 &&
-    review.asked.unchecked === 0;
+    review.asked.unchecked === 0 &&
+    !review.asked.setChanged;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -613,8 +617,9 @@ export function RenderReviewTray({
       );
     } catch (error) {
       setFiring(false);
-      // Refused before anything was made: the session.
+      // Refused before anything was made: the session, or a set that moved (renderHold.ts).
       if (isSessionRefusal(error)) return setProblem(SESSION_EXPIRED);
+      if (isSetChanged(error)) return setProblem(SET_CHANGED);
       // Held: by another tab since the sign, or by this createBatch failing, whatever the status
       // (some rows may exist). Either way the hold opens, and the ledger is re-read.
       if (signed || error instanceof RenderHeldError) {

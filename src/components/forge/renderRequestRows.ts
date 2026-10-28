@@ -1342,6 +1342,10 @@ export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): For
  * delivers is chosen during the review, and a thumbnail loading is nothing
  * the server signs, so none of those make a review stale.
  */
+/** The rows and selection a signature names, without the set's revision: a rename moves only that. */
+export const rowsOfSignature = (signature: string): string =>
+  JSON.stringify((JSON.parse(signature) as unknown[]).slice(0, 2));
+
 export const reviewSignature = (
   rows: RequestRow[],
   selectedIds: string[],

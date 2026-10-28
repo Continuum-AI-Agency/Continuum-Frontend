@@ -27,12 +27,16 @@ const shareRenderSetZipMock = mock(async (_brandId: string, _setId: string) => (
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: listJobsMock,
+    listRenderSetRevisions: async () => ({
+      items: [{ revision: 3, savedAt: new Date().toISOString(), contractHash: 'hash', rows: [] }],
+    }),
     shareRenderSet: shareRenderSetMock,
     shareRenderSetZip: shareRenderSetZipMock,
   },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
 import {
   cleanup,
   fireEvent,
@@ -219,10 +223,14 @@ describe('RenderSetRail', () => {
     expect(props.onDescribe.mock.calls[0]).toEqual([LAUNCH, null]);
   });
 
-  test('a held set cannot be duplicated or deleted, with why; New set still can', async () => {
+  test('a held set cannot be duplicated, deleted, updated or replaced, with why; New set still can', async () => {
     const { props } = setup({
+      // An older template, so Update to current template is offered; a draft to import.
+      sets: [{ ...LAUNCH, contractHash: 'older' }, TEASER],
+      activeSet: { ...LAUNCH, contractHash: 'older' },
+      draftAvailable: true,
       onDuplicate: mock((_set: ForgeRenderSet) => undefined),
-      heldReason: (set: ForgeRenderSet) =>
+      heldReason: (set: { id: string }) =>
         set.id === LAUNCH.id ? 'Check the Render ledger first' : null,
     });
     const actions = async (name: string) => {
@@ -230,10 +238,16 @@ describe('RenderSetRail', () => {
       return {
         duplicate: await screen.findByRole('menuitem', { name: /Duplicate/ }),
         remove: screen.getByRole('menuitem', { name: /Delete/ }),
+        update: screen.queryByRole('menuitem', { name: /Update to current template/ }),
+        rename: screen.getByRole('menuitem', { name: /Rename/ }),
+        describe: screen.getByRole('menuitem', { name: /Edit description/ }),
       };
     };
     const held = await actions('Launch week');
-    for (const item of [held.duplicate, held.remove]) {
+    // Rename and describe change nothing a held batch renders.
+    for (const item of [held.rename, held.describe])
+      expect(item.hasAttribute('data-disabled')).toBe(false);
+    for (const item of [held.duplicate, held.remove, held.update!]) {
       expect(
         item.hasAttribute('data-disabled') || item.getAttribute('aria-disabled') === 'true',
       ).toBe(true);
@@ -248,8 +262,38 @@ describe('RenderSetRail', () => {
     expect(free.duplicate.hasAttribute('data-disabled')).toBe(false);
     fireEvent.keyDown(free.duplicate, { key: 'Escape' });
     await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
+    // The browser draft would replace the held set's rows on screen.
+    const draft = screen.getByRole<HTMLButtonElement>('button', { name: /Import browser draft/ });
+    expect(draft.disabled).toBe(true);
+    expect(draft.getAttribute('title')).toBe('Check the Render ledger first');
     // New set is different rows: it stays open.
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New set' }).disabled).toBe(false);
+  });
+
+  test('Restore as new set waits while the set holds a render, and says why', async () => {
+    const onRestore = mock(async () => undefined);
+    testingRender(
+      <SetHistoryDialog
+        brandId={BRAND}
+        set={LAUNCH}
+        contractHash="hash"
+        onRestore={onRestore}
+        restoreBlocked="Check the Render ledger first"
+        onOpenChange={() => undefined}
+      />,
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    const restore = await screen.findByRole<HTMLButtonElement>('button', {
+      name: 'Restore as new set',
+    });
+    expect(restore.disabled).toBe(true);
+    expect(restore.getAttribute('title')).toBe('Check the Render ledger first');
+    fireEvent.click(restore);
+    expect(onRestore).not.toHaveBeenCalled();
   });
 
   test('switching and New set ask the grid first; the open set is not reopened', () => {

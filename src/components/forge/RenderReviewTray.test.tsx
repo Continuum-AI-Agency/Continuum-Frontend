@@ -216,7 +216,9 @@ import {
   holdKeyOf,
   NOT_SAVED,
   readHold,
+  SESSION_CHECK,
   SESSION_EXPIRED,
+  SET_CHANGED,
   useRenderHold,
 } from './renderHold';
 
@@ -576,7 +578,8 @@ describe('RenderReviewTray · Review', () => {
       throw new ApiError('Unauthorized', 401);
     });
     renderTray();
-    expect(await screen.findByText(SESSION_EXPIRED)).toBeTruthy();
+    // The enabled way on, in the review, is Check again.
+    expect(await screen.findByText(SESSION_CHECK)).toBeTruthy();
     expect(document.body.textContent).not.toContain('Unauthorized');
   }, 30_000);
 
@@ -928,6 +931,20 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real });
     }
+  }, 30_000);
+
+  test('a set that moved, at confirm, made nothing: not held, and Reload it, then Render', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('render_set_revision_conflict', 409, undefined, {
+        error: 'render_set_revision_conflict',
+      });
+    });
+    const { onHeld } = renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    expect(await screen.findByText(SET_CHANGED)).toBeTruthy();
+    expect(onHeld).not.toHaveBeenCalled();
+    expect(readHold(SCOPE)).toBeNull();
   }, 30_000);
 
   test('a 401 from createBatch is not held: the session expired', async () => {

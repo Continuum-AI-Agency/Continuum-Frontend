@@ -356,6 +356,7 @@ export function RenderSetRail({
                 id: 'update',
                 label: 'Update to current template',
                 icon: RefreshCw,
+                disabledReason: held,
                 run: () => (active ? onUpdate(set) : confirmDiscard(() => onSwitch(set))),
               },
             ]),
@@ -616,6 +617,9 @@ export function RenderSetRail({
             size="xs"
             variant="ghost"
             className="-mx-2"
+            // The draft replaces the open set's rows: not while that set holds a render.
+            disabled={Boolean(activeSet && heldReason?.(activeSet))}
+            title={(activeSet && heldReason?.(activeSet)) || undefined}
             onClick={() => confirmDiscard(onImportDraft)}
           >
             <History data-icon="inline-start" /> Import browser draft
