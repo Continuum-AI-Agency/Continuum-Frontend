@@ -28,19 +28,27 @@ const mockChannel = {
 };
 
 /**
- * The registered handler for one event on the db channel.
+ * The db channel's handler, fed a `postgres_changes`-shaped payload for one event.
  *
- * The hook binds INSERT, UPDATE and DELETE separately rather than one `*` with an
- * `eventType` switch, so "the first postgres_changes call" is no longer "the only
- * one" — asking for the first and firing a DELETE at it silently exercises the INSERT
- * path and asserts nothing.
+ * The db half joins the trigger-fed `canvas_sessions:<brand>` topic, so the row arrives as
+ * a broadcast `{ operation, record }`; this adapter keeps the cases below in the row's own
+ * terms. The peer channel binds named broadcast events, the db topic binds `*`.
  */
 const dbHandlerFor = (event: 'INSERT' | 'UPDATE' | 'DELETE') => {
   const call = (mockChannel.on as any).mock.calls.find(
-    (c: any) => c[0] === 'postgres_changes' && c[1]?.event === event,
+    (c: any) => c[0] === 'broadcast' && c[1]?.event === '*',
   );
-  if (!call) throw new Error(`no postgres_changes binding registered for ${event}`);
-  return call[2] as (payload: any) => void;
+  if (!call) throw new Error('no row-broadcast binding registered');
+  const deliver = call[2] as (message: any) => void;
+  return (payload: any) =>
+    deliver({
+      event,
+      payload: {
+        operation: payload.eventType ?? event,
+        record: (payload.eventType ?? event) === 'DELETE' ? payload.old : payload.new,
+        old_record: {},
+      },
+    });
 };
 
 const createMockQueryBuilder = () => {

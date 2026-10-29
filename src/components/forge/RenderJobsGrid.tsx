@@ -54,7 +54,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { pluralize } from '@/lib/format/pluralize';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
 import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
@@ -260,13 +260,10 @@ export function RenderJobsGrid({
       }, 400);
     };
     if (!cancelled)
-      unsubscribe = subscribeToPostgresChanges({
-        label: 'ad-render-jobs',
+      unsubscribe = subscribeToRowBroadcasts({
+        topic: `ad_render_jobs:${brandId}`,
         bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
           event,
-          schema: 'media',
-          table: 'ad_render_jobs',
-          filter: `brand_id=eq.${brandId}`,
           onRow: (row) => onRow(event, row),
         })),
         onSubscribed: () =>

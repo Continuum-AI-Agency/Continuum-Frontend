@@ -30,7 +30,7 @@ type RealtimeSubscription = {
   onSubscribed?: () => void | Promise<void>;
 };
 let realtimeSubscription: RealtimeSubscription | null = null;
-const subscribeToPostgresChanges = mock((subscription: RealtimeSubscription) => {
+const subscribeToRowBroadcasts = mock((subscription: RealtimeSubscription) => {
   realtimeSubscription = subscription;
   return () => {};
 });
@@ -42,7 +42,7 @@ mock.module('@/lib/documents/uploadEphemeralChatDocument', () => ({
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ schema: schemaDocuments }),
 }));
-mock.module('@/lib/supabase/realtime', () => ({ subscribeToPostgresChanges }));
+mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts }));
 // The stale window is shortened so the timeout test does not take two minutes. 100ms left
 // no slack at all — the whole render/effect cycle had to finish inside ~40ms or the
 // heartbeat landed after the deadline it was meant to push back, which made the test fail

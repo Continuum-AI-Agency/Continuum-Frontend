@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { useWorkflowExecution } from '@/StudioCanvas/hooks/useWorkflowExecution';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import { executeWorkflow } from '@/StudioCanvas/utils/executeWorkflow';
@@ -54,18 +54,15 @@ export function useCanvasRunRequests(brandProfileId: string, roomId: string | un
 
     const store = createSupabaseRunRequestStore(supabase);
 
-    // The old channel carried `config: { broadcast: { self: false } }` with no broadcast
-    // binding on it — cargo cult from the sibling canvas channel. Dropped, not threaded.
-    return subscribeToPostgresChanges({
-      label: `canvas:runs:${brandProfileId}:${roomId}`,
+    // The topic is the brand's; this room's requests are picked out here.
+    return subscribeToRowBroadcasts({
+      topic: `canvas_run_requests:${brandProfileId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: 'brand_profiles',
-          table: 'canvas_run_requests',
-          filter: `room_id=eq.${roomId}`,
           onRow: (row) => {
-            if (row.brand_profile_id !== brandProfileId || row.status !== 'pending') return;
+            if (row.brand_profile_id !== brandProfileId || row.room_id !== roomId) return;
+            if (row.status !== 'pending') return;
             const runRequestId = typeof row.id === 'string' ? row.id : null;
             if (!runRequestId || handledRef.current.has(runRequestId)) return;
             handledRef.current.add(runRequestId);

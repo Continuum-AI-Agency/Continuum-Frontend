@@ -1,7 +1,7 @@
 'use client';
 
 // Comments for one asset while its detail modal is open: initial fetch,
-// realtime merge (media.comments postgres_changes, same channel pattern as
+// realtime merge (the brand's `comments:<brand>` row broadcasts, as
 // useMediaLibrary), and optimistic posting. Realtime rows carry no author
 // fields, so an authors map built from the fetch (plus the caller) fills
 // display names for rows arriving live.
@@ -27,7 +27,7 @@ import {
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getSessionUser } from '@/lib/supabase/sessionUser';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type PostCommentInput = {
   body: string;
@@ -128,12 +128,6 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
   }, [brandId, assetId]);
 
   useEffect(() => {
-    const scoped = {
-      schema: 'media',
-      table: 'comments',
-      filter: `asset_id=eq.${assetId}`,
-    } as const;
-
     const applyComment = (row: MediaCommentRow) => {
       if (row.deleted_at) {
         setComments((prev) => prev.filter((c) => c.id !== row.id));
@@ -151,22 +145,26 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
       });
     };
 
-    return subscribeToPostgresChanges({
-      label: `media-comments-${assetId}`,
+    // The topic is the brand's; this asset's comments are picked out here.
+    const onAsset =
+      (apply: (row: Record<string, unknown>) => void) => (row: Record<string, unknown>) => {
+        if (row.asset_id === assetId) apply(row);
+      };
+    return subscribeToRowBroadcasts({
+      topic: `comments:${brandId}`,
       bindings: [
         {
-          ...scoped,
           event: 'DELETE',
-          onRow: (row) => {
+          onRow: onAsset((row) => {
             const removedId = (row as { id?: string }).id;
             if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
-          },
+          }),
         },
-        { ...scoped, event: 'INSERT', onRow: (row) => applyComment(row as MediaCommentRow) },
-        { ...scoped, event: 'UPDATE', onRow: (row) => applyComment(row as MediaCommentRow) },
+        { event: 'INSERT', onRow: onAsset((row) => applyComment(row as MediaCommentRow)) },
+        { event: 'UPDATE', onRow: onAsset((row) => applyComment(row as MediaCommentRow)) },
       ],
     });
-  }, [assetId]);
+  }, [brandId, assetId]);
 
   const markPending = useCallback((id: string, pending: boolean) => {
     setPendingIds((prev) => {

@@ -291,7 +291,7 @@ mock.module('@/components/forge/OutputSettingsPanel', () => ({
 }));
 // The Renders section subscribes to job changes; the sheet's tests need no live channel.
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: () => () => undefined,
+  subscribeToRowBroadcasts: () => () => undefined,
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {

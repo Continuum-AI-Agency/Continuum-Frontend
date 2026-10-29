@@ -94,19 +94,22 @@ describe('useCanvasRooms', () => {
     await waitFor(() => expect(result.current.rooms).toEqual(mockRooms));
     // The row lands in the query cache, which notifies its observers asynchronously — so
     // this waits for the re-render rather than reading the render that was already on screen.
-    act(() => realtimeHandlers.get('INSERT')?.({ new: room }));
+    act(() =>
+      realtimeHandlers.get('*')?.({ payload: { operation: 'INSERT', record: room, old_record: {} } }),
+    );
 
     await waitFor(() => expect(result.current.rooms).toContainEqual(room));
   });
 
-  it('uses a distinct Realtime channel for each hook instance', async () => {
+  it("shares the brand's one rooms topic between hook instances", async () => {
     const first = render();
     const second = render();
 
     await act(async () => {});
 
+    // A second channel(topic) would be handed the joined one and its subscribe() would throw.
     const topics = mockSupabase.channel.mock.calls.map(([topic]: [string]) => topic);
-    expect(new Set(topics).size).toBe(topics.length);
+    expect(topics).toEqual(['canvas_rooms:brand-1']);
     first.unmount();
     second.unmount();
   });

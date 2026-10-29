@@ -29,7 +29,7 @@ import {
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getSessionUser } from '@/lib/supabase/sessionUser';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type PostMultiCommentInput = {
   assetId: string;
@@ -179,36 +179,27 @@ export function useMultiAssetComments(
   useEffect(() => {
     if (!assetKey) return;
 
-    const scoped = {
-      schema: 'media',
-      table: 'comments',
-      filter: `asset_id=in.(${assetKey})`,
-    } as const;
-
-    return subscribeToPostgresChanges({
-      label: `media-comments-multi-${assetKey}`,
+    // The topic is the brand's; these assets' comments are picked out here.
+    const assetIds = new Set(assetKey.split(','));
+    const onAssets =
+      (apply: (row: Record<string, unknown>) => void) => (row: Record<string, unknown>) => {
+        if (typeof row.asset_id === 'string' && assetIds.has(row.asset_id)) apply(row);
+      };
+    return subscribeToRowBroadcasts({
+      topic: `comments:${brandId}`,
       bindings: [
         {
-          ...scoped,
           event: 'DELETE',
-          onRow: (row) => {
+          onRow: onAssets((row) => {
             const removedId = (row as { id?: string }).id;
             if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
-          },
+          }),
         },
-        {
-          ...scoped,
-          event: 'INSERT',
-          onRow: (row) => applyComment(row as MediaCommentRow),
-        },
-        {
-          ...scoped,
-          event: 'UPDATE',
-          onRow: (row) => applyComment(row as MediaCommentRow),
-        },
+        { event: 'INSERT', onRow: onAssets((row) => applyComment(row as MediaCommentRow)) },
+        { event: 'UPDATE', onRow: onAssets((row) => applyComment(row as MediaCommentRow)) },
       ],
     });
-  }, [assetKey, applyComment]);
+  }, [brandId, assetKey, applyComment]);
 
   const markPending = useCallback((id: string, pending: boolean) => {
     setPendingIds((prev) => {

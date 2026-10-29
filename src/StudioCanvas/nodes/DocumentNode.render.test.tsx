@@ -28,7 +28,7 @@ const writes: Array<{ patch: Row; ids: unknown; guard: [string, unknown] }> = []
 // Realtime is silenced on purpose: this suite is about the state that was already
 // reached, so any chip that turns correct here did so from a real read of the table.
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: () => () => {},
+  subscribeToRowBroadcasts: () => () => {},
 }));
 
 mock.module('@/lib/supabase/client', () => ({

@@ -49,7 +49,7 @@ const getContract = mock((_brandId: string, _templateKey: string, _bindingId?: s
 
 // The Renders section subscribes to job changes; this spec needs no live channel.
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: () => () => undefined,
+  subscribeToRowBroadcasts: () => () => undefined,
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {

@@ -2,30 +2,20 @@ import { describe, expect, it } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// One owner for `postgres_changes`, asserted over the tree rather than per file.
+// No `postgres_changes` subscription anywhere, asserted over the tree rather than per file.
 //
-// A channel topic is a GLOBAL name on the browser client: `supabase.channel(topic)`
-// hands back an EXISTING channel when the string matches, and `.subscribe()` flips it to
-// `joining` synchronously — so a second subscriber that composes the same string gets
-// that channel mid-join and its `.on('postgres_changes', …)` THROWS. In a Next app that
-// lands on the global error boundary, i.e. the whole authenticated page dies.
+// While ANY postgres_changes subscription exists, Supabase Realtime polls the database and
+// decodes the whole WAL several times a second — it was a quarter of all DB time
+// (realtime.list_changes). Every table the app watches is pushed by a trigger onto a private
+// Broadcast topic instead (`subscribeToRowBroadcasts`, supabase/migrations/
+// 20261028070000_realtime_row_broadcasts.sql and 20261028092000_realtime_row_broadcasts_rest.sql),
+// so one careless `.on('postgres_changes', …)` would quietly turn the poller back on for
+// every open tab. A new table to watch needs a trigger, a topic rule and a frontend topic.
 //
-// It has happened twice: the canvas composer's two run tails, and `useDesignSystem`
-// mounted once by DesignSystemSection and again by the DesignSystemCard inside it. A
-// third was already live and unreported — `useDocuments` keys its topic on brandId while
-// DocumentNode is a React Flow node type, so two document nodes on one canvas crashed it.
-//
-// `subscribeToPostgresChanges` makes the collision unrepresentable by generating the
-// topic. Individual call sites rot back one careless PR at a time, so the rule is
-// enforced here instead of in review.
-//
-// BROADCAST AND PRESENCE ARE NOT COVERED, deliberately. For those the topic IS the
-// rendezvous between peers — `canvas:broadcast:<brand>:<room>` must be the same string in
-// every browser or multiplayer breaks. They never contain the banned literal, so they
-// need no exemption and get none.
+// BROADCAST AND PRESENCE ARE NOT COVERED, deliberately: peer channels (canvas cursors,
+// presence) never contain the banned literal, so they need no exemption and get none.
 
 const SRC = join(import.meta.dir, '..', '..');
-const OWNER = join(SRC, 'lib', 'supabase', 'realtime.ts');
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -47,26 +37,23 @@ function stripComments(source: string): string {
 }
 
 /**
- * Deliberately loose between `.on` and the literal.
- *
- * A tight `\.on\(` misses `channel.on<Row>('postgres_changes', …)` — which is the form
- * the helper itself uses, and the form a typed call site would naturally reach for. The
- * "owner still binds it" case below exists to catch exactly that: it failed on the first
- * draft of this file and is why the window is here.
+ * Deliberately loose between `.on` and the literal, so the typed form
+ * `channel.on<Row>('postgres_changes', …)` is caught as well as the plain one.
  */
 const BANNED = /\.on\b[\s\S]{0,120}?['"`]postgres_changes['"`]/;
 
-describe('postgres_changes has exactly one owner', () => {
+describe('postgres_changes has no subscriber', () => {
   const offenders = sourceFiles(SRC)
-    .filter((path) => path !== OWNER)
     .filter((path) => BANNED.test(stripComments(readFileSync(path, 'utf8'))))
     .map((path) => path.slice(SRC.length + 1));
 
-  it('is never bound outside lib/supabase/realtime.ts', () => {
+  it('is never bound in src', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('still guards a real rule — the owner itself binds it', () => {
-    expect(BANNED.test(stripComments(readFileSync(OWNER, 'utf8')))).toBe(true);
+  it('still guards a real rule — both forms of the binding match', () => {
+    expect(BANNED.test("channel.on('postgres_changes', { event: 'INSERT' }, cb)")).toBe(true);
+    expect(BANNED.test('channel.on<Row>(\n  "postgres_changes",\n  filter,\n  cb)')).toBe(true);
+    expect(BANNED.test("channel.on('broadcast', { event: '*' }, cb)")).toBe(false);
   });
 });
