@@ -16,12 +16,13 @@
  */
 
 import type {
+  PaidScaffoldAdPlan,
   PaidScaffoldAdSetPlan,
   PaidScaffoldAudience,
   PaidScaffoldCreative,
   PaidScaffoldPlan,
 } from '@continuum/contracts';
-import { metaCurrencyOffset } from '@continuum/contracts';
+import { metaCurrencyOffset, paidScaffoldCopiedAudienceLabel } from '@continuum/contracts';
 import {
   type AdData,
   type AdSetData,
@@ -292,6 +293,27 @@ const audienceForAdSet = (
   if (planAudience?.kind === 'group') {
     return groupNode(planAudience.group_version_id, planAudience.group_name);
   }
+  if (planAudience?.kind === 'copied') {
+    // A campaign copy's targeting, verbatim from a live ad set: one ad set's own, shown for
+    // what it is and never re-expressed as broad (it holds cities, interests, audiences).
+    const targeting = readRecord(adSet.derived.targeting);
+    const label = paidScaffoldCopiedAudienceLabel(planAudience.source_adset_name);
+    return {
+      nodeId: `${adSet.id}:audience`,
+      data: {
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        status: 'draft',
+        validationStatus: 'valid',
+        mode: 'copied',
+        copiedFromAdSetName: planAudience.source_adset_name,
+        locations: locationsOf(targeting),
+        ...(typeof targeting.age_min === 'number' ? { ageMin: targeting.age_min } : {}),
+        ...(typeof targeting.age_max === 'number' ? { ageMax: targeting.age_max } : {}),
+        genders: gendersOf(targeting.genders),
+        provenance: provenanceOf(adSet.id, `${adSet.pathKey}/audience`, gate, null),
+      },
+    };
+  }
   if (planAudience?.kind === 'broad') {
     const { targeting } = planAudience;
     return {
@@ -449,6 +471,67 @@ export function creativeFromRow(
   };
 }
 
+/** `{ key: value }` when the value is set, `{}` otherwise — a node never carries an `undefined` key. */
+const present = <K extends string, V>(key: K, value: V | null | undefined): Partial<Record<K, V>> =>
+  value === null || value === undefined ? {} : ({ [key]: value } as Record<K, V>);
+
+/*
+ * P5: budget mode, bid, schedule, optimization event, URL tags. The ROW is the truth (its
+ * columns are what the save wrote); the version's plan fills in only for a row read before
+ * the columns existed, and only with what is not the plan's own default — a plan defaults to
+ * ABO, uncapped and unscheduled, and copying a default the row does not hold would make the
+ * next save differ from the version it was opened from.
+ */
+
+const campaignP5Of = (
+  row: PaidScaffoldNodeRow | undefined,
+  plan: PaidScaffoldPlan | null,
+  offset: number,
+): Partial<CampaignData> => {
+  const planBid = plan?.campaign_bid ?? null;
+  const budgetMinor =
+    row?.campaignDailyBudgetMinorUnits ?? plan?.campaign_daily_budget_minor_units ?? null;
+  const amountMinor = row?.bidAmountMinorUnits ?? planBid?.bid_amount_minor_units ?? null;
+  return {
+    ...present('budgetMode', row?.budgetMode ?? (plan?.budget_mode === 'cbo' ? 'cbo' : null)),
+    ...present('campaignBudgetAmount', budgetMinor === null ? null : budgetMinor / offset),
+    ...present('bidStrategy', row?.bidStrategy ?? planBid?.strategy),
+    ...present('bidAmount', amountMinor === null ? null : amountMinor / offset),
+    ...present('roasFloor', row?.roasFloor ?? planBid?.roas_floor),
+    ...present('fieldProvenance', row?.fieldProvenance),
+  };
+};
+
+const adSetP5Of = (
+  row: PaidScaffoldNodeRow | undefined,
+  planAdSet: PaidScaffoldAdSetPlan | undefined,
+  campaignCbo: boolean,
+  offset: number,
+): Partial<AdSetData> => {
+  // Under CBO the plan's ad-set bid is the campaign's, which the campaign node already shows.
+  const planBid = campaignCbo ? null : (planAdSet?.bid ?? null);
+  const amountMinor = row?.bidAmountMinorUnits ?? planBid?.bid_amount_minor_units ?? null;
+  const schedule = planAdSet?.schedule ?? null;
+  return {
+    ...present('bidStrategy', row?.bidStrategy ?? planBid?.strategy),
+    ...present('bidAmount', amountMinor === null ? null : amountMinor / offset),
+    ...present('roasFloor', row?.roasFloor ?? planBid?.roas_floor),
+    ...present('startTime', row?.startTime ?? schedule?.start_time),
+    ...present('endTime', row?.endTime ?? schedule?.end_time),
+    ...present('customEventType', row?.customEventType),
+    ...present('pixelId', row?.pixelId),
+    ...present('fieldProvenance', row?.fieldProvenance),
+  };
+};
+
+const adP5Of = (
+  row: PaidScaffoldNodeRow | undefined,
+  planAd: PaidScaffoldAdPlan | undefined,
+): Partial<AdData> => ({
+  ...present('urlTags', row?.urlTags ?? planAd?.url_tags),
+  ...present('fieldProvenance', row?.fieldProvenance),
+});
+
 export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanvasGraph {
   const tree = buildScaffoldTree(read.tree.rows);
   const rowById = new Map<string, PaidScaffoldNodeRow>(read.tree.rows.map((row) => [row.id, row]));
@@ -460,7 +543,14 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
   const planCreativeByPath = new Map<string, PaidScaffoldCreative | null>(
     (plan?.ads ?? []).map((entry) => [entry.path_key, entry.creative]),
   );
+  const planAdByPath = new Map<string, PaidScaffoldAdPlan>(
+    (plan?.ads ?? []).map((entry) => [entry.path_key, entry]),
+  );
   const currency = plan?.currency ?? read.version.budgetCurrency ?? 'USD';
+  const offset = metaCurrencyOffset(currency);
+  const campaignRow = tree.campaign ? rowById.get(tree.campaign.id) : undefined;
+  const campaignP5 = campaignP5Of(campaignRow, plan, offset);
+  const campaignCbo = campaignP5.budgetMode === 'cbo';
 
   const nodes: CampaignCanvasNode[] = [];
   const edges: CampaignCanvasEdge[] = [];
@@ -493,11 +583,11 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       // the typed `daily_budget_minor_units` column. Null means no measured CPA: build uses
       // the Backend placeholder, shown as 0 rather than as a figure nobody derived.
       budgetType: 'DAILY',
-      budgetAmount:
-        typeof budgetMinorUnits === 'number' ? budgetMinorUnits / metaCurrencyOffset(currency) : 0,
+      budgetAmount: typeof budgetMinorUnits === 'number' ? budgetMinorUnits / offset : 0,
       budgetCurrency: currency,
       pacingType: adSet.choices.placement ?? [],
       ...placementOf(payload),
+      ...adSetP5Of(row, planAdSet, campaignCbo, offset),
       ...(adSet.metaObjectId ? { metaId: adSet.metaObjectId } : {}),
       provenance: provenanceOf(
         adSet.id,
@@ -546,6 +636,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
         ...(description ? { description } : {}),
         callToAction: callToActionOf(creativePayload),
         ...(linkUrl ? { linkUrl } : {}),
+        ...adP5Of(adRow, planAdByPath.get(ad.pathKey)),
         ...(ad.metaCreativeId ? { metaId: ad.metaCreativeId } : {}),
         provenance: provenanceOf(
           ad.id,
@@ -583,8 +674,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
   });
 
   if (tree.campaign) {
-    const row = rowById.get(tree.campaign.id);
-    const payload = row?.payload ?? {};
+    const payload = campaignRow?.payload ?? {};
     const planObjective = plan?.objective;
     const campaign: CampaignData = {
       label: tree.campaign.name,
@@ -597,6 +687,8 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       buyingType: 'AUCTION',
       // The version's list is what the build applies.
       specialAdCategories: read.specialAdCategories,
+      budgetCurrency: currency,
+      ...campaignP5,
       ...(tree.campaign.metaObjectId ? { metaId: tree.campaign.metaObjectId } : {}),
       provenance: provenanceOf(
         tree.campaign.id,

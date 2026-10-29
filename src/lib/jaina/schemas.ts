@@ -26,6 +26,7 @@ import {
   stepsBlockSchema as contractStepsBlockSchema,
   surveyBlockSchema as contractSurveyBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
+  campaignStructurePayloadSchema,
   jainaClarificationFrameDataSchema,
   jainaOperatorActionSchema,
   jainaPaidCreativeRenderPayloadSchema,
@@ -1133,6 +1134,7 @@ export type JainaStreamEvent =
   | z.infer<typeof paidScaffoldProgressSchema>
   | z.infer<typeof paidScaffoldReceiptSchema>
   | z.infer<typeof paidCreativeRenderSchema>
+  | z.infer<typeof paidCampaignStructureSchema>
   | z.infer<typeof streamErrorSchema>;
 
 /**
@@ -1171,6 +1173,10 @@ export const paidScaffoldReceiptSchema = streamEventSchema(
 export const paidCreativeRenderSchema = streamEventSchema(
   'paid.creative_render',
   jainaPaidCreativeRenderPayloadSchema,
+);
+export const paidCampaignStructureSchema = streamEventSchema(
+  'paid.campaign_structure',
+  campaignStructurePayloadSchema,
 );
 
 export const jainaStreamEventSchema = z.union([
@@ -1213,6 +1219,7 @@ export const jainaStreamEventSchema = z.union([
   paidScaffoldProgressSchema,
   paidScaffoldReceiptSchema,
   paidCreativeRenderSchema,
+  paidCampaignStructureSchema,
   streamErrorSchema,
 ]);
 

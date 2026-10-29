@@ -34,6 +34,7 @@ import { EditableAmount } from '../components/EditableAmount';
 import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
+import { usePersonEdit } from '../hooks/usePersonEdit';
 import { type AdSetData, AUDIENCE_HANDLE_ID, type CampaignNodeProps } from '../types';
 import {
   billingEventForGoal,
@@ -52,7 +53,9 @@ const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: 
 ];
 
 export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set'>) => {
-  const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
+  const { duplicateNode, removeNode, addConnectedNode } = useCampaignStore();
+  // Context-menu edits are a person's: they relabel what they change 'user_gave'.
+  const updateNodeData = usePersonEdit();
   const hasAudience = useCampaignStore((store) =>
     store.edges.some((edge) => edge.target === id && edge.targetHandle === AUDIENCE_HANDLE_ID),
   );

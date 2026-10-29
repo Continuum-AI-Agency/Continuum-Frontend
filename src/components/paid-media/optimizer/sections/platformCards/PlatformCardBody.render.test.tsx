@@ -1,9 +1,13 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { CrossPlatformMoveCardSchema, PlatformCardSchema } from '@continuum/contracts';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import { PORTFOLIO_ID, RAISE_GOOGLE_BUDGET } from './__fixtures__/platformCardActions';
 import {
   CROSS_PLATFORM_MOVE,
   EVERY_CARD,
+  GOOGLE_ACCOUNT_CHECKLIST,
+  GOOGLE_ACCOUNT_COURSE_SPLIT,
+  GOOGLE_ACCOUNT_NEGATIVES,
   GOOGLE_AD_DRAG,
   GOOGLE_AD_WINNER,
   GOOGLE_AUDIENCE_SATURATION,
@@ -28,6 +32,7 @@ import {
 } from './__fixtures__/platformCards';
 import { PlatformCardBody } from './PlatformCardBody';
 import {
+  accountBarGeometry,
   bidCooldownNote,
   googleReasonInWords,
   isReadOnly,
@@ -131,6 +136,7 @@ describe('YouTube read-only', () => {
       GOOGLE_AD_WINNER,
       GOOGLE_AUDIENCE_SATURATION,
       GOOGLE_PMAX_ASSETS,
+      GOOGLE_ACCOUNT_COURSE_SPLIT,
     ]);
   });
 });
@@ -454,6 +460,7 @@ describe('every variant', () => {
       'google_ad_winner',
       'google_audience_saturation',
       'google_pmax_assets',
+      'google_account_finding',
     ]);
   });
 });
@@ -654,5 +661,193 @@ describe('Google PMax assets (G18)', () => {
     expect(getByRole('heading').textContent).toBe(
       '1 asset in TANGASSI (Necesidades SLP) costs more than the best of its kind',
     );
+  });
+});
+
+describe('Google account finding (P8)', () => {
+  const texts = (nodes: HTMLElement[]) => nodes.map((node) => node.textContent);
+
+  it('draws an account-wide split by share, with a target tick and the flagged line in warning', () => {
+    const { getByRole, getByTestId, getAllByTestId } = render(
+      <PlatformCardBody card={GOOGLE_ACCOUNT_COURSE_SPLIT} />,
+    );
+    expect(getByRole('heading', { level: 3 }).textContent).toBe(
+      'Bachillerato takes 71% of the spend against an agreed 50%',
+    );
+    expect(getByTestId('platform-card-mark').getAttribute('data-platform')).toBe('google_ads');
+    expect(getByTestId('account-finding-scope').textContent).toBe('Whole account · last 30 days');
+    expect(texts(getAllByTestId('account-finding-fact'))).toEqual([
+      'Spend, 30 days$42,180 MXN',
+      'Lines off their split2 of 3',
+    ]);
+    const bars = getAllByTestId('account-finding-bar');
+    expect(bars.map((bar) => bar.getAttribute('data-flagged'))).toEqual(['true', 'false', 'false']);
+    expect(texts(getAllByTestId('account-finding-bar-value'))).toEqual([
+      '$29,948 MXN',
+      '$8,436 MXN',
+      '$3,796 MXN',
+    ]);
+    expect(texts(getAllByTestId('account-finding-bar-share'))).toEqual([
+      ' · 71%',
+      ' · 20%',
+      ' · 9.0%',
+    ]);
+    expect(texts(getAllByTestId('account-finding-bar-target'))).toEqual([
+      ' · target 50%',
+      ' · target 35%',
+      ' · target 15%',
+    ]);
+    expect(getAllByTestId('account-finding-bar-tick')).toHaveLength(3);
+    expect(bars[0]?.querySelector('.bg-warning')).not.toBeNull();
+    expect(bars[1]?.querySelector('.bg-warning')).toBeNull();
+    expect(getAllByTestId('account-finding-bar-tick')[0]?.style.left).toBe(
+      `${(0.5 / 0.71) * 100}%`,
+    );
+  });
+
+  it('scales bars by share and target together, or by value when nothing splits a whole', () => {
+    const split = GOOGLE_ACCOUNT_COURSE_SPLIT;
+    if (split.variant !== 'google_account_finding')
+      throw new Error('fixture is an account finding');
+    const [biggest, middle] = accountBarGeometry(split.bars ?? []);
+    expect(biggest).toEqual({ width: 1, target: 0.5 / 0.71 });
+    expect(middle).toEqual({ width: 0.2 / 0.71, target: 0.35 / 0.71 });
+    expect(
+      accountBarGeometry([
+        { label: 'Mobile', value: 30, share: null, target_share: null, flagged: true },
+        { label: 'Desktop', value: 60, share: null, target_share: 0.5, flagged: false },
+      ]),
+    ).toEqual([
+      { width: 0.5, target: null },
+      { width: 1, target: null },
+    ]);
+    expect(
+      accountBarGeometry([
+        { label: 'None', value: 0, share: null, target_share: null, flagged: false },
+      ]),
+    ).toEqual([{ width: 0, target: null }]);
+  });
+
+  it('orders the checklist with a chip for each verified status and none for an unverified step', () => {
+    const { getByTestId, getAllByTestId } = render(
+      <PlatformCardBody card={GOOGLE_ACCOUNT_CHECKLIST} />,
+    );
+    expect(getByTestId('account-finding-scope').textContent).toBe('Search | Marca · last 14 days');
+    expect(getByTestId('account-finding-recommend-only').textContent).toBe(
+      'Client executes · recommend only',
+    );
+    expect(getByTestId('account-finding-checklist').tagName).toBe('OL');
+    const steps = getAllByTestId('account-finding-step');
+    expect(steps.map((step) => step.getAttribute('data-status'))).toEqual([
+      'done',
+      'partial',
+      'pending',
+      'none',
+    ]);
+    expect(texts(getAllByTestId('account-finding-step-status'))).toEqual([
+      '✓ Done',
+      '◐ Partial',
+      '✗ Pending',
+    ]);
+    expect(steps[1]?.textContent).toContain('Set to $1,000 MXN on 21 Oct');
+    expect(steps[3]?.querySelector('[data-testid="account-finding-step-status"]')).toBeNull();
+    expect(getByTestId('account-finding-facts').textContent).toBe('Real cost per lead$1,151 MXN');
+  });
+
+  it('shows no recommend-only badge on an account we run', () => {
+    const { queryByTestId } = render(<PlatformCardBody card={GOOGLE_ACCOUNT_COURSE_SPLIT} />);
+    expect(queryByTestId('account-finding-recommend-only')).toBeNull();
+  });
+
+  describe('negatives', () => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = mock(async (_text: string) => undefined);
+    beforeEach(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    });
+    afterEach(() => {
+      writeText.mockClear();
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    it('groups the terms by theme and copies one theme as one term per line', () => {
+      const { getAllByTestId, getByRole } = render(
+        <PlatformCardBody card={GOOGLE_ACCOUNT_NEGATIVES} />,
+      );
+      const groups = getAllByTestId('account-finding-negative-group');
+      expect(groups.map((group) => group.querySelector('h4')?.textContent)).toEqual([
+        'Jobs · 3 terms',
+        'Free · 2 terms',
+      ]);
+      expect(groups[0]?.textContent).toContain('"empleo", "vacantes", "trabajo de maestro"');
+      fireEvent.click(getByRole('button', { name: 'Copy the Free negatives' }));
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(writeText.mock.calls[0]?.[0]).toBe('gratis\nbecas 100%');
+      expect(groups[1]?.querySelector('[data-testid="account-finding-copy"]')?.textContent).toBe(
+        'Copied',
+      );
+    });
+  });
+
+  it('says what it cannot measure yet as a muted notice', () => {
+    const { getByTestId } = render(<PlatformCardBody card={GOOGLE_ACCOUNT_NEGATIVES} />);
+    expect(getByTestId('account-finding-blocked').textContent).toBe(
+      'GHL → WooCommerce: no connector, so sales per term are not measured yet.',
+    );
+    cleanup();
+    const without = render(<PlatformCardBody card={GOOGLE_ACCOUNT_CHECKLIST} />);
+    expect(without.queryByTestId('account-finding-blocked')).toBeNull();
+  });
+
+  it('offers no write: read-only, no action label, and no control even when handed an action', () => {
+    for (const card of [
+      GOOGLE_ACCOUNT_COURSE_SPLIT,
+      GOOGLE_ACCOUNT_CHECKLIST,
+      GOOGLE_ACCOUNT_NEGATIVES,
+    ]) {
+      expect(isReadOnly(card)).toBe(true);
+      expect(platformCardActionLabel(card)).toBeNull();
+      expect(PLATFORM_CARD_TYPE[card.variant]).toBe('Account finding');
+      expect(platformsOf(card)).toEqual(['google_ads']);
+      const { queryByTestId, queryAllByRole, unmount } = render(
+        <PlatformCardBody
+          action={{ portfolioId: PORTFOLIO_ID, action: RAISE_GOOGLE_BUDGET, applyEnabled: true }}
+          card={card}
+        />,
+      );
+      expect(queryByTestId('platform-card-action')).toBeNull();
+      expect(queryByTestId('platform-card-action-unavailable')).toBeNull();
+      expect(queryByTestId('platform-card-add-negatives')).toBeNull();
+      expect(queryAllByRole('button').map((button) => button.getAttribute('data-testid'))).toEqual(
+        card === GOOGLE_ACCOUNT_NEGATIVES ? ['account-finding-copy', 'account-finding-copy'] : [],
+      );
+      unmount();
+    }
+  });
+});
+
+// optimizer:p8:detectors:bench hands this test the cards the P8 detectors produced from live
+// Google reads (OPTIMIZER_P8_CARDS_DOC); without it there is nothing to render.
+describe('the P8 bench document', () => {
+  const doc = process.env.OPTIMIZER_P8_CARDS_DOC;
+  it.skipIf(!doc)('renders every live P8 card with its headline and no write control', async () => {
+    const { readFileSync } = await import('node:fs');
+    const cards = JSON.parse(readFileSync(doc as string, 'utf8')) as unknown[];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const raw of cards) {
+      const card = PlatformCardSchema.parse(raw);
+      if (card.variant !== 'google_account_finding') throw new Error(`not a P8 card: ${card.variant}`);
+      expect(isReadOnly(card)).toBe(true);
+      const { getByRole, queryByTestId, getAllByTestId, unmount } = render(
+        <PlatformCardBody card={card} />,
+      );
+      expect(getByRole('heading', { level: 3 }).textContent).toBe(card.headline);
+      expect(getAllByTestId('account-finding-fact')).toHaveLength(card.facts.length);
+      expect(queryByTestId('platform-card-action')).toBeNull();
+      expect(queryByTestId('platform-card-add-negatives')).toBeNull();
+      if (card.recommend_only) expect(queryByTestId('account-finding-recommend-only')).not.toBeNull();
+      unmount();
+    }
   });
 });

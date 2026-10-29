@@ -49,6 +49,7 @@ import {
   unsignedCreativeAssetIds,
   useSignedCreativeUrls,
 } from '../../nodes/CreativeNode';
+import { usePersonEdit } from '../../hooks/usePersonEdit';
 import { useCampaignStore } from '../../stores/useCampaignStore';
 import {
   CAROUSEL_MAX_CARDS,
@@ -239,7 +240,8 @@ function CarouselCardRow({
 }
 
 function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[] }) {
-  const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const updateNodeData = usePersonEdit();
   const signed = useSignedCreativeUrls(unsignedCreativeAssetIds({ cards }));
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -292,7 +294,8 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
 export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creative'] }) {
   const { data } = node;
   const setCreativeFormat = useCampaignStore((store) => store.setCreativeFormat);
-  const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const updateNodeData = usePersonEdit();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const {

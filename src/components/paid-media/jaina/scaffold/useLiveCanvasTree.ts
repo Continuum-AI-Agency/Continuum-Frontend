@@ -58,6 +58,18 @@ export function draftRowsOf(
           : { kind: creative.format, asset_id: creative.cards[0]?.asset_id }
         : null,
       dailyBudgetMinorUnits: node.daily_budget_minor_units ?? saved?.dailyBudgetMinorUnits ?? null,
+      // The P5 keys are the columns' own values, so a draft row reads like a saved one.
+      budgetMode: node.budget_mode,
+      campaignDailyBudgetMinorUnits: node.campaign_daily_budget_minor_units,
+      bidStrategy: node.bid_strategy,
+      bidAmountMinorUnits: node.bid_amount_minor_units,
+      roasFloor: node.roas_floor,
+      startTime: node.start_time,
+      endTime: node.end_time,
+      customEventType: node.custom_event_type,
+      pixelId: node.pixel_id,
+      urlTags: node.url_tags,
+      fieldProvenance: node.field_provenance,
     };
   });
 }

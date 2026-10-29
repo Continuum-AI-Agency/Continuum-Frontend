@@ -197,6 +197,7 @@ const renderCard = (
     name = 'Easy Fit | Summer' as string | null,
     adAccountId = null as string | null,
     lifecycle = 'proposed',
+    currentVersionId = undefined as string | undefined,
   } = {},
 ) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -213,6 +214,7 @@ const renderCard = (
       version: 2,
       contentHash,
       plan,
+      ...(currentVersionId ? { currentVersionId } : {}),
     },
   });
   return render(
@@ -453,6 +455,49 @@ describe('PaidScaffoldCard', () => {
     expect(screen.getByText(/1 campaign · 2 ad sets · 2 ads/)).toBeTruthy();
   });
 
+  it('a version a correction replaced says so, and offers no approval of its own', () => {
+    const decisions: unknown[] = [];
+    renderCard(
+      {
+        approval: DEPLOY_APPROVAL,
+        onDecide: (...args) => decisions.push(args),
+        onDeploy: () => {},
+        supersededByVersion: 3,
+      },
+      { rows: READY_ROWS, plan: PLAN, contentHash: HASH },
+    );
+    expect(screen.getByText('Superseded by v3')).toBeTruthy();
+    expect(screen.getByTestId('scaffold-superseded').textContent).toContain('v3');
+    expect(screen.queryByTestId('scaffold-deploy')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+    expect(screen.queryByText('Awaiting your approval')).toBeNull();
+    expect(screen.queryByTestId('scaffold-gate-preview')).toBeNull();
+    expect(decisions).toEqual([]);
+  });
+
+  it('reads a newer current version off the scaffold row when the thread holds none', () => {
+    renderCard(
+      { onDeploy: () => {} },
+      {
+        rows: READY_ROWS,
+        plan: PLAN,
+        contentHash: HASH,
+        currentVersionId: '66666666-6666-4666-8666-666666666666',
+      },
+    );
+    expect(screen.getByText('Superseded by a newer version')).toBeTruthy();
+    expect(screen.queryByTestId('scaffold-deploy')).toBeNull();
+  });
+
+  it('the current version is not superseded', () => {
+    renderCard(
+      { onDeploy: () => {} },
+      { rows: READY_ROWS, plan: PLAN, contentHash: HASH, currentVersionId: VERSION },
+    );
+    expect(screen.queryByTestId('scaffold-superseded')).toBeNull();
+    expect(screen.getByTestId('scaffold-deploy')).toBeTruthy();
+  });
+
   it('links to the scaffold on the campaign canvas', () => {
     renderCard();
     expect(screen.getByTestId('scaffold-open-canvas').getAttribute('href')).toBe(
@@ -468,5 +513,179 @@ describe('PaidScaffoldCard', () => {
     // No account currency resolves without a brand, so the figure prints bare — never as $.
     expect(outline.textContent).toContain('61.99/day');
     expect(outline.textContent).toContain('30.00/day');
+  });
+});
+
+/*
+ * Every field the version will build, each with who supplied it. The rows carry the values and
+ * `field_provenance`; the plan fills in only what a row read before the P5 columns lacks.
+ */
+describe('PaidScaffoldCard — every field, with who supplied it', () => {
+  const P5_ROWS: PaidScaffoldNodeRow[] = [
+    node({
+      id: 'c',
+      level: 'campaign',
+      pathKey: 'c0',
+      name: 'Easy Fit | Summer',
+      payload: { objective: 'OUTCOME_SALES' },
+      budgetMode: 'cbo',
+      campaignDailyBudgetMinorUnits: 25_000,
+      bidStrategy: 'COST_CAP',
+      bidAmountMinorUnits: 1_800,
+      fieldProvenance: {
+        name: 'user_gave',
+        budget_mode: 'user_gave',
+        bid_strategy: 'jaina_filled',
+      },
+    }),
+    node({
+      id: 'a1',
+      parentId: 'c',
+      level: 'adset',
+      pathKey: 'c0/a0',
+      name: 'Prospecting',
+      payload: {
+        optimization_goal: 'OFFSITE_CONVERSIONS',
+        targeting: { geo_locations: { countries: ['MX'] } },
+        placement: {
+          mode: 'manual',
+          publisher_platforms: ['instagram'],
+          instagram_positions: ['reels'],
+        },
+      },
+      startTime: '2099-01-01T18:00:00+00:00',
+      endTime: null,
+      customEventType: 'PURCHASE',
+      pixelId: '123456789012',
+      fieldProvenance: { start_time: 'user_gave', custom_event_type: 'jaina_filled' },
+    }),
+    node({
+      id: 'd1',
+      parentId: 'a1',
+      level: 'ad',
+      pathKey: 'c0/a0/ad0',
+      name: 'Try-on reel',
+      payload: {
+        creative: {
+          message: 'Stretch that moves with you.',
+          link_url: 'https://easyfit.example/summer',
+        },
+      },
+      urlTags: 'utm_source=meta&utm_medium=paid',
+      fieldProvenance: { url_tags: 'user_gave', message: 'jaina_filled' },
+    }),
+  ];
+
+  const P5_PLAN: PaidScaffoldPlan = paidScaffoldPlanSchema.parse({
+    ...PLAN,
+    adsets: [
+      {
+        ...PLAN.adsets[0],
+        daily_budget_minor_units: null,
+        budget_source: 'derived',
+        budget_held_by_campaign: true,
+        audience: {
+          kind: 'broad',
+          targeting: { countries: ['MX'], age_min: 25, age_max: 54, genders: null },
+          targeting_summary: 'MX · 25-54 · all genders',
+          reach: null,
+        },
+      },
+    ],
+    budget_mode: 'cbo',
+    campaign_daily_budget_minor_units: 25_000,
+    campaign_bid: { strategy: 'COST_CAP', bid_amount_minor_units: 1_800, roas_floor: null },
+  });
+
+  const line = (pathKey: string, key: string) => {
+    const found = screen
+      .getAllByTestId('scaffold-field')
+      .find(
+        (entry) =>
+          entry.getAttribute('data-path') === pathKey && entry.getAttribute('data-key') === key,
+      );
+    if (!found) throw new Error(`no field ${key} on ${pathKey}`);
+    return found;
+  };
+  const pillOf = (entry: HTMLElement) =>
+    entry.querySelector('[data-testid="field-provenance-pill"]')?.textContent ?? null;
+
+  it('shows the campaign: name, objective, budget mode and figure, bid', () => {
+    renderCard({}, { rows: P5_ROWS, plan: P5_PLAN, contentHash: HASH });
+    expect(line('c0', 'name').textContent).toContain('Easy Fit | Summer');
+    expect(pillOf(line('c0', 'name'))).toBe('You gave this');
+    expect(line('c0', 'objective').textContent).toContain('Sales');
+    expect(line('c0', 'budget_mode').textContent).toContain('Campaign budget (CBO)');
+    expect(pillOf(line('c0', 'budget_mode'))).toBe('You gave this');
+    expect(line('c0', 'campaign_daily_budget_minor_units').textContent).toContain('$250 USD/day');
+    expect(line('c0', 'bid_strategy').textContent).toContain('Cost per result goal');
+    expect(line('c0', 'bid_strategy').textContent).toContain('$18.00 USD');
+    expect(pillOf(line('c0', 'bid_strategy'))).toBe('Jaina filled this');
+  });
+
+  it('shows the ad set: event, pixel, budget, bid, audience, location, placements, schedule', () => {
+    renderCard({}, { rows: P5_ROWS, plan: P5_PLAN, contentHash: HASH });
+    expect(line('c0/a0', 'name').textContent).toContain('Prospecting');
+    expect(line('c0/a0', 'optimization_goal').textContent).toContain('Website conversions');
+    expect(line('c0/a0', 'custom_event_type').textContent).toContain('Purchase');
+    expect(pillOf(line('c0/a0', 'custom_event_type'))).toBe('Jaina filled this');
+    expect(line('c0/a0', 'pixel_id').textContent).toContain('123456789012');
+    expect(line('c0/a0', 'daily_budget_minor_units').textContent).toContain(
+      'All of the campaign budget (CBO) · $250 USD/day',
+    );
+    expect(line('c0/a0', 'bid_strategy').textContent).toContain('Set by the campaign');
+    expect(line('c0/a0', 'broad_targeting').textContent).toContain('Broad targeting');
+    expect(line('c0/a0', 'location').textContent).toContain('MX · 25-54 · all genders');
+    expect(line('c0/a0', 'placement_mode').textContent).toContain('instagram');
+    expect(line('c0/a0', 'placement_mode').textContent).toContain('ig:reels');
+    const schedule = line('c0/a0', 'start_time');
+    expect(schedule.textContent).toContain('2099');
+    expect(schedule.textContent).toContain('no end date');
+    expect(pillOf(schedule)).toBe('You gave this');
+  });
+
+  it('shows the ad: creative, copy, URL and UTM — and what Jaina still asks for', () => {
+    renderCard({}, { rows: P5_ROWS, plan: P5_PLAN, contentHash: HASH });
+    expect(line('c0/a0/ad0', 'name').textContent).toContain('Try-on reel');
+    expect(line('c0/a0/ad0', 'message').textContent).toContain('Stretch that moves with you.');
+    expect(pillOf(line('c0/a0/ad0', 'message'))).toBe('Jaina filled this');
+    expect(line('c0/a0/ad0', 'link').textContent).toContain('https://easyfit.example/summer');
+    expect(line('c0/a0/ad0', 'url_tags').textContent).toContain('utm_source=meta&utm_medium=paid');
+    expect(pillOf(line('c0/a0/ad0', 'url_tags'))).toBe('You gave this');
+    // Nothing attached, nothing recorded: an open question.
+    expect(line('c0/a0/ad0', 'creative').textContent).toContain('Not set yet');
+    expect(pillOf(line('c0/a0/ad0', 'creative'))).toBe('Jaina asks');
+    expect(pillOf(line('c0/a0/ad0', 'headline'))).toBe('Jaina asks');
+
+    const pills = new Set(
+      screen.getAllByTestId('field-provenance-pill').map((pill) => pill.textContent),
+    );
+    expect([...pills].sort()).toEqual(['Jaina asks', 'Jaina filled this', 'You gave this']);
+  });
+
+  it('under CBO prints the campaign budget once, and its share — never an own budget — on its ad sets', () => {
+    renderCard({}, { rows: P5_ROWS, plan: P5_PLAN, contentHash: HASH });
+    const outline = screen.getByTestId('scaffold-outline');
+    expect(outline.textContent).toContain('$250 USD/day');
+    expect(outline.textContent).toContain('All of the campaign budget (CBO) · $250 USD/day · 1 ad');
+    expect(outline.textContent).not.toContain('Placeholder budget');
+    fireEvent.click(screen.getByRole('button', { name: 'Table' }));
+    const table = screen.getByRole('table');
+    expect(table.textContent).toContain('All of the campaign budget (CBO) · $250 USD/day');
+    expect(table.textContent).not.toContain('Placeholder budget');
+  });
+
+  it('reads a version proposed before P5 as ABO, uncapped and unscheduled', () => {
+    renderCard({}, { rows: READY_ROWS, plan: PLAN, contentHash: HASH });
+    expect(line('c0', 'budget_mode').textContent).toContain('Ad set budgets (ABO)');
+    expect(line('c0/a0', 'daily_budget_minor_units').textContent).toContain('$61.99 USD/day');
+    expect(line('c0/a0', 'bid_strategy').textContent).toContain('Lowest cost (no cap)');
+    expect(line('c0/a0', 'start_time').textContent).toContain(
+      'Starts when activated · no end date',
+    );
+    expect(line('c0/a0', 'custom_event_type').textContent).toContain('From the objective');
+    expect(line('c0/a0/ad0', 'url_tags').textContent).toContain('None');
+    // No recorded provenance: a value reads as Jaina's, never as the person's.
+    expect(pillOf(line('c0/a0', 'bid_strategy'))).toBe('Jaina filled this');
   });
 });

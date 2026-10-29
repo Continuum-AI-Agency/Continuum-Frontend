@@ -195,6 +195,167 @@ export const TikTokDeliverySignalSchema = z.object({
   ),
 });
 
+// ---------------------------------------------------------------------------
+// P8 (docs/jaina-google-goals/projects/P8-google-per-account.md): the per-account reads the
+// account detectors need. Every block is optional — a read recorded before P8, or one whose
+// GAQL failed, leaves it out and the detector that needs it abstains by name.
+// ---------------------------------------------------------------------------
+
+/** One conversion action of the account, with what each campaign reported for it over the
+ *  window. `counted`/`excluded_reason` are conversion-rule.ts's verdict (the ONE definition);
+ *  `reported` is what Google puts in metrics.conversions (primary actions only). */
+export const GoogleConversionActionSignalSchema = z.object({
+  conversion_action_id: z.string().min(1),
+  name: z.string().min(1),
+  /** conversion_action.category: SUBMIT_LEAD_FORM, CONTACT, PURCHASE, GET_DIRECTIONS, … */
+  category: z.string().min(1).nullable(),
+  /** conversion_action.type: WEBPAGE, GOOGLE_ANALYTICS_4_CUSTOM, CLICK_TO_CALL, … */
+  type: z.string().min(1).nullable(),
+  primary_for_goal: z.boolean().nullable(),
+  /** conversion_action.status: ENABLED, HIDDEN or REMOVED. A removed action is read only while
+   *  the window still holds conversions it recorded. */
+  status: z.string().min(1).nullable(),
+  /** GA4 event name for a GA4 import; null otherwise. */
+  ga4_event_name: z.string().min(1).nullable(),
+  /** The GA4 event is an attention event (conversion-rule.ts GA4_ENGAGEMENT_EVENTS), whether
+   *  or not the action is primary: it measures a visit, never a contact. */
+  ga4_engagement: z.boolean(),
+  /** value_settings: the configured value per conversion and whether it is always used. */
+  default_value: z.number().nonnegative().nullable(),
+  always_use_default_value: z.boolean().nullable(),
+  counted: z.boolean(),
+  excluded_reason: z.enum(['no_bucket', 'not_in_goals', 'ga4_engagement_event']).nullable(),
+  by_campaign: z.array(
+    z.object({
+      campaign_id: z.string().min(1),
+      /** metrics.conversions: what Google reports (and bids toward). */
+      reported: amount,
+      /** metrics.all_conversions: every conversion, primary or not. */
+      all: amount,
+      value: amount,
+    }),
+  ),
+});
+
+/** Every campaign that is not removed, paused included, with its window totals and a longer
+ *  60-day total (E2: a paused campaign that beat the active ones stopped before the window). */
+export const GoogleCampaignSignalSchema = z.object({
+  campaign_id: z.string().min(1),
+  name: z.string().min(1),
+  status: z.enum(['ENABLED', 'PAUSED']),
+  /** campaign.advertising_channel_type: SEARCH, PERFORMANCE_MAX, DISPLAY, … */
+  channel_type: z.string().min(1),
+  budget_per_day: amount.nullable(),
+  totals: SignalWindowTotalsSchema.extend({ conversions_value: amount }),
+  totals_60d: SignalWindowTotalsSchema.extend({ conversions_value: amount }),
+  /** Impression share lost to budget / to rank over the window (Search and Performance Max);
+   *  null when Google reports none. */
+  budget_lost_impression_share: fraction.nullable(),
+  rank_lost_impression_share: fraction.nullable(),
+});
+
+/** The account's totals per day of the window. A day Google returns no row for reads zero:
+ *  that is what a dark day is. */
+export const GoogleAccountDaySignalSchema = z.object({
+  date: day,
+  spend: amount,
+  impressions: count,
+  clicks: count,
+  conversions: amount,
+});
+
+/** Per campaign per device (segments.device: MOBILE, DESKTOP, TABLET, CONNECTED_TV, OTHER). */
+export const GoogleDeviceSignalSchema = z.object({
+  campaign_id: z.string().min(1),
+  device: z.string().min(1),
+  totals: SignalWindowTotalsSchema,
+});
+
+/** One open (not dismissed) recommendation Google makes on the account. Read, never applied. */
+export const GoogleRecommendationSignalSchema = z.object({
+  resource_name: z.string().min(1),
+  /** recommendation.type: KEYWORD, CAMPAIGN_BUDGET, TARGET_CPA_OPT_IN, SITELINK_ASSET, … */
+  type: z.string().min(1),
+  campaign_id: z.string().min(1).nullable(),
+});
+
+/** Every ad group of a campaign that is not removed, removed groups included: names for
+ *  service grouping (V5), course lines (P4) and the change-history checklist (P1), which names
+ *  a group by id only — and a client's "pause this group" is often done by removing it. */
+export const GoogleAdGroupSignalSchema = z.object({
+  ad_group_id: z.string().min(1),
+  campaign_id: z.string().min(1),
+  name: z.string().min(1),
+  status: z.enum(['ENABLED', 'PAUSED', 'REMOVED']),
+  /** The distinct final URLs of the group's ads; empty when none is known. */
+  final_urls: z.array(z.string().min(1)),
+});
+
+/** One change_event of the last 30 days, any resource type (P1's verification). */
+export const GoogleChangeSignalSchema = z.object({
+  changed_at: z.string().datetime({ offset: true }),
+  /** change_event.change_resource_type: CAMPAIGN, AD_GROUP, AD_GROUP_CRITERION, AD, … */
+  resource_type: z.string().min(1),
+  /** CREATE, UPDATE or REMOVE. */
+  operation: z.string().min(1).nullable(),
+  campaign_id: z.string().min(1).nullable(),
+  ad_group_id: z.string().min(1).nullable(),
+  changed_fields: z.array(z.string().min(1)),
+  /** GOOGLE_ADS_WEB_CLIENT, GOOGLE_ADS_API, … — who made it. */
+  client_type: z.string().min(1).nullable(),
+  /** The status the resource has after the change, when the event carries one. */
+  new_status: z.string().min(1).nullable(),
+});
+
+/** A course or service line and the campaigns that sell it (P4): campaign ids first, name
+ *  patterns as the fallback, and the share of spend the client agreed for it. */
+export const GoogleCourseLineSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  target_share: fraction,
+  campaign_ids: z.array(z.string().min(1)),
+  /** Case-insensitive substrings matched against campaign, then ad group, then term. */
+  name_patterns: z.array(z.string().min(1)),
+});
+
+/** One agreed action the client executes (P1), with how change history proves it. */
+export const GoogleChecklistItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  agreed_on: day,
+  verify: z.object({
+    resource_type: z.string().min(1),
+    /** Case-insensitive substring of the campaign or ad group name the change must touch. */
+    name_contains: z.string().min(1).nullable(),
+    /** Regex source over the change's changed_fields. */
+    field_pattern: z.string().min(1).nullable(),
+    /** The status the resource must have after the change; null when any. */
+    new_status: z.string().min(1).nullable(),
+  }),
+});
+
+/** Where a profile list came from: the team stored it, or the edge inferred it this read. */
+export const ProfileListSourceSchema = z.enum(['stored', 'inferred']);
+
+/** The account's detector profile (paid_media.google_account_profiles): what the team stored,
+ *  and — for each term list they left empty — what the edge inferred from the brand name, the
+ *  customer name and the search terms. Every list says where it came from. */
+export const GoogleAccountProfileSignalSchema = z.object({
+  brand_name: z.string().min(1).nullable(),
+  customer_name: z.string().min(1).nullable(),
+  /** The client runs the account; we recommend and verify, we never write. */
+  client_executes: z.boolean(),
+  /** The brand name and its variants, normalized (lower case, no accents). */
+  brand_terms: z.array(z.string().min(1)),
+  brand_terms_source: ProfileListSourceSchema,
+  /** Other brands the account's search terms name, normalized. */
+  competitor_terms: z.array(z.string().min(1)),
+  competitor_terms_source: ProfileListSourceSchema,
+  /** Null when no split was agreed. */
+  course_lines: z.array(GoogleCourseLineSchema).nullable(),
+  checklist: z.array(GoogleChecklistItemSchema),
+});
+
 export const PlatformSignalsSchema = z.object({
   account_id: z.string().min(1),
   currency: CurrencyCodeSchema.nullable(),
@@ -211,6 +372,15 @@ export const PlatformSignalsSchema = z.object({
       ads: z.array(GoogleAdSignalSchema).optional(),
       pmax_assets: z.array(GooglePmaxAssetSignalSchema).optional(),
       audience: z.array(GoogleAudienceSignalSchema).optional(),
+      /** Absent on signals recorded before P8. */
+      conversion_actions: z.array(GoogleConversionActionSignalSchema).optional(),
+      campaigns: z.array(GoogleCampaignSignalSchema).optional(),
+      account_daily: z.array(GoogleAccountDaySignalSchema).optional(),
+      devices: z.array(GoogleDeviceSignalSchema).optional(),
+      recommendations: z.array(GoogleRecommendationSignalSchema).optional(),
+      ad_groups: z.array(GoogleAdGroupSignalSchema).optional(),
+      changes: z.array(GoogleChangeSignalSchema).optional(),
+      profile: GoogleAccountProfileSignalSchema.optional(),
     })
     .nullable(),
   tiktok: z
@@ -224,3 +394,6 @@ export const PlatformSignalsSchema = z.object({
     .nullable(),
 });
 export type PlatformSignals = z.infer<typeof PlatformSignalsSchema>;
+export type GoogleAccountProfileSignal = z.infer<typeof GoogleAccountProfileSignalSchema>;
+export type GoogleCourseLine = z.infer<typeof GoogleCourseLineSchema>;
+export type GoogleChecklistItem = z.infer<typeof GoogleChecklistItemSchema>;

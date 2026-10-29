@@ -5,8 +5,8 @@
  * hands back the wrong id approves a different call than the one on screen.
  */
 
-import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { jainaToolApprovalRequiredPayloadSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -91,6 +91,41 @@ describe('JainaToolApprovalCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(onDecide.mock.calls[1]).toEqual([pending, 'deny'] as never);
+  });
+
+  it('states why a call cannot run and offers no approval, only a dismiss', () => {
+    const onDecide = mock(() => {});
+    const reason =
+      "This ad set optimizes for purchases made in a message conversation (Meta's MESSAGING_PURCHASE_CONVERSION goal), and Jaina can't create ad sets with that goal yet, so it can't make this copy. It can be duplicated in Ads Manager.";
+    const blocked = approval({
+      toolName: 'duplicate_meta_entity',
+      input: {
+        level: 'adset',
+        source_entity_id: '120',
+        optimization_goal: 'MESSAGING_PURCHASE_CONVERSION',
+      },
+      preview: {
+        subject: 'Duplicate adset 120 as a PAUSED copy',
+        rows: [{ field: 'status', before: 'ACTIVE', after: 'PAUSED' }],
+        blocked: reason,
+      },
+    });
+    expect(jainaToolApprovalRequiredPayloadSchema.safeParse(blocked).success).toBe(true);
+
+    render(
+      <JainaToolApprovalCard
+        approval={blocked}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={onDecide}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByRole('note').textContent).toBe(reason);
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onDecide.mock.calls[0]).toEqual([blocked, 'deny'] as never);
   });
 
   it('retires the buttons the moment a decision is in flight', () => {
@@ -260,5 +295,134 @@ describe('JainaToolApprovalCard', () => {
 
     expect(screen.getByText('agv_2')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
+  });
+
+  // ── a card that offers a choice of approval (change_meta_budget_bid) ───────
+  //
+  // Ramiro's no-cap rule: the card states every change and offers apply OR pause-for-review.
+  // Parsed through the vendored contract, like the preview above.
+
+  const budgetCard = jainaToolApprovalRequiredPayloadSchema.parse({
+    approvalId: 'appr_3',
+    toolCallId: 'call_3',
+    toolName: 'change_meta_budget_bid',
+    input: {
+      changes: [
+        {
+          entity_id: '120201',
+          level: 'adset',
+          entity_name: 'Prospecting · Broad',
+          field: 'daily_budget',
+          expected_current_minor_units: 10000,
+          new_minor_units: 15000,
+          currency: 'MXN',
+        },
+        {
+          entity_id: '120202',
+          level: 'adset',
+          entity_name: 'Retargeting',
+          field: 'daily_budget',
+          expected_current_minor_units: 20000,
+          new_minor_units: 10000,
+          currency: 'MXN',
+        },
+      ],
+      affected_adset_ids_for_review: [
+        { adset_id: '120201', name: 'Prospecting · Broad', expected_status: 'ACTIVE' },
+        { adset_id: '120202', name: 'Retargeting', expected_status: 'PAUSED' },
+      ],
+      reason: 'Move budget to the cheaper ad set.',
+      idempotency_key: 'key-0000-0003',
+    },
+    expiresAt: '2099-01-01T00:00:00.000Z',
+    preview: {
+      subject: '2 changes · Move budget to the cheaper ad set.',
+      rows: [
+        {
+          field: 'Daily budget · Prospecting · Broad',
+          before: '$100 MXN',
+          after: '$150 MXN',
+          changePct: 50,
+          difference: '+$50.00 MXN',
+        },
+        {
+          field: 'Daily budget · Retargeting',
+          before: '$200 MXN',
+          after: '$100 MXN',
+          changePct: -50,
+          difference: '-$100 MXN',
+        },
+      ],
+    },
+  });
+
+  const renderBudget = (onDecide: (...args: unknown[]) => void = () => {}) =>
+    render(
+      <JainaToolApprovalCard
+        approval={budgetCard}
+        optimisticDecision={null}
+        isStreaming={false}
+        onDecide={onDecide}
+      />,
+      { wrapper },
+    );
+
+  it('states how many budgets change, and every entity with before, after and difference', () => {
+    renderBudget();
+    expect(screen.getByText('Change budgets and bids')).toBeTruthy();
+    expect(screen.getByText(/You are about to change 2 budgets\./)).toBeTruthy();
+
+    const table = within(screen.getByRole('table'));
+    expect(table.getByText('Entity')).toBeTruthy();
+    expect(table.getByText('Difference')).toBeTruthy();
+    expect(table.getByText('Daily budget · Prospecting · Broad')).toBeTruthy();
+    // The first row's before and the second row's after are both $100 MXN.
+    expect(table.getAllByText('$100 MXN')).toHaveLength(2);
+    expect(table.getByText('$150 MXN')).toBeTruthy();
+    expect(table.getByText('+$50.00 MXN (+50.0%)')).toBeTruthy();
+    expect(table.getByText('-$100 MXN (-50.0%)')).toBeTruthy();
+  });
+
+  it('names the ad sets a pause for review would stop, and the one it leaves alone', () => {
+    renderBudget();
+    expect(screen.getByText(/Pausing for review changes no budget or bid/)).toBeTruthy();
+    const list = within(screen.getByRole('list'));
+    expect(list.getByText('Prospecting · Broad')).toBeTruthy();
+    expect(list.getByText(/already paused, left as it is/)).toBeTruthy();
+  });
+
+  it('offers apply, pause for review and reject — each an approve with its choice, or a deny', () => {
+    const onDecide = mock(() => {});
+    renderBudget(onDecide);
+
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    expect(onDecide.mock.calls[0]).toEqual([budgetCard, 'approve', undefined, 'apply'] as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause these ad sets for review' }));
+    expect(onDecide.mock.calls[1]).toEqual([
+      budgetCard,
+      'approve',
+      undefined,
+      'pause_for_review',
+    ] as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(onDecide.mock.calls[2]).toEqual([budgetCard, 'deny'] as never);
+  });
+
+  it('retires all three buttons once a decision is in flight', () => {
+    render(
+      <JainaToolApprovalCard
+        approval={budgetCard}
+        optimisticDecision="approve"
+        isStreaming
+        onDecide={() => {}}
+      />,
+      { wrapper },
+    );
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause these ad sets for review' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import * as typeScale from '../../typeScale';
 import { PlatformChip, PlatformIcon } from '../platforms/PlatformChip';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { NegativeTermsReview } from '../searchActions/NegativeTermsReview';
+import { AccountFindingEvidence } from './AccountFindingEvidence';
 import { PlatformCardActionControl, UnavailableAction } from './PlatformCardActionControl';
 import {
   cardActionAvailability,
@@ -546,6 +547,8 @@ function VariantEvidence({
           <OpenInGoogleAds href={GOOGLE_ADS_CAMPAIGNS_HREF} />
         </div>
       );
+    case 'google_account_finding':
+      return <AccountFindingEvidence card={card} />;
   }
 }
 

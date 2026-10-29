@@ -229,6 +229,14 @@ export const GOOGLE_SIGNAL_BLOCKS = [
   'ads',
   'pmax_assets',
   'audience',
+  'conversion_actions',
+  'campaigns',
+  'account_daily',
+  'devices',
+  'recommendations',
+  'ad_groups',
+  'changes',
+  'profile',
 ] as const;
 export type GoogleSignalBlock = (typeof GOOGLE_SIGNAL_BLOCKS)[number];
 

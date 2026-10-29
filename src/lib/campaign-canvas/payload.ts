@@ -77,12 +77,24 @@ const baseNodeSchema = z.object({
   }),
 });
 
+/*
+ * The P5 options (budget mode, bid, schedule, event, URL tags) are `.nullish()`: a payload
+ * written before they existed still parses, and null is "not set" — ABO, uncapped, derived.
+ */
+const optionalNumber = z.number().nullish();
+const optionalString = z.string().nullish();
+
 const campaignNodePayloadSchema = baseNodeSchema.extend({
   nodeType: z.literal('campaign'),
   options: z.object({
     objective: objectiveSchema.nullable(),
     buyingType: buyingTypeSchema,
     specialAdCategories: z.array(z.string()),
+    budgetMode: z.enum(['abo', 'cbo']).nullish(),
+    campaignBudgetAmount: optionalNumber,
+    bidStrategy: optionalString,
+    bidAmount: optionalNumber,
+    roasFloor: optionalNumber,
   }),
 });
 
@@ -103,6 +115,10 @@ const adSetNodePayloadSchema = baseNodeSchema.extend({
     facebookPositions: z.array(z.string()),
     instagramPositions: z.array(z.string()),
     devicePlatforms: z.array(z.string()),
+    bidAmount: optionalNumber,
+    roasFloor: optionalNumber,
+    customEventType: optionalString,
+    pixelId: optionalString,
   }),
 });
 
@@ -115,6 +131,7 @@ const adNodePayloadSchema = baseNodeSchema.extend({
     description: z.string().nullable(),
     callToAction: callToActionSchema,
     linkUrl: z.string().nullable(),
+    urlTags: optionalString,
   }),
 });
 
@@ -277,6 +294,10 @@ function normalizeBoolean(value: unknown): boolean {
   return value === true;
 }
 
+function normalizeAmount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function normalizeLabel(value: unknown, fallback: string): string {
   return normalizeString(value) ?? fallback;
 }
@@ -324,6 +345,11 @@ function normalizeCampaignNode(node: CampaignCanvasNode) {
         ? (data.buyingType as (typeof BUYING_TYPES)[number])
         : 'AUCTION',
       specialAdCategories: normalizeStringArray(data.specialAdCategories),
+      budgetMode: data.budgetMode === 'cbo' || data.budgetMode === 'abo' ? data.budgetMode : null,
+      campaignBudgetAmount: normalizeAmount(data.campaignBudgetAmount),
+      bidStrategy: normalizeString(data.bidStrategy),
+      bidAmount: normalizeAmount(data.bidAmount),
+      roasFloor: normalizeAmount(data.roasFloor),
     },
   };
 }
@@ -354,6 +380,10 @@ function normalizeAdSetNode(node: CampaignCanvasNode) {
       facebookPositions: normalizeStringArray(data.facebookPositions),
       instagramPositions: normalizeStringArray(data.instagramPositions),
       devicePlatforms: normalizeStringArray(data.devicePlatforms),
+      bidAmount: normalizeAmount(data.bidAmount),
+      roasFloor: normalizeAmount(data.roasFloor),
+      customEventType: normalizeString(data.customEventType),
+      pixelId: normalizeString(data.pixelId),
     },
   };
 }
@@ -377,6 +407,7 @@ function normalizeAdNode(node: CampaignCanvasNode) {
         ? (data.callToAction as (typeof CALL_TO_ACTIONS)[number])
         : 'LEARN_MORE',
       linkUrl: normalizeString(data.linkUrl),
+      urlTags: normalizeString(data.urlTags),
     },
   };
 }
@@ -622,12 +653,32 @@ function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
       facts.push(`special_ad_categories=${node.options.specialAdCategories.join(',')}`);
     }
   }
+  if (node.nodeType === 'campaign' && node.options.budgetMode === 'cbo') {
+    facts.push('budget_mode=cbo');
+    if (node.options.campaignBudgetAmount) {
+      facts.push(`campaign_daily_budget=${node.options.campaignBudgetAmount}`);
+    }
+    if (node.options.bidStrategy) facts.push(`bid_strategy=${node.options.bidStrategy}`);
+    if (node.options.bidAmount) facts.push(`bid_amount=${node.options.bidAmount}`);
+    if (node.options.roasFloor) facts.push(`roas_floor=${node.options.roasFloor}`);
+  }
   if (node.nodeType === 'ad-set') {
     facts.push(`optimization_goal=${node.options.optimizationGoal}`);
     if (node.options.pacingType.length > 0) {
       facts.push(`placement=${node.options.pacingType.join(',')}`);
     }
     facts.push(`daily_budget=${node.options.budgetAmount} ${node.options.budgetCurrency}`);
+    if (node.options.bidStrategy !== 'LOWEST_COST_WITHOUT_CAP') {
+      facts.push(`bid_strategy=${node.options.bidStrategy}`);
+    }
+    if (node.options.bidAmount) facts.push(`bid_amount=${node.options.bidAmount}`);
+    if (node.options.roasFloor) facts.push(`roas_floor=${node.options.roasFloor}`);
+    if (node.options.startTime) facts.push(`start_time=${node.options.startTime}`);
+    if (node.options.endTime) facts.push(`end_time=${node.options.endTime}`);
+    if (node.options.customEventType) {
+      facts.push(`custom_event_type=${node.options.customEventType}`);
+    }
+    if (node.options.pixelId) facts.push(`pixel_id=${node.options.pixelId}`);
   }
   if (node.nodeType === 'ad') {
     facts.push(`format=${node.options.adFormat}`, `call_to_action=${node.options.callToAction}`);
@@ -637,6 +688,7 @@ function describeNode(node: CampaignCanvasPayload['nodes'][number]): string {
       facts.push(`description=${JSON.stringify(node.options.description)}`);
     }
     if (node.options.linkUrl) facts.push(`link=${node.options.linkUrl}`);
+    if (node.options.urlTags) facts.push(`url_tags=${node.options.urlTags}`);
   }
   if (node.nodeType === 'audience') {
     facts.push(`mode=${node.options.mode}`);

@@ -33,6 +33,7 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'google_ad_winner':
     case 'google_audience_saturation':
     case 'google_pmax_assets':
+    case 'google_account_finding':
       return ['google_ads'];
     case 'tiktok_creative_fatigue':
     case 'tiktok_scheduled_decrease':
@@ -76,6 +77,7 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
   google_ad_winner: 'Creative',
   google_audience_saturation: 'Audience',
   google_pmax_assets: 'Assets',
+  google_account_finding: 'Account finding',
 };
 
 /** The variants whose body carries the platform's mark beside the title. The wave-6/7
@@ -97,6 +99,7 @@ const MARKED_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'google_ad_winner',
   'google_audience_saturation',
   'google_pmax_assets',
+  'google_account_finding',
 ]);
 
 export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
@@ -108,7 +111,7 @@ export function markedPlatformOf(card: PlatformCard): AdPlatform | null {
  *  attribution-window card explains why platforms are not compared and has nothing to apply; a
  *  delivery problem is fixed where the platform names it (a policy, billing, a review), never
  *  by a write of ours. A new ad, a replacement asset and a wider audience are made by a person
- *  in Google Ads too. */
+ *  in Google Ads too. An account finding is recommend-only by contract: it carries no write. */
 const READ_ONLY_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'google_video_readonly',
   'tiktok_attribution_window',
@@ -117,6 +120,7 @@ const READ_ONLY_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'google_ad_winner',
   'google_audience_saturation',
   'google_pmax_assets',
+  'google_account_finding',
 ]);
 
 export function isReadOnly(card: PlatformCard): boolean {
@@ -455,7 +459,72 @@ export function platformCardTitle(card: PlatformCard): string {
       const one = card.assets.length === 1;
       return `${plural(card.assets.length, 'asset', 'assets')} in ${where} ${one ? 'costs' : 'cost'} more than the best of ${one ? 'its' : 'their'} kind`;
     }
+    case 'google_account_finding':
+      return card.headline;
   }
+}
+
+type AccountFindingCard = Extract<PlatformCard, { variant: 'google_account_finding' }>;
+type AccountFindingBar = NonNullable<AccountFindingCard['bars']>[number];
+export type AccountFindingStatus = AccountFindingCard['checklist'][number]['status'];
+
+/** On an account the client runs, the card recommends and verifies; it never offers a write. */
+export const RECOMMEND_ONLY_BADGE = 'Client executes · recommend only';
+
+/** "Search | Marca · last 30 days", or the whole account when no campaign is named. */
+export function accountFindingScope(card: AccountFindingCard): string {
+  return `${card.campaign_name ?? 'Whole account'} · last ${plural(card.window_days, 'day', 'days')}`;
+}
+
+/** A bar's own figure in the card's unit; a bar without a unit counts. */
+export function accountBarValueLabel(
+  value: number,
+  unit: AccountFindingCard['unit'],
+  currency: string | null,
+): string {
+  if (unit === 'money') return formatCurrency(value, currency);
+  if (unit === 'share') return percentLabel(value);
+  return countLabel(value);
+}
+
+export type AccountBarGeometry = {
+  /** 0..1 of the track the bar fills. */
+  width: number;
+  /** 0..1 of the track where the target tick sits; null without a target. */
+  target: number | null;
+};
+
+/** Where each bar ends and where its target tick sits, relative to the largest bar. When the
+ *  bars split a whole they are drawn by share, on the same scale as their target shares, so a
+ *  tick and a bar can be compared by eye; otherwise by value. Geometry only: every figure the
+ *  card prints is the producer's. */
+export function accountBarGeometry(bars: readonly AccountFindingBar[]): AccountBarGeometry[] {
+  const byShare = bars.length > 0 && bars.every((bar) => bar.share != null);
+  const extent = Math.max(
+    0,
+    ...bars.map((bar) => (byShare ? (bar.share ?? 0) : bar.value)),
+    ...bars.map((bar) => (byShare ? (bar.target_share ?? 0) : 0)),
+  );
+  const fraction = (amount: number) => (extent > 0 ? Math.min(1, amount / extent) : 0);
+  return bars.map((bar) => ({
+    width: fraction(byShare ? (bar.share ?? 0) : bar.value),
+    target: byShare && bar.target_share != null ? fraction(bar.target_share) : null,
+  }));
+}
+
+/** The checklist chip: a glyph and a word for each verified status; null has no chip. */
+export const CHECKLIST_STATUS: Record<
+  NonNullable<AccountFindingStatus>,
+  { glyph: string; label: string }
+> = {
+  done: { glyph: '✓', label: 'Done' },
+  partial: { glyph: '◐', label: 'Partial' },
+  pending: { glyph: '✗', label: 'Pending' },
+};
+
+/** A negative list as Google Ads' bulk editor takes it: one term per line. */
+export function negativesClipboardText(terms: readonly string[]): string {
+  return terms.join('\n');
 }
 
 export const ATTRIBUTION_WINDOW_NOTE =

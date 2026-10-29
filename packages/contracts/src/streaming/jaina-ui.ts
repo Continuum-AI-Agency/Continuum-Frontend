@@ -106,6 +106,12 @@ export type JainaUIDataTypes = {
    * surface signs on demand. Canonical shape: `jainaHyperframeSetSchema` in ../optimization.
    */
   'jaina-optimizer-hyperframe': Record<string, unknown>;
+  /**
+   * A scaffold's campaign structure drawn in the chat, one part per layout (P5). The part id is
+   * the payload's own `partId`, so a redraw after a correction replaces the drawing it corrects.
+   * Canonical shape: `campaignStructurePayloadSchema` in ./jaina-campaign-structure.
+   */
+  'jaina-campaign-structure': Record<string, unknown>;
 };
 
 /** Jaina's tools are discovered at run time, so they cross the wire as DYNAMIC tool parts. */
@@ -135,4 +141,5 @@ export const JAINA_UI_DATA_PART = {
   notice: 'data-jaina-notice',
   optimizerCard: 'data-jaina-optimizer-card',
   optimizerHyperframe: 'data-jaina-optimizer-hyperframe',
+  campaignStructure: 'data-jaina-campaign-structure',
 } as const satisfies Record<string, JainaUIDataPartType>;

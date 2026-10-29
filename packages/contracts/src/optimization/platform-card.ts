@@ -433,6 +433,77 @@ export const GooglePmaxAssetsCardSchema = z.object({
     .min(1),
 });
 
+/** The P8 account ideas (docs/jaina-google-goals/detalles.html §6): each fires on any
+ *  Google account that shows its pattern. Named by the pattern, not by the account that
+ *  inspired it. */
+export const GOOGLE_ACCOUNT_IDEAS = [
+  'inflated_primary_conversion',
+  'brand_vs_nonbrand',
+  'capped_budget_locked',
+  'pmax_rescue_or_pause',
+  'quality_score_by_service',
+  'continuity_calendar',
+  'paused_beat_active',
+  'conversion_value_map',
+  'competitor_terms',
+  'google_recommendations_filtered',
+  'client_executes_checklist',
+  'device_split',
+  'intent_negatives',
+  'course_line_split',
+  'lead_to_sale_funnel',
+] as const;
+export const GoogleAccountIdeaSchema = z.enum(GOOGLE_ACCOUNT_IDEAS);
+export type GoogleAccountIdea = z.infer<typeof GoogleAccountIdeaSchema>;
+
+/** A finding about the whole account or one campaign (P8). The card states the producer's
+ *  figures and what a person should do; it carries no write — every P8 idea is recommend-only,
+ *  and on an account the client runs (`recommend_only`) the card offers no control at all. */
+export const GoogleAccountFindingCardSchema = z.object({
+  variant: z.literal('google_account_finding'),
+  idea: GoogleAccountIdeaSchema,
+  headline: z.string().min(1),
+  /** The campaign the finding is about; null when it is about the whole account. */
+  campaign_name: z.string().min(1).nullable(),
+  currency: CurrencyCodeSchema.nullable(),
+  window_days: z.number().int().positive(),
+  /** The client executes the account: recommend and verify, never a write control. */
+  recommend_only: z.boolean(),
+  /** The figures, already worded by the producer ("Real cost per lead", "$1,151 MXN"). */
+  facts: z
+    .array(z.object({ label: z.string().min(1), value: z.string().min(1) }))
+    .min(1),
+  /** Bars the card draws: one value per row in `unit`, and the agreed share when there is one. */
+  bars: z
+    .array(
+      z.object({
+        label: z.string().min(1),
+        value: z.number().nonnegative(),
+        /** 0..1 of the bars' total, when the bars split a whole. */
+        share: share.nullable(),
+        target_share: share.nullable(),
+        /** The bar is the problem (dark day, the brand, the wrong device). */
+        flagged: z.boolean(),
+      }),
+    )
+    .optional(),
+  unit: z.enum(['money', 'count', 'share']).optional(),
+  /** What to do, in order. A status is set when change history verified it. */
+  checklist: z.array(
+    z.object({
+      label: z.string().min(1),
+      status: z.enum(['done', 'pending', 'partial']).nullable(),
+      detail: z.string().min(1).nullable(),
+    }),
+  ),
+  /** Negative lists to paste, grouped by theme. */
+  negatives: z
+    .array(z.object({ theme: z.string().min(1), terms: z.array(z.string().min(1)).min(1) }))
+    .optional(),
+  /** What the finding cannot measure yet and why ("GHL → WooCommerce: no connector"). */
+  blocked: z.string().min(1).nullable(),
+});
+
 export const PlatformCardSchema = z.union([
   GoogleBudgetLimitedCardSchema,
   GooglePmaxAssetGroupCardSchema,
@@ -455,6 +526,7 @@ export const PlatformCardSchema = z.union([
   GoogleAdWinnerCardSchema,
   GoogleAudienceSaturationCardSchema,
   GooglePmaxAssetsCardSchema,
+  GoogleAccountFindingCardSchema,
 ]);
 export type PlatformCard = z.infer<typeof PlatformCardSchema>;
 export type PlatformCardVariant = PlatformCard['variant'];

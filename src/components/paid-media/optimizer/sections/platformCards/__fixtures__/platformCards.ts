@@ -309,6 +309,70 @@ export const GOOGLE_PMAX_ASSETS = parse({
   ],
 });
 
+/** P8 course_line_split: the whole account's spend by course line against the agreed split. */
+export const GOOGLE_ACCOUNT_COURSE_SPLIT = parse({
+  variant: 'google_account_finding',
+  idea: 'course_line_split',
+  headline: 'Bachillerato takes 71% of the spend against an agreed 50%',
+  campaign_name: null,
+  currency: 'MXN',
+  window_days: 30,
+  recommend_only: false,
+  facts: [
+    { label: 'Spend, 30 days', value: '$42,180 MXN' },
+    { label: 'Lines off their split', value: '2 of 3' },
+  ],
+  bars: [
+    { label: 'Bachillerato', value: 29947.8, share: 0.71, target_share: 0.5, flagged: true },
+    { label: 'Licenciatura', value: 8436, share: 0.2, target_share: 0.35, flagged: false },
+    { label: 'Posgrado', value: 3796.2, share: 0.09, target_share: 0.15, flagged: false },
+  ],
+  unit: 'money',
+  checklist: [],
+  blocked: null,
+});
+
+/** P8 client_executes_checklist: the client runs the account; change history verifies the steps. */
+export const GOOGLE_ACCOUNT_CHECKLIST = parse({
+  variant: 'google_account_finding',
+  idea: 'client_executes_checklist',
+  headline: '1 of 3 agreed changes is done in Search | Marca',
+  campaign_name: 'Search | Marca',
+  currency: 'MXN',
+  window_days: 14,
+  recommend_only: true,
+  facts: [{ label: 'Real cost per lead', value: '$1,151 MXN' }],
+  checklist: [
+    { label: 'Make "Lead form" the only primary conversion', status: 'done', detail: null },
+    {
+      label: 'Lower the target CPA to $900 MXN',
+      status: 'partial',
+      detail: 'Set to $1,000 MXN on 21 Oct',
+    },
+    { label: 'Pause the broad-match keywords', status: 'pending', detail: '4 still enabled' },
+    { label: 'Review again in two weeks', status: null, detail: null },
+  ],
+  blocked: null,
+});
+
+/** P8 intent_negatives: search terms with no buying intent, grouped by theme, plus a blocked read. */
+export const GOOGLE_ACCOUNT_NEGATIVES = parse({
+  variant: 'google_account_finding',
+  idea: 'intent_negatives',
+  headline: '14 search terms with no buying intent spent $3,420 MXN in 30 days',
+  campaign_name: 'Search | Genérica',
+  currency: 'MXN',
+  window_days: 30,
+  recommend_only: false,
+  facts: [{ label: 'Spend without intent', value: '$3,420 MXN' }],
+  checklist: [{ label: 'Paste each list as phrase negatives', status: null, detail: null }],
+  negatives: [
+    { theme: 'Jobs', terms: ['empleo', 'vacantes', 'trabajo de maestro'] },
+    { theme: 'Free', terms: ['gratis', 'becas 100%'] },
+  ],
+  blocked: 'GHL → WooCommerce: no connector, so sales per term are not measured yet.',
+});
+
 export const EVERY_CARD = [
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_PMAX,
@@ -331,4 +395,5 @@ export const EVERY_CARD = [
   GOOGLE_AD_WINNER,
   GOOGLE_AUDIENCE_SATURATION,
   GOOGLE_PMAX_ASSETS,
+  GOOGLE_ACCOUNT_COURSE_SPLIT,
 ] as const;

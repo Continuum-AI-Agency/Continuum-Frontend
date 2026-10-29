@@ -1,3 +1,8 @@
+import {
+  PAID_SCAFFOLD_CONVERSION_EVENTS,
+  type PaidScaffoldBidStrategy,
+  type PaidScaffoldConversionEvent,
+} from '@continuum/contracts';
 import type { AdFormat, CampaignData, PlacementMode } from './index';
 
 /*
@@ -154,6 +159,60 @@ export const OPTIMIZATION_GOALS = [
 ];
 
 export const DEFAULT_OPTIMIZATION_GOAL = 'OFFSITE_CONVERSIONS';
+
+/**
+ * Meta's bid strategies in the words Ads Manager uses — the contract's
+ * `PAID_SCAFFOLD_BID_STRATEGIES`, and the labels the scaffold card prints too, so the canvas
+ * and the chat never name one strategy two ways.
+ */
+export const BID_STRATEGIES: Array<{
+  value: PaidScaffoldBidStrategy;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'LOWEST_COST_WITHOUT_CAP',
+    label: 'Lowest cost (no cap)',
+    description: 'Spends the whole budget for the most results, with no cost control.',
+  },
+  {
+    value: 'COST_CAP',
+    label: 'Cost per result goal',
+    description: 'Keeps the average cost per result around the amount you set.',
+  },
+  {
+    value: 'LOWEST_COST_WITH_BID_CAP',
+    label: 'Bid cap',
+    description: 'Never bids more than the amount you set in any auction.',
+  },
+  {
+    value: 'LOWEST_COST_WITH_MIN_ROAS',
+    label: 'ROAS goal',
+    description: 'Keeps the return on ad spend above the floor you set. Needs a value goal.',
+  },
+];
+
+/** A null strategy is the uncapped default, and reads as such. */
+export const bidStrategyLabel = (strategy: string | null | undefined): string =>
+  BID_STRATEGIES.find((entry) => entry.value === (strategy ?? 'LOWEST_COST_WITHOUT_CAP'))
+    ?.label ?? strategy ?? 'Lowest cost (no cap)';
+
+const CONVERSION_EVENT_LABELS: Partial<Record<PaidScaffoldConversionEvent, string>> = {
+  CONTENT_VIEW: 'View content',
+  INITIATED_CHECKOUT: 'Initiate checkout',
+};
+
+/** The pixel events an ad set can optimize for, as a person reads them ('ADD_TO_CART' → 'Add to cart'). */
+export const CONVERSION_EVENTS: Array<{ value: PaidScaffoldConversionEvent; label: string }> =
+  PAID_SCAFFOLD_CONVERSION_EVENTS.map((value) => ({
+    value,
+    label:
+      CONVERSION_EVENT_LABELS[value] ??
+      value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' '),
+  }));
+
+export const conversionEventLabel = (event: string | null | undefined): string | null =>
+  event ? (CONVERSION_EVENTS.find((entry) => entry.value === event)?.label ?? event) : null;
 
 /**
  * Billing is COMPUTED from the goal, never chosen: Meta refuses a goal/billing pair it

@@ -19,6 +19,8 @@
 import {
   type AgentDelegatedFrameData,
   agentDelegatedFrameDataSchema,
+  type CampaignStructurePayload,
+  campaignStructurePayloadSchema,
   JAINA_UI_DATA_PART,
   type JainaHyperframeSet,
   type JainaOptimizerCard,
@@ -505,6 +507,37 @@ export const optimizerHyperframesOf = (message: JainaUIMessage): JainaHyperframe
     return parsed.success ? [parsed.data] : [];
   });
 
+/**
+ * The scaffold's structure drawings, one per layout, in the order they were drawn. A redraw
+ * after a correction arrives on the same part id, so the SDK has already replaced it here.
+ * Parsed for the same reason as a hyperframe: a part can come from a replayed run log, and it
+ * carries a pointer the surface is about to sign.
+ */
+export const campaignStructuresOf = (message: JainaUIMessage): CampaignStructurePayload[] =>
+  partsOfType(message, JAINA_UI_DATA_PART.campaignStructure).flatMap((data) => {
+    const structure = campaignStructureOf(data);
+    return structure ? [structure] : [];
+  });
+
+/**
+ * One structure payload, or null. A layout this Frontend does not know yet (a newer Backend
+ * mid-deploy) is drawn as the outline of the same nodes rather than dropped: the person still
+ * has a proposal to read.
+ */
+export const campaignStructureOf = (data: unknown): CampaignStructurePayload | null => {
+  const parsed = campaignStructurePayloadSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  const record = asRecord(data);
+  if (!record) return null;
+  const outline = campaignStructurePayloadSchema.safeParse({
+    ...record,
+    layout: 'outline',
+    html: null,
+    diff: null,
+  });
+  return outline.success ? outline.data : null;
+};
+
 export const canvasActionsOf = (message: JainaUIMessage): Record<string, unknown>[] =>
   partsOfType(message, JAINA_UI_DATA_PART.canvasActions);
 
@@ -798,6 +831,7 @@ export const toJainaChatMessage = (
   const reportArtifactJob = reportArtifactJobOf(message);
   const optimizerCitations = optimizerCitationsOf(message);
   const optimizerHyperframes = optimizerHyperframesOf(message);
+  const campaignStructures = campaignStructuresOf(message);
   const plan = planOf(message);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
@@ -838,6 +872,7 @@ export const toJainaChatMessage = (
     ...(paidCreativeRenders.length > 0 ? { paidCreativeRenders } : {}),
     ...(optimizerCitations.length > 0 ? { optimizerCitations } : {}),
     ...(optimizerHyperframes.length > 0 ? { optimizerHyperframes } : {}),
+    ...(campaignStructures.length > 0 ? { campaignStructures } : {}),
     ...(pendingClarification ? { pendingClarification } : {}),
     ...(objectives.length > 0 ? { objectives } : {}),
     ...(delegations.length > 0 ? { delegations } : {}),

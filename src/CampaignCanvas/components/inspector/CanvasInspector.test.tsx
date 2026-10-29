@@ -141,3 +141,147 @@ describe('CanvasInspector', () => {
     expect(screen.queryByTestId('canvas-inspector')).toBeNull();
   });
 });
+
+describe('CanvasInspector — budget mode, bid, schedule, event, URL tags (P5)', () => {
+  const campaignNode = (selected: boolean, data: Record<string, unknown> = {}): CampaignCanvasNode => ({
+    id: 'campaign',
+    type: 'campaign',
+    position: { x: 0, y: 0 },
+    selected,
+    data: {
+      label: 'Easy Fit | Summer',
+      objective: 'OUTCOME_SALES',
+      buyingType: 'AUCTION',
+      specialAdCategories: [],
+      validationStatus: 'valid',
+      ...data,
+    },
+  });
+  const adSetNode = (selected: boolean, data: Record<string, unknown> = {}): CampaignCanvasNode => ({
+    id: 'adset',
+    type: 'ad-set',
+    position: { x: 0, y: 300 },
+    selected,
+    data: {
+      label: 'Prospecting',
+      optimizationGoal: 'OFFSITE_CONVERSIONS',
+      billingEvent: 'IMPRESSIONS',
+      budgetAmount: 50,
+      budgetCurrency: 'USD',
+      validationStatus: 'valid',
+      ...data,
+    },
+  });
+  const loadGraph = (nodes: CampaignCanvasNode[]) =>
+    useCampaignStore.setState({
+      nodes,
+      edges: [{ id: 'campaign->adset', source: 'campaign', target: 'adset' }],
+      history: [],
+      redoStack: [],
+      hydration: null,
+      openAiHydration: null,
+      isDirty: false,
+      editLocked: false,
+    });
+  const dataOf = (id: string) =>
+    useCampaignStore.getState().nodes.find((node) => node.id === id)?.data as Record<string, unknown>;
+  const commit = async (testId: string, value: string) => {
+    const input = screen.getByTestId(testId) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { value } });
+      fireEvent.blur(input);
+    });
+  };
+
+  afterEach(() => cleanup());
+
+  it('switches the campaign to CBO and takes its daily budget, each marked as the person’s', async () => {
+    loadGraph([campaignNode(true), adSetNode(false)]);
+    await renderInspector();
+    expect(screen.queryByTestId('inspector-field-campaignBudgetAmount')).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Campaign budget (CBO)' }));
+    });
+    expect(dataOf('campaign').budgetMode).toBe('cbo');
+    // CBO without a budget is refused at save; the inspector says so where it is fixed.
+    expect(screen.getByTestId('inspector-field-issues').textContent).toContain(
+      'needs a campaign daily budget',
+    );
+    await commit('inspector-field-campaignBudgetAmount', '120');
+    expect(dataOf('campaign')).toMatchObject({
+      campaignBudgetAmount: 120,
+      fieldProvenance: {
+        budget_mode: 'user_gave',
+        campaign_daily_budget_minor_units: 'user_gave',
+      },
+    });
+    expect(screen.queryByTestId('inspector-field-issues')).toBeNull();
+  });
+
+  it('under ABO edits the ad set’s bid amount and names a capped strategy left without one', async () => {
+    loadGraph([campaignNode(false), adSetNode(true, { bidStrategy: 'COST_CAP' })]);
+    await renderInspector();
+    expect(screen.getByTestId('inspector-field-issues').textContent).toContain(
+      'needs a bid amount',
+    );
+    await commit('inspector-field-bidAmount', '15');
+    expect(dataOf('adset')).toMatchObject({
+      bidAmount: 15,
+      fieldProvenance: { bid_amount_minor_units: 'user_gave' },
+    });
+    expect(screen.queryByTestId('inspector-field-issues')).toBeNull();
+  });
+
+  it('under CBO hides the ad set budget and strategy, keeping its own cap when the campaign is capped', async () => {
+    loadGraph([
+      campaignNode(false, { budgetMode: 'cbo', campaignBudgetAmount: 120, bidStrategy: 'COST_CAP', bidAmount: 18 }),
+      adSetNode(true),
+    ]);
+    await renderInspector();
+    expect(screen.queryByTestId('inspector-field-budgetAmount')).toBeNull();
+    expect(screen.getByTestId('inspector-field-budgetHeld').textContent).toContain(
+      'Campaign budget (CBO)',
+    );
+    expect(screen.queryByTestId('inspector-field-bidStrategy')).toBeNull();
+    await commit('inspector-field-bidAmount', '12');
+    expect(dataOf('adset').bidAmount).toBe(12);
+  });
+
+  it('sends the schedule as ISO-8601 with the browser offset, and takes a pixel id', async () => {
+    loadGraph([campaignNode(false), adSetNode(true)]);
+    await renderInspector();
+    await commit('inspector-field-startTime', '2099-11-01T09:00');
+    const start = dataOf('adset').startTime as string;
+    expect(start).toMatch(/^2099-11-01T09:00:00[+-]\d\d:\d\d$/);
+    expect(Date.parse(start)).toBe(new Date('2099-11-01T09:00').getTime());
+    expect((screen.getByTestId('inspector-field-startTime') as HTMLInputElement).value).toBe(
+      '2099-11-01T09:00',
+    );
+
+    await commit('inspector-field-endTime', '2099-10-01T09:00');
+    expect(screen.getByTestId('inspector-field-issues').textContent).toContain(
+      'ends at or before it starts',
+    );
+
+    await commit('inspector-field-pixelId', ' 123456789012 ');
+    expect(dataOf('adset')).toMatchObject({
+      pixelId: '123456789012',
+      fieldProvenance: { start_time: 'user_gave', end_time: 'user_gave', pixel_id: 'user_gave' },
+    });
+  });
+
+  it('edits the ad’s URL tags and refuses a leading "?" inline', async () => {
+    load([adNode('ad-1', true)]);
+    await renderInspector();
+    await commit('inspector-field-urlTags', '?utm_source=meta');
+    expect(screen.getByTestId('inspector-field-issues').textContent).toContain('bare query string');
+    await commit('inspector-field-urlTags', 'utm_source=meta&utm_medium=paid');
+    expect((useCampaignStore.getState().nodes[0]?.data as AdData).urlTags).toBe(
+      'utm_source=meta&utm_medium=paid',
+    );
+    expect(useCampaignStore.getState().nodes[0]?.data.fieldProvenance).toEqual({
+      url_tags: 'user_gave',
+    });
+    expect(screen.queryByTestId('inspector-field-issues')).toBeNull();
+  });
+});

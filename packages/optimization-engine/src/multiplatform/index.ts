@@ -100,3 +100,10 @@ export {
   TIKTOK_MIN_ADGROUP_BUDGET_USD,
   tiktokLearningMultiple,
 } from './signalRules';
+export {
+  ACCOUNT_DETECTOR_RULES,
+  FUNNEL_BLOCKED,
+  mentions,
+  normalizeTerm,
+  OFF_INTENT_THEMES,
+} from './accountDetectors';

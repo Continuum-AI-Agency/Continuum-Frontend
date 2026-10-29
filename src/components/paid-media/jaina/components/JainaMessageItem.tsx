@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  JainaApprovalVariant,
   JainaOperatorAction,
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
@@ -13,6 +14,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
+import { JainaCampaignStructures } from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
@@ -131,6 +133,7 @@ type JainaMessageItemProps = {
     approval: JainaToolApprovalRequiredPayload,
     decision: ToolApprovalDecision,
     publicationMode?: JainaPublicationMode,
+    approvalVariant?: JainaApprovalVariant,
   ) => void;
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
@@ -151,6 +154,11 @@ type JainaMessageItemProps = {
    * the optimizer is URL state, and both have to move for the chip to reach anything.
    */
   onOpenAccountRead?: (readId: string) => void;
+  /**
+   * The newer version of this message's scaffold that a later turn proposed (a correction in
+   * words). A number, not an object, so the memo below still bites on a finished message.
+   */
+  scaffoldSupersededByVersion?: number;
 };
 
 function JainaMessageItemImpl({
@@ -165,6 +173,7 @@ function JainaMessageItemImpl({
   optimisticApprovalDecisions,
   onOperatorAction,
   onOpenAccountRead,
+  scaffoldSupersededByVersion,
 }: JainaMessageItemProps) {
   const isStreaming = message.status === 'streaming';
 
@@ -249,6 +258,7 @@ function JainaMessageItemImpl({
   const artifacts = message.artifacts;
   const optimizerCitations = message.optimizerCitations ?? [];
   const optimizerHyperframes = message.optimizerHyperframes ?? [];
+  const campaignStructures = message.campaignStructures ?? [];
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -363,6 +373,11 @@ function JainaMessageItemImpl({
 
             <ObjectivesQueue objectives={objectives ?? []} isStreaming={isStreaming} />
 
+            {/* The drawing sits above the card it illustrates; approval stays on the card. */}
+            {campaignStructures.length > 0 ? (
+              <JainaCampaignStructures structures={campaignStructures} />
+            ) : null}
+
             {scaffold ? (
               <PaidScaffoldCard
                 scaffold={scaffold}
@@ -375,6 +390,9 @@ function JainaMessageItemImpl({
                     : null
                 }
                 isStreaming={isStreaming}
+                {...(scaffoldSupersededByVersion !== undefined
+                  ? { supersededByVersion: scaffoldSupersededByVersion }
+                  : {})}
                 onRequestCreative={onSuggestionClick}
                 {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
                 {...(onOperatorAction ? { onDeploy: onOperatorAction } : {})}

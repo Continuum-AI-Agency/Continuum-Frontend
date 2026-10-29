@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  CampaignStructurePayload,
   JainaHyperframeSet,
   JainaOptimizerCard,
   JainaPaidCreativeRenderPayload,
@@ -64,6 +65,8 @@ export type JainaChatMessage = {
   optimizerCitations?: JainaOptimizerCard[];
   /** Compiled cards filed for this turn — the whole document, not a reference into a read. */
   optimizerHyperframes?: JainaHyperframeSet[];
+  /** The proposed scaffold drawn in the chat, one entry per layout (P5 structure designs). */
+  campaignStructures?: CampaignStructurePayload[];
   pendingClarification?: {
     id?: string;
     /** Exactly as Jaina asked it — in the question's language, never translated or relabelled. */

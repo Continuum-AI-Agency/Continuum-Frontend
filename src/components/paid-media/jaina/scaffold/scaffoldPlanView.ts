@@ -6,18 +6,31 @@
 // got a creative" is a row question, never a plan one. Both are read here so the card, its test
 // and the bench all grade one derivation.
 
-import type {
-  PaidScaffoldAudience,
-  PaidScaffoldEvidence,
-  PaidScaffoldEvidenceMetric,
-  PaidScaffoldPlan,
+import {
+  effectiveFieldProvenance,
+  type FieldProvenance,
+  type PaidScaffoldAudience,
+  type PaidScaffoldBidPlan,
+  type PaidScaffoldEvidence,
+  type PaidScaffoldEvidenceMetric,
+  type PaidScaffoldPlan,
+  paidScaffoldCopiedAudienceLabel,
 } from '@continuum/contracts';
+import {
+  bidStrategyLabel,
+  conversionEventLabel,
+  OPTIMIZATION_GOALS,
+  placementLabels,
+} from '@/CampaignCanvas/types/nodeOptions';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import {
   openingDailyBudgetOf,
+  type PaidScaffoldNodeRow,
   type ScaffoldTree,
   scaffoldBlockersOf,
+  targetingSummary,
 } from '@/lib/paid-media/scaffoldTree';
+import { formatCampaignBudgetShare, formatDailyBudget } from './scaffoldBudget';
 
 const OBJECTIVE_LABELS: Record<string, string> = {
   OUTCOME_SALES: 'Sales',
@@ -97,7 +110,9 @@ export const audienceLinesOf = (plan: PaidScaffoldPlan): AudienceLine[] => {
     const key =
       audience.kind === 'group'
         ? `group:${audience.group_version_id}`
-        : `broad:${audience.targeting_summary}`;
+        : audience.kind === 'copied'
+          ? `copied:${audience.source_adset_id}`
+          : `broad:${audience.targeting_summary}`;
     const existing = byKey.get(key);
     if (existing) {
       existing.adSets.push(adSet.name);
@@ -106,7 +121,11 @@ export const audienceLinesOf = (plan: PaidScaffoldPlan): AudienceLine[] => {
     byKey.set(key, {
       key,
       name:
-        audience.kind === 'group' ? (audience.group_name ?? 'Audience group') : 'Broad targeting',
+        audience.kind === 'group'
+          ? (audience.group_name ?? 'Audience group')
+          : audience.kind === 'copied'
+            ? paidScaffoldCopiedAudienceLabel(audience.source_adset_name)
+            : 'Broad targeting',
       kind: audience.kind,
       summary: audience.targeting_summary,
       members: audience.kind === 'group' ? audience.members.map((member) => member.label) : [],
@@ -131,6 +150,8 @@ export type CreativeTile = {
    */
   previewAssetId: string | null;
   cardCount: number;
+  /** A campaign copy's ad: the source ad's own Meta creative, which it is created on. */
+  reusedCreativeId: string | null;
 };
 
 const readString = (record: Record<string, unknown>, key: string): string | null => {
@@ -160,6 +181,7 @@ export const creativeTilesOf = (
           ? (ad.creative.cards[0]?.asset_id ?? null)
           : null,
       cardCount: ad.creative?.cards.length ?? 0,
+      reusedCreativeId: null,
     }));
   }
   return ads.map((ad) => {
@@ -192,6 +214,7 @@ export const creativeTilesOf = (
             null)
           : null,
       cardCount: cards.length > 0 ? cards.length : attached ? 1 : 0,
+      reusedCreativeId: ad.sourceCreativeId ?? null,
     };
   });
 };
@@ -200,6 +223,8 @@ export const creativeTilesOf = (
 export type ScaffoldSummary = {
   objective: string;
   dailyBudgetMinorUnits: number | null;
+  /** CBO: the figure is the campaign's one budget, not a sum over ad sets. */
+  budgetHeldByCampaign: boolean;
   currency: string | null;
   conversionsPerDay: number | null;
   cpa: number | null;
@@ -225,11 +250,12 @@ export const scaffoldSummaryOf = (
     return {
       objective: objectiveLabel(plan.objective),
       dailyBudgetMinorUnits: plan.expected.daily_budget_minor_units,
+      budgetHeldByCampaign: plan.budget_mode === 'cbo',
       currency: plan.expected.currency ?? plan.currency ?? fallbackCurrency,
       conversionsPerDay: plan.expected.conversions_per_day,
       cpa: plan.expected.cpa,
       audiences: audienceLinesOf(plan).length,
-      creatives: tiles.filter((tile) => tile.format !== null).length,
+      creatives: tiles.filter((tile) => tile.format !== null || tile.reusedCreativeId).length,
       ads: tiles.length,
       optimizer: optimizerLabel(plan),
     };
@@ -244,11 +270,12 @@ export const scaffoldSummaryOf = (
   return {
     objective: objectiveLabel(objective),
     dailyBudgetMinorUnits: budget && budget.placeholders === 0 ? budget.totalMinorUnits : null,
+    budgetHeldByCampaign: Boolean(tree?.campaign?.budget),
     currency: fallbackCurrency,
     conversionsPerDay: null,
     cpa: null,
     audiences: groups.size,
-    creatives: tiles.filter((tile) => tile.format !== null).length,
+    creatives: tiles.filter((tile) => tile.format !== null || tile.reusedCreativeId).length,
     ads: tiles.length,
     optimizer: null,
   };
@@ -311,4 +338,313 @@ export const deployBlockersOf = (params: {
     }
   }
   return blockers;
+};
+
+// ---------------------------------------------------------------------------
+// Every field, with who supplied it (P5)
+// ---------------------------------------------------------------------------
+
+/** One field as the card lists it. `value` is already worded; `key` is the draft-node key. */
+export type ScaffoldFieldLine = {
+  key: string;
+  label: string;
+  value: string;
+  provenance: FieldProvenance;
+};
+
+export type ScaffoldFieldGroup = {
+  pathKey: string;
+  level: PaidScaffoldNodeRow['level'];
+  name: string;
+  lines: ScaffoldFieldLine[];
+};
+
+/** What a field with no value reads as — the open question its 'Jaina asks' pill names. */
+export const NOT_SET = 'Not set yet';
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const DATE_TIME = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
+const dateTimeLabel = (iso: string): string => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : DATE_TIME.format(date);
+};
+
+/** "Starts Jan 1, 2099, 12:00 PM · no end date". Null on both ends is the default, said in words. */
+export const scheduleLabel = (start: string | null, end: string | null): string =>
+  `${start ? `Starts ${dateTimeLabel(start)}` : 'Starts when activated'} · ${
+    end ? `ends ${dateTimeLabel(end)}` : 'no end date'
+  }`;
+
+/** A bid as one phrase: the strategy, then the amount or floor it needs. Null = uncapped. */
+export const bidLabel = (
+  bid: Pick<PaidScaffoldBidPlan, 'strategy' | 'bid_amount_minor_units' | 'roas_floor'> | null,
+  currency: string | null,
+): string => {
+  const strategy = bidStrategyLabel(bid?.strategy);
+  if (typeof bid?.bid_amount_minor_units === 'number') {
+    return `${strategy} · ${formatCurrency(bid.bid_amount_minor_units / 100, currency)}`;
+  }
+  if (typeof bid?.roas_floor === 'number') return `${strategy} · ${bid.roas_floor}x`;
+  return strategy;
+};
+
+const goalLabel = (goal: string | null): string | null =>
+  goal ? (OPTIMIZATION_GOALS.find((entry) => entry.value === goal)?.label ?? goal) : null;
+
+/** Advantage+ or the manual surfaces, flattened the way the table and the canvas say them. */
+const placementLabelOf = (payload: Record<string, unknown>): string => {
+  const placement = asRecord(payload.placement);
+  const strings = (key: string) =>
+    Array.isArray(placement[key])
+      ? (placement[key] as unknown[]).filter((entry): entry is string => typeof entry === 'string')
+      : [];
+  const labels =
+    placement.mode === 'manual'
+      ? placementLabels({
+          placementMode: 'manual',
+          publisherPlatforms: strings('publisher_platforms'),
+          facebookPositions: strings('facebook_positions'),
+          instagramPositions: strings('instagram_positions'),
+          devicePlatforms: strings('device_platforms'),
+        })
+      : [];
+  // A row with no placement choice builds on Meta's automatic placement.
+  return labels.length > 0 ? labels.join(', ') : 'Advantage+';
+};
+
+const FORMAT_LABELS = { image: 'Image', video: 'Video', carousel: 'Carousel' } as const;
+
+/**
+ * The card's field list: campaign, then each ad set followed by its ads. Values are the ROWS'
+ * (what the version holds now; creative is attached after propose, so only a row knows it),
+ * falling back to the plan for a row read before the P5 columns existed — the same precedence
+ * the canvas hydrates with, so the card and the canvas agree on every value.
+ *
+ * Provenance is `effectiveFieldProvenance(recorded, hasValue)`. `hasValue` is whether the
+ * field holds an ANSWER, which is not the same as non-null: a null bid is "lowest cost, no
+ * cap", a null schedule is "starts when activated", a null event is "from the objective" —
+ * decisions with a meaning. Only a null that leaves a hole (no budget figure, no audience, no
+ * creative, no copy) is an open question Jaina asks.
+ */
+export const scaffoldFieldGroupsOf = (params: {
+  plan: PaidScaffoldPlan | null;
+  rows: readonly PaidScaffoldNodeRow[] | null;
+  currency: string | null;
+}): ScaffoldFieldGroup[] => {
+  const { plan, currency } = params;
+  const planAdSets = new Map((plan?.adsets ?? []).map((entry) => [entry.path_key, entry]));
+  const planAds = new Map((plan?.ads ?? []).map((entry) => [entry.path_key, entry]));
+  // No rows yet (a live frame before the read lands): the plan's own nodes, values and all.
+  const rows: readonly Partial<PaidScaffoldNodeRow>[] =
+    params.rows && params.rows.length > 0
+      ? params.rows
+      : plan
+        ? [
+            { level: 'campaign', pathKey: 'c0', name: '' },
+            ...plan.adsets.flatMap((adSet) => [
+              { level: 'adset' as const, pathKey: adSet.path_key, name: adSet.name },
+              ...plan.ads
+                .filter((ad) => ad.adset_path_key === adSet.path_key)
+                .map((ad) => ({ level: 'ad' as const, pathKey: ad.path_key, name: ad.name })),
+            ]),
+          ]
+        : [];
+  const campaignRow = rows.find((row) => row.level === 'campaign');
+  const cbo = (campaignRow?.budgetMode ?? plan?.budget_mode) === 'cbo';
+  const campaignBid: PaidScaffoldBidPlan | null = (() => {
+    const strategy = campaignRow?.bidStrategy ?? plan?.campaign_bid?.strategy ?? null;
+    return strategy
+      ? {
+          strategy,
+          bid_amount_minor_units:
+            campaignRow?.bidAmountMinorUnits ?? plan?.campaign_bid?.bid_amount_minor_units ?? null,
+          roas_floor: campaignRow?.roasFloor ?? plan?.campaign_bid?.roas_floor ?? null,
+        }
+      : null;
+  })();
+
+  const groupOf = (row: Partial<PaidScaffoldNodeRow>): ScaffoldFieldGroup => {
+    const recorded = row.fieldProvenance ?? {};
+    const lines: ScaffoldFieldLine[] = [];
+    const add = (
+      key: string,
+      label: string,
+      value: string | null,
+      hasValue: boolean = value !== null,
+      provenanceKeys: readonly string[] = [key],
+    ) => {
+      const stored = provenanceKeys.map((entry) => recorded[entry]).find(Boolean);
+      lines.push({
+        key,
+        label,
+        value: value ?? NOT_SET,
+        provenance: effectiveFieldProvenance(stored, hasValue),
+      });
+    };
+    const payload = asRecord(row.payload);
+    const pathKey = row.pathKey ?? '';
+    const name = row.name ?? '';
+    add('name', 'Name', name || null);
+
+    if (row.level === 'campaign') {
+      const objective = plan?.objective ?? (payload.objective as string | undefined) ?? null;
+      add('objective', 'Objective', objective ? objectiveLabel(objective) : null);
+      add('budget_mode', 'Budget', cbo ? 'Campaign budget (CBO)' : 'Ad set budgets (ABO)', true);
+      if (cbo) {
+        const figure =
+          row.campaignDailyBudgetMinorUnits ?? plan?.campaign_daily_budget_minor_units ?? null;
+        add(
+          'campaign_daily_budget_minor_units',
+          'Campaign daily budget',
+          figure === null ? null : formatDailyBudget(figure, currency),
+        );
+        add('bid_strategy', 'Bid strategy', bidLabel(campaignBid, currency), true);
+      }
+    }
+
+    if (row.level === 'adset') {
+      const planAdSet = planAdSets.get(pathKey);
+      add(
+        'optimization_goal',
+        'Optimization goal',
+        goalLabel(planAdSet?.optimization_goal ?? (payload.optimization_goal as string) ?? null),
+      );
+      const promoted = planAdSet?.promoted_object ?? {};
+      const event = conversionEventLabel(row.customEventType);
+      const derivedEvent = conversionEventLabel(promoted.custom_event_type);
+      add(
+        'custom_event_type',
+        'Optimization event',
+        event ?? (derivedEvent ? `${derivedEvent} (from the objective)` : 'From the objective'),
+        true,
+      );
+      add('pixel_id', 'Pixel', row.pixelId ?? promoted.pixel_id ?? "The account's pixel", true);
+      if (cbo) {
+        add(
+          'daily_budget_minor_units',
+          'Daily budget',
+          formatCampaignBudgetShare(
+            {
+              adSetCount: rows.filter((entry) => entry.level === 'adset').length,
+              campaignDailyBudgetMinorUnits:
+                campaignRow?.campaignDailyBudgetMinorUnits ??
+                plan?.campaign_daily_budget_minor_units ??
+                null,
+            },
+            currency,
+          ),
+          true,
+        );
+        const ownCap =
+          typeof row.bidAmountMinorUnits === 'number'
+            ? ` · own cap ${formatCurrency(row.bidAmountMinorUnits / 100, currency)}`
+            : '';
+        add('bid_strategy', 'Bid strategy', `Set by the campaign${ownCap}`, true);
+      } else {
+        const figure = row.dailyBudgetMinorUnits ?? planAdSet?.daily_budget_minor_units ?? null;
+        add(
+          'daily_budget_minor_units',
+          'Daily budget',
+          figure === null ? null : formatDailyBudget(figure, currency),
+        );
+        const bid: PaidScaffoldBidPlan | null = row.bidStrategy
+          ? {
+              strategy: row.bidStrategy,
+              bid_amount_minor_units: row.bidAmountMinorUnits ?? null,
+              roas_floor: row.roasFloor ?? null,
+            }
+          : (planAdSet?.bid ?? null);
+        add('bid_strategy', 'Bid strategy', bidLabel(bid, currency), true);
+      }
+      const audience = planAdSet?.audience;
+      const groupVersion =
+        audience?.kind === 'group'
+          ? audience.group_version_id
+          : (payload.audience_group_version_id as string | undefined);
+      const copied = audience?.kind === 'copied' ? audience : null;
+      const broad =
+        !copied &&
+        (audience?.kind === 'broad' || (!groupVersion && Boolean(payload.targeting)));
+      const audienceKey = groupVersion ? 'audience_group_version_id' : 'broad_targeting';
+      const audienceKeys = ['audience_group_version_id', 'broad_targeting'];
+      add(
+        audienceKey,
+        'Audience',
+        groupVersion
+          ? audience?.kind === 'group'
+            ? (audience.group_name ?? 'Audience group')
+            : 'Audience group'
+          : copied
+            ? paidScaffoldCopiedAudienceLabel(copied.source_adset_name)
+            : broad
+              ? 'Broad targeting'
+              : null,
+        undefined,
+        [audienceKey, ...audienceKeys],
+      );
+      const location = audience?.targeting_summary ?? targetingSummary(payload.targeting);
+      add(
+        'location',
+        'Location',
+        location ?? (groupVersion ? 'From the audience group' : null),
+        undefined,
+        [audienceKey, ...audienceKeys],
+      );
+      add('placement_mode', 'Placements', placementLabelOf(payload), true);
+      add(
+        'start_time',
+        'Schedule',
+        scheduleLabel(
+          row.startTime ?? planAdSet?.schedule?.start_time ?? null,
+          row.endTime ?? planAdSet?.schedule?.end_time ?? null,
+        ),
+        true,
+        ['start_time', 'end_time'],
+      );
+    }
+
+    if (row.level === 'ad') {
+      const planAd = planAds.get(pathKey);
+      const media = asRecord(row.creativeMedia);
+      const kind = media.kind;
+      const cards = Array.isArray(media.cards) ? media.cards.length : 0;
+      const format =
+        kind === 'carousel' || kind === 'video' || kind === 'image'
+          ? kind
+          : row.creativeAssetId
+            ? 'image'
+            : (planAd?.creative?.format ?? null);
+      const cardCount = cards || planAd?.creative?.cards.length || 0;
+      const reused = typeof payload.source_creative_id === 'string' ? payload.source_creative_id : null;
+      add(
+        'creative',
+        'Creative',
+        reused
+          ? `The source ad's creative · ${reused}`
+          : format
+            ? format === 'carousel'
+              ? `Carousel · ${cardCount} card${cardCount === 1 ? '' : 's'}`
+              : FORMAT_LABELS[format]
+            : null,
+      );
+      const creative = asRecord(payload.creative);
+      const text = (key: string) =>
+        typeof creative[key] === 'string' && (creative[key] as string).trim()
+          ? (creative[key] as string)
+          : null;
+      add('message', 'Primary text', text('message'));
+      add('headline', 'Headline', text('headline'));
+      add('link', 'URL', text('link_url') ?? text('link'));
+      add('url_tags', 'URL tags (UTM)', row.urlTags ?? planAd?.url_tags ?? 'None', true);
+    }
+
+    return { pathKey, level: row.level ?? 'ad', name, lines };
+  };
+
+  return rows.map(groupOf);
 };

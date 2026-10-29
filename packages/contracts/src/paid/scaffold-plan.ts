@@ -19,6 +19,7 @@
 
 import { z } from 'zod';
 import { ApplyModeSchema, AutopilotScopesSchema } from '../optimization/service';
+import { type FieldProvenance, fieldProvenanceSchema } from '../streaming/jaina-campaign-structure';
 
 export const PAID_SCAFFOLD_PLAN_SCHEMA_VERSION = 1 as const;
 
@@ -124,8 +125,30 @@ export const paidScaffoldAudienceSchema = z.discriminatedUnion('kind', [
     targeting_summary: z.string(),
     reach: paidScaffoldReachSchema.nullable(),
   }),
+  /**
+   * P5 design 08: a campaign COPY's ad set carries its source's targeting verbatim — cities,
+   * interests, custom audiences — which neither a published group nor broad targeting can
+   * hold. The spec rides in the hashed node payload; this names where it came from. The
+   * canvas cannot edit it (`paidScaffoldCopiedAudienceSaveIssue`).
+   */
+  z.object({
+    kind: z.literal('copied'),
+    source_adset_id: z.string().min(1),
+    source_adset_name: z.string(),
+    /** One line read off the copied spec, e.g. 'MX · 3 cities · 22-45 · all genders'. */
+    targeting_summary: z.string().nullable(),
+    reach: paidScaffoldReachSchema.nullable(),
+  }),
 ]);
 export type PaidScaffoldAudience = z.infer<typeof paidScaffoldAudienceSchema>;
+
+/** How a card names a copied audience: "copied from <source ad set name>". */
+export const paidScaffoldCopiedAudienceLabel = (sourceAdSetName: string): string =>
+  `copied from ${sourceAdSetName}`;
+
+/** Why a canvas save refuses a copied audience, and the next step. */
+export const paidScaffoldCopiedAudienceSaveIssue = (sourceAdSetName: string): string =>
+  `This audience was copied from ${sourceAdSetName}; edit it by asking Jaina or in Ads Manager.`;
 
 // ---------------------------------------------------------------------------
 // Creative
@@ -195,6 +218,82 @@ export const PAID_SCAFFOLD_AUTOPILOT_SCOPES_OFF = {
 } as const satisfies z.infer<typeof AutopilotScopesSchema>;
 
 // ---------------------------------------------------------------------------
+// Budget mode, bid, schedule, conversion event, URL tags (P5, 2026-10-29)
+// ---------------------------------------------------------------------------
+
+/**
+ * Who holds the budget. ABO (the default, and the only shape the Optimizer moves on its
+ * own) puts it on each ad set; CBO puts it, and the bid strategy, on the campaign.
+ */
+export const PAID_SCAFFOLD_BUDGET_MODES = ['abo', 'cbo'] as const;
+export const paidScaffoldBudgetModeSchema = z.enum(PAID_SCAFFOLD_BUDGET_MODES);
+export type PaidScaffoldBudgetMode = z.infer<typeof paidScaffoldBudgetModeSchema>;
+
+/**
+ * Meta's bid strategies, the same list as the Backend's `META_BID_STRATEGIES`
+ * (`App/shared/meta/scaffoldVocabulary.ts`; a Backend spec pins the two equal). Declared
+ * here because the canvas and the card print them: the Frontend cannot import the
+ * Backend's vocabulary.
+ */
+export const PAID_SCAFFOLD_BID_STRATEGIES = [
+  'LOWEST_COST_WITHOUT_CAP',
+  'COST_CAP',
+  'LOWEST_COST_WITH_BID_CAP',
+  'LOWEST_COST_WITH_MIN_ROAS',
+] as const;
+export const paidScaffoldBidStrategySchema = z.enum(PAID_SCAFFOLD_BID_STRATEGIES);
+export type PaidScaffoldBidStrategy = z.infer<typeof paidScaffoldBidStrategySchema>;
+
+/** The strategies that need an amount: a cost per result, or a bid per auction. */
+export const PAID_SCAFFOLD_CAPPED_BID_STRATEGIES: readonly PaidScaffoldBidStrategy[] = [
+  'COST_CAP',
+  'LOWEST_COST_WITH_BID_CAP',
+];
+
+/**
+ * The pixel events a person may name as an ad set's optimization event — a subset of Meta's
+ * `custom_event_type` enum, string members only. Null on the node keeps today's rule: the
+ * event is derived from the objective (PURCHASE for sales, LEAD for leads).
+ */
+export const PAID_SCAFFOLD_CONVERSION_EVENTS = [
+  'PURCHASE',
+  'LEAD',
+  'COMPLETE_REGISTRATION',
+  'ADD_TO_CART',
+  'INITIATED_CHECKOUT',
+  'ADD_PAYMENT_INFO',
+  'ADD_TO_WISHLIST',
+  'CONTENT_VIEW',
+  'SEARCH',
+  'CONTACT',
+  'SCHEDULE',
+  'SUBMIT_APPLICATION',
+  'SUBSCRIBE',
+  'START_TRIAL',
+] as const;
+export const paidScaffoldConversionEventSchema = z.enum(PAID_SCAFFOLD_CONVERSION_EVENTS);
+export type PaidScaffoldConversionEvent = z.infer<typeof paidScaffoldConversionEventSchema>;
+
+/** The query string Meta appends to every link click, e.g. "utm_source=meta&utm_medium=paid". */
+export const PAID_SCAFFOLD_URL_TAGS_MAX = 1_000;
+
+/** A bid as the plan states it: the strategy, and the amount or ratio it needs (null otherwise). */
+export const paidScaffoldBidPlanSchema = z.object({
+  strategy: paidScaffoldBidStrategySchema,
+  bid_amount_minor_units: z.number().int().positive().nullable(),
+  roas_floor: z.number().positive().nullable(),
+});
+export type PaidScaffoldBidPlan = z.infer<typeof paidScaffoldBidPlanSchema>;
+
+export const paidScaffoldSchedulePlanSchema = z.object({
+  /** ISO-8601 with offset; null = delivers as soon as a person activates it. */
+  start_time: z.string().nullable(),
+  /** ISO-8601 with offset; null = runs until paused. */
+  end_time: z.string().nullable(),
+});
+export type PaidScaffoldSchedulePlan = z.infer<typeof paidScaffoldSchedulePlanSchema>;
+
+// ---------------------------------------------------------------------------
 // The plan
 // ---------------------------------------------------------------------------
 
@@ -217,6 +316,14 @@ export const paidScaffoldAdSetPlanSchema = z.object({
   audience: paidScaffoldAudienceSchema,
   /** Meta's `promoted_object` (pixel/page/app ids) for this ad set; null when none applies. */
   promoted_object: z.record(z.string(), z.string()).nullable(),
+  // P5. Defaulted, so a plan stored before these existed still parses — and reads as what
+  // it built: an ABO ad set, uncapped, with no schedule.
+  /** True under a CBO campaign: this ad set sends no budget, `daily_budget_minor_units` is null. */
+  budget_held_by_campaign: z.boolean().default(false),
+  /** The bid this ad set is created with; null = uncapped (LOWEST_COST_WITHOUT_CAP). */
+  bid: paidScaffoldBidPlanSchema.nullable().default(null),
+  /** When it may deliver; null = no start or end is sent. */
+  schedule: paidScaffoldSchedulePlanSchema.nullable().default(null),
 });
 export type PaidScaffoldAdSetPlan = z.infer<typeof paidScaffoldAdSetPlanSchema>;
 
@@ -231,6 +338,8 @@ export const paidScaffoldAdPlanSchema = z.object({
    * `creative_media` is then the current attachment.
    */
   creative: paidScaffoldCreativeSchema.nullable(),
+  /** The URL parameters every click carries; null = none (P5). */
+  url_tags: z.string().nullable().default(null),
 });
 export type PaidScaffoldAdPlan = z.infer<typeof paidScaffoldAdPlanSchema>;
 
@@ -271,6 +380,12 @@ export const paidScaffoldPlanSchema = z.object({
   expected: paidScaffoldExpectedSchema,
   optimizer_enrollment: paidScaffoldOptimizerEnrollmentSchema,
   blockers: z.array(paidScaffoldBlockerSchema),
+  // P5. Defaulted to what every older plan built: ABO, no campaign budget, no campaign bid.
+  budget_mode: paidScaffoldBudgetModeSchema.default('abo'),
+  /** CBO only: the campaign's daily budget, already checked against Meta's floor. */
+  campaign_daily_budget_minor_units: z.number().int().positive().nullable().default(null),
+  /** CBO only: the campaign's bid strategy (its ad sets carry none of their own). */
+  campaign_bid: paidScaffoldBidPlanSchema.nullable().default(null),
 });
 export type PaidScaffoldPlan = z.infer<typeof paidScaffoldPlanSchema>;
 
@@ -325,8 +440,236 @@ export const paidScaffoldDraftNodeSchema = z.object({
   call_to_action_type: z.string().nullable(),
   /** ad only. Null leaves the ad without creative (a deploy then refuses by name). */
   creative: paidScaffoldCreativeSchema.nullable(),
+
+  // P5 (2026-10-29). `.nullable().default(null)`, not `.nullish()`: a save from a Frontend that
+  // predates these keys, and a manifest stored before them, both parse to null — "not set",
+  // which builds exactly what was built before (ABO, uncapped, no schedule, no URL tags, the
+  // derived event) — while every reader still sees a value, never undefined. Cross-node rules
+  // (CBO needs a campaign budget, its ad sets carry none) are `paidScaffoldFullFieldIssues`.
+  /** campaign only. Null = ABO. */
+  budget_mode: paidScaffoldBudgetModeSchema.nullable().default(null),
+  /** campaign only, CBO only: the campaign's daily budget in minor units. */
+  campaign_daily_budget_minor_units: z.number().int().positive().nullable().default(null),
+  /** adset under ABO, or the campaign under CBO. Null = uncapped (LOWEST_COST_WITHOUT_CAP). */
+  bid_strategy: paidScaffoldBidStrategySchema.nullable().default(null),
+  /** Required by COST_CAP / LOWEST_COST_WITH_BID_CAP, minor units; null otherwise. */
+  bid_amount_minor_units: z.number().int().positive().nullable().default(null),
+  /** Required by LOWEST_COST_WITH_MIN_ROAS: the return a person reads (2.5 = 2.5x). */
+  roas_floor: z.number().positive().max(1000).nullable().default(null),
+  /** adset only. ISO-8601 with offset; null = as soon as it is activated. */
+  start_time: z.string().datetime({ offset: true }).nullable().default(null),
+  /** adset only. ISO-8601 with offset, after `start_time`; null = runs until paused. */
+  end_time: z.string().datetime({ offset: true }).nullable().default(null),
+  /** adset only. The pixel event it optimizes for; null derives it from the objective. */
+  custom_event_type: paidScaffoldConversionEventSchema.nullable().default(null),
+  /** adset only. The pixel it optimizes on; null uses the account's only pixel. */
+  pixel_id: z
+    .string()
+    .regex(/^\d{5,32}$/, 'a Meta pixel id is digits')
+    .nullable()
+    .default(null),
+  /** ad only. "utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}". */
+  url_tags: z.string().trim().min(1).max(PAID_SCAFFOLD_URL_TAGS_MAX).nullable().default(null),
+  /**
+   * Who supplied each field: the person ('user_gave'), Jaina ('jaina_filled'), or nobody yet
+   * ('jaina_asks'). PRESENTATION ONLY — it is stored on the node row and never enters the
+   * manifest, so the content hash an approval covers does not move when a label does. Not the
+   * canvas's NodeProvenance (the approval state of a hydrated node). Keyed by draft-node key.
+   */
+  field_provenance: z.record(z.string(), fieldProvenanceSchema).nullable().default(null),
 });
 export type PaidScaffoldDraftNode = z.infer<typeof paidScaffoldDraftNodeSchema>;
+/** What a caller may hand the schema: the P5 keys are optional on the way in. */
+export type PaidScaffoldDraftNodeInput = z.input<typeof paidScaffoldDraftNodeSchema>;
+
+/** The draft-node keys whose value carries a provenance, by level. Structure keys carry none. */
+export const PAID_SCAFFOLD_PROVENANCE_KEYS = {
+  campaign: [
+    'name',
+    'objective',
+    'special_ad_categories',
+    'budget_mode',
+    'campaign_daily_budget_minor_units',
+    'bid_strategy',
+    'bid_amount_minor_units',
+    'roas_floor',
+  ],
+  adset: [
+    'name',
+    'optimization_goal',
+    'custom_event_type',
+    'pixel_id',
+    'funnel_stage',
+    'placement_mode',
+    'publisher_platforms',
+    'facebook_positions',
+    'instagram_positions',
+    'device_platforms',
+    'audience_group_version_id',
+    'broad_targeting',
+    'daily_budget_minor_units',
+    'target_conversions_per_day',
+    'bid_strategy',
+    'bid_amount_minor_units',
+    'roas_floor',
+    'start_time',
+    'end_time',
+  ],
+  ad: [
+    'name',
+    'link',
+    'message',
+    'headline',
+    'description',
+    'call_to_action_type',
+    'url_tags',
+    'creative',
+  ],
+} as const satisfies Record<
+  PaidScaffoldDraftNode['level'],
+  readonly (keyof PaidScaffoldDraftNode)[]
+>;
+export type PaidScaffoldProvenanceKey =
+  (typeof PAID_SCAFFOLD_PROVENANCE_KEYS)[keyof typeof PAID_SCAFFOLD_PROVENANCE_KEYS][number];
+
+/**
+ * The four decisions Jaina asks for before proposing when the person has not given them
+ * (Ramiro, 2026-10-21). The same names as the evidence decisions they become.
+ */
+export const PAID_SCAFFOLD_CRITICAL_DECISIONS = [
+  'budget',
+  'objective',
+  'audience',
+  'creative',
+] as const satisfies readonly PaidScaffoldDecision[];
+export type PaidScaffoldCriticalDecision = (typeof PAID_SCAFFOLD_CRITICAL_DECISIONS)[number];
+
+/** Which draft-node keys answer each critical decision. */
+export const PAID_SCAFFOLD_CRITICAL_KEYS = {
+  budget: ['daily_budget_minor_units', 'campaign_daily_budget_minor_units'],
+  objective: ['objective', 'optimization_goal', 'custom_event_type'],
+  audience: ['audience_group_version_id', 'broad_targeting'],
+  creative: ['creative'],
+} as const satisfies Record<PaidScaffoldCriticalDecision, readonly (keyof PaidScaffoldDraftNode)[]>;
+
+/**
+ * The provenance a reader is shown for one field. A field stored as 'jaina_asks' that has a
+ * value now (a creative attached after propose, which the attach RPC does not relabel) reads
+ * as 'jaina_filled'; a field with no recorded provenance reads 'jaina_filled' when it has a
+ * value and 'jaina_asks' when it has none — the honest default for a version stored before
+ * provenance existed.
+ */
+export const effectiveFieldProvenance = (
+  recorded: FieldProvenance | null | undefined,
+  hasValue: boolean,
+): FieldProvenance => {
+  if (!hasValue) return recorded === 'user_gave' ? 'user_gave' : 'jaina_asks';
+  if (!recorded || recorded === 'jaina_asks') return 'jaina_filled';
+  return recorded;
+};
+
+const BID_KEYS = ['bid_strategy', 'bid_amount_minor_units', 'roas_floor'] as const;
+const CAMPAIGN_ONLY_KEYS = ['budget_mode', 'campaign_daily_budget_minor_units'] as const;
+const ADSET_ONLY_KEYS = ['start_time', 'end_time', 'custom_event_type', 'pixel_id'] as const;
+const AD_ONLY_KEYS = ['url_tags'] as const;
+
+const isSet = (value: unknown): boolean => value !== null && value !== undefined;
+
+/**
+ * The P5 field rules, refused BY NAME at propose and at save (the compiler runs this before
+ * any read), the same way an ad set with no audience is. One sentence per broken rule, each
+ * naming the node — a Meta 400 mid-build would name nothing and leave objects above it.
+ *
+ * `now` only judges an end date already past; the caller passes its clock.
+ */
+export const paidScaffoldFullFieldIssues = (
+  nodes: readonly PaidScaffoldDraftNodeInput[],
+  now: number = Date.now(),
+): string[] => {
+  const issues: string[] = [];
+  const byPathKey = new Map(nodes.map((node) => [node.path_key, node]));
+  for (const node of nodes) {
+    const where = `${node.level} ${node.path_key}`;
+    const record = node as Record<string, unknown>;
+    const forbid = (keys: readonly string[], why: string) => {
+      for (const key of keys)
+        if (isSet(record[key])) issues.push(`${where} must omit ${key} (${why})`);
+    };
+    if (node.level !== 'campaign') forbid(CAMPAIGN_ONLY_KEYS, 'campaign only');
+    if (node.level !== 'adset') forbid(ADSET_ONLY_KEYS, 'ad set only');
+    if (node.level !== 'ad') forbid(AD_ONLY_KEYS, 'ad only');
+    if (node.level === 'ad') forbid(BID_KEYS, 'an ad carries no bid');
+
+    const parent = node.parent_path_key ? byPathKey.get(node.parent_path_key) : undefined;
+    const cbo =
+      node.level === 'campaign' ? node.budget_mode === 'cbo' : parent?.budget_mode === 'cbo';
+    const strategy = node.bid_strategy ?? null;
+
+    if (node.level === 'campaign') {
+      if (cbo && !isSet(node.campaign_daily_budget_minor_units)) {
+        issues.push(
+          `${where} uses campaign budget (CBO) and needs campaign_daily_budget_minor_units`,
+        );
+      }
+      if (!cbo) forbid(['campaign_daily_budget_minor_units'], 'only a CBO campaign holds a budget');
+      if (!cbo) forbid(BID_KEYS, 'under ABO each ad set holds its own bid');
+    }
+    if (node.level === 'adset' && cbo) {
+      forbid(['daily_budget_minor_units'], 'its campaign uses CBO and holds the budget');
+      forbid(['bid_strategy', 'roas_floor'], 'its campaign uses CBO and holds the bid strategy');
+      const campaignStrategy = parent?.bid_strategy ?? null;
+      if (
+        isSet(node.bid_amount_minor_units) &&
+        !(campaignStrategy && PAID_SCAFFOLD_CAPPED_BID_STRATEGIES.includes(campaignStrategy))
+      ) {
+        issues.push(
+          `${where} names bid_amount_minor_units but its CBO campaign's strategy takes no amount`,
+        );
+      }
+    }
+    if ((node.level === 'campaign' && cbo) || (node.level === 'adset' && !cbo)) {
+      const capped = strategy !== null && PAID_SCAFFOLD_CAPPED_BID_STRATEGIES.includes(strategy);
+      if (capped && !isSet(node.bid_amount_minor_units)) {
+        issues.push(`${where} uses ${strategy} and needs bid_amount_minor_units`);
+      }
+      if (!capped && isSet(node.bid_amount_minor_units)) {
+        issues.push(
+          `${where} names bid_amount_minor_units but ${strategy ?? 'an uncapped bid'} takes no amount`,
+        );
+      }
+      const roas = strategy === 'LOWEST_COST_WITH_MIN_ROAS';
+      if (roas && !isSet(node.roas_floor)) {
+        issues.push(`${where} uses LOWEST_COST_WITH_MIN_ROAS and needs roas_floor`);
+      }
+      if (!roas && isSet(node.roas_floor)) {
+        issues.push(
+          `${where} names roas_floor but its bid strategy is not LOWEST_COST_WITH_MIN_ROAS`,
+        );
+      }
+    }
+    if (node.level === 'adset') {
+      // Meta bids a ROAS floor on purchase value only.
+      const heldStrategy = cbo ? (parent?.bid_strategy ?? null) : strategy;
+      if (heldStrategy === 'LOWEST_COST_WITH_MIN_ROAS' && node.optimization_goal !== 'VALUE') {
+        issues.push(`${where} bids a ROAS floor and must optimize for VALUE`);
+      }
+      const start = node.start_time ? Date.parse(node.start_time) : null;
+      const end = node.end_time ? Date.parse(node.end_time) : null;
+      if (start !== null && end !== null && end <= start) {
+        issues.push(`${where} ends at or before it starts; end_time must be after start_time`);
+      }
+      if (end !== null && end <= now) issues.push(`${where} has an end_time already in the past`);
+    }
+    if (node.level === 'ad' && node.url_tags) {
+      if (/^[?&]/.test(node.url_tags) || /\s/.test(node.url_tags)) {
+        issues.push(
+          `${where}: url_tags is a bare query string ("utm_source=meta&utm_medium=paid"), with no leading ? and no spaces`,
+        );
+      }
+    }
+  }
+  return issues;
+};
 
 export const paidScaffoldVersionSaveRequestSchema = z.object({
   /** The version the canvas was editing. A save on anything but the current one is 409. */

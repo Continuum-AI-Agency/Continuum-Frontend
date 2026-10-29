@@ -39,6 +39,7 @@ describe('jainaToolActionSchema', () => {
     // grow a subject field, or a client could steer a decision onto another row.
     expect(Object.keys(jainaToolActionSchema.shape).sort()).toEqual([
       'approval_id',
+      'approval_variant',
       'decision',
       'publication_mode',
       'reason',

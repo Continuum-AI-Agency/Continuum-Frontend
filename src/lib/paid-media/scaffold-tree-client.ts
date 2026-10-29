@@ -18,12 +18,26 @@
  * gate, which is why the tree is never carried on the wire.
  */
 
-import { type PaidScaffoldPlan, paidScaffoldPlanSchema } from '@continuum/contracts';
+import {
+  FIELD_PROVENANCE_VALUES,
+  type FieldProvenance,
+  PAID_SCAFFOLD_BID_STRATEGIES,
+  PAID_SCAFFOLD_BUDGET_MODES,
+  PAID_SCAFFOLD_CONVERSION_EVENTS,
+  type PaidScaffoldPlan,
+  paidScaffoldPlanSchema,
+} from '@continuum/contracts';
 import type { PaidScaffoldNodeRow, ScaffoldNodeStatus } from '@/lib/paid-media/scaffoldTree';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const NODE_COLUMNS =
-  'id,parent_id,level,ordinal,path_key,name,product_key,angle_key,concept_key,payload,status,meta_object_id,meta_creative_id,error_message,attempt,creative_asset_id,creative_media,daily_budget_minor_units';
+/*
+ * `select('*')`, not a column list, on purpose: ORDER-SAFE ACROSS THE P5 MIGRATION. This
+ * client ships before `paid_scaffold_nodes` gains budget_mode, bid_strategy, start_time,
+ * url_tags, field_provenance and the rest, and PostgREST refuses a whole select that names a
+ * column it does not have — one missing column would blank every scaffold card. `*` returns
+ * whatever exists, and `toNodeRow` reads an absent column as null ("not set").
+ */
+const NODE_COLUMNS = '*';
 
 const NODE_STATUSES: readonly ScaffoldNodeStatus[] = [
   'pending',
@@ -59,7 +73,26 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const asNullableString = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
-const toNodeRow = (raw: Record<string, unknown>): PaidScaffoldNodeRow => ({
+const asNullableNumber = (value: unknown): number | null => {
+  // `numeric` (roas_floor) can arrive as a string; an int column always as a number.
+  const number = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof number === 'number' && Number.isFinite(number) ? number : null;
+};
+
+/** A value of one of the contract's vocabularies, or null — never a string it does not name. */
+const oneOf = <T extends string>(vocabulary: readonly T[], value: unknown): T | null =>
+  vocabulary.includes(value as T) ? (value as T) : null;
+
+/** `field_provenance` jsonb, keeping only labels the contract names. */
+const asFieldProvenance = (value: unknown): Record<string, FieldProvenance> | null => {
+  const entries = Object.entries(asRecord(value)).filter(([, label]) =>
+    FIELD_PROVENANCE_VALUES.includes(label as FieldProvenance),
+  ) as [string, FieldProvenance][];
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+};
+
+/** One `paid_scaffold_nodes` row, read before or after the P5 columns exist. Exported for tests. */
+export const toNodeRow = (raw: Record<string, unknown>): PaidScaffoldNodeRow => ({
   id: String(raw.id ?? ''),
   parentId: asNullableString(raw.parent_id),
   level: asLevel(raw.level),
@@ -79,6 +112,17 @@ const toNodeRow = (raw: Record<string, unknown>): PaidScaffoldNodeRow => ({
   creativeMedia: raw.creative_media === null ? null : asRecord(raw.creative_media),
   dailyBudgetMinorUnits:
     typeof raw.daily_budget_minor_units === 'number' ? raw.daily_budget_minor_units : null,
+  budgetMode: oneOf(PAID_SCAFFOLD_BUDGET_MODES, raw.budget_mode),
+  campaignDailyBudgetMinorUnits: asNullableNumber(raw.campaign_daily_budget_minor_units),
+  bidStrategy: oneOf(PAID_SCAFFOLD_BID_STRATEGIES, raw.bid_strategy),
+  bidAmountMinorUnits: asNullableNumber(raw.bid_amount_minor_units),
+  roasFloor: asNullableNumber(raw.roas_floor),
+  startTime: asNullableString(raw.start_time),
+  endTime: asNullableString(raw.end_time),
+  customEventType: oneOf(PAID_SCAFFOLD_CONVERSION_EVENTS, raw.custom_event_type),
+  pixelId: typeof raw.pixel_id === 'number' ? String(raw.pixel_id) : asNullableString(raw.pixel_id),
+  urlTags: asNullableString(raw.url_tags),
+  fieldProvenance: asFieldProvenance(raw.field_provenance),
 });
 
 /**
@@ -114,6 +158,11 @@ export type PaidScaffoldHeader = {
   lifecycle?: string;
   /** `paid_scaffolds.id` — what the canvas record bar selects on. */
   scaffoldId: string;
+  /**
+   * `paid_scaffolds.current_version_id`: the version a deploy is accepted for. Another id
+   * means a newer version (a correction in words, a canvas save) replaced this one.
+   */
+  currentVersionId?: string | null;
   brandId: string;
   adAccountId: string | null;
   name: string | null;
@@ -143,7 +192,7 @@ export async function fetchPaidScaffoldHeader(params: {
     // `!scaffold_id` names the FK: `paid_scaffolds.current_version_id` points back the other
     // way, and PostgREST refuses an embed it cannot disambiguate.
     .select(
-      'scaffold_id,brand_id,version,content_hash,lifecycle,plan:manifest->plan,paid_scaffolds!scaffold_id(ad_account_id,name)',
+      'scaffold_id,brand_id,version,content_hash,lifecycle,plan:manifest->plan,paid_scaffolds!scaffold_id(ad_account_id,name,current_version_id)',
     )
     .eq('id', params.scaffoldVersionId)
     .maybeSingle();
@@ -155,6 +204,7 @@ export async function fetchPaidScaffoldHeader(params: {
   const plan = paidScaffoldPlanSchema.safeParse(raw.plan);
   return {
     scaffoldId: String(raw.scaffold_id ?? ''),
+    currentVersionId: asNullableString(parent.current_version_id),
     lifecycle: String(raw.lifecycle ?? ''),
     brandId: String(raw.brand_id ?? ''),
     adAccountId: asNullableString(parent.ad_account_id),

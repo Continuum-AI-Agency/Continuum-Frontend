@@ -370,6 +370,13 @@ export const RecommendationKindSchema = z.enum([
   /** Nothing is being served: un-pause it, un-enrol it, widen the audience, clear Meta's
    *  blocker. The one kind whose answer is never a creative. */
   'restore_delivery',
+  /** Change a portfolio setting (the S-family): the engine's own guardrails got in the way of
+   *  what it scored. Portfolio-level — its `adSetId` is the engine's PORTFOLIO_SCOPE sentinel. */
+  'settings',
+  /** A Google or TikTok platform-signal finding (`trigger` is `signal:<rule>`). Recommend-only. */
+  'platform_signal',
+  /** G27: budget moved from one platform to another in a mixed portfolio. */
+  'budget_move',
 ]);
 export type RecommendationKind = z.infer<typeof RecommendationKindSchema>;
 
@@ -1749,6 +1756,162 @@ export const ApplyEntityStatusResponseSchema = z.object({
   error: z.string().optional(),
 });
 export type ApplyEntityStatusResponse = z.infer<typeof ApplyEntityStatusResponseSchema>;
+
+/** ── A human's budget on an ENROLLED ad set (POST /apply/entity-budget, edge
+ *  optimizer-apply-entity-budget) ──
+ *
+ *  The money twin of the targeted pause above. Every other budget route applies the latest
+ *  cycle RUN's amounts (/apply, /apply/approved); none takes a number a person chose. Writing
+ *  that number to Meta directly is not enough for an ad set an autopilot portfolio manages:
+ *  a fixed-total portfolio conserves its stored daily_total, so the next cycle would claw the
+ *  change back across the roster. This route writes through the optimizer's own ledger and
+ *  audit, and moves the portfolio's baseline with it.
+ *
+ *  Strict, like the pause route: an unknown key is a 400, never a silent strip. Amounts are
+ *  MINOR units of the ad account's currency (cents; whole yen on a zero-decimal account),
+ *  because that is what the caller showed the human and what apply_audits records. */
+export const EntityBudgetTargetSchema = z
+  .object({
+    /** The Meta ad-set id. Refused by name (`not_enrolled`) when the next cycle would not
+     *  plan it — the optimizer only writes to what it manages. */
+    ad_set_id: z.string().min(1),
+    /** The daily budget the caller showed the human, from its own read. Compared against
+     *  Meta's live daily_budget before ANY write; a mismatch refuses the whole request
+     *  (`budget_drifted`). null means the caller saw no ad-set daily budget (one under a
+     *  CBO campaign), which this route cannot set, so it is refused (`no_own_budget`). */
+    expected_daily_budget_minor_units: z.number().int().nonnegative().nullable(),
+    /** The number the human chose. No %-cap on this path (Ramiro, 2026-10-29): the approval
+     *  card states before -> after and the difference, and the human confirms it. */
+    new_daily_budget_minor_units: z.number().int().positive(),
+  })
+  .strict();
+export type EntityBudgetTarget = z.infer<typeof EntityBudgetTargetSchema>;
+
+export const ApplyEntityBudgetRequestSchema = z
+  .object({
+    /** Asserted against the portfolio's own brand at the service, after the edge already
+     *  proved the caller can reach it: a body naming one brand and a portfolio of another is
+     *  refused (`brand_mismatch`), never written. */
+    brand_id: z.string().uuid(),
+    portfolio_id: z.string().uuid(),
+    targets: z
+      .array(EntityBudgetTargetSchema)
+      .min(1)
+      .max(50)
+      .refine((targets) => new Set(targets.map((t) => t.ad_set_id)).size === targets.length, {
+        message: 'each ad_set_id may appear once',
+      }),
+    /** One approval = one key. A repeat of the same key answers the FIRST outcome and never
+     *  writes again; the service derives each write's apply_audits id from it. */
+    idempotency_key: z.string().trim().min(8).max(200),
+    /** The human's reason, carried to apply_audits.justification. */
+    reason: z.string().trim().min(1).max(2000),
+    /** The approval card the human clicked (Jaina's gate), named on the audit row. */
+    approval_id: z.string().trim().min(1).max(200),
+    /** The human who approved — stamped by the edge from the caller's JWT, NEVER read from
+     *  the browser's body. */
+    requested_by: z.string().uuid().optional(),
+    /** Default TRUE, as on every apply route. A dry run runs every check, including the live
+     *  Meta read, and answers `would` with ZERO writes and ZERO ledger touches. */
+    dryRun: z.boolean().optional(),
+  })
+  .strict();
+export type ApplyEntityBudgetRequest = z.infer<typeof ApplyEntityBudgetRequestSchema>;
+
+/** Why ONE target was refused before any write, or held back at its reservation. Each is a
+ *  sentence the caller can render:
+ *  - `not_enrolled`      — not an active member of this portfolio's roster.
+ *  - `not_meta`          — a Google/TikTok member; this route writes Meta ad-set budgets only.
+ *  - `no_change`         — the new number is the expected one; nothing to write.
+ *  - `budget_drifted`    — Meta holds a different daily budget than the human was shown.
+ *  - `no_own_budget`     — Meta holds no ad-set daily budget (the campaign owns it, CBO).
+ *  - `budget_unreadable` — the live budget could not be read, so nothing is written over it.
+ *  - `in_flight`         — the same write is already reserved and not yet confirmed. */
+export const EntityBudgetRefusalSchema = z.enum([
+  'not_enrolled',
+  'not_meta',
+  'no_change',
+  'budget_drifted',
+  'no_own_budget',
+  'budget_unreadable',
+  'in_flight',
+]);
+export type EntityBudgetRefusal = z.infer<typeof EntityBudgetRefusalSchema>;
+
+/** One target a dry run WOULD write. `change_pct` is logged and shown, never capped. */
+export const EntityBudgetWouldWriteSchema = z.object({
+  ad_set_id: z.string(),
+  before_minor: z.number().int().nullable(),
+  after_minor: z.number().int(),
+  change_pct: z.number().nullable(),
+});
+export type EntityBudgetWouldWrite = z.infer<typeof EntityBudgetWouldWriteSchema>;
+
+/** One target's outcome. `applied` carries the apply_audits id (the dashboard's Revert handle);
+ *  `indeterminate` is a write Meta never answered whose read-back failed too — it may have
+ *  landed, so it is neither applied nor failed and its reservation stays in flight. */
+export const EntityBudgetResultSchema = z.object({
+  ad_set_id: z.string(),
+  ok: z.boolean(),
+  status: z.enum(['applied', 'failed', 'refused', 'indeterminate']),
+  reason: EntityBudgetRefusalSchema.optional(),
+  before_minor: z.number().int().nullable(),
+  after_minor: z.number().int(),
+  /** What Meta held when the route read it, on a drift refusal. */
+  live_minor: z.number().int().nullable().optional(),
+  change_pct: z.number().nullable(),
+  audit_id: z.string().optional(),
+  error: z.string().optional(),
+});
+export type EntityBudgetResult = z.infer<typeof EntityBudgetResultSchema>;
+
+/** What the NEXT cycle starts from after this change — the reason the route exists.
+ *  - `observed`: the cycle conserves the live sum of the roster's budgets, which now holds the
+ *    human's number; nothing else to move.
+ *  - `fixed`: the cycle conserves the stored daily_total, so it is shifted by the applied
+ *    change (`shifted`); without that the cycle would pull the change back across the roster.
+ *  - `pacing`: a running flight plan sets the total; the human's number is the new starting
+ *    point and pacing scales every ad set from it (Ramiro's 2026-10-08 rule). A fixed
+ *    daily_total is still shifted, for the day the flight ends. */
+export const EntityBudgetBaselineSchema = z.object({
+  source: z.enum(['observed', 'fixed', 'pacing']),
+  /** MAJOR units, the scale optimizer.portfolios.daily_total is stored in. */
+  daily_total_before: z.number(),
+  daily_total_after: z.number(),
+  shifted: z.boolean(),
+  note: z.string(),
+  error: z.string().optional(),
+});
+export type EntityBudgetBaseline = z.infer<typeof EntityBudgetBaselineSchema>;
+
+/** POST /apply/entity-budget response. Same envelope family as the pause route.
+ *
+ *  ALL-OR-NOTHING before the first write: any refused target answers `ok:false`,
+ *  `reason:'targets_refused'`, names every refused target in `results`, and writes nothing.
+ *  Once writing starts a Meta error can still fail one target after another landed; that is
+ *  `reason:'partial_failure'` with every target's status, never a silent half.
+ *
+ *  Top-level `reason` values: `brand_mismatch`, `observe_mode`, `meta_apply_disabled`,
+ *  `campaign_unsupported`, `applier_dry_run`, `daily_cap_exceeded`, `targets_refused`,
+ *  `idempotency_key_reused` (the key already wrote a different change), `partial_failure`,
+ *  `write_failed` (nothing landed), `baseline_not_recorded` (the budgets moved, the fixed
+ *  daily_total did not — the next cycle may pull them back).
+ *  `replayed: true` marks an answer read back from the first use of the key. */
+export const ApplyEntityBudgetResponseSchema = z.object({
+  ok: z.boolean(),
+  dryRun: z.boolean().optional(),
+  runId: z.string().optional(),
+  replayed: z.boolean().optional(),
+  would: z.array(EntityBudgetWouldWriteSchema).default([]),
+  applied: z.number().int().nonnegative().optional(),
+  failed: z.number().int().nonnegative().optional(),
+  refused: z.number().int().nonnegative().optional(),
+  results: z.array(EntityBudgetResultSchema).default([]),
+  baseline: EntityBudgetBaselineSchema.optional(),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ApplyEntityBudgetResponse = z.infer<typeof ApplyEntityBudgetResponseSchema>;
 
 /** The Meta write receipt captured on a successful budget write and stored in
  *  optimizer.apply_audits.meta_receipt. Kept loose — it is read back from jsonb. */
