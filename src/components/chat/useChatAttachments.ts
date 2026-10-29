@@ -11,7 +11,7 @@ import {
 } from '@/lib/documents/uploadLimits';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { classifyChatAttachment } from './attachmentRouting';
 import type { Attachment } from './attachments';
 
@@ -277,14 +277,11 @@ export function useChatAttachments({
   useEffect(() => {
     if (!brandId || indexingIds.length === 0) return;
 
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `chat-documents-${brandId}-${indexingKey}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `brand_documents:${brandId}`,
       bindings: [
         {
           event: 'UPDATE',
-          schema: 'brand_profiles',
-          table: 'brand_documents',
-          filter: `brand_id=eq.${brandId}`,
           onRow: (row) => reconcileDocumentRow(row, { source: 'realtime' }),
         },
       ],

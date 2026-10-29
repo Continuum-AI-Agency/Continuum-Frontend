@@ -9,11 +9,12 @@ import { useEffect, useRef } from 'react';
 import { useAgentRunStream } from '@/hooks/useAgentRunStream';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
+// The run's own key column: a hyperframes run's id IS its runId.
 const RUN_TABLE = {
-  canvas: 'ai_studio_canvas_composer_runs',
-  hyperframes: 'ai_studio_hyperframe_runs',
+  canvas: { table: 'ai_studio_canvas_composer_runs', key: 'run_id' },
+  hyperframes: { table: 'ai_studio_hyperframe_runs', key: 'id' },
 } as const;
 
 const runFromRow = (row: Record<string, unknown>, current: AgentRunDto): AgentRunDto => ({
@@ -33,7 +34,7 @@ export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
     throw new Error(`DurableAiStudioRunTail cannot tail ${run.agent}.`);
   }
   const agent = run.agent;
-  const table = RUN_TABLE[agent];
+  const { table, key } = RUN_TABLE[agent];
   useAgentRunStream(run.runId, agent);
   const upsertRun = useAgentRunStore((state) => state.upsertRun);
   // The latest run rides a ref so the subscription is keyed on runId alone — depending
@@ -47,20 +48,10 @@ export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
       if (runChanged(next, runRef.current)) upsertRun(next);
     };
 
-    // A label distinct from the event tail's, on top of the helper's unique suffix: this
-    // run has TWO subscriptions, and sharing a topic between them is what used to crash
-    // the app to the global 500 boundary.
-    return subscribeToPostgresChanges({
-      label: `agent-run-row:${agent}:${run.runId}`,
-      bindings: [
-        {
-          event: 'UPDATE',
-          schema: 'brand_profiles',
-          table,
-          filter: `run_id=eq.${run.runId}`,
-          onRow: fold,
-        },
-      ],
+    // The run row's topic, not the event tail's (`<events table>:<runId>`).
+    return subscribeToRowBroadcasts({
+      topic: `${table}:${run.runId}`,
+      bindings: [{ event: 'UPDATE', onRow: fold }],
       onSubscribed: async () => {
         // Close the mount race: the run may have gone terminal between the active-runs
         // hydrate and this subscription going live, and a missed UPDATE never replays.
@@ -72,7 +63,7 @@ export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
             .schema('brand_profiles')
             .from(table)
             .select('status,error_message,finished_at')
-            .eq('run_id', run.runId)
+            .eq(key, run.runId)
             .maybeSingle();
           if (data) fold(data as Record<string, unknown>);
         } catch {
@@ -80,7 +71,7 @@ export function DurableAiStudioRunTail({ run }: { run: AgentRunDto }) {
         }
       },
     });
-  }, [agent, run.runId, table, upsertRun]);
+  }, [key, run.runId, table, upsertRun]);
 
   return null;
 }

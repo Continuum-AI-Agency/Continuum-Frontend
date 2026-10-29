@@ -1,11 +1,12 @@
 'use client';
 
 import { motion, useReducedMotion } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 import React, { Suspense } from 'react';
 import { WhatsNewBell } from '@/components/changelog/WhatsNewBell';
 import { ClientRenderInbox } from '@/components/client-render/ClientRenderInbox';
-import { NotificationsBell } from '@/components/notifications/NotificationsBell';
+import { ClientOnly } from '@/components/ui/ClientOnly';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useToastContext } from '@/components/ui/ToastProvider';
@@ -26,6 +27,20 @@ import {
 // module tabs), the module pill and its separator step aside: the page bar already says where
 // you are, and every pixel it gets keeps its tabs from clipping. Everywhere else they stay.
 const YIELDS_TO_PAGE_BAR = 'max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:hidden';
+
+// The bell's in-flight feed reads helpers that live beside the whole organic streaming schema
+// graph in contracts, and the header is on every authenticated page: a static import put that
+// graph in every page's first load. Both of its feeds only fill after hydration, so it mounts
+// then, into a slot the size of its button. `loading` gives it its own Suspense boundary (see
+// BrandWelcomeBanner in DashboardLayoutShell for what happens without one).
+const BELL_SLOT = <span aria-hidden="true" className="size-9 shrink-0" />;
+const NotificationsBell = dynamic(
+  () =>
+    import('@/components/notifications/NotificationsBell').then((m) => ({
+      default: m.NotificationsBell,
+    })),
+  { loading: () => BELL_SLOT },
+);
 
 function DashboardHeaderInner({ changelogEntries }: { changelogEntries: ChangelogEntry[] }) {
   useDashboardWelcomeToast();
@@ -81,7 +96,9 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
       <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:group-has-[[data-testid=scale-header-bar]]/app-header:gap-0.5">
         <ClientRenderInbox />
         <WhatsNewBell entries={changelogEntries} />
-        <NotificationsBell />
+        <ClientOnly fallback={BELL_SLOT}>
+          <NotificationsBell />
+        </ClientOnly>
       </div>
     </header>
   );

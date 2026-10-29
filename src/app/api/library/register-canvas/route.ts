@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { createHash } from 'node:crypto';
 import {
   type RegisteredAssetOriginRef,
@@ -35,11 +36,8 @@ export async function POST(request: Request) {
   const input = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, input.brandProfileId))) {

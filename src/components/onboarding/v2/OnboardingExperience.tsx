@@ -30,6 +30,7 @@ import { prepareOnboardingStarter } from '@/lib/onboarding/starterKit';
 import type { OnboardingState } from '@/lib/onboarding/state';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 import { OnboardingBrandSwitcher } from './OnboardingBrandSwitcher';
 import { OnboardingShell, type ShellPillId } from './OnboardingShell';
 import type { StepperState } from './OnboardingStepper';
@@ -359,8 +360,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     setSourceError(null);
     useBrandProfileRevealCache.getState().invalidateBrand(brandId);
     patch('agentPreview', emptyBuckets());
-    const user = await createSupabaseBrowserClient().auth.getUser();
-    const userId = user.data.user?.id;
+    const userId = (await getSessionUser())?.id;
     if (!userId || generation !== analysisGenerationRef.current) return false;
     let source: OnboardingSourceResponse | null = null;
     if (intake.url) {

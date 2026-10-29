@@ -13,7 +13,7 @@ import {
 import React from 'react';
 import * as realtime from '@/lib/supabase/realtime';
 
-const subscribe = spyOn(realtime, 'subscribeToPostgresChanges').mockImplementation(
+const subscribe = spyOn(realtime, 'subscribeToRowBroadcasts').mockImplementation(
   () => () => undefined,
 );
 afterAll(() => subscribe.mockRestore());

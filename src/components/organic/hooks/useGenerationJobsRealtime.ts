@@ -4,12 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { generationSummariesQueryKey } from '@/lib/organic/generationSummaries';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 /**
- * Keeps the live generations ticker authoritative with the server: subscribes to
- * Supabase Realtime postgres_changes on organic.post_generation_jobs for the
- * active brand and invalidates the useGenerationSummaries query whenever a job
+ * Keeps the live generations ticker authoritative with the server: listens to the
+ * row broadcasts of organic.post_generation_jobs for the active brand (pushed by
+ * the post_generation_jobs_broadcast trigger) and invalidates the useGenerationSummaries query whenever a job
  * row is written by ANY path (enqueue, stage transitions, completion, failure,
  * cancel). Mirrors useCalendarRealtimeSync — it does not carry the payload, it
  * just nudges a refetch so the canonical brand-scoped summaries win.
@@ -31,17 +31,9 @@ export function useGenerationJobsRealtime(brandId?: string | null) {
       }, 400);
     };
 
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `organic-post-generation-jobs-${brandId}`,
-      bindings: [
-        {
-          event: '*',
-          schema: 'organic',
-          table: 'post_generation_jobs',
-          filter: `brand_id=eq.${brandId}`,
-          onRow: handleChange,
-        },
-      ],
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `post_generation_jobs:${brandId}`,
+      bindings: [{ event: '*', onRow: handleChange }],
     });
 
     return () => {

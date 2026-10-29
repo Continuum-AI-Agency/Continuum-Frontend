@@ -69,23 +69,3 @@ export async function getServerSession() {
     return null;
   }
 }
-
-export async function getServerUser() {
-  const supabase = await createSupabaseServerClient();
-
-  try {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error) {
-      throw error;
-    }
-
-    return user;
-  } catch (error) {
-    console.error('Error fetching user:', error);
-    return null;
-  }
-}

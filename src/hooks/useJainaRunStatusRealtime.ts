@@ -1,12 +1,14 @@
 // Subscribes to durable Jaina run-status changes (jaina.jaina_conversation_runs)
 // so the UI can recover a run's outcome when the live NDJSON stream is lost, and
-// drive a per-session "generating" indicator — independent of the stream. RLS
-// scopes rows to the signed-in user, so no server-side filter is needed; the
-// consumer matches the run/session it cares about. The heavy result payload is
-// NOT broadcast (excluded from the Realtime publication) — fetch it via REST.
+// drive a per-session "generating" indicator — independent of the stream. The
+// trigger sends each change to the run owner's own topic, carrying only run_id,
+// session_id, status, result_type and error_message, and only when one of them
+// changed; the consumer matches the run/session it cares about. The heavy result
+// payload is never broadcast — fetch it via REST.
 
 import { useEffect, useRef } from 'react';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { useSession } from '@/hooks/useSession';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type JainaRunStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -35,13 +37,11 @@ export function useJainaRunStatusRealtime({
 }: UseJainaRunStatusRealtimeParams): void {
   const callbackRef = useRef(onRunStatus);
   callbackRef.current = onRunStatus;
+  const userId = useSession().user?.id ?? null;
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !userId) return;
 
-    // The old topic was the bare literal `jaina:run-status` — no brand, no user, no
-    // discriminator of any kind — so a second mount anywhere in the tree would have been
-    // handed the first one's channel and thrown. Two render sites already exist.
     const onRow = (row: Record<string, unknown>): void => {
       const runId = typeof row.run_id === 'string' ? row.run_id : null;
       const status = typeof row.status === 'string' ? (row.status as JainaRunStatus) : null;
@@ -55,15 +55,14 @@ export function useJainaRunStatusRealtime({
       });
     };
 
-    // INSERT and UPDATE only, not `*`. The old handler read `payload.new` and bailed
-    // when it was empty, so a DELETE was silently ignored; `*` through the helper would
-    // hand it the deleted row instead and report a finished run as a live status change.
-    return subscribeToPostgresChanges({
-      label: 'jaina:run-status',
+    // INSERT and UPDATE only, not `*`: a DELETE would hand over the deleted row and report a
+    // finished run as a live status change. The trigger sends no DELETE anyway.
+    return subscribeToRowBroadcasts({
+      topic: `jaina_conversation_runs:${userId}`,
       bindings: [
-        { event: 'INSERT', schema: 'jaina', table: 'jaina_conversation_runs', onRow },
-        { event: 'UPDATE', schema: 'jaina', table: 'jaina_conversation_runs', onRow },
+        { event: 'INSERT', onRow },
+        { event: 'UPDATE', onRow },
       ],
     });
-  }, [enabled]);
+  }, [enabled, userId]);
 }

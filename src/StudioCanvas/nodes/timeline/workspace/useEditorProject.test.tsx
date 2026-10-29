@@ -1,12 +1,12 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { createEditorProjectV2 } from '@continuum/contracts';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
+import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 const ID = '22222222-2222-4222-8222-222222222222';
 let project = createEditorProjectV2({ projectId: ID, title: 'Edit', width: 640, height: 640 });
 let reads = 0;
-let subscription: PostgresChangesSubscription | undefined;
+let subscription: RowBroadcastSubscription | undefined;
 const notices: string[] = [];
 const show = (notice: { title: string }) => notices.push(notice.title);
 mock.module('@/components/ui/ToastProvider', () => ({ useToast: () => ({ show }) }));
@@ -31,7 +31,7 @@ mock.module('@/lib/api/videoEditorOps.client', () => ({
   },
 }));
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: (input: PostgresChangesSubscription) => {
+  subscribeToRowBroadcasts: (input: RowBroadcastSubscription) => {
     subscription = input;
     return () => undefined;
   },

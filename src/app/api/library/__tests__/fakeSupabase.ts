@@ -315,7 +315,7 @@ export function createFakeSupabaseClient(options: FakeClientOptions) {
 
   return {
     auth: {
-      getUser: async () => ({ data: { user: { id: userId, email: userEmail } }, error: null }),
+      getClaims: async () => ({ data: { claims: { sub: userId, email: userEmail } }, error: null }),
     },
     schema: (schemaName: string) => ({
       rpc: async (fn: string) =>

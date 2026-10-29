@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { redirect } from 'next/navigation';
 import { OnboardingExperience } from '@/components/onboarding/v2/OnboardingExperience';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
@@ -17,12 +18,9 @@ type OnboardingPageProps = {
 
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
 
-  if (userError || !user) {
+  if (!user) {
     redirect('/login');
   }
 

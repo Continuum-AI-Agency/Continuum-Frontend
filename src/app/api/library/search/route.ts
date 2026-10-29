@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import type {
   MediaSearchMatchReason,
   MediaSearchResponse,
@@ -368,12 +369,9 @@ function mergeBestVisual(visual: RankedMatch[], frameHits: readonly MatchAssetRo
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
 
-  if (authError || !user) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

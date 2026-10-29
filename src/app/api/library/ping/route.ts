@@ -1,5 +1,6 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { reviewPingRequestSchema, reviewPingResponseSchema } from '@continuum/contracts';
-import type { User } from '@supabase/supabase-js';
+import type { AuthIdentity } from '@/lib/auth/identity';
 import { NextResponse } from 'next/server';
 import { fetchBrandMembers } from '@/lib/brands/members';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
@@ -25,11 +26,8 @@ export async function GET(request: Request) {
     }
 
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await claimsIdentityOf(supabase);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!(await callerHasBrandAccess(supabase, brandId))) {
@@ -65,11 +63,8 @@ export async function POST(request: Request) {
     const input = parsed.data;
 
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
+    const user = await claimsIdentityOf(supabase);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!(await callerHasBrandAccess(supabase, input.brandId))) {
@@ -147,7 +142,7 @@ export async function POST(request: Request) {
   }
 }
 
-function resolveActorName(user: User): string {
+function resolveActorName(user: AuthIdentity): string {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
   for (const key of ['name', 'full_name']) {
     const value = metadata[key];

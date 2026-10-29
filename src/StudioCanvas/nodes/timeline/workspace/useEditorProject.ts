@@ -16,7 +16,7 @@ import {
   restoreVideoProjectTimeline,
 } from '@/lib/api/videoProjects.client';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import type { EditorCommandDraft } from '../editorProjectV2AssemblyModel';
 import { type EditBuild, finalizeEdit } from './timelineEdits';
 
@@ -88,14 +88,11 @@ export function useEditorProject(projectId: string) {
         variant: 'error',
       }),
     );
-    return subscribeToPostgresChanges({
-      label: `editor_project_${projectId}`,
+    return subscribeToRowBroadcasts({
+      topic: `editor_projects:${projectId}`,
       bindings: [
         {
           event: 'UPDATE',
-          schema: 'media',
-          table: 'editor_projects',
-          filter: `id=eq.${projectId}`,
           onRow: (row) => {
             const revision = typeof row.revision === 'number' ? row.revision : null;
             if (revision === null || revision <= (projectRef.current?.revision ?? -1)) return;

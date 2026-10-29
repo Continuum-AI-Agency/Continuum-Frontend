@@ -20,7 +20,7 @@ const request = mock(async (opts: RequestOptions) => {
 const upserts: Record<string, unknown>[] = [];
 const updates: Record<string, unknown>[] = [];
 const supabase = {
-  auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+  auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }) },
   schema: () => ({
     from: () => ({
       upsert: (row: Record<string, unknown>) => {

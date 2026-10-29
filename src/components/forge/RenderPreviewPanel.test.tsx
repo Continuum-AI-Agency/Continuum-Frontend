@@ -21,7 +21,7 @@ import type {
   ForgeRenderPreviewRequest,
   ForgeRenderSketch,
 } from '@continuum/contracts';
-import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
+import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 type ListOptions = { renderSetRowId?: string; templateKey?: string };
 const listJobsMock = mock(async (_brandId: string, _limit: number, _options?: ListOptions) => ({
@@ -130,9 +130,9 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   },
 }));
 
-let subscription: PostgresChangesSubscription | null = null;
+let subscription: RowBroadcastSubscription | null = null;
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: (options: PostgresChangesSubscription) => {
+  subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
     subscription = options;
     return () => undefined;
   },

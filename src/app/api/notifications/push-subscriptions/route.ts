@@ -2,6 +2,7 @@
 // (brand_profiles.web_push_subscriptions, RLS: own rows). The endpoint is the
 // identity: re-subscribing the same browser refreshes its keys instead of adding a row.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -18,9 +19,7 @@ const subscriptionSchema = z
 
 async function signedIn() {
   const client = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+  const user = await claimsIdentityOf(client);
   return user ? { client, userId: user.id } : null;
 }
 

@@ -1,6 +1,7 @@
 import { combineChunks, createChunks, stringFromBase64URL, stringToBase64URL } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { managementSql } from './prodEnv';
+import { leaseSession } from './sessionCache';
 
 // Supabase auth-mint helper for Playwright E2E.
 //
@@ -145,10 +146,67 @@ export async function mintSessionForEmail(email: string): Promise<PlaywrightStor
   return (await mintSessionBundleForEmail(email)).state;
 }
 
+/**
+ * The session is recycled from an earlier run when it still works (./sessionCache) and is
+ * never shared with another live caller, so each call still gets a session of its own.
+ */
 export async function mintSessionBundleForEmail(email: string): Promise<MintedSession> {
+  const { raw, reused } = await leaseSession(
+    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
+    email,
+    gotrueSessionSource(email),
+  );
+  const accessToken = (JSON.parse(raw) as { access_token?: string }).access_token;
+  if (!accessToken) {
+    throw new Error(`[e2e/auth] verifyOtp returned no access token or user for ${email}.`);
+  }
+  const { userId, sessionId } = sessionClaimsOf(accessToken);
+  if (reused) {
+    // A fresh session has no brand pin; one an earlier run left behind would open ITS brand.
+    const { error } = await createAdminClient()
+      .schema('brand_profiles')
+      .from('user_session_brands')
+      .delete()
+      .eq('user_id', userId)
+      .eq('session_id', sessionId);
+    if (error) throw new Error(`[e2e/auth] reused session pin clear failed: ${error.message}`);
+  }
+  return { state: buildStorageState(raw), accessToken, userId };
+}
+
+function persistingAnonClient(): { client: SupabaseClient; storage: MemorySessionStorage } {
+  const storage = new MemorySessionStorage();
+  const client = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), resolveAnonKey(), {
+    auth: {
+      storageKey: SUPABASE_AUTH_COOKIE_NAME,
+      storage,
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  return { client, storage };
+}
+
+function gotrueSessionSource(email: string) {
+  return {
+    async alive(accessToken: string) {
+      const { data, error } = await persistingAnonClient().client.auth.getUser(accessToken);
+      return !error && Boolean(data.user);
+    },
+    async refresh(refreshToken: string) {
+      const { client, storage } = persistingAnonClient();
+      const { data, error } = await client.auth.refreshSession({ refresh_token: refreshToken });
+      if (error || !data.session) return null;
+      return storage.read(SUPABASE_AUTH_COOKIE_NAME) ?? JSON.stringify(data.session);
+    },
+    mint: () => mintRawSession(email),
+  };
+}
+
+// The exact serialized session string the browser client would persist for `email`.
+async function mintRawSession(email: string): Promise<string> {
   const admin = createAdminClient();
-  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const anonKey = resolveAnonKey();
 
   const { data: linkData, error: linkError } = await retryTransient(
     () => admin.auth.admin.generateLink({ type: 'magiclink', email }),
@@ -162,39 +220,19 @@ export async function mintSessionBundleForEmail(email: string): Promise<MintedSe
     throw new Error(`[e2e/auth] generateLink returned no hashed_token for ${email}.`);
   }
 
-  const sessionStorage = new MemorySessionStorage();
-  const anon = createClient(url, anonKey, {
-    auth: {
-      storageKey: SUPABASE_AUTH_COOKIE_NAME,
-      storage: sessionStorage,
-      persistSession: true,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-
-  const { data: verifyData, error: verifyError } = await anon.auth.verifyOtp({
-    token_hash: hashedToken,
-    type: 'magiclink',
-  });
+  const { client: anon, storage } = persistingAnonClient();
+  const { data: verifyData, error: verifyError } = await retryTransient(
+    () => anon.auth.verifyOtp({ token_hash: hashedToken, type: 'magiclink' }),
+    `verifyOtp for ${email}`,
+  );
   if (verifyError) {
     throw new Error(`[e2e/auth] verifyOtp failed for ${email}: ${verifyError.message}`);
   }
-
-  const persisted = sessionStorage.read(SUPABASE_AUTH_COOKIE_NAME);
-  const rawSessionJson =
-    persisted ?? (verifyData.session ? JSON.stringify(verifyData.session) : null);
-  if (!rawSessionJson) {
-    throw new Error(`[e2e/auth] No session was persisted after verifyOtp for ${email}.`);
-  }
-
-  const accessToken = verifyData.session?.access_token;
-  const userId = verifyData.session?.user?.id;
-  if (!accessToken || !userId) {
+  if (!verifyData.session?.access_token || !verifyData.session.user?.id) {
     throw new Error(`[e2e/auth] verifyOtp returned no access token or user for ${email}.`);
   }
 
-  return { state: buildStorageState(rawSessionJson), accessToken, userId };
+  return storage.read(SUPABASE_AUTH_COOKIE_NAME) ?? JSON.stringify(verifyData.session);
 }
 
 /** A GoTrue access token's `sub` and `session_id` claims (required on every Supabase token). */
@@ -450,34 +488,7 @@ export async function mintSessionWithPassword(
  * for benches that call the Backend over HTTP directly rather than driving a page.
  */
 export async function mintAccessTokenForEmail(email: string): Promise<string> {
-  const admin = createAdminClient();
-  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const anonKey = resolveAnonKey();
-
-  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-    type: 'magiclink',
-    email,
-  });
-  if (linkError) {
-    throw new Error(`[e2e/auth] generateLink failed for ${email}: ${linkError.message}`);
-  }
-  const hashedToken = linkData.properties?.hashed_token;
-  if (!hashedToken) {
-    throw new Error(`[e2e/auth] generateLink returned no hashed_token for ${email}.`);
-  }
-
-  const anon = createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-  const { data, error } = await retryTransient(
-    () => anon.auth.verifyOtp({ token_hash: hashedToken, type: 'magiclink' }),
-    `verifyOtp for ${email}`,
-  );
-  if (error || !data.session?.access_token) {
-    throw new Error(`[e2e/auth] verifyOtp failed for ${email}: ${error?.message ?? 'no session'}`);
-  }
-
-  return data.session.access_token;
+  return (await mintSessionBundleForEmail(email)).accessToken;
 }
 
 // Creates an ephemeral confirmed user (test-only domain) with the requested
@@ -505,7 +516,8 @@ export async function mintSession({
     throw new Error(`[e2e/auth] createUser failed for ${email}: ${createError.message}`);
   }
 
-  return mintSessionForEmail(email);
+  // A one-off user: nothing to recycle, so no cache slot.
+  return buildStorageState(await mintRawSession(email));
 }
 
 // Authenticates as the seeded Pizza Test brand owner (duanecscott@gmail.com) for

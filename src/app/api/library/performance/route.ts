@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   assetAdAttributionMapSchema,
   assetPerformanceSchema,
@@ -47,11 +48,8 @@ export async function GET(request: Request) {
   const { brandId, assetId, window } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, brandId))) {

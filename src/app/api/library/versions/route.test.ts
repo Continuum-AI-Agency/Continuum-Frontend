@@ -332,9 +332,9 @@ beforeEach(() => {
   hooks.__testCreateSupabaseServerClient = () =>
     Promise.resolve({
       auth: {
-        getUser: () =>
+        getClaims: () =>
           Promise.resolve({
-            data: { user: { id: USER_ID, email: 'uploader@continuum.test' } },
+            data: { claims: { sub: USER_ID, email: 'uploader@continuum.test' } },
             error: null,
           }),
       },

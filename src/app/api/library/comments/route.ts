@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   createCommentRequestSchema,
   deleteCommentRequestSchema,
@@ -56,11 +57,8 @@ type AuthedContext = { supabase: SupabaseClient; userId: string; userEmail: stri
 
 async function requireCaller(): Promise<AuthedContext | NextResponse> {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getServerUser } from '@/lib/supabase/server';
+import { getClaimsIdentity } from '@/lib/auth/claims';
 import { DriveSettings } from './DriveSettings';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DriveSettingsPage() {
-  const user = await getServerUser();
+  const user = await getClaimsIdentity();
   const email = user?.email ?? 'your Continuum login email';
 
   return (

@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   type CollectionMember,
   collectionAccessSchema,
@@ -20,9 +21,7 @@ type MemberRow = { user_id: string; role: string; added_by: string | null; creat
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const collectionId = new URL(request.url).searchParams.get('collectionId');
@@ -73,9 +72,7 @@ export async function GET(request: Request) {
 // { userId, role: null } removes.
 export async function PUT(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const parsed = setCollectionMemberRequestSchema.safeParse(await request.json().catch(() => null));

@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { NextResponse } from 'next/server';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { log } from '@/lib/observability/logger';
@@ -29,8 +30,8 @@ function createStreamResponseHeaders(upstreamHeaders: Headers): Headers {
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   const posthog = getPostHogClient();
   posthog.capture({
-    distinctId: userData.user.id,
+    distinctId: user.id,
     event: 'organic_agent_chat_message_sent',
     properties: {
       brand_id: (body as Record<string, unknown>)?.brandId ?? null,
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       'upstream.url': upstreamUrl,
       'upstream.status': backendResponse.status,
       'upstream.detail': detail.slice(0, 500),
-      'user.id': userData.user.id,
+      'user.id': user.id,
     });
     return NextResponse.json(
       { error: detail || 'Failed to connect to Organic agent.' },

@@ -97,7 +97,10 @@ function createClientStub(plan: Record<string, DbResult[]>) {
 function setAuth(user: { id: string; email?: string } | null) {
   hooks.__testCreateSupabaseServerClient = () =>
     Promise.resolve({
-      auth: { getUser: () => Promise.resolve({ data: { user }, error: null }) },
+      auth: {
+        getClaims: () =>
+          Promise.resolve({ data: { claims: user && { sub: user.id, email: user.email } }, error: null }),
+      },
     });
 }
 
@@ -148,8 +151,8 @@ describe('GET /api/library/review', () => {
       Promise.resolve({
         ...client,
         auth: {
-          getUser: () =>
-            Promise.resolve({ data: { user: { id: USER_ID, email: USER_EMAIL } }, error: null }),
+          getClaims: () =>
+            Promise.resolve({ data: { claims: { sub: USER_ID, email: USER_EMAIL } }, error: null }),
         },
       });
 

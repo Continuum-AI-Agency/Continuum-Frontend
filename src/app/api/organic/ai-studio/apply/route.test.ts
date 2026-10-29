@@ -101,7 +101,7 @@ function seedApplyClients(): void {
   (
     globalThis as { __testCreateSupabaseServerClient?: (...params: unknown[]) => unknown }
   ).__testCreateSupabaseServerClient = mock().mockResolvedValue({
-    auth: { getUser: mock().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null }) },
+    auth: { getClaims: mock().mockResolvedValue({ data: { claims: { sub: 'user-1' } }, error: null }) },
     schema: mock().mockReturnValue({ rpc: mock().mockResolvedValue({ data: true, error: null }) }),
     storage: {
       from: mock().mockReturnValue({
@@ -154,7 +154,7 @@ describe('POST /api/organic/ai-studio/apply', () => {
       error: null,
     });
     const rpcMock = mock().mockResolvedValue({ data: true, error: null });
-    const getUserMock = mock().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    const getClaimsMock = mock().mockResolvedValue({ data: { claims: { sub: 'user-1' } }, error: null });
     // Registration now goes through media.library_execute_operation, so what this
     // captures is the Creative Operations payload rather than a raw assets row.
     const registerOperations: Array<Record<string, unknown>> = [];
@@ -212,7 +212,7 @@ describe('POST /api/organic/ai-studio/apply', () => {
         __testCreateSupabaseServerClient?: (...params: unknown[]) => unknown;
       }
     ).__testCreateSupabaseServerClient = mock().mockResolvedValue({
-      auth: { getUser: getUserMock },
+      auth: { getClaims: getClaimsMock },
       schema: mock().mockReturnValue({ rpc: rpcMock }),
       storage: {
         from: mock().mockReturnValue({

@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { LIBRARY_TRASH_RETENTION_DAYS, type LibraryTrashPage } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -27,11 +28,8 @@ function isRestorable(row: MediaAssetRow): boolean {
 // retention window, newest deletion first.
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

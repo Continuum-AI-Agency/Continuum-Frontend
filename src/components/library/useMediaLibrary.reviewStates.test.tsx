@@ -1,7 +1,11 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { libraryBrowseQuerySchema, type MediaAsset } from '@continuum/contracts';
 import { renderHook, waitFor } from '@testing-library/react';
-import { useMediaLibrary } from './useMediaLibrary';
+
+// The live grid's row topic needs a configured Supabase client; this suite is about the list read.
+mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts: () => () => {} }));
+
+const { useMediaLibrary } = await import('./useMediaLibrary');
 
 // Custom review states are not a browse-RPC argument (a new one would be a PostgREST
 // overload), so the browse route narrows the ranked rows with them — and every other browse

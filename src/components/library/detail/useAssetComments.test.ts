@@ -9,7 +9,7 @@ const mockChannel = {
 };
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'jane@test.dev' } } }) },
+    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1', email: 'jane@test.dev' } } } }) },
     channel: () => mockChannel,
     removeChannel: () => {},
   }),

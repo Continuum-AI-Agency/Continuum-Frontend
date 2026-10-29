@@ -4,21 +4,23 @@
 // event log, once in its own effect for the run row. Both used to build the identical
 // topic `agent-run:canvas:<runId>`. A Supabase Realtime topic is a global namespace on the
 // browser client, so the second `supabase.channel(...)` was handed the FIRST channel back,
-// already flipped to `joining` by its synchronous `.subscribe()` — and `.on('postgres_changes')`
+// already flipped to `joining` by its synchronous `.subscribe()` — and a late `.on(...)`
 // on a joining channel throws. The throw escaped the post-auth layout to global-error.tsx.
+// Now each tail joins its own table's row-broadcast topic: `<events table>:<runId>` and
+// `<runs table>:<runId>`.
 //
 // The fake client below models exactly those two SDK behaviours (topic dedupe, and the
 // post-subscribe `.on` guard). Without them the bug is invisible to a test.
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AgentRunDto } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 
 type FakeChannel = {
   topic: string;
   joining: boolean;
-  bindings: { event: string; table: string }[];
-  on: (type: string, filter: { event: string; table: string }, callback: unknown) => FakeChannel;
+  bindings: { type: string; event: string }[];
+  on: (type: string, filter: { event: string }, callback: unknown) => FakeChannel;
   subscribe: (callback?: (status: string) => void) => FakeChannel;
 };
 
@@ -31,13 +33,13 @@ const makeChannel = (topic: string): FakeChannel => {
     joining: false,
     bindings: [],
     on: (type, filter) => {
-      // RealtimeChannel.on: throws for presence/postgres_changes once joining or joined.
-      if (channel.joining && type === 'postgres_changes') {
+      // RealtimeChannel.on: throws for late bindings once joining or joined.
+      if (channel.joining) {
         throw new Error(
           `cannot add \`${type}\` callbacks for ${channel.topic} after \`subscribe()\`.`,
         );
       }
-      channel.bindings.push({ event: filter.event, table: filter.table });
+      channel.bindings.push({ type, event: filter.event });
       return channel;
     },
     subscribe: (callback) => {
@@ -98,54 +100,51 @@ afterEach(() => {
   removed.length = 0;
 });
 
+const topicsOpen = () => channels.map((channel) => channel.topic).sort();
+
 describe('CanvasComposerRunTail realtime subscriptions', () => {
   it('opens two DISTINCT channels — one for the event log, one for the run row', () => {
     render(<CanvasComposerRunTail run={run} />);
 
-    const topics = channels.map((channel) => channel.topic);
-    expect(topics).toHaveLength(2);
-    expect(new Set(topics).size).toBe(2);
-
-    const bindings = channels.flatMap((channel) => channel.bindings);
-    expect(bindings).toContainEqual({
-      event: 'INSERT',
-      table: 'ai_studio_canvas_composer_run_events',
-    });
-    expect(bindings).toContainEqual({
-      event: 'UPDATE',
-      table: 'ai_studio_canvas_composer_runs',
-    });
+    expect(topicsOpen()).toEqual([
+      `realtime:ai_studio_canvas_composer_run_events:${run.runId}`,
+      `realtime:ai_studio_canvas_composer_runs:${run.runId}`,
+    ]);
+    for (const channel of channels) {
+      expect(channel.bindings).toEqual([{ type: 'broadcast', event: '*' }]);
+    }
   });
 
   it('tails the HyperFrames event log and authoritative run row', () => {
     render(<DurableAiStudioRunTail run={{ ...run, agent: 'hyperframes' }} />);
 
-    const bindings = channels.flatMap((channel) => channel.bindings);
-    expect(bindings).toContainEqual({
-      event: 'INSERT',
-      table: 'ai_studio_hyperframe_run_events',
-    });
-    expect(bindings).toContainEqual({
-      event: 'UPDATE',
-      table: 'ai_studio_hyperframe_runs',
-    });
+    expect(topicsOpen()).toEqual([
+      `realtime:ai_studio_hyperframe_run_events:${run.runId}`,
+      `realtime:ai_studio_hyperframe_runs:${run.runId}`,
+    ]);
   });
 
   it('removes every channel it opened on unmount', () => {
     const { unmount } = render(<CanvasComposerRunTail run={run} />);
-    const opened = channels.map((channel) => channel.topic);
+    const opened = topicsOpen();
     unmount();
 
-    expect(removed.sort()).toEqual(opened.sort());
+    expect(removed.sort()).toEqual(opened);
     expect(channels).toHaveLength(0);
   });
 
   // Remount is the navigate-away-and-back path. A topic left in the client's registry by
   // a bare `unsubscribe()` would be handed back here, dead and already joined.
-  it('survives a remount without reusing a stale channel', () => {
+  it('survives a remount without reusing a stale channel', async () => {
     const first = render(<CanvasComposerRunTail run={run} />);
+    const stale = [...channels];
     first.unmount();
     expect(() => render(<CanvasComposerRunTail run={run} />)).not.toThrow();
+    // The new channels open once the old ones have left.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(channels).toHaveLength(2);
+    for (const channel of channels) expect(stale).not.toContain(channel);
   });
 });

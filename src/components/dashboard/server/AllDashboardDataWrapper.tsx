@@ -1,7 +1,5 @@
-import {
-  OrganicPaidOverview,
-  type PaidAdAccountRef,
-} from '@/components/organic/compare/OrganicPaidOverview';
+import { OrganicPaidOverview } from '@/components/dashboard/views/lazyViews';
+import type { PaidAdAccountRef } from '@/components/organic/compare/OrganicPaidOverview';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import type { SnapshotAccountRef } from '@/lib/organic/brandOrganicSnapshot';
 

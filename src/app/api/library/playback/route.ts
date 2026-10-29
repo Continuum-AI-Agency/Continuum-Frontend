@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   LIBRARY_PROXY_LADDER,
   LIBRARY_VIDEO_PLAYBACK_ROLES,
@@ -45,11 +46,8 @@ export async function GET(request: Request) {
   const { brandId, assetId } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await claimsIdentityOf(supabase);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!(await callerHasBrandAccess(supabase, brandId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

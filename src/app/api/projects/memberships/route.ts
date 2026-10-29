@@ -4,6 +4,7 @@
 // The query runs on the caller's own client, under RLS (`project_memberships_member_read` is
 // has_brand_access); the explicit gate first turns a foreign brand into a 403.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { projectMembershipQuerySchema, toProjectMembership } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
@@ -24,11 +25,8 @@ export async function GET(request: Request) {
   const { brandId, projectId, entityType, entityId } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, brandId))) {

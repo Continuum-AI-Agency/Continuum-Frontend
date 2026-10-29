@@ -9,6 +9,7 @@
 // could persist a value that violates brand_documents_category_check — collapsing
 // them fixes that.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   EPHEMERAL_DOCUMENT_TTL_DAYS,
   toDocumentCategory,
@@ -102,9 +103,7 @@ export async function recordDocumentUpload(
 
   // Authenticated caller required; brand membership enforced via RLS (returns
   // nothing if the user is not a member of the brand).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
   if (!user) {
     return { ok: false, status: 401, error: 'Unauthorized' };
   }

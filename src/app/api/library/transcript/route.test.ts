@@ -50,7 +50,7 @@ function setClient(row: DbResult | Resolve, user: { id: string } | null = { id: 
   const resolve = typeof row === 'function' ? row : () => row;
   hooks.__testCreateSupabaseServerClient = () =>
     Promise.resolve({
-      auth: { getUser: () => Promise.resolve({ data: { user }, error: null }) },
+      auth: { getClaims: () => Promise.resolve({ data: { claims: user && { sub: user.id } }, error: null }) },
       schema: () => ({ from: () => new QueryStub(resolve) }),
     });
 }

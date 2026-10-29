@@ -28,7 +28,8 @@ import {
   upsertComment,
 } from '@/lib/library/comments';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type PostMultiCommentInput = {
   assetId: string;
@@ -120,11 +121,11 @@ export function useMultiAssetComments(
 
     const supabase = createSupabaseBrowserClient();
 
-    void supabase.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return;
-      currentUserRef.current = { id: data.user.id, email: data.user.email ?? null };
-      authorsRef.current.set(data.user.id, { name: null, email: data.user.email ?? null });
-      setCurrentUserId(data.user.id);
+    void getSessionUser().then((user) => {
+      if (cancelled || !user) return;
+      currentUserRef.current = { id: user.id, email: user.email ?? null };
+      authorsRef.current.set(user.id, { name: null, email: user.email ?? null });
+      setCurrentUserId(user.id);
     });
 
     Promise.all(ids.map((assetId) => listCommentsWithVersion(brandId, assetId)))
@@ -178,36 +179,27 @@ export function useMultiAssetComments(
   useEffect(() => {
     if (!assetKey) return;
 
-    const scoped = {
-      schema: 'media',
-      table: 'comments',
-      filter: `asset_id=in.(${assetKey})`,
-    } as const;
-
-    return subscribeToPostgresChanges({
-      label: `media-comments-multi-${assetKey}`,
+    // The topic is the brand's; these assets' comments are picked out here.
+    const assetIds = new Set(assetKey.split(','));
+    const onAssets =
+      (apply: (row: Record<string, unknown>) => void) => (row: Record<string, unknown>) => {
+        if (typeof row.asset_id === 'string' && assetIds.has(row.asset_id)) apply(row);
+      };
+    return subscribeToRowBroadcasts({
+      topic: `comments:${brandId}`,
       bindings: [
         {
-          ...scoped,
           event: 'DELETE',
-          onRow: (row) => {
+          onRow: onAssets((row) => {
             const removedId = (row as { id?: string }).id;
             if (removedId) setComments((prev) => prev.filter((c) => c.id !== removedId));
-          },
+          }),
         },
-        {
-          ...scoped,
-          event: 'INSERT',
-          onRow: (row) => applyComment(row as MediaCommentRow),
-        },
-        {
-          ...scoped,
-          event: 'UPDATE',
-          onRow: (row) => applyComment(row as MediaCommentRow),
-        },
+        { event: 'INSERT', onRow: onAssets((row) => applyComment(row as MediaCommentRow)) },
+        { event: 'UPDATE', onRow: onAssets((row) => applyComment(row as MediaCommentRow)) },
       ],
     });
-  }, [assetKey, applyComment]);
+  }, [brandId, assetKey, applyComment]);
 
   const markPending = useCallback((id: string, pending: boolean) => {
     setPendingIds((prev) => {

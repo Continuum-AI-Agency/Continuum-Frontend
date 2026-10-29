@@ -8,6 +8,7 @@ import type { OnboardingPatch, OnboardingState } from '@/lib/onboarding/state';
 import { mergeOnboardingState } from '@/lib/onboarding/state';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 
 type OnboardingContextValue = {
   brandId: string;
@@ -39,9 +40,7 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   React.useEffect(() => {
     const fetchUser = async () => {
       const supabase = createSupabaseBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getSessionUser();
       if (user) setUserId(user.id);
     };
     fetchUser();

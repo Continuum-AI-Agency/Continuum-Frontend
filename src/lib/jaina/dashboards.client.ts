@@ -8,6 +8,7 @@ import {
   jainaDashboardSchema,
 } from '@continuum/contracts';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSessionUser } from '@/lib/supabase/sessionUser';
 
 const TABLE = 'jaina_dashboards';
 
@@ -81,8 +82,8 @@ const withoutSpec = (row: Record<string, unknown>): Record<string, unknown> =>
 
 export async function saveDashboard(input: JainaDashboardInsert): Promise<JainaDashboard> {
   const payload = jainaDashboardInsertSchema.parse(input);
-  const { data: auth } = await createSupabaseBrowserClient().auth.getUser();
-  const row: Record<string, unknown> = { ...payload, created_by: auth.user?.id ?? null };
+  const user = await getSessionUser();
+  const row: Record<string, unknown> = { ...payload, created_by: user?.id ?? null };
   let result = await insertRow(row);
   if (result.error && isMissingSpecColumn(result.error)) {
     result = await insertRow(withoutSpec(row));

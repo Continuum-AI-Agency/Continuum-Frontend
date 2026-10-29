@@ -7,7 +7,7 @@ mock.module('@/lib/supabase/client', () => ({
     schema: () => ({ rpc: async () => ({ data: 'owner', error: null }) }),
   }),
 }));
-mock.module('@/lib/supabase/realtime', () => ({ subscribeToPostgresChanges: () => () => {} }));
+mock.module('@/lib/supabase/realtime', () => ({ subscribeToRowBroadcasts: () => () => {} }));
 
 const { cleanup, render, screen } = await import('@testing-library/react');
 const { CollectionMembersDialog } = await import('./CollectionMembersDialog');

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type ParsedRunEvent = {
   seq: number;
@@ -97,14 +97,11 @@ export function useRunEventStream(
 
     // Subscribe first, then hydrate — ensures no events are lost in the window
     // between hydration completing and the subscription activating.
-    unsubscribe = subscribeToPostgresChanges({
-      label: `run-events:${runId}`,
+    unsubscribe = subscribeToRowBroadcasts({
+      topic: `organic_agent_run_events:${runId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: 'organic',
-          table: 'organic_agent_run_events',
-          filter: `run_id=eq.${runId}`,
           onRow: (row) => {
             if (cancelled) return;
             dispatchEvent({

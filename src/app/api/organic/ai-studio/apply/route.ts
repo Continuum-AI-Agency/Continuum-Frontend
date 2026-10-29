@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   attachOrganicCanvasCreativeResponseSchema,
   type CanvasPublishingAsset,
@@ -245,12 +246,9 @@ export async function POST(request: Request) {
 
   const payload = parsedRequest.data;
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const user = await claimsIdentityOf(supabase);
 
-  if (userError || !user) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 

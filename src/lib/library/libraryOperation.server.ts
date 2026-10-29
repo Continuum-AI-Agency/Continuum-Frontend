@@ -1,3 +1,4 @@
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import 'server-only';
 
 // The caller gate the Library routes share: a signed-in user with access to the brand,
@@ -5,20 +6,18 @@ import 'server-only';
 // dispatcher writes go through the Library edge functions (library-creative-operations,
 // library-review, library-share), never through this file.
 
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { AuthIdentity } from '@/lib/auth/identity';
 import { NextResponse } from 'next/server';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export type BrandCaller = { supabase: SupabaseClient; user: User };
+export type BrandCaller = { supabase: SupabaseClient; user: AuthIdentity };
 
 export async function requireBrandCaller(brandId: string): Promise<BrandCaller | NextResponse> {
   const supabase = (await createSupabaseServerClient()) as unknown as SupabaseClient;
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, brandId))) {

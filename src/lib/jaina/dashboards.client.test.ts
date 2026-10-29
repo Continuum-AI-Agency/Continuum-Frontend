@@ -15,7 +15,7 @@ let responses: InsertResult[] = [];
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: '4bc1599a-e987-4d7a-aa90-acba967c6a09' } } }),
+      getSession: async () => ({ data: { session: { user: { id: '4bc1599a-e987-4d7a-aa90-acba967c6a09' } } } }),
     },
     schema: () => ({
       from: () => ({

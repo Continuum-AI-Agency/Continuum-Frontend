@@ -94,7 +94,7 @@ function installSupabaseStub(params: {
 
   hooks.__testCreateSupabaseServerClient = async () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: 'user-1' } }, error: null }),
+      getClaims: async () => ({ data: { claims: { sub: 'user-1' } }, error: null }),
     },
     functions: {
       invoke: async () =>

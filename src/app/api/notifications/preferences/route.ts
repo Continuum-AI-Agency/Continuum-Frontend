@@ -2,6 +2,7 @@
 // RLS scopes every row to auth.uid(), so the user-scoped client is the whole boundary;
 // the body is validated against the contract before anything is written.
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import {
   notificationChannelSchema,
   notificationFrequencySchema,
@@ -30,9 +31,7 @@ const putSchema = z
 
 async function signedIn() {
   const client = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+  const user = await claimsIdentityOf(client);
   return user ? { client, userId: user.id } : null;
 }
 

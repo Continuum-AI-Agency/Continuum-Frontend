@@ -1,151 +1,50 @@
 'use client';
 
-// The one place that owns Supabase Realtime `postgres_changes` subscriptions.
+// The one place that owns Supabase Realtime row subscriptions.
 //
-// WHY IT EXISTS: a channel topic is a GLOBAL namespace on the browser client, and
-// `supabase.channel(topic)` silently hands back an EXISTING channel when the topic
-// matches. Two independent subscribers that happen to build the same string therefore
-// share one channel object — and because `.subscribe()` flips the channel to `joining`
-// synchronously, the second subscriber's `.on('postgres_changes', ...)` throws outright.
-// That crashed the whole authenticated app to the global 500 boundary every time a canvas
-// composer run went live, because its two tails built the same topic.
+// Every table the app watches is pushed by a database trigger: each change goes to a private
+// Broadcast topic `<table>:<scope>` that the `realtime.messages` policy admits exactly the
+// row's audience to (supabase/migrations/20261028070000_realtime_row_broadcasts.sql and
+// 20261028092000_realtime_row_broadcasts_rest.sql). There are no `postgres_changes`
+// subscriptions left: while ANY exists, Realtime polls the database and decodes the whole
+// WAL several times a second, which was a quarter of all DB time. Broadcast costs one insert
+// per change instead, so nothing here pauses while a tab is hidden.
 //
-// A `postgres_changes` topic carries no meaning — the binding filter carries all of it —
-// so the fix is to make the topic unique by construction and let the label survive only as
-// something greppable in devtools. Broadcast and presence are the opposite: their topic IS
-// the rendezvous between peers, so they keep hand-rolling their own shared channel and must
-// NOT come through here.
-//
-// The other half of the contract is teardown. `channel.unsubscribe()` leaves the dead
-// channel in the client's registry, where a later `channel()` call for the same topic will
-// find it; only `removeChannel` evicts it. This helper always does the latter.
+// The topic is the rendezvous, so two subscribers to one topic must share one channel:
+// `supabase.channel(topic)` silently hands back an EXISTING channel for a matching topic; a
+// late binding on a joined channel threw (that crashed the whole authenticated app to the
+// global 500 boundary more than once), and a second `.subscribe()` on it does nothing. Peer
+// channels (canvas cursors, presence) keep their own hand-built topics. Teardown always goes
+// through `removeChannel`: `unsubscribe()` leaves the dead channel in the client's registry,
+// where the next `channel()` for that topic finds it.
 
-import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from './client';
 
 type ChangeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
 
-/**
- * What a row arrived as, for the rare caller that cannot infer it from its binding.
- *
- * Reach for this ONLY when the event genuinely cannot be split apart — an UPDATE that
- * has to compare the previous row against the new one is the real case. When a handler
- * merely branches on `eventType`, register one binding per event instead: three small
- * handlers read better than one with a switch, and the binding already carries the fact.
- */
+/** What a row arrived as, for the caller whose handler serves more than one event. */
 export type PostgresChangeMeta = {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-  /** The pre-change row. Populated on UPDATE and DELETE, `{}` on INSERT. */
+  /**
+   * The pre-change row. On DELETE it is the deleted row (the same object the binding gets);
+   * on UPDATE, only the columns the table's trigger sends as `old_record` (usually none).
+   */
   old: Record<string, unknown>;
-};
-
-export type PostgresChangesBinding = {
-  event: ChangeEvent;
-  schema: string;
-  table: string;
-  /** `column=operator.value`, e.g. `run_id=eq.<uuid>`. */
-  filter?: string;
-  /** A Realtime row is untrusted JSON — narrow it in the caller, never cast it. */
-  onRow: (row: Record<string, unknown>, meta: PostgresChangeMeta) => void;
-};
-
-export type PostgresChangesSubscription = {
-  /** Human-readable prefix for the generated topic. Debugging aid only — never an identity. */
-  label: string;
-  /** Every binding is registered BEFORE subscribe, which is the only legal ordering. */
-  bindings: readonly PostgresChangesBinding[];
-  /** Runs once the channel is live. Suppressed after teardown. */
-  onSubscribed?: () => void | Promise<void>;
-  /**
-   * Every status the socket reports, for callers that show connection state.
-   * `onSubscribed` stays the place to run a backfill; this is for the UI.
-   */
-  onStatus?: (status: string) => void;
-  /**
-   * Passed straight to `supabase.channel(topic, options)`.
-   *
-   * Load-bearing for `config: { private: true }` — an authorized channel that loses its
-   * option silently becomes a public one, which is a permissions regression no type
-   * checks. A `config: { broadcast: … }` on a channel with no broadcast binding is cargo
-   * cult; drop it rather than threading it through here.
-   */
-  channelOptions?: Parameters<ReturnType<typeof createSupabaseBrowserClient>['channel']>[1];
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
-/** A DELETE reports the vanished row under `old`; everything else reports it under `new`. */
-const rowFromPayload = (
-  payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
-): Record<string, unknown> | null => {
-  const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
-  return row && typeof row === 'object' ? (row as Record<string, unknown>) : null;
-};
-
-const bind = (channel: RealtimeChannel, binding: PostgresChangesBinding): void => {
-  channel.on<Record<string, unknown>>(
-    'postgres_changes',
-    {
-      event: binding.event,
-      schema: binding.schema,
-      table: binding.table,
-      ...(binding.filter ? { filter: binding.filter } : {}),
-    },
-    (payload) => {
-      const row = rowFromPayload(payload);
-      if (row) {
-        binding.onRow(row, {
-          eventType: payload.eventType,
-          old: asRecord(payload.old),
-        });
-      }
-    },
-  );
-};
-
 /**
- * Subscribe to one or more `postgres_changes` streams on a channel nobody else can reach.
- *
- * Returns an idempotent teardown. Callers that tear down early (a terminal event, a
- * watchdog) can call it and still return it from their effect cleanup.
+ * Join once the socket carries the viewer's token. A join sent before setAuth is
+ * `claims_role = anon`: a private topic is refused, a public one delivers nothing until the
+ * next heartbeat. Measured on the render queue; every subscriber here gets the wait.
  */
-export function subscribeToPostgresChanges({
-  label,
-  bindings,
-  onSubscribed,
-  onStatus,
-  channelOptions,
-}: PostgresChangesSubscription): () => void {
-  const supabase = createSupabaseBrowserClient();
-  const topic = `${label}:${crypto.randomUUID()}`;
-  const channel = channelOptions
-    ? supabase.channel(topic, channelOptions)
-    : supabase.channel(topic);
-  let closed = false;
-
-  for (const binding of bindings) {
-    bind(channel, {
-      ...binding,
-      onRow: (row, meta) => {
-        if (!closed) binding.onRow(row, meta);
-      },
-    });
-  }
-
-  // Bindings are registered before this join. The join itself waits for setAuth so
-  // the first frame is not `claims_role = anon` — a channel that reports SUBSCRIBED
-  // and then delivers nothing until the next heartbeat. Measured on the render
-  // queue; the helper is the one owner, so every postgres_changes subscriber gets it.
-  const join = () => {
-    if (closed) return;
-    channel.subscribe((status) => {
-      if (closed) return;
-      onStatus?.(status);
-      if (status !== 'SUBSCRIBED') return;
-      void onSubscribed?.();
-    });
-  };
+const afterAuth = (
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  join: () => void,
+): void => {
   const pending = supabase.realtime?.setAuth?.();
   if (pending != null && typeof (pending as PromiseLike<unknown>).then === 'function') {
     void Promise.resolve(pending)
@@ -154,10 +53,126 @@ export function subscribeToPostgresChanges({
   } else {
     join();
   }
+};
 
+export type RowBroadcastBinding = {
+  event: ChangeEvent;
+  /** A Realtime row is untrusted JSON — narrow it in the caller, never cast it. */
+  onRow: (row: Record<string, unknown>, meta: PostgresChangeMeta) => void;
+};
+
+export type RowBroadcastSubscription = {
+  /**
+   * `<table>:<scope>`, exactly as the table's trigger sends it. The scope is the ONE column
+   * the topic is keyed on (usually the brand); filter anything finer in `onRow`.
+   */
+  topic: string;
+  bindings: readonly RowBroadcastBinding[];
+  /** Runs once the channel is live, and again after every rejoin: the place to backfill. */
+  onSubscribed?: () => void | Promise<void>;
+  onStatus?: (status: string) => void;
+};
+
+type SharedTopic = {
+  /** Null while the topic's previous channel is still leaving (see `leaving`). */
+  channel: RealtimeChannel | null;
+  subscribers: Set<RowBroadcastSubscription>;
+  status: string | null;
+};
+
+const sharedTopics = new Map<string, SharedTopic>();
+
+/**
+ * Topics whose last channel is still leaving. `removeChannel` drops a joined channel from
+ * the client's registry only when the server acks the leave, and until then
+ * `supabase.channel(topic)` hands that leaving channel back, on which `subscribe()` is a
+ * silent no-op. An effect that re-runs on a dependency change does exactly that, so a new
+ * channel for the topic waits for the old one to be gone.
+ */
+const leaving = new Map<string, Promise<unknown>>();
+
+const isOperation = (value: unknown): value is PostgresChangeMeta['eventType'] =>
+  value === 'INSERT' || value === 'UPDATE' || value === 'DELETE';
+
+/** `{ operation, record, old_record }` from the trigger; anything else is dropped. */
+const deliver = (shared: SharedTopic, message: unknown): void => {
+  const payload = asRecord(asRecord(message).payload);
+  const operation = payload.operation;
+  const record = payload.record;
+  if (!isOperation(operation) || !record || typeof record !== 'object') return;
+  const meta: PostgresChangeMeta = {
+    eventType: operation,
+    old: operation === 'DELETE' ? (record as Record<string, unknown>) : asRecord(payload.old_record),
+  };
+  for (const subscriber of shared.subscribers) {
+    for (const binding of subscriber.bindings) {
+      if (binding.event === '*' || binding.event === operation) {
+        binding.onRow(record as Record<string, unknown>, meta);
+      }
+    }
+  }
+};
+
+/**
+ * Subscribe to the rows a database trigger broadcasts on a private topic.
+ *
+ * Returns an idempotent teardown; the channel closes when its last subscriber leaves.
+ */
+export function subscribeToRowBroadcasts(subscription: RowBroadcastSubscription): () => void {
+  // A copy, so the same object passed twice still counts as two subscribers.
+  const subscriber = { ...subscription };
+  const { topic } = subscriber;
+  let shared = sharedTopics.get(topic);
+
+  if (shared) {
+    shared.subscribers.add(subscriber);
+    if (shared.status === 'SUBSCRIBED') {
+      subscriber.onStatus?.('SUBSCRIBED');
+      void subscriber.onSubscribed?.();
+    }
+  } else {
+    const entry: SharedTopic = { channel: null, subscribers: new Set([subscriber]), status: null };
+    shared = entry;
+    sharedTopics.set(topic, entry);
+    const open = () => {
+      if (sharedTopics.get(topic) !== entry) return;
+      const supabase = createSupabaseBrowserClient();
+      const channel = supabase.channel(topic, { config: { private: true } });
+      entry.channel = channel;
+      channel.on('broadcast', { event: '*' }, (message) => deliver(entry, message));
+      afterAuth(supabase, () => {
+        if (sharedTopics.get(topic) !== entry) return;
+        channel.subscribe((status, error) => {
+          if (sharedTopics.get(topic) !== entry) return;
+          entry.status = status;
+          // A refused join is final: realtime-js would otherwise rejoin every ~10 s for the
+          // life of the tab, and each attempt re-runs the topic policy in the database.
+          if (status === 'CHANNEL_ERROR' && /unauthori[sz]ed/i.test(error?.message ?? '')) {
+            void supabase.removeChannel(channel);
+          }
+          for (const each of entry.subscribers) {
+            each.onStatus?.(status);
+            if (status === 'SUBSCRIBED') void each.onSubscribed?.();
+          }
+        });
+      });
+    };
+    const previous = leaving.get(topic);
+    if (previous) void previous.then(open);
+    else open();
+  }
+
+  const entry = shared;
   return () => {
-    if (closed) return;
-    closed = true;
-    void supabase.removeChannel(channel);
+    if (!entry.subscribers.delete(subscriber) || entry.subscribers.size > 0) return;
+    if (sharedTopics.get(topic) === entry) sharedTopics.delete(topic);
+    if (!entry.channel) return;
+    const left = Promise.resolve(createSupabaseBrowserClient().removeChannel(entry.channel)).catch(
+      () => undefined,
+    );
+    leaving.set(topic, left);
+    void left.then(() => {
+      if (leaving.get(topic) === left) leaving.delete(topic);
+    });
   };
 }

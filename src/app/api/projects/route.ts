@@ -5,6 +5,7 @@
 // has_brand_access). The explicit gate first turns a foreign brand into a 403 instead of an
 // empty list that reads as "this brand has no projects".
 
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { type Project, projectListQuerySchema, toProject } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
@@ -23,11 +24,8 @@ export async function GET(request: Request) {
   const { brandId, status } = parsed.data;
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const user = await claimsIdentityOf(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!(await callerHasBrandAccess(supabase, brandId))) {

@@ -8,7 +8,7 @@ import type { CommentReaction } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
 import { listCommentReactions, setCommentReaction } from '@/lib/library/comments';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 type ReactionRow = {
   comment_id: string;
@@ -56,18 +56,14 @@ export function useCommentReactions(
   }, [brandId, assetId]);
 
   useEffect(() => {
-    const scoped = {
-      schema: 'media',
-      table: 'comment_reactions',
-      filter: `asset_id=eq.${assetId}`,
-    } as const;
-    return subscribeToPostgresChanges({
-      label: `media-comment-reactions-${assetId}`,
+    // The topic is the brand's; this asset's reactions are picked out here.
+    return subscribeToRowBroadcasts({
+      topic: `comment_reactions:${brandId}`,
       bindings: [
         {
-          ...scoped,
           event: 'INSERT',
           onRow: (row) => {
+            if (row.asset_id !== assetId) return;
             const reaction = fromRow(row as ReactionRow);
             setReactions((prev) =>
               prev.some(sameReaction(reaction)) ? prev : [...prev, reaction],
@@ -75,9 +71,9 @@ export function useCommentReactions(
           },
         },
         {
-          ...scoped,
           event: 'DELETE',
           onRow: (row) => {
+            if (row.asset_id !== assetId) return;
             const gone = row as Partial<ReactionRow>;
             if (!gone.comment_id || !gone.user_id || !gone.emoji) return;
             const key = { commentId: gone.comment_id, userId: gone.user_id, emoji: gone.emoji };
@@ -86,7 +82,7 @@ export function useCommentReactions(
         },
       ],
     });
-  }, [assetId]);
+  }, [brandId, assetId]);
 
   const toggle = useCallback(
     (commentId: string, emoji: string) => {
