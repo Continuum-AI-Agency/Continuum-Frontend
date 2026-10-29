@@ -59,6 +59,24 @@ const HELP: Record<Mode | 'empty', string> = {
   documents: 'You’ll add a brand guide, deck, or product doc on the next step.',
 };
 
+// Says what will happen with what was given — including a link kept as context beside files, and
+// a post or group link before Enter rejects it.
+function helpFor(
+  mode: Mode | null,
+  detected: DetectedIntake | null,
+  fileCount: number,
+  overridden: boolean,
+): string {
+  if (fileCount > 0) {
+    return detected?.kind === 'website' || detected?.kind === 'instagram'
+      ? `We’ll read these files on the next step, with ${new URL(detected.url).hostname.replace(/^www\./, '')} as context.`
+      : 'We’ll read these files on the next step.';
+  }
+  if (detected?.kind === 'unsupported_social' && !overridden)
+    return 'That looks like a post or group. Use an Instagram profile or a Facebook business Page.';
+  return HELP[mode ?? 'empty'];
+}
+
 function modeOf(detected: DetectedIntake | null): Mode | null {
   if (!detected) return null;
   if (detected.kind === 'website' || detected.kind === 'description') return detected.kind;
@@ -151,18 +169,21 @@ export function UrlScreen({
     if (problem || !mode) return;
     const value = text.trim();
     const social = mode === 'social' ? onboardingSocialInputSchema.parse(value) : null;
-    const typedSocial = onboardingSocialInputSchema.safeParse(value);
-    // A link the user gave before switching to documents or a description stays as context.
+    // A link typed beside files, or given before switching to documents or a description, stays
+    // as context.
+    const typedLink =
+      detected?.kind === 'website' ||
+      detected?.kind === 'instagram' ||
+      detected?.kind === 'facebook'
+        ? detected.url
+        : null;
+    const remembered = defaultIntake?.reference_url ?? defaultIntake?.url ?? null;
     const referenceUrl =
-      mode === 'documents' || mode === 'description'
-        ? (defaultIntake?.reference_url ??
-          defaultIntake?.url ??
-          (mode === 'documents'
-            ? typedSocial.success
-              ? typedSocial.data.url
-              : resolveWebsiteDraftUrl(value)
-            : null))
-        : defaultIntake?.reference_url;
+      mode === 'documents'
+        ? (typedLink ?? remembered)
+        : mode === 'description'
+          ? remembered
+          : defaultIntake?.reference_url;
     const intake = onboardingIntakeSchema.parse({
       kind: social?.kind ?? mode,
       brand_name: brandName.trim() || defaultBrandName || 'My Brand',
@@ -377,9 +398,7 @@ export function UrlScreen({
             </div>
           ) : (
             <p id={helpId} className="text-sm text-muted-foreground">
-              {files.length > 0
-                ? 'We’ll read these files on the next step.'
-                : HELP[mode ?? 'empty']}
+              {helpFor(mode, detected, files.length, Boolean(override))}
             </p>
           )}
         </form>

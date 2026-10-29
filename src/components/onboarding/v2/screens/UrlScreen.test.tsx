@@ -152,3 +152,32 @@ test('a failed read keeps the link and offers describing it instead', async () =
     ),
   );
 });
+
+test('a link typed beside files is kept as context and says so', async () => {
+  const onSubmit = submit();
+  const view = render(<UrlScreen onSubmit={onSubmit} defaultBrandName="Acme" />);
+  type('www.acme.com');
+  const file = new File(['guide'], 'guide.pdf', { type: 'application/pdf' });
+  const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(screen.getByText(/acme\.com as context/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /Continue to documents/ }));
+  await waitFor(() =>
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        kind: 'documents',
+        brand_name: 'Acme',
+        url: null,
+        reference_url: 'https://www.acme.com/',
+        description: null,
+      },
+      [file],
+    ),
+  );
+});
+
+test('a post or group link is flagged before Enter', () => {
+  render(<UrlScreen onSubmit={submit()} defaultBrandName="Acme" />);
+  type('instagram.com/p/Cx1');
+  expect(screen.getByText(/looks like a post or group/)).toBeTruthy();
+});
