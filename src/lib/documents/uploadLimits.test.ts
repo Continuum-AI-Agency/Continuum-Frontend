@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  documentMimeType,
   isAcceptedDocumentMime,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_MB,
@@ -100,5 +101,23 @@ describe('validateDocumentUploadMetadata', () => {
     const result = validateDocumentUploadMetadata(validMetadata({ brandId: '' }));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(400);
+  });
+});
+
+describe('documentMimeType', () => {
+  it('reads a CSV that Excel labels as a spreadsheet as text/csv, so it is accepted', () => {
+    for (const reported of ['application/vnd.ms-excel', 'application/csv']) {
+      expect(isAcceptedDocumentMime(reported)).toBe(false);
+      expect(documentMimeType('offers.CSV', reported)).toBe('text/csv');
+    }
+  });
+
+  it('leaves every other file as the browser reported it', () => {
+    expect(documentMimeType('offers.csv', 'text/csv')).toBe('text/csv');
+    expect(documentMimeType('brief.pdf', 'application/pdf')).toBe('application/pdf');
+    expect(documentMimeType('old.xls', 'application/vnd.ms-excel')).toBe(
+      'application/vnd.ms-excel',
+    );
+    expect(documentMimeType('notes.md', '')).toBe('');
   });
 });
