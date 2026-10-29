@@ -2,13 +2,13 @@ import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
+import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
-let subscription: PostgresChangesSubscription;
+let subscription: RowBroadcastSubscription;
 const fetchRun = mock(async (_brandId: string, _assetId: string): Promise<unknown> => null);
 mock.module('@/lib/library/templateSources', () => ({ fetchTemplateRun: fetchRun }));
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: (options: PostgresChangesSubscription) => {
+  subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
     subscription = options;
     return () => undefined;
   },

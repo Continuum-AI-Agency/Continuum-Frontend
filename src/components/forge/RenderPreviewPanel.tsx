@@ -31,7 +31,7 @@ import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
 import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useDebounce } from '@/hooks/useDebounce';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
   LiveImage,
@@ -748,13 +748,10 @@ function TemplatePreviewPanel({
   // A realtime job is a signal to re-read, never data to merge: only the list read re-signs URLs.
   useEffect(() => {
     if (!renderSetId || !rowId) return;
-    return subscribeToPostgresChanges({
-      label: 'render-preview-last',
+    return subscribeToRowBroadcasts({
+      topic: `ad_render_jobs:${brandId}`,
       bindings: (['INSERT', 'UPDATE'] as const).map((event) => ({
         event,
-        schema: 'media',
-        table: 'ad_render_jobs',
-        filter: `brand_id=eq.${brandId}`,
         onRow: (job: Record<string, unknown>) => {
           if (job.status !== 'finished') return;
           if (job.render_set_row_id === rowId && lastKey) {

@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
 import { type BrandRole, useBrandRole } from '@/lib/library/useBrandRole';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { useMentionTargets } from '../detail/useMentionTargets';
 
 const ROLE_LABEL: Record<CollectionRole, string> = {
@@ -96,22 +96,16 @@ export function CollectionMembersDialog({
     if (open) void load();
   }, [open, load]);
 
-  // A manager in another tab adding or re-roling someone shows up here as it lands.
+  // A manager in another tab adding or re-roling someone shows up here as it lands. The
+  // brand's membership topic is a change signal (no row: a restricted collection's members
+  // are not every member's to see), so any membership change in the brand re-reads the list.
   useEffect(() => {
     if (!open) return;
-    return subscribeToPostgresChanges({
-      label: `collection-members-${collectionId}`,
-      bindings: [
-        {
-          event: '*',
-          schema: 'media',
-          table: 'collection_members',
-          filter: `collection_id=eq.${collectionId}`,
-          onRow: () => void load(),
-        },
-      ],
+    return subscribeToRowBroadcasts({
+      topic: `collection_members:${brandId}`,
+      bindings: [{ event: '*', onRow: () => void load() }],
     });
-  }, [open, collectionId, load]);
+  }, [open, brandId, load]);
 
   const change = async (body: Record<string, unknown>, done: string) => {
     setBusy(true);

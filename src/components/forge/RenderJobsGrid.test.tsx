@@ -17,7 +17,7 @@ import {
   type ForgeOutputLibraryState,
   WEB_COMPONENT_BINDING_ID,
 } from '@continuum/contracts';
-import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
+import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 const HOUR = 3_600_000;
 const BATCH = '99999999-9999-4999-8999-999999999991';
@@ -178,7 +178,7 @@ const getFileSpecs = mock(
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
-let realtime: PostgresChangesSubscription | undefined;
+let realtime: RowBroadcastSubscription | undefined;
 const listJobs = mock(async (_brandId: string, _limit: number, options?: { batchId?: string }) => ({
   items: options?.batchId
     ? jobsFixture.filter((job) => job.batchId === options.batchId)
@@ -222,7 +222,7 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ realtime: { setAuth: async () => undefined } }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: (options: PostgresChangesSubscription) => {
+  subscribeToRowBroadcasts: (options: RowBroadcastSubscription) => {
     realtime = options;
     return () => undefined;
   },

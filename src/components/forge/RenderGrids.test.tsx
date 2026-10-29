@@ -256,7 +256,7 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ realtime: { setAuth: async () => undefined } }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: () => () => undefined,
+  subscribeToRowBroadcasts: () => () => undefined,
 }));
 /** What the stand-in Library hands back: a long file name, no title. */
 const HERO_ASSET = {

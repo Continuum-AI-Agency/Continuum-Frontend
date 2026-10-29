@@ -23,10 +23,10 @@ import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { readNdjsonStream } from '@/lib/streaming/readNdjsonStream';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 type RunEventSource = {
-  schema: string;
+  /** Its trigger broadcasts each inserted event on `<table>:<runId>`. */
   table: string;
   /** Replay endpoint, given a runId. Returns NDJSON of every event with seq > after_seq. */
   eventsUrl: (runId: string, afterSeq: number) => string;
@@ -43,25 +43,21 @@ export const shouldForgetUnavailableRun = (status: number): boolean =>
 
 const RUN_EVENT_SOURCES: Record<RunEventAgentKind, RunEventSource> = {
   organic: {
-    schema: 'organic',
     table: 'organic_agent_run_events',
     eventsUrl: (runId, afterSeq) =>
       `${getApiBaseUrl()}/api/organic/agent/runs/${runId}/events?after_seq=${afterSeq}`,
   },
   jaina: {
-    schema: 'jaina',
     table: 'jaina_conversation_run_events',
     eventsUrl: (runId, afterSeq) =>
       `${getApiBaseUrl()}/api/agents/jaina/chat/runs/${runId}/events?after_seq=${afterSeq}`,
   },
   hyperframes: {
-    schema: 'brand_profiles',
     table: 'ai_studio_hyperframe_run_events',
     eventsUrl: (runId, afterSeq) =>
       `${getApiBaseUrl()}/api/ai-studio/hyperframes-agent/runs/${runId}/events?after_seq=${afterSeq}`,
   },
   canvas: {
-    schema: 'brand_profiles',
     table: 'ai_studio_canvas_composer_run_events',
     eventsUrl: (runId, afterSeq) =>
       `${getApiBaseUrl()}/api/ai-studio/canvas/compose/runs/${runId}/events?after_seq=${afterSeq}`,
@@ -142,14 +138,11 @@ export function useAgentRunStream(
 
     // Subscribe FIRST — `onSubscribed` runs only once the channel is live, so nothing
     // emitted while the backlog fetch is in flight is lost.
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `agent-run:${agent}:${runId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `${source.table}:${runId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: source.schema,
-          table: source.table,
-          filter: `run_id=eq.${runId}`,
           onRow: (row) => {
             const event = rowToEvent(row);
             if (event) ingest([event]);

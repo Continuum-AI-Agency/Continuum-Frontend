@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseFieldFiltersParam, serializeFieldFilters } from '@/lib/library/customFields';
 import { buildLibraryBrowseParams, mediaTypeToKind } from '@/lib/media/filters';
 import type { MediaAssetRow } from '@/lib/media/schema';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 // Lightweight Realtime-only mapper — signedUrl comes from SSR seed; Realtime
 // updates only carry status/progress changes so we merge rather than replace.
@@ -200,13 +200,10 @@ export function useMediaLibrary(params: {
   useEffect(() => {
     if (!brandId) return;
 
-    const scoped = { schema: 'media', table: 'assets', filter: `brand_id=eq.${brandId}` } as const;
-
-    return subscribeToPostgresChanges({
-      label: `media-assets-${brandId}`,
+    return subscribeToRowBroadcasts({
+      topic: `assets:${brandId}`,
       bindings: [
         {
-          ...scoped,
           event: 'UPDATE',
           onRow: (row) => {
             // Covers deletes from every origin — this grid, another member's session,
@@ -215,7 +212,6 @@ export function useMediaLibrary(params: {
           },
         },
         {
-          ...scoped,
           event: 'INSERT',
           onRow: (row) => {
             // Only auto-surface inserts in the unfiltered Everything dump; a
@@ -274,7 +270,6 @@ export function useMediaLibrary(params: {
           },
         },
         {
-          ...scoped,
           event: 'DELETE',
           onRow: (row) => {
             const removedId = (row as { id?: string }).id;

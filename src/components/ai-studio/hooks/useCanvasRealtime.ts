@@ -5,7 +5,7 @@ import type { Edge } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { stringToColor } from '@/lib/utils/color';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 import type { StudioNode } from '@/StudioCanvas/types';
@@ -168,7 +168,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       const remoteRevision = toFiniteNumber(payload.revision);
       const localRevision = lastRevisionRef.current;
 
-      // Self-echo immunity: postgres_changes has no self-filter, so this client
+      // Self-echo immunity: a row broadcast has no self-filter, so this client
       // receives its OWN persist-stripped UPDATE. Applying it would merge a row
       // with the media fields removed over the freshly generated local node. Drop
       // any live event we authored. Catch-up is an explicit re-read we still want
@@ -597,7 +597,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       });
 
     let cancelled = false;
-    // Same race as postgres_changes: a join before setAuth is `anon` and presence
+    // Same race as the row topics: a join before setAuth is `anon` and presence
     // / broadcast stay silent until the heartbeat. Bindings stay above; only the
     // join waits.
     void Promise.resolve(supabase.realtime.setAuth())
@@ -631,14 +631,12 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   useEffect(() => {
     if (!brandProfileId || !roomId) return;
 
-    const scoped = {
-      schema: 'brand_profiles',
-      table: 'canvas_sessions',
-      filter: `room_id=eq.${roomId}`,
-    } as const;
+    // The topic is the brand's; this room's rows are picked out here.
+    const inRoom = (row: Record<string, unknown>) =>
+      row.brand_profile_id === brandProfileId && row.room_id === roomId;
 
     const applySession = (row: Record<string, unknown>) => {
-      if (row.brand_profile_id !== brandProfileId) return;
+      if (!inRoom(row)) return;
       handleRemoteUpdate({
         nodes: row.nodes,
         edges: row.edges,
@@ -650,20 +648,18 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       } as Parameters<typeof handleRemoteUpdate>[0]);
     };
 
-    // ONLY the db half moves onto the helper. The sibling `canvas:broadcast:` channel
-    // above keeps its hand-built topic on purpose: for broadcast and presence the topic
-    // IS the rendezvous between peers, and uniquifying it would leave every client alone
-    // in its own room with working cursors nobody else can see.
-    return subscribeToPostgresChanges({
-      label: `canvas:db:${brandProfileId}:${roomId}`,
+    // The db half: the trigger-fed `canvas_sessions:<brand>` topic. The sibling
+    // `canvas:broadcast:` channel above is the peers' own (cursors, presence) and keeps its
+    // hand-built topic.
+    return subscribeToRowBroadcasts({
+      topic: `canvas_sessions:${brandProfileId}`,
       bindings: [
-        { ...scoped, event: 'INSERT', onRow: applySession },
-        { ...scoped, event: 'UPDATE', onRow: applySession },
+        { event: 'INSERT', onRow: applySession },
+        { event: 'UPDATE', onRow: applySession },
         {
-          ...scoped,
           event: 'DELETE',
           onRow: (row) => {
-            if (row.brand_profile_id !== brandProfileId) return;
+            if (!inRoom(row)) return;
             const store = useStudioStore.getState();
             if (store.nodes.length === 0 && store.edges.length === 0) {
               lastRemoteNodeIdsRef.current = new Set();

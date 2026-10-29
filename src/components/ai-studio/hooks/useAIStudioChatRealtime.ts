@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/components/ui/toast-imperative';
 import { useSession } from '@/hooks/useSession';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type ChatMessage = {
   id: string;
@@ -97,16 +97,11 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
   useEffect(() => {
     if (!brandProfileId) return;
 
-    // `config: { broadcast: { self: true } }` used to sit on this channel with no
-    // broadcast binding anywhere on it. Dropped rather than carried.
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `chat:${brandProfileId}:${roomId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `chat_messages:${brandProfileId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: 'brand_profiles',
-          table: 'chat_messages',
-          filter: `brand_profile_id=eq.${brandProfileId}`,
           onRow: (row) => {
             const newMessage = row as ChatMessage;
             if (newMessage.room_id !== roomId) return;

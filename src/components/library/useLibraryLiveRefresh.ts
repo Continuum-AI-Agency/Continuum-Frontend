@@ -16,7 +16,7 @@
 import type { MediaCollection } from '@continuum/contracts';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 const REFRESH_DEBOUNCE_MS = 250;
 
@@ -47,50 +47,51 @@ export function useLibraryLiveRefresh(
     const refreshOnFieldChange = () => {
       if (selectedRef.current?.kind === 'smart' || sortedByFieldRef.current) refresh();
     };
-    const brandFilter = `brand_id=eq.${brandId}`;
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `library-live-${brandId}`,
+    // `collections` and `collection_members` are change signals (no row): a private or
+    // restricted collection is not every member's to see, so the topic only says "re-read".
+    const stops = [
+      subscribeToRowBroadcasts({
+        topic: `collections:${brandId}`,
+        bindings: [{ event: '*', onRow: refresh }],
+      }),
+      // Being added to (or dropped from) a restricted collection changes what this
+      // person can see: the collection and its assets appear or vanish.
+      subscribeToRowBroadcasts({
+        topic: `collection_members:${brandId}`,
+        bindings: [{ event: '*', onRow: refresh }],
+      }),
+      subscribeToRowBroadcasts({
+        topic: `asset_field_values:${brandId}`,
+        bindings: [{ event: '*', onRow: refreshOnFieldChange }],
+      }),
+      subscribeToRowBroadcasts({
+        topic: `assets:${brandId}`,
+        bindings: [{ event: 'UPDATE', onRow: refreshIfSmart }],
+      }),
+    ];
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      for (const stop of stops) stop();
+    };
+  }, [brandId, router]);
+
+  // A manual collection's items live on the collection's own topic, joined while it is open.
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedId) return;
+    return subscribeToRowBroadcasts({
+      topic: `collection_items:${selectedId}`,
       bindings: [
-        { event: '*', schema: 'media', table: 'collections', filter: brandFilter, onRow: refresh },
-        // Being added to (or dropped from) a restricted collection changes what this
-        // person can see: the collection and its assets appear or vanish.
         {
           event: '*',
-          schema: 'media',
-          table: 'collection_members',
-          filter: brandFilter,
-          onRow: refresh,
-        },
-        {
-          event: '*',
-          schema: 'media',
-          table: 'collection_items',
-          onRow: (row, meta) => {
-            const source = meta.eventType === 'DELETE' ? meta.old : row;
-            if (source.collection_id === selectedRef.current?.id) refresh();
+          onRow: () => {
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = setTimeout(() => router.refresh(), REFRESH_DEBOUNCE_MS);
           },
-        },
-        {
-          event: '*',
-          schema: 'media',
-          table: 'asset_field_values',
-          filter: brandFilter,
-          onRow: refreshOnFieldChange,
-        },
-        {
-          event: 'UPDATE',
-          schema: 'media',
-          table: 'assets',
-          filter: brandFilter,
-          onRow: refreshIfSmart,
         },
       ],
     });
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-      unsubscribe();
-    };
-  }, [brandId, router]);
+  }, [selectedId, router]);
 }
 
 /**
@@ -102,14 +103,11 @@ export function useFieldFilterLiveRefresh(brandId: string | null, active: boolea
   useEffect(() => {
     if (!brandId || !active) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `library-field-filter-${brandId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `asset_field_values:${brandId}`,
       bindings: [
         {
           event: '*',
-          schema: 'media',
-          table: 'asset_field_values',
-          filter: `brand_id=eq.${brandId}`,
           onRow: () => {
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => router.refresh(), REFRESH_DEBOUNCE_MS);

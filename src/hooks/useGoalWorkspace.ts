@@ -4,24 +4,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { getGoalEvents, getGoalSnapshot } from '@/lib/api/goals.client';
 import { projectGoalWorkspace } from '@/lib/goals/projection';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export function useGoalWorkspace(goalId: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    return subscribeToPostgresChanges({
-      label: `goal:${goalId}`,
-      // `private: true` must survive the move. An authorized channel that loses this
-      // option becomes an ordinary public one — Realtime stops enforcing the channel
-      // policy, and nothing in the types or the tests would say so.
-      channelOptions: { config: { private: true } },
+    // Private by construction: the topic is admitted only to the goal's readers
+    // (agent_workspace.can_read_goal), and the trigger sends only that something happened.
+    return subscribeToRowBroadcasts({
+      topic: `events:${goalId}`,
       bindings: [
         {
           event: 'INSERT',
-          schema: 'agent_workspace',
-          table: 'events',
-          filter: `goal_id=eq.${goalId}`,
           onRow: () => {
             void queryClient.invalidateQueries({ queryKey: ['goal-workspace', goalId] });
           },

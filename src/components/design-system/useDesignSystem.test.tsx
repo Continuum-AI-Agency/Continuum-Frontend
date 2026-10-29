@@ -1,18 +1,14 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { act, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { act, cleanup, render } from '@testing-library/react';
 
 // The settings page mounts this hook TWICE for one brand — `DesignSystemSection` for
 // the section cards, and the `DesignSystemCard` nested inside it for the uploader. When
-// the hook built its own channel topic from the brand id, both mounts produced the same
-// string, `supabase.channel()` handed the second mount the first mount's already-
-// subscribed channel, and `.on('postgres_changes', …)` threw:
-//
-//   cannot add `postgres_changes` callbacks for realtime:design-system-<brand> after `subscribe()`
-//
-// which took /settings?section=brand-intelligence to the global error boundary. The fake
-// client below reproduces exactly those two Supabase behaviours — a topic-keyed registry
-// and a throw on late binding — so this test fails again the moment the hook goes back to
-// naming its own topic.
+// the hook built its own channel from the brand id, both mounts produced the same topic,
+// `supabase.channel()` handed the second mount the first mount's already-subscribed
+// channel, and its late `.on(…)` threw — which took /settings?section=brand-intelligence
+// to the global error boundary. The fake client below reproduces exactly those two
+// Supabase behaviours — a topic-keyed registry and a throw on late binding — so this test
+// fails again the moment the hook goes back to binding its own channel.
 
 const BRAND = '32841a24-9e31-480c-8a3a-7ebc3cde0569';
 
@@ -23,7 +19,7 @@ class FakeChannel {
   on(): FakeChannel {
     if (this.subscribed) {
       throw new Error(
-        `cannot add \`postgres_changes\` callbacks for realtime:${this.topic} after \`subscribe()\`.`,
+        `cannot add callbacks for realtime:${this.topic} after \`subscribe()\`.`,
       );
     }
     return this;
@@ -92,19 +88,17 @@ describe('useDesignSystem realtime subscription', () => {
     claimedTopics = [];
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it('does not throw when two consumers watch the same brand', async () => {
     await expect(mountTwoConsumers(BRAND)).resolves.toBeUndefined();
   });
 
-  it('gives each consumer its own channel topic', async () => {
+  it("shares the brand's one row-broadcast channel between both consumers", async () => {
     await mountTwoConsumers(BRAND);
-    expect(claimedTopics).toHaveLength(2);
-    expect(new Set(claimedTopics).size).toBe(2);
-  });
-
-  it('keeps the brand id in the topic so the channel stays greppable in devtools', async () => {
-    await mountTwoConsumers(BRAND);
-    for (const topic of claimedTopics) expect(topic).toContain(`design-system-${BRAND}`);
+    expect(claimedTopics).toEqual([`brand_design_systems:${BRAND}`]);
   });
 
   it('subscribes to nothing when there is no brand', async () => {

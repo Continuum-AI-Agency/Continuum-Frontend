@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
-import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
+import type { RowBroadcastSubscription } from '@/lib/supabase/realtime';
 
 const requestCalendarRefetch = mock();
 const unsubscribe = mock();
-const subscriptions: PostgresChangesSubscription[] = [];
+const subscriptions: RowBroadcastSubscription[] = [];
 
 mock.module('@/lib/organic/store', () => createCalendarStoreStub({ requestCalendarRefetch }));
 
 mock.module('@/lib/supabase/realtime', () => ({
-  subscribeToPostgresChanges: mock((subscription: PostgresChangesSubscription) => {
+  subscribeToRowBroadcasts: mock((subscription: RowBroadcastSubscription) => {
     subscriptions.push(subscription);
     return unsubscribe;
   }),
@@ -46,17 +46,12 @@ afterEach(() => {
 });
 
 describe('useCalendarRealtimeSync', () => {
-  it('binds the brand drafts table on the shared realtime seam', () => {
+  it("joins the brand's drafts topic on the shared realtime seam", () => {
     renderHook(() => useCalendarRealtimeSync({ brandProfileId: 'brand-1' }));
 
     expect(subscriptions).toHaveLength(1);
-    expect(subscriptions[0]?.label).toBe('organic-calendar-drafts-brand-1');
-    expect(latestBinding()).toMatchObject({
-      event: '*',
-      schema: 'organic',
-      table: 'organic_calendar_drafts',
-      filter: 'brand_id=eq.brand-1',
-    });
+    expect(subscriptions[0]?.topic).toBe('organic_calendar_drafts:brand-1');
+    expect(latestBinding()).toMatchObject({ event: '*' });
   });
 
   it('subscribes to nothing without a brand', () => {
@@ -122,7 +117,6 @@ describe('useCalendarRealtimeSync', () => {
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(subscriptions).toHaveLength(2);
-    expect(subscriptions[1]?.label).toBe('organic-calendar-drafts-brand-2');
-    expect(latestBinding().filter).toBe('brand_id=eq.brand-2');
+    expect(subscriptions[1]?.topic).toBe('organic_calendar_drafts:brand-2');
   });
 });

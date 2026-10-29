@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnboardingDocument } from '@/lib/onboarding/state';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import type { DocumentView } from './types';
 
 type RealtimeRow = {
@@ -196,15 +196,10 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentsHa
       return;
     }
 
-    const table = { schema: 'brand_profiles', table: 'brand_documents' } as const;
-    const filter = `brand_id=eq.${brandId}`;
-
-    const unsubscribe = subscribeToPostgresChanges({
-      label: `brand-documents-${brandId}`,
+    const unsubscribe = subscribeToRowBroadcasts({
+      topic: `brand_documents:${brandId}`,
       bindings: [
         {
-          ...table,
-          filter,
           event: 'UPDATE',
           onRow: (row) => {
             const updated = row as RealtimeRow;
@@ -215,8 +210,6 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentsHa
           },
         },
         {
-          ...table,
-          filter,
           event: 'INSERT',
           onRow: (row) => {
             const inserted = row as RealtimeRow;
@@ -228,8 +221,6 @@ export function useDocuments(brandId: string, seed: DocumentView[]): DocumentsHa
           },
         },
         {
-          ...table,
-          filter,
           event: 'DELETE',
           onRow: (row) => {
             const removedId = (row as { id?: string }).id;

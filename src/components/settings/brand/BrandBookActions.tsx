@@ -18,7 +18,7 @@ import {
   downloadBrandBookPdf,
   downloadBrandSystemArchive,
 } from '@/lib/brands/brand-system-export';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { useBrandMdDirtyOptional } from './BrandMdDirtyContext';
 
 /**
@@ -50,14 +50,12 @@ export function BrandBookActions({
   }, [editorIsDirty]);
 
   useEffect(() => {
-    return subscribeToPostgresChanges({
-      label: `brand_book_${brandId}`,
+    // A change signal: the trigger sends no composite, the RSC re-read fetches it.
+    return subscribeToRowBroadcasts({
+      topic: `brand_report_composites:${brandId}`,
       bindings: [
         {
           event: 'UPDATE',
-          schema: 'brand_profiles',
-          table: 'brand_report_composites',
-          filter: `brand_profile_id=eq.${brandId}`,
           onRow: () => {
             // The composite changed (e.g. the deep pass landed) — re-run the RSC
             // fetch so the viewer reflects the new tiers without a manual reload.

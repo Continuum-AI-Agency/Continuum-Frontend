@@ -7,18 +7,18 @@
 // document upload does: the row IS the progress, and the server is already writing to
 // it step by step.
 //
-// The subscription goes through `subscribeToPostgresChanges` rather than building a
+// The subscription goes through `subscribeToRowBroadcasts` rather than building a
 // channel here. Settings mounts this hook twice — `DesignSystemSection` for the section
-// cards, and the `DesignSystemCard` inside it for the uploader — and a hand-built topic
-// of `design-system-${brandId}` is the same string both times. `supabase.channel()`
-// hands back the EXISTING channel for a matching topic, so the second mount's `.on()`
-// landed on an already-subscribed channel and threw, taking the settings page to the
-// global error boundary.
+// cards, and the `DesignSystemCard` inside it for the uploader — and both join the same
+// `brand_design_systems:<brand>` topic. `supabase.channel()` hands back the EXISTING
+// channel for a matching topic, so a second hand-built mount's `.on()` landed on an
+// already-subscribed channel and threw, taking the settings page to the global error
+// boundary; the helper shares the one channel instead.
 
 import type { DesignSystemFontFace, DesignSystemSnapshot } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchDesignSystem } from '@/lib/brands/designSystem.client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 export type DesignSystemPhase = 'idle' | 'loading' | 'parsing' | 'ready' | 'error' | 'absent';
 
@@ -83,14 +83,11 @@ export function useDesignSystem(brandId: string | null): DesignSystemState {
 
   useEffect(() => {
     if (!brandId) return;
-    return subscribeToPostgresChanges({
-      label: `design-system-${brandId}`,
+    return subscribeToRowBroadcasts({
+      topic: `brand_design_systems:${brandId}`,
       bindings: [
         {
           event: '*',
-          schema: 'brand_profiles',
-          table: 'brand_design_systems',
-          filter: `brand_id=eq.${brandId}`,
           onRow: (row) => {
             lastUpdateRef.current = Date.now();
             setProgressStep(readString(row, 'progress_step'));
@@ -105,7 +102,7 @@ export function useDesignSystem(brandId: string | null): DesignSystemState {
               setPhase('parsing');
               return;
             }
-            // A row reaching `ready` carries only the columns Realtime replicated, not
+            // A row reaching `ready` carries only the progress columns the trigger sends, not
             // the sections — so refetch rather than reconstructing a partial snapshot
             // from a payload that was never meant to be the whole system.
             if (status === 'ready' && row.is_active === true) void refresh();

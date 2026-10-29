@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/toast-imperative';
 import { listAssetFieldValues, setAssetFieldValue } from '@/lib/library/customFields';
 import { validateCustomFieldValue, valuesByFieldId } from '@/lib/library/customFieldValue';
 import { useLibraryAccess } from '@/lib/library/useBrandRole';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { CustomFieldManagerDialog } from './CustomFieldManagerDialog';
 import { CustomFieldValueEditor } from './CustomFieldValueEditor';
 import { useCustomFields } from './useCustomFields';
@@ -36,18 +36,17 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
   const { canEdit } = useLibraryAccess(brandId, { assetId });
 
   // Another member's write to this asset's fields lands here as the row arrives.
+  // The topic is the brand's; this asset's values are picked out here.
   useEffect(
     () =>
-      subscribeToPostgresChanges({
-        label: `asset-fields-${assetId}`,
+      subscribeToRowBroadcasts({
+        topic: `asset_field_values:${brandId}`,
         bindings: [
           {
             event: '*',
-            schema: 'media',
-            table: 'asset_field_values',
-            filter: `asset_id=eq.${assetId}`,
             onRow: (row, meta) => {
               const source = meta.eventType === 'DELETE' ? meta.old : row;
+              if (source.asset_id !== assetId) return;
               const fieldId = typeof source.field_id === 'string' ? source.field_id : null;
               if (!fieldId) return;
               setValues((prev) =>
@@ -60,7 +59,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
           },
         ],
       }),
-    [assetId],
+    [brandId, assetId],
   );
 
   useEffect(() => {

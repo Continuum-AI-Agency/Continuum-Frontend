@@ -5,7 +5,7 @@ import { useCallback, useEffect } from 'react';
 import { z } from 'zod';
 import { toast } from '@/components/ui/toast-imperative';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 
 const canvasRoomSchema = z
   .object({
@@ -124,27 +124,15 @@ export function useCanvasRooms(brandProfileId: string) {
       );
     };
 
-    const scoped = {
-      schema: 'brand_profiles',
-      table: 'canvas_rooms',
-      filter: `brand_profile_id=eq.${brandProfileId}`,
-    } as const;
-
-    // The `useId()` this used to build into its topic is gone: the helper's UUID topic
-    // is the same guarantee, made structurally rather than by remembering to do it. That
-    // matters here more than most — StudioCanvas calls this hook AND renders
-    // CanvasRoomsTabs, which calls it again with the same brand.
-    return subscribeToPostgresChanges({
-      label: `canvas-rooms:${brandProfileId}`,
+    // StudioCanvas calls this hook AND renders CanvasRoomsTabs, which calls it again with the
+    // same brand: the helper shares the one channel per topic between them.
+    return subscribeToRowBroadcasts({
+      topic: `canvas_rooms:${brandProfileId}`,
       bindings: [
-        { ...scoped, event: 'INSERT', onRow: receiveRoom },
-        { ...scoped, event: 'UPDATE', onRow: receiveRoom },
+        { event: 'INSERT', onRow: receiveRoom },
+        { event: 'UPDATE', onRow: receiveRoom },
         {
-          // Deliberately unfiltered: a DELETE payload carries only the primary key, so
-          // Postgres cannot evaluate a brand filter against it.
           event: 'DELETE',
-          schema: 'brand_profiles',
-          table: 'canvas_rooms',
           onRow: (row) => {
             const deleted = z.object({ id: z.string().uuid() }).safeParse(row);
             if (deleted.success) {

@@ -16,7 +16,7 @@
 //   when the room loaded are left alone: their wiring may have changed since they ran.
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
   fetchCanvasLibraryContext,
@@ -87,30 +87,20 @@ export function LibraryContextSync() {
       clearTimeout(timer);
       timer = setTimeout(() => void refresh(), REFRESH_DEBOUNCE_MS);
     };
-    const stop = subscribeToPostgresChanges({
-      label: 'canvas-library-context',
-      bindings: [
-        {
-          event: 'UPDATE',
-          schema: 'media',
-          table: 'assets',
-          filter: `brand_id=eq.${brandId}`,
-          onRow: (row) => schedule(row.id),
-        },
-        {
-          event: '*',
-          schema: 'media',
-          table: 'comments',
-          filter: `brand_id=eq.${brandId}`,
-          onRow: (row) => schedule(row.asset_id),
-        },
-      ],
+    const stopAssets = subscribeToRowBroadcasts({
+      topic: `assets:${brandId}`,
+      bindings: [{ event: 'UPDATE', onRow: (row) => schedule(row.id) }],
+    });
+    const stopComments = subscribeToRowBroadcasts({
+      topic: `comments:${brandId}`,
+      bindings: [{ event: '*', onRow: (row) => schedule(row.asset_id) }],
     });
     const onFocus = () => void refresh();
     window.addEventListener('focus', onFocus);
     return () => {
       clearTimeout(timer);
-      stop();
+      stopAssets();
+      stopComments();
       window.removeEventListener('focus', onFocus);
     };
   }, [brandId, refresh]);

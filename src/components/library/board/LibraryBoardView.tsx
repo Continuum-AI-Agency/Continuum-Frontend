@@ -55,7 +55,7 @@ import { setAssetReviewState, transitionReviewStatus } from '@/lib/library/revie
 import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
 import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { useMentionTargets } from '../detail/useMentionTargets';
 import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { BoardCardContent } from './BoardCard';
@@ -273,14 +273,12 @@ export function LibraryBoardView({
   // lanes as the row arrives — merged in place, no refetch and no reload.
   const groupFieldId = groupField?.id ?? null;
   useEffect(() => {
-    return subscribeToPostgresChanges({
-      label: `library-board-${brandId}`,
+    if (!brandId) return;
+    const fieldValues = subscribeToRowBroadcasts({
+      topic: `asset_field_values:${brandId}`,
       bindings: [
         {
           event: '*',
-          schema: 'media',
-          table: 'asset_field_values',
-          filter: `brand_id=eq.${brandId}`,
           onRow: (row, meta) => {
             const source = meta.eventType === 'DELETE' ? meta.old : row;
             if (!groupFieldId || source.field_id !== groupFieldId) return;
@@ -294,11 +292,13 @@ export function LibraryBoardView({
             });
           },
         },
+      ],
+    });
+    const assets = subscribeToRowBroadcasts({
+      topic: `assets:${brandId}`,
+      bindings: [
         {
           event: 'UPDATE',
-          schema: 'media',
-          table: 'assets',
-          filter: `brand_id=eq.${brandId}`,
           onRow: (row) => {
             const reviewStatus = mediaReviewStatusSchema.safeParse(row.review_status);
             if (!reviewStatus.success) return;
@@ -320,6 +320,10 @@ export function LibraryBoardView({
         },
       ],
     });
+    return () => {
+      fieldValues();
+      assets();
+    };
   }, [brandId, groupFieldId]);
 
   const members = useMentionTargets(

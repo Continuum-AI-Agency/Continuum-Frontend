@@ -23,6 +23,16 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => mockSupabase,
 }));
 
+mock.module('@/hooks/useSession', () => ({
+  useSession: () => ({ user: { id: 'user_1' }, session: null, isLoading: false }),
+}));
+
+/** The trigger's broadcast for one run row change. */
+const runChange = (record: Record<string, unknown>) => ({
+  event: 'UPDATE',
+  payload: { operation: 'UPDATE', record, old_record: {} },
+});
+
 describe('isTerminalRunStatus', () => {
   it('treats completed and failed as terminal', () => {
     expect(isTerminalRunStatus('completed')).toBe(true);
@@ -47,16 +57,15 @@ describe('useJainaRunStatusRealtime', () => {
     cleanup();
   });
 
-  it('subscribes on a topic unique to this mount', async () => {
+  it("joins the signed-in user's private run-status topic", async () => {
     await act(async () => {
       renderHook(() => useJainaRunStatusRealtime({ onRunStatus: () => {} }));
     });
-    // The topic carries the label as a devtools aid but is uniquified per subscription:
-    // the bare `jaina:run-status` string it used to claim is a global name, and a second
-    // mount would have been handed this channel mid-join and thrown on `.on(...)`.
-    const topic = mockSupabase.channel.mock.calls[0]?.[0] as string;
-    expect(topic.startsWith('jaina:run-status:')).toBe(true);
-    expect(topic).not.toBe('jaina:run-status');
+    // The trigger fans each change out to the run owner's own topic; the policy admits only them.
+    expect(mockSupabase.channel.mock.calls[0]).toEqual([
+      'jaina_conversation_runs:user_1',
+      { config: { private: true } },
+    ]);
     expect(mockChannel.subscribe).toHaveBeenCalled();
   });
 
@@ -68,15 +77,15 @@ describe('useJainaRunStatusRealtime', () => {
     expect(capturedHandler).not.toBeNull();
 
     act(() => {
-      capturedHandler?.({
-        new: {
+      capturedHandler?.(
+        runChange({
           run_id: 'run_abc',
           session_id: 'chat_1',
           status: 'completed',
           result_type: 'checkpoint_report',
           error_message: null,
-        },
-      });
+        }),
+      );
     });
 
     expect(onRunStatus).toHaveBeenCalledWith({
@@ -95,7 +104,7 @@ describe('useJainaRunStatusRealtime', () => {
     });
 
     act(() => {
-      capturedHandler?.({ new: { session_id: 'chat_1' } });
+      capturedHandler?.(runChange({ session_id: 'chat_1' }));
     });
 
     expect(onRunStatus).not.toHaveBeenCalled();

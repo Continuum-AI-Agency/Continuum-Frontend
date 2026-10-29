@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PreviewRateLimitedError, runOnboardingPreview } from '@/lib/onboarding/agentClient';
-import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import {
   type BrandBookGenerationPayload,
   brandBookGenerationStatus,
@@ -37,14 +37,11 @@ export function BrandBookEmptyState({
   const refreshedRef = useRef(false);
 
   useEffect(() => {
-    return subscribeToPostgresChanges({
-      label: `brand_book_generate_${brandId}`,
+    return subscribeToRowBroadcasts({
+      topic: `brand_report_composites:${brandId}`,
       bindings: [
         {
           event: '*',
-          schema: 'brand_profiles',
-          table: 'brand_report_composites',
-          filter: `brand_profile_id=eq.${brandId}`,
           onRow: () => {
             // The composite was just written — pull it in. Guard so a flurry of
             // INSERT/UPDATE events only triggers one refresh.
