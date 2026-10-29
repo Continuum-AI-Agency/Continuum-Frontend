@@ -87,11 +87,11 @@ import { AskedProposalPanel } from './detail/AskedProposalPanel';
 import { adsetTableRows } from './detail/adsetTableRows';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { ByPlatform } from './detail/ByPlatform';
-import { GooglePortfolioCampaigns } from './detail/google/GooglePortfolioCampaigns';
 import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
+import { GooglePortfolioCampaigns } from './detail/google/GooglePortfolioCampaigns';
 import { buildPortfolioHeadline } from './detail/headlineModel';
 import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
 import {
@@ -494,7 +494,15 @@ export function PortfolioDetailWorkspace({
       setActiveSuggestionId(asked.id);
       adopt.mutate(
         { id: asked.suggestionId, token: asked.adoptToken },
-        { onSettled: () => setActiveSuggestionId(null) },
+        {
+          // A refused take-on (an expired grant, access) prints on its row like a refused build.
+          onError: (error) =>
+            setBuildFailure({
+              rowId: asked.id,
+              message: error instanceof Error ? error.message : 'That did not go through.',
+            }),
+          onSettled: () => setActiveSuggestionId(null),
+        },
       );
       return;
     }
@@ -541,7 +549,15 @@ export function PortfolioDetailWorkspace({
     const asked = askedById.get(row.id);
     if (!asked) return;
     setActiveSuggestionId(asked.id);
-    dismiss.mutate(asked.suggestionId, { onSettled: () => setActiveSuggestionId(null) });
+    setBuildFailure(null);
+    dismiss.mutate(asked.suggestionId, {
+      onError: (error) =>
+        setBuildFailure({
+          rowId: asked.id,
+          message: error instanceof Error ? error.message : 'That did not go through.',
+        }),
+      onSettled: () => setActiveSuggestionId(null),
+    });
   };
 
   const isReadRowWaiting = (row: DailyReadRow): boolean => {

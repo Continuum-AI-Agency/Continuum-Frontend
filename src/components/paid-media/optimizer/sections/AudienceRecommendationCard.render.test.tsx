@@ -677,6 +677,42 @@ describe('AudienceRecommendationCard — a failed row always says what failed', 
     );
   });
 
+  it('a refused create prints the error on the card instead of doing nothing', async () => {
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onApprove={(_input, handlers) =>
+          handlers?.onError?.(
+            'Could not approve the audience proposal: proposal is blocked, not ready',
+          )
+        }
+        view={audienceCardView([row({})], rec)}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('audience-create'));
+    await waitFor(() => expect(document.body.textContent).toContain('Create the ad set'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create the ad set' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('audience-action-notice').textContent).toBe(
+        'Could not approve the audience proposal: proposal is blocked, not ready',
+      ),
+    );
+  });
+
+  it('a refused discard prints the error on the card', () => {
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onCancel={(handlers) => handlers?.onError?.('Could not discard: permission denied')}
+        view={audienceCardView([row({})], rec)}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByTestId('audience-action-notice').textContent).toBe(
+      'Could not discard: permission denied',
+    );
+  });
+
   it('a refused retry prints the error inline and the button shows it is working', () => {
     const view = failedWith(
       { code: 'activate_failed', phase: 'activate' },

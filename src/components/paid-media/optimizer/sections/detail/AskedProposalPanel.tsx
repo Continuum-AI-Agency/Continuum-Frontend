@@ -94,15 +94,18 @@ export function AskedProposalPanel(props: AskedProposalPanelProps) {
         cboPreview={campaignId ? (props.cboPreviewByCampaign.get(campaignId) ?? null) : null}
         convertingCbo={props.busy.convertingCbo}
         currency={props.currency}
-        onActivate={() => props.actions.activate(proposalId)}
-        onApprove={({ budgetMinorUnits, activate }) =>
-          props.actions.approve({ proposalId, budgetMinorUnits, activate, mode: plan.mode })
+        onActivate={(handlers) => props.actions.activate(proposalId, handlers)}
+        onApprove={({ budgetMinorUnits, activate }, handlers) =>
+          props.actions.approve(
+            { proposalId, budgetMinorUnits, activate, mode: plan.mode },
+            handlers,
+          )
         }
-        onCancel={() => props.actions.cancel(proposalId)}
+        onCancel={(handlers) => props.actions.cancel(proposalId, handlers)}
         onConvertCbo={props.actions.convertCbo}
         onRequest={(handlers) => props.actions.request(rec.id, handlers)}
         onRetry={(handlers) => props.actions.retry(proposalId, handlers)}
-        onUndo={() => props.actions.undo(proposalId)}
+        onUndo={(handlers) => props.actions.undo(proposalId, handlers)}
         portfolioSpecs={props.portfolioSpecs}
         rec={rec}
         requesting={props.busy.requestingRecId === rec.id}

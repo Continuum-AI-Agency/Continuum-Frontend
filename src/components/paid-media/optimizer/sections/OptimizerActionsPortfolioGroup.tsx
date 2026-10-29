@@ -213,15 +213,18 @@ type EvidenceContext = {
     request: (recId: string, handlers?: AudienceActionHandlers) => void;
     /** Re-run the Meta write a failed row stopped at (optimizer_retry_audience_proposal). */
     retry: (proposalId: string, handlers?: AudienceActionHandlers) => void;
-    approve: (input: {
-      proposalId: string;
-      budgetMinorUnits: number;
-      activate: boolean;
-      mode: 'replace' | 'add';
-    }) => void;
-    cancel: (proposalId: string) => void;
-    activate: (proposalId: string) => void;
-    undo: (proposalId: string) => void;
+    approve: (
+      input: {
+        proposalId: string;
+        budgetMinorUnits: number;
+        activate: boolean;
+        mode: 'replace' | 'add';
+      },
+      handlers?: AudienceActionHandlers,
+    ) => void;
+    cancel: (proposalId: string, handlers?: AudienceActionHandlers) => void;
+    activate: (proposalId: string, handlers?: AudienceActionHandlers) => void;
+    undo: (proposalId: string, handlers?: AudienceActionHandlers) => void;
     convertCbo: (campaignId: string, dryRun: boolean) => void;
   };
   audienceBusy: {
@@ -568,6 +571,10 @@ const NO_PORTFOLIO_NAMES: ReadonlyMap<string, string> = new Map();
  * so both surfaces press the same RPCs and never wire a second copy of the same request.
  * `noteFor` receives the recommendation id and the message when a request fails.
  */
+function errorText(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function useAudienceCardActions(
   brandId: string,
   adAccountId: string,
@@ -610,21 +617,35 @@ export function useAudienceCardActions(
           onSettled: () => setRetryingId(null),
         });
       },
-      approve: (input) => {
+      // A refused write reaches the card that pressed it (handlers.onError). These four
+      // used to settle silently, so a refusal read as a button that did nothing.
+      approve: (input, handlers) => {
         setBusyId(input.proposalId);
-        audienceMutations.approve.mutate(input, { onSettled: () => setBusyId(null) });
+        audienceMutations.approve.mutate(input, {
+          onError: (error) => handlers?.onError?.(errorText(error, 'Could not create the ad set.')),
+          onSettled: () => setBusyId(null),
+        });
       },
-      cancel: (proposalId) => {
+      cancel: (proposalId, handlers) => {
         setBusyId(proposalId);
-        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setBusyId(null) });
+        audienceMutations.cancel.mutate(proposalId, {
+          onError: (error) => handlers?.onError?.(errorText(error, 'Could not discard it.')),
+          onSettled: () => setBusyId(null),
+        });
       },
-      activate: (proposalId) => {
+      activate: (proposalId, handlers) => {
         setBusyId(proposalId);
-        audienceMutations.activate.mutate(proposalId, { onSettled: () => setBusyId(null) });
+        audienceMutations.activate.mutate(proposalId, {
+          onError: (error) => handlers?.onError?.(errorText(error, 'Could not switch it on.')),
+          onSettled: () => setBusyId(null),
+        });
       },
-      undo: (proposalId) => {
+      undo: (proposalId, handlers) => {
         setBusyId(proposalId);
-        audienceMutations.undo.mutate(proposalId, { onSettled: () => setBusyId(null) });
+        audienceMutations.undo.mutate(proposalId, {
+          onError: (error) => handlers?.onError?.(errorText(error, 'Could not undo it.')),
+          onSettled: () => setBusyId(null),
+        });
       },
       convertCbo: (campaignId, dryRun) => {
         convertCboMutation.mutate(
@@ -2487,22 +2508,22 @@ function AudienceCardHost({
       cboPreview={campaignId ? (evidence.cboPreviewByCampaign.get(campaignId) ?? null) : null}
       convertingCbo={evidence.audienceBusy.convertingCbo}
       currency={evidence.currency}
-      onActivate={() => proposalId && evidence.audienceActions.activate(proposalId)}
-      onApprove={({ budgetMinorUnits, activate }) =>
+      onActivate={(handlers) =>
+        proposalId && evidence.audienceActions.activate(proposalId, handlers)
+      }
+      onApprove={({ budgetMinorUnits, activate }, handlers) =>
         proposalId &&
         view.plan &&
-        evidence.audienceActions.approve({
-          proposalId,
-          budgetMinorUnits,
-          activate,
-          mode: view.plan.mode,
-        })
+        evidence.audienceActions.approve(
+          { proposalId, budgetMinorUnits, activate, mode: view.plan.mode },
+          handlers,
+        )
       }
-      onCancel={() => proposalId && evidence.audienceActions.cancel(proposalId)}
+      onCancel={(handlers) => proposalId && evidence.audienceActions.cancel(proposalId, handlers)}
       onConvertCbo={evidence.audienceActions.convertCbo}
       onRequest={(handlers) => evidence.audienceActions.request(rec.id, handlers)}
       onRetry={(handlers) => proposalId && evidence.audienceActions.retry(proposalId, handlers)}
-      onUndo={() => proposalId && evidence.audienceActions.undo(proposalId)}
+      onUndo={(handlers) => proposalId && evidence.audienceActions.undo(proposalId, handlers)}
       portfolioSpecs={evidence.portfolioSpecs}
       rec={rec}
       requesting={evidence.audienceBusy.requestingRecId === rec.id}
