@@ -1,6 +1,5 @@
 @import "tailwindcss" source("../");
 @import "tw-animate-css";
-@import "./dither-tiles.css";
 @source "../../packages/contracts/src";
 @source "../node_modules/streamdown/dist/*.js";
 /* Relative to this file, so the Frontend's own node_modules (the standalone install
@@ -1249,150 +1248,61 @@ body {
   }
 }
 
-/* Skeleton loaders (ui/skeleton.tsx): ascii-reveal's `dither` look
-   (github.com/quanhoangindex/ascii-reveal). A faint field of block shades, and a band of
-   denser shades that sweeps across and flickers between two patterns. The shades are mask
-   tiles from dither-tiles.css (scripts/gen-dither-skeleton.mjs), inked with the theme's
-   foreground, so they follow every theme.
+/* Skeleton loaders (ui/skeleton.tsx): a neutral bar with a violet glint sweeping across it.
+   The glint is a pseudo-element moved by transform, so the sweep runs on the compositor and
+   never repaints. Both colors come from theme tokens, so every theme gets its own pair.
 
    In `components`, not `@utility`: any utility a caller passes (absolute inset-0,
    rounded-full, a bg-* backdrop tint) has to win, and twMerge can't see custom classes. */
 :root {
-  --dither-band: linear-gradient(90deg, transparent, #000 45%, #000 55%, transparent);
-  /* The glyphs useDitherReveal decodes content through. */
-  --ascii-font: var(--font-mono);
+  --skeleton-bone: color-mix(in oklab, var(--foreground) 6%, transparent);
+  --skeleton-glint: color-mix(in oklab, var(--primary) 16%, transparent);
 }
 
 @layer components {
-  .dither-skeleton {
+  .skeleton-glint {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
+    background-color: var(--skeleton-bone);
   }
 
   /* Behind the host's own content (z-index -1 inside the isolated host). */
-  .dither-skeleton::before,
-  .dither-skeleton::after {
+  .skeleton-glint::after {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-color: var(--foreground);
-  }
-
-  .dither-skeleton::before {
-    opacity: 0.22;
-    -webkit-mask: var(--dither-base) 0 0 / var(--dither-tile) repeat;
-    mask: var(--dither-base) 0 0 / var(--dither-tile) repeat;
-  }
-
-  .dither-skeleton::after {
-    opacity: 0.75;
-    -webkit-mask-image: var(--dither-wave-a), var(--dither-band);
-    mask-image: var(--dither-wave-a), var(--dither-band);
-    -webkit-mask-size:
-      var(--dither-tile),
-      55% 100%;
-    mask-size:
-      var(--dither-tile),
-      55% 100%;
-    -webkit-mask-repeat: repeat, no-repeat;
-    mask-repeat: repeat, no-repeat;
-    -webkit-mask-position:
-      0 0,
-      -120% 0;
-    mask-position:
-      0 0,
-      -120% 0;
-    -webkit-mask-composite: source-in;
-    mask-composite: intersect;
-    animation-name: dither-sweep, dither-scramble;
-    animation-duration: 1.8s, 0.24s;
-    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95), steps(1, end);
-    animation-delay: var(--dither-delay, 0s), 0s;
-    animation-iteration-count: infinite;
-  }
-
-  /* Neighbouring bars sweep as one diagonal band instead of in lockstep. */
-  .dither-skeleton:nth-child(3n + 2) {
-    --dither-delay: 0.09s;
-  }
-  .dither-skeleton:nth-child(3n) {
-    --dither-delay: 0.18s;
+    background-image: linear-gradient(90deg, transparent, var(--skeleton-glint), transparent);
+    transform: translateX(-100%);
+    animation: skeleton-glint 1.6s ease-in-out infinite;
   }
 
   /* A skeleton line that wraps like the sentence it stands in for (SkeletonText wrap). An
-     inline box can't hold the absolutely positioned layers above, so the host itself is
-     masked: the soft base field plus the wave inside the band. With box-decoration-clone
-     (SkeletonText adds it) each line fragment gets its own field and its own sweep. */
-  .dither-skeleton-inline {
-    background-color: color-mix(in oklab, var(--foreground) 75%, transparent);
-    -webkit-mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-a);
-    mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-a);
-    -webkit-mask-size:
-      var(--dither-tile),
-      55% 100%,
-      var(--dither-tile);
-    mask-size:
-      var(--dither-tile),
-      55% 100%,
-      var(--dither-tile);
-    -webkit-mask-repeat: repeat, no-repeat, repeat;
-    mask-repeat: repeat, no-repeat, repeat;
-    -webkit-mask-position:
-      0 0,
-      -120% 0,
-      0 0;
-    mask-position:
-      0 0,
-      -120% 0,
-      0 0;
-    -webkit-mask-composite: source-over, source-in, source-over;
-    mask-composite: add, intersect, add;
-    animation-name: dither-sweep-inline, dither-scramble-inline;
-    animation-duration: 1.8s, 0.24s;
-    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95), steps(1, end);
-    animation-iteration-count: infinite;
+     inline box can't hold the pseudo-element above, so the glint is the host's own background,
+     moved by position. With box-decoration-clone each line fragment gets its own sweep. */
+  .skeleton-glint-inline {
+    background-color: var(--skeleton-bone);
+    background-image: linear-gradient(90deg, transparent 30%, var(--skeleton-glint) 50%, transparent 70%);
+    background-size: 300% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-glint-inline 1.6s ease-in-out infinite;
   }
 }
 
-@keyframes dither-sweep {
+@keyframes skeleton-glint {
   to {
-    -webkit-mask-position:
-      0 0,
-      220% 0;
-    mask-position:
-      0 0,
-      220% 0;
+    transform: translateX(100%);
   }
 }
 
-@keyframes dither-scramble {
-  50% {
-    -webkit-mask-image: var(--dither-wave-b), var(--dither-band);
-    mask-image: var(--dither-wave-b), var(--dither-band);
+@keyframes skeleton-glint-inline {
+  from {
+    background-position: 100% 0;
   }
-}
-
-@keyframes dither-sweep-inline {
   to {
-    -webkit-mask-position:
-      0 0,
-      220% 0,
-      0 0;
-    mask-position:
-      0 0,
-      220% 0,
-      0 0;
-  }
-}
-
-@keyframes dither-scramble-inline {
-  50% {
-    -webkit-mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-b);
-    mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-b);
+    background-position: 0 0;
   }
 }
 
@@ -1566,11 +1476,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* The still shade field stays; the sweeping band goes (parked off the edge when inline). */
-  .dither-skeleton::after {
+  /* The bar stays; the glint goes. */
+  .skeleton-glint::after {
     display: none;
   }
-  .dither-skeleton-inline {
+  .skeleton-glint-inline {
     animation: none;
   }
   .live-pulse {
