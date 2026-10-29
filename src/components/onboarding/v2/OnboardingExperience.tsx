@@ -1,6 +1,7 @@
 'use client';
 
 import type { OnboardingIntake, OnboardingSourceResponse } from '@continuum/contracts';
+import { CircleNotch } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -80,6 +81,8 @@ type OnboardingExperienceProps = {
    * as it did before billing (billing-cutover).
    */
   planRequired: boolean;
+  /** Continuum staff may skip "Choose your plan"; the completion action re-verifies server-side. */
+  staff: boolean;
 };
 
 export function OnboardingExperience(props: OnboardingExperienceProps) {
@@ -93,7 +96,12 @@ export function OnboardingExperience(props: OnboardingExperienceProps) {
   );
 }
 
-function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingExperienceProps) {
+function ExperienceInner({
+  initialState,
+  defaultUrl,
+  planRequired,
+  staff,
+}: OnboardingExperienceProps) {
   const router = useRouter();
   const { show } = useToast();
   const totalSteps = planRequired ? TOTAL_STEPS + 1 : TOTAL_STEPS;
@@ -215,9 +223,10 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
       if (planRequired) {
         // Approve and start the analysis now; completion waits for a plan on the next screen.
         try {
-          await approveOnboardingAndStartAnalysisAction(brandId, {
+          const approved = await approveOnboardingAndStartAnalysisAction(brandId, {
             idempotencyKey: launchKeyRef.current ?? undefined,
           });
+          if (!approved.success) throw new Error(approved.error);
           await navigate(PLAN_SCREEN);
         } catch (error) {
           show({
@@ -230,9 +239,10 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         return;
       }
       try {
-        await approveAndLaunchOnboardingAction(brandId, {
+        const launched = await approveAndLaunchOnboardingAction(brandId, {
           idempotencyKey: launchKeyRef.current ?? undefined,
         });
+        if (!launched.success) throw new Error(launched.error);
         useBrandProfileRevealCache.getState().invalidateBrand(brandId);
         trackOnboardingEvent('onboarding_launch_succeeded', {
           duration_ms: launchTimer.sinceStart(),
@@ -278,7 +288,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     const skipInspirations = !hasConnectedInstagram(state);
     startLaunch(async () => {
       try {
-        await approveOnboardingAndStartAnalysisAction(brandId, { idempotencyKey });
+        const approved = await approveOnboardingAndStartAnalysisAction(brandId, { idempotencyKey });
+        if (!approved.success) throw new Error(approved.error);
         if (skipInspirations) {
           trackOnboardingEvent('onboarding_inspirations_skipped', {
             reason: 'no_connected_instagram',
@@ -313,7 +324,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
 
   // Flag-on path: the finale's final CTA only completes onboarding + routes; the
   // approve/analysis already ran when leaving Brand DNA.
-  const handleFinishToDashboard = () => {
+  const handleFinishToDashboard = (staffSkip = false) => {
     const launchTimer = timing();
     startLaunch(async () => {
       try {
@@ -321,7 +332,11 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
         // completion. Otherwise a fast toggle + Finish click can persist completedAt
         // while the previous email preference is still in flight.
         await updateState({ emailReportOptIn: emailReportOptInRef.current });
-        await completeOnboardingAction(brandId);
+        const completed = await completeOnboardingAction(
+          brandId,
+          staffSkip ? { staffSkip: true } : undefined,
+        );
+        if (!completed.success) throw new Error(completed.error);
         useBrandProfileRevealCache.getState().invalidateBrand(brandId);
         trackOnboardingEvent('onboarding_launch_succeeded', {
           duration_ms: launchTimer.sinceStart(),
@@ -341,6 +356,35 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
       }
     });
   };
+
+  // Leaving Brand DNA approves the profile, and the Backend refuses (409) while the preview still
+  // runs. A click during the preview waits for it and then continues on its own.
+  const [continueQueued, setContinueQueued] = useState(false);
+  const previewStatus = jobs.agentPreview.status;
+  const leaveDnaRef = useRef(handleContinueToInspirations);
+  leaveDnaRef.current = INSPIRATIONS_ENABLED ? handleContinueToInspirations : handleLaunch;
+  const handleLeaveDna = () => {
+    if (previewStatus === 'running') setContinueQueued(true);
+    else leaveDnaRef.current();
+  };
+  useEffect(() => {
+    if (!continueQueued) return;
+    if (screen !== 5) {
+      setContinueQueued(false);
+      return;
+    }
+    if (previewStatus === 'running') return;
+    setContinueQueued(false);
+    if (previewStatus === 'done') {
+      leaveDnaRef.current();
+      return;
+    }
+    show({
+      title: 'Brand DNA didn’t finish',
+      description: 'Retry the analysis above, then continue.',
+      variant: 'error',
+    });
+  }, [continueQueued, previewStatus, screen, show]);
 
   const analyzeIntake = async (snapshot: OnboardingState, force = false): Promise<boolean> => {
     const intake = snapshot.intake;
@@ -581,8 +625,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     navigate,
     onChangeUrl: () => void navigate(0),
     onDocumentsContinue: handleDocumentsContinue,
-    onLaunch: handleLaunch,
-    onContinueToInspirations: handleContinueToInspirations,
+    onLeaveDna: handleLeaveDna,
+    continueQueued,
     planRequired,
     designSystemBusy,
     catalogBusy,
@@ -834,7 +878,7 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           ) : screen === 7 ? (
             <InspirationGenerationScreen
               brandId={brandId}
-              onFinish={planRequired ? handleContinueToPlan : handleFinishToDashboard}
+              onFinish={planRequired ? handleContinueToPlan : () => handleFinishToDashboard()}
               finishLabel={planRequired ? 'Choose your plan →' : undefined}
               finishing={launching}
               onBack={() => void navigate(hasConnectedInstagram(state) ? 6 : 5)}
@@ -849,7 +893,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
             <PlanScreen
               brandId={brandId}
               onBack={() => void navigate(INSPIRATIONS_ENABLED ? 7 : 5)}
-              onComplete={handleFinishToDashboard}
+              onComplete={() => handleFinishToDashboard()}
+              onStaffSkip={staff ? () => handleFinishToDashboard(true) : undefined}
               completing={launching}
             />
           )}
@@ -891,8 +936,8 @@ function useBottomBar({
   navigate,
   onChangeUrl,
   onDocumentsContinue,
-  onLaunch,
-  onContinueToInspirations,
+  onLeaveDna,
+  continueQueued,
   inspirationsEnabled,
   planRequired,
   launching,
@@ -903,8 +948,9 @@ function useBottomBar({
   navigate: (next: ScreenIndex) => Promise<boolean>;
   onChangeUrl: () => void;
   onDocumentsContinue: () => Promise<void>;
-  onLaunch: () => void;
-  onContinueToInspirations: () => void;
+  /** Approves Brand DNA and moves on; waits for a running preview first. */
+  onLeaveDna: () => void;
+  continueQueued: boolean;
   inspirationsEnabled: boolean;
   planRequired: boolean;
   launching: boolean;
@@ -1020,26 +1066,38 @@ function useBottomBar({
     };
   }
   if (screen === 5) {
-    if (inspirationsEnabled) {
-      return {
-        hint: '',
-        actions: (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onContinueToInspirations}
-            disabled={launching}
-          >
-            {launching ? 'Preparing…' : 'Continue →'}
-          </Button>
-        ),
-      };
-    }
+    const idleLabel = inspirationsEnabled
+      ? 'Continue →'
+      : planRequired
+        ? 'Choose your plan →'
+        : 'Launch Continuum ✦';
     return {
-      hint: '',
+      hint: continueQueued ? 'Continuing as soon as your Brand DNA is ready.' : '',
       actions: (
-        <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
-          {launching ? 'Launching…' : planRequired ? 'Choose your plan →' : 'Launch Continuum ✦'}
+        <Button
+          variant={inspirationsEnabled ? 'default' : 'success'}
+          size="sm"
+          onClick={onLeaveDna}
+          disabled={launching || continueQueued}
+          aria-busy={launching || continueQueued}
+        >
+          {continueQueued ? (
+            <>
+              <CircleNotch
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden
+              />
+              Finishing your Brand DNA…
+            </>
+          ) : launching ? (
+            inspirationsEnabled ? (
+              'Preparing…'
+            ) : (
+              'Launching…'
+            )
+          ) : (
+            idleLabel
+          )}
         </Button>
       ),
     };

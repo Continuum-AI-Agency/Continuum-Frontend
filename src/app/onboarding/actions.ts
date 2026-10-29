@@ -3,9 +3,11 @@
 import { randomUUID } from 'node:crypto';
 import { documentCategorySchema, documentRenameSchema } from '@continuum/contracts';
 import { revalidatePath } from 'next/cache';
+import { unstable_rethrow } from 'next/navigation';
 import { after } from 'next/server';
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
 import { getClaimsIdentity } from '@/lib/auth/claims';
+import { isStaffUser } from '@/lib/auth/staff';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { onboardingNeedsPlan } from '@/lib/billing/productAccess';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
@@ -109,13 +111,44 @@ export async function resetOnboardingStateAction(brandId: string): Promise<Onboa
 
 const PLAN_REQUIRED_MESSAGE = 'Choose a plan to finish setting up this brand.';
 
-export async function completeOnboardingAction(brandId: string): Promise<OnboardingState> {
+/**
+ * What the client-called onboarding actions return. A thrown server-action error reaches a
+ * production browser only as React's redacted #441, so these settle into a message instead.
+ */
+export type OnboardingActionResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+async function settle<T>(label: string, run: () => Promise<T>): Promise<OnboardingActionResult<T>> {
+  try {
+    return { success: true, data: await run() };
+  } catch (error) {
+    unstable_rethrow(error);
+    log.warn(`[${label}] failed`, { error: String(error) });
+    return {
+      success: false,
+      error: error instanceof Error && error.message ? error.message : 'Please try again.',
+    };
+  }
+}
+
+export async function completeOnboardingAction(
+  brandId: string,
+  options?: { staffSkip?: boolean },
+): Promise<OnboardingActionResult<OnboardingState>> {
+  return settle('completeOnboardingAction', () => completeOnboarding(brandId, options));
+}
+
+async function completeOnboarding(
+  brandId: string,
+  options?: { staffSkip?: boolean },
+): Promise<OnboardingState> {
   const user = await getClaimsIdentity();
-  // No skip: once billing is live a brand finishes onboarding only with a product — bought
-  // through Checkout or granted as a Contract. The plan screen never calls this without one;
-  // this is the boundary for anything that does.
+  // Once billing is live a brand finishes onboarding only with a product — bought through
+  // Checkout or granted as a Contract — unless Continuum staff skip the plan step. The plan
+  // screen never calls this without one of those; this is the boundary for anything that does.
   const access = await readBrandAccess(brandId);
-  if (onboardingNeedsPlan(access)) {
+  if (onboardingNeedsPlan(access) && !(options?.staffSkip && (await verifiedStaff()))) {
     throw new Error(PLAN_REQUIRED_MESSAGE);
   }
   const state = await applyOnboardingPatch(brandId, {
@@ -168,11 +201,30 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
   return state;
 }
 
+// The staff skip reads the Auth server, not the token claims: `email_confirmed_at` is not a claim,
+// and the skip is a billing boundary. Only this path pays for the round trip.
+async function verifiedStaff(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return isStaffUser(user);
+}
+
 // Approves the brand profile and kicks the background strategic analysis WITHOUT
 // marking onboarding complete. Used when leaving Brand DNA so competitor analysis
 // is computing while the user moves through the inspirations + generation finale.
 // approveAndLaunchOnboardingAction = this + completeOnboardingAction (classic flow).
 export async function approveOnboardingAndStartAnalysisAction(
+  brandId: string,
+  options?: { idempotencyKey?: string },
+): Promise<OnboardingActionResult<void>> {
+  return settle('approveOnboardingAndStartAnalysisAction', () =>
+    approveOnboardingAndStartAnalysis(brandId, options),
+  );
+}
+
+async function approveOnboardingAndStartAnalysis(
   brandId: string,
   options?: { idempotencyKey?: string },
 ): Promise<void> {
@@ -275,9 +327,11 @@ export async function approveOnboardingAndStartAnalysisAction(
 export async function approveAndLaunchOnboardingAction(
   brandId: string,
   options?: { idempotencyKey?: string },
-): Promise<OnboardingState> {
-  await approveOnboardingAndStartAnalysisAction(brandId, options);
-  return completeOnboardingAction(brandId);
+): Promise<OnboardingActionResult<OnboardingState>> {
+  return settle('approveAndLaunchOnboardingAction', async () => {
+    await approveOnboardingAndStartAnalysis(brandId, options);
+    return completeOnboarding(brandId);
+  });
 }
 
 export async function registerDocumentMetadataAction(

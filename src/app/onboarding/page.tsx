@@ -1,7 +1,8 @@
-import { claimsIdentityOf } from '@/lib/auth/claims';
 import { redirect } from 'next/navigation';
 import { OnboardingExperience } from '@/components/onboarding/v2/OnboardingExperience';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
+import { claimsIdentityOf } from '@/lib/auth/claims';
+import { isStaffIdentity } from '@/lib/auth/staff';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { isOnboardingComplete } from '@/lib/onboarding/state';
@@ -48,6 +49,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
         initialState={state}
         defaultUrl={defaultUrl}
         planRequired={billingLive}
+        staff={isStaffIdentity(user)}
       />
     </ActiveBrandProvider>
   );
