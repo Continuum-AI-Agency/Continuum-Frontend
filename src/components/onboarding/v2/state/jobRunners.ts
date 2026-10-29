@@ -8,7 +8,7 @@ import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { getOnboardingAgentBaseUrl } from '@/lib/onboarding/agentClient';
 import type { ScrapeResult } from '@/lib/onboarding/scrape';
-import { sourceFailureMessage } from '@/lib/onboarding/sourceFailure';
+import { SOURCE_UNREACHABLE_MESSAGE, sourceFailureMessage } from '@/lib/onboarding/sourceFailure';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 
 // The Backend tries a direct read, Firecrawl and a grounded search in turn (10 + 25 + 30 s), so a
@@ -49,7 +49,12 @@ export async function readOnboardingSource(
       failureTracked = true;
       throw new Error(message);
     }
-    const result = onboardingSourceResponseSchema.parse(await response.json());
+    // A 200 that is not the source shape (a proxy page, a half-deployed Backend) is unreadable too.
+    const parsed = onboardingSourceResponseSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (!parsed.success) throw new Error(SOURCE_UNREACHABLE_MESSAGE);
+    const result = parsed.data;
     if (result.kind === 'instagram' && !hasInstagramBrandContext(result.instagram_profile))
       throw new Error(
         'That Instagram profile has no readable brand information. Add a business description or brand documents to continue.',
