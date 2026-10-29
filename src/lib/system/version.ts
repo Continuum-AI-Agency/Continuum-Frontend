@@ -37,3 +37,27 @@ export function parseVersionResponse(payload: unknown): VersionResponse {
   }
   return { sha };
 }
+
+// What a tab says when its build is no longer the deployed one: the chunk it asks for is gone
+// (Next/webpack "ChunkLoadError", or a dynamic import 404), or the Server Action id it posts
+// belongs to a build the server no longer runs. Either way every press that needs that code
+// does nothing at all, not even a spinner, until the page reloads.
+const STALE_BUILD_PATTERNS = [
+  /ChunkLoadError/,
+  /Loading (CSS )?chunk [\w-]+ failed/i,
+  /Failed to fetch dynamically imported module/i,
+  /Failed to find Server Action/i,
+  /Server action not found/i,
+];
+
+export function isStaleBuildError(reason: unknown): boolean {
+  const text =
+    typeof reason === 'string'
+      ? reason
+      : reason instanceof Error
+        ? `${reason.name}: ${reason.message}`
+        : typeof (reason as { message?: unknown } | null)?.message === 'string'
+          ? String((reason as { message: string }).message)
+          : '';
+  return text !== '' && STALE_BUILD_PATTERNS.some((pattern) => pattern.test(text));
+}
