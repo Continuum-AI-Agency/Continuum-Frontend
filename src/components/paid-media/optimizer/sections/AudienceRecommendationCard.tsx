@@ -83,11 +83,14 @@ export type AudienceRecommendationCardProps = {
   /** Re-run the Meta write a failed row stopped at. */
   onRetry: (handlers?: AudienceActionHandlers) => void;
   retrying: boolean;
-  onApprove: (input: { budgetMinorUnits: number; activate: boolean }) => void;
+  onApprove: (
+    input: { budgetMinorUnits: number; activate: boolean },
+    handlers?: AudienceActionHandlers,
+  ) => void;
   approving: boolean;
-  onCancel: () => void;
-  onActivate: () => void;
-  onUndo: () => void;
+  onCancel: (handlers?: AudienceActionHandlers) => void;
+  onActivate: (handlers?: AudienceActionHandlers) => void;
+  onUndo: (handlers?: AudienceActionHandlers) => void;
   busy: boolean;
   /** CBO fix: dry-run first (preview), then the real conversion. */
   onConvertCbo: (campaignId: string, dryRun: boolean) => void;
@@ -707,6 +710,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
     setNotice(null);
     props.onRetry({ onError });
   };
+  // Every write on the card reports a refusal here: a press that fails must say so, never
+  // look like a button that does nothing.
+  const run = (action: (handlers: AudienceActionHandlers) => void) => () => {
+    setNotice(null);
+    action({ onError });
+  };
   const askButton = (label: string, variant: 'secondary' | 'ghost' = 'secondary') => (
     <Button
       className={ROOMY_BUTTON}
@@ -892,7 +901,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               <Button
                 className={ROOMY_BUTTON}
                 disabled={props.busy}
-                onClick={props.onCancel}
+                onClick={run(props.onCancel)}
                 size="sm"
                 type="button"
                 variant="ghost"
@@ -922,7 +931,8 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   <AlertDialogAction
                     onClick={() => {
                       setConfirmOpen(false);
-                      props.onApprove({ budgetMinorUnits: budgetMinor, activate });
+                      setNotice(null);
+                      props.onApprove({ budgetMinorUnits: budgetMinor, activate }, { onError });
                     }}
                   >
                     Create the ad set
@@ -1028,7 +1038,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   <Button
                     className={ROOMY_BUTTON}
                     disabled={props.busy}
-                    onClick={props.onActivate}
+                    onClick={run(props.onActivate)}
                     size="sm"
                     type="button"
                   >
@@ -1039,7 +1049,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   <Button
                     className={ROOMY_BUTTON}
                     disabled={props.busy}
-                    onClick={props.onActivate}
+                    onClick={run(props.onActivate)}
                     size="sm"
                     type="button"
                   >
@@ -1049,7 +1059,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 <Button
                   className={ROOMY_BUTTON}
                   disabled={props.busy}
-                  onClick={props.onUndo}
+                  onClick={run(props.onUndo)}
                   size="sm"
                   type="button"
                   variant="ghost"
