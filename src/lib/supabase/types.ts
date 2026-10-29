@@ -8037,6 +8037,48 @@ export type Database = {
         }
         Relationships: []
       }
+      jaina_account_result_definitions: {
+        Row: {
+          ad_account_id: string
+          brand_id: string
+          created_at: string
+          result_kind: string
+          set_by_email: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_id: string
+          created_at?: string
+          result_kind: string
+          set_by_email?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_id?: string
+          created_at?: string
+          result_kind?: string
+          set_by_email?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jaina_account_result_definitions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "jaina_account_result_definitions_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jaina_dashboards: {
         Row: {
           ad_account_id: string | null
@@ -12446,6 +12488,19 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "automation_workflow_versions"
+      create_paid_scaffold_revision: {
+        Args: {
+          p_ad_account_id: string
+          p_base_version_id: string
+          p_brand_id: string
+          p_content_hash: string
+          p_manifest: Json
+          p_name: string
+          p_nodes: Json
+          p_user_id?: string
+        }
+        Returns: Json
+      }
           isOneToOne: true
           isSetofReturn: false
         }
@@ -16750,7 +16805,9 @@ export type Database = {
         Returns: boolean
       }
       set_jaina_tool_cache: {
+          accept_linked_line_mismatch: boolean
         Args: { p_cache_key: string; p_result: Json; p_run_id: string }
+          accept_off_palette_color: boolean
         Returns: undefined
       }
       try_claim_session_run_lease: {
@@ -16802,7 +16859,9 @@ export type Database = {
           reconcile_completed_at: string | null
           reconcile_lease_expires_at: string | null
           reconcile_lease_token: string | null
+          accept_linked_line_mismatch?: boolean
           render_input: Json
+          accept_off_palette_color?: boolean
           render_request_id: string | null
           render_set_id: string | null
           render_set_name: string | null
@@ -16854,7 +16913,9 @@ export type Database = {
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
           reconcile_lease_token?: string | null
+          accept_linked_line_mismatch?: boolean
           render_input?: Json
+          accept_off_palette_color?: boolean
           render_request_id?: string | null
           render_set_id?: string | null
           render_set_name?: string | null
@@ -20178,7 +20239,9 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          accept_linked_line_mismatch: boolean
           contract_hash: string
+          accept_off_palette_color: boolean
           created_at?: string
           created_by?: string | null
           id?: string
@@ -20208,7 +20271,9 @@ export type Database = {
           contract_hash: string
           created_at: string
           created_by: string
+          accept_linked_line_mismatch?: boolean
           encode: Json | null
+          accept_off_palette_color?: boolean
           id: string
           idempotency_key: string
           label: string | null
@@ -20238,7 +20303,9 @@ export type Database = {
           contract_hash: string
           created_at?: string
           created_by: string
+          accept_linked_line_mismatch?: boolean
           encode?: Json | null
+          accept_off_palette_color?: boolean
           id?: string
           idempotency_key: string
           label?: string | null
@@ -20356,6 +20423,7 @@ export type Database = {
           saved_at?: string
           set_id?: string
           template_revision?: Json | null
+          settings: Json
         }
         Relationships: [
           {
@@ -20372,6 +20440,7 @@ export type Database = {
           binding_id: string | null
           brand_id: string
           collection_id: string | null
+          settings?: Json
           contract_hash: string
           created_at: string
           created_by: string | null
@@ -20388,6 +20457,7 @@ export type Database = {
           binding_id?: string | null
           brand_id: string
           collection_id?: string | null
+          settings?: Json
           contract_hash: string
           created_at?: string
           created_by?: string | null
@@ -23091,6 +23161,49 @@ export type Database = {
           execution_spec: Json
           id: string
           input_manifest: Json
+      claim_service_template_ingest_job_v2: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          claimed_by: string | null
+          claimed_client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_code: string | null
+          error_message: string | null
+          execution_spec: Json
+          id: string
+          input_manifest: Json
+          kind: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation_name: string | null
+          phase: string | null
+          progress: number
+          result_asset_ids: string[]
+          result_asset_refs: Json
+          service_worker_id: string | null
+          source_id: string
+          source_revision: string
+          state: string
+          target_client_id: string | null
+          target_expires_at: string | null
+          title: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "client_render_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
@@ -23319,6 +23432,15 @@ export type Database = {
           execution_spec: Json
           id: string
           input_manifest: Json
+      complete_hyperframes_film_job: {
+        Args: {
+          p_job_id: string
+          p_lease_token: string
+          p_result: Json
+          p_worker_id: string
+        }
+        Returns: Json
+      }
           kind: string
           lease_expires_at: string | null
           lease_token: string | null
@@ -23606,6 +23728,15 @@ export type Database = {
           project_id: string
           requested_by: string | null
           requested_count: number
+      ensure_native_template_original_source: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_scene_sha256: string
+          p_version_id: string
+        }
+        Returns: string
+      }
           shot_id: string | null
           state: string
           updated_at: string
@@ -24074,6 +24205,38 @@ export type Database = {
           p_file_name: string
           p_idempotency_key: string
           p_integrity_state: string
+      lock_native_uploaded_variant_parent: {
+        Args: {
+          p_actor: string
+          p_brand: string
+          p_intent: Json
+          p_upload: string
+        }
+        Returns: {
+          brand_id: string
+          checksum: string
+          created_at: string
+          created_by: string | null
+          dependencies: Json | null
+          edits: Json
+          id: string
+          idempotency_key: string
+          native_family: string | null
+          parent_revision_id: string | null
+          revision_number: number
+          source_asset_id: string
+          source_snapshot: Json
+          source_version_id: string
+          template_id: string
+          variant_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "template_revisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
           p_mime_type: string
           p_note: string
           p_size_bytes: number
@@ -24215,6 +24378,10 @@ export type Database = {
           tags: string[]
           title: string
         }[]
+      }
+      materialize_native_uploaded_variant: {
+        Args: { p_job_id: string; p_scene: Json }
+        Returns: string
       }
       match_similar_assets: {
         Args: {
@@ -24516,6 +24683,10 @@ export type Database = {
           p_user_id: string
           p_variant_id: string
         }
+      register_uploaded_native_template_source: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
         Returns: string
       }
       register_template_revision_sources: {
@@ -24775,6 +24946,63 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      autopilot_settings: {
+        Row: {
+          accounts: Json
+          approval_destination_ids: string[]
+          brand_id: string
+          created_at: string
+          enabled: boolean
+          framework_note: string | null
+          last_plan_at: string | null
+          last_plan_error: string | null
+          last_plan_status: string | null
+          next_plan_at: string | null
+          paused: boolean
+          run_as_user_id: string | null
+          strategy: Json
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          accounts?: Json
+          approval_destination_ids?: string[]
+          brand_id: string
+          created_at?: string
+          enabled?: boolean
+          framework_note?: string | null
+          last_plan_at?: string | null
+          last_plan_error?: string | null
+          last_plan_status?: string | null
+          next_plan_at?: string | null
+          paused?: boolean
+          run_as_user_id?: string | null
+          strategy?: Json
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          accounts?: Json
+          approval_destination_ids?: string[]
+          brand_id?: string
+          created_at?: string
+          enabled?: boolean
+          framework_note?: string | null
+          last_plan_at?: string | null
+          last_plan_error?: string | null
+          last_plan_status?: string | null
+          next_plan_at?: string | null
+          paused?: boolean
+          run_as_user_id?: string | null
+          strategy?: Json
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       }
       validate_native_revision_scene: {
         Args: {
@@ -25762,6 +25990,68 @@ export type Database = {
         Update: {
           brand_id?: string
           created_at?: string
+      post_delivery_gates: {
+        Row: {
+          brand_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_display_name: string | null
+          decided_via: string | null
+          decision_reason: string | null
+          draft_id: string
+          id: string
+          messages: Json
+          mode: string
+          notified_at: string | null
+          revision: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_display_name?: string | null
+          decided_via?: string | null
+          decision_reason?: string | null
+          draft_id: string
+          id?: string
+          messages?: Json
+          mode: string
+          notified_at?: string | null
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_display_name?: string | null
+          decided_via?: string | null
+          decision_reason?: string | null
+          draft_id?: string
+          id?: string
+          messages?: Json
+          mode?: string
+          notified_at?: string | null
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_delivery_gates_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: true
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
           created_by?: string | null
           draft_id?: string
           error?: string | null
@@ -26169,6 +26459,33 @@ export type Database = {
           job_id: string
           job_type: string
           last_error: Json | null
+      claim_due_autopilot_plans: {
+        Args: { p_limit?: number }
+        Returns: {
+          accounts: Json
+          approval_destination_ids: string[]
+          brand_id: string
+          created_at: string
+          enabled: boolean
+          framework_note: string | null
+          last_plan_at: string | null
+          last_plan_error: string | null
+          last_plan_status: string | null
+          next_plan_at: string | null
+          paused: boolean
+          run_as_user_id: string | null
+          strategy: Json
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "autopilot_settings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
           max_attempts: number
           min_worker_generation: number
           next_run_at: string
@@ -26219,6 +26536,32 @@ export type Database = {
           job_id: string
           job_type: string
           last_error: Json | null
+      claim_post_delivery_gates: {
+        Args: { p_limit?: number }
+        Returns: {
+          brand_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_display_name: string | null
+          decided_via: string | null
+          decision_reason: string | null
+          draft_id: string
+          id: string
+          messages: Json
+          mode: string
+          notified_at: string | null
+          revision: number
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_delivery_gates"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
           max_attempts: number
           min_worker_generation: number
           next_run_at: string
@@ -26258,6 +26601,32 @@ export type Database = {
           p_error?: Json
           p_job_id: string
           p_status: Database["organic"]["Enums"]["post_generation_job_status"]
+      expire_post_delivery_gates: {
+        Args: never
+        Returns: {
+          brand_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_display_name: string | null
+          decided_via: string | null
+          decision_reason: string | null
+          draft_id: string
+          id: string
+          messages: Json
+          mode: string
+          notified_at: string | null
+          revision: number
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_delivery_gates"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
           p_worker_id: string
         }
         Returns: boolean
@@ -26415,6 +26784,32 @@ export type Database = {
               job_id: string
               job_type: string
               last_error: Json | null
+      open_post_delivery_gates: {
+        Args: { p_brand_id: string; p_draft_ids: string[]; p_mode: string }
+        Returns: {
+          brand_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_display_name: string | null
+          decided_via: string | null
+          decision_reason: string | null
+          draft_id: string
+          id: string
+          messages: Json
+          mode: string
+          notified_at: string | null
+          revision: number
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_delivery_gates"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
               max_attempts: number
               min_worker_generation: number
               next_run_at: string
@@ -26885,6 +27280,51 @@ export type Database = {
           status?: Database["paid_media"]["Enums"]["creative_label_job_status"]
           trigger?: string
           worker_id?: string | null
+        }
+        Relationships: []
+      }
+      google_account_profiles: {
+        Row: {
+          brand_id: string
+          brand_terms: string[] | null
+          checklist: Json
+          client_executes: boolean
+          competitor_terms: string[] | null
+          course_lines: Json | null
+          created_at: string
+          customer_id: string
+          id: string
+          notes: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_id: string
+          brand_terms?: string[] | null
+          checklist?: Json
+          client_executes?: boolean
+          competitor_terms?: string[] | null
+          course_lines?: Json | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_id?: string
+          brand_terms?: string[] | null
+          checklist?: Json
+          client_executes?: boolean
+          competitor_terms?: string[] | null
+          course_lines?: Json | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -31384,6 +31824,32 @@ export type Database = {
         }[]
       }
       get_google_access_token: {
+      jaina_confirm_direct_edit: {
+        Args: {
+          p_audit?: Json
+          p_brand_id: string
+          p_entity_id: string
+          p_error?: string
+          p_field: string
+          p_idempotency_key: string
+          p_status: string
+        }
+        Returns: string
+      }
+      jaina_reserve_direct_edit: {
+        Args: {
+          p_actor_id: string
+          p_ad_account_id: string
+          p_brand_id: string
+          p_entity_id: string
+          p_expected_minor: number
+          p_field: string
+          p_idempotency_key: string
+          p_level: string
+          p_target_minor: number
+        }
+        Returns: Json
+      }
         Args: { p_customer_id: string }
         Returns: string
       }
@@ -32411,7 +32877,10 @@ export type Database = {
         Args: { p_ad_account_id?: string; p_brand_id: string }
         Returns: {
           adset_id: string
+          leg: number
+          move_id: string
           can_release: boolean
+          platform: string
           portfolio_id: string
           portfolio_name: string
           same_brand: boolean
@@ -32965,6 +33434,10 @@ export type Database = {
       paid_media_get_creative_winrates: {
         Args: { p_brand_id: string; p_dimension?: string; p_window?: string }
         Returns: Json
+      realtime_row_topic_allowed: {
+        Args: { p_topic: string }
+        Returns: boolean
+      }
       }
       paid_media_upsert_ad_breakdown_daily: {
         Args: { p_portfolio_id: string; p_rows: Json }
