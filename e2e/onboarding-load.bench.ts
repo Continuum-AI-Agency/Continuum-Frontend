@@ -30,7 +30,7 @@ const outDir = path.resolve(
   process.argv[4] ?? '../../Continuum-Monorepo/artifacts/hillclimb/onboarding-load',
 );
 const SEALED = '/tmp/onboarding-load-sealed';
-const REPEATS = Number(process.env.ONBOARDING_LOAD_REPEATS ?? 3);
+const REPEATS = Number(process.env.ONBOARDING_LOAD_REPEATS ?? 5);
 const SEED = 20261029;
 const PASSWORD = 'localdev123';
 const SOLO = 'onb-bench-solo@continuum-e2e.test';
@@ -310,15 +310,24 @@ function stepMarker(step: number): string {
   ][step];
 }
 
+// Stratified by kind: a split that put every move case in train could never keep a transition
+// win (test cannot move), so each kind keeps about two thirds in train.
 function split(): { train: Case[]; test: Case[] } {
   let seed = SEED;
-  const shuffled = CASES.map((c) => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return { c, order: seed };
-  })
-    .sort((a, b) => a.order - b.order)
-    .map(({ c }) => c);
-  return { train: shuffled.slice(0, 5), test: shuffled.slice(5) };
+  const shuffle = (cases: Case[]) =>
+    cases
+      .map((c) => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return { c, order: seed };
+      })
+      .sort((a, b) => a.order - b.order)
+      .map(({ c }) => c);
+  const loads = shuffle(CASES.filter((c) => c.kind === 'load'));
+  const moves = shuffle(CASES.filter((c) => c.kind === 'move'));
+  return {
+    train: [...loads.slice(0, 3), ...moves.slice(0, 2)],
+    test: [...loads.slice(3), ...moves.slice(2)],
+  };
 }
 
 async function main() {
@@ -343,12 +352,12 @@ async function main() {
   const browser = await chromium.launch();
   const { train, test } = split();
   const latency = {
-    rubric: 'onboarding-load-v1',
+    rubric: 'onboarding-load-v2',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
   const parity = {
-    rubric: 'onboarding-load-parity-v1',
+    rubric: 'onboarding-load-parity-v2',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
