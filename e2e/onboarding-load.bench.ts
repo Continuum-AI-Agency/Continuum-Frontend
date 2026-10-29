@@ -19,6 +19,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { chromium, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '@/lib/onboarding/state';
@@ -192,18 +193,21 @@ function READY({ marker, control }: { marker: string; control: string }): boolea
 }
 
 // CDP network emulation is a no-op in this headless Chromium (149), so the network is modelled
-// with routing: every request pays one round trip, and static chunks also pay their size at the
-// link's throughput. Documents, RSC and server actions are delayed but never buffered, so
-// streaming still streams. Concurrent downloads do not share bandwidth here — optimistic, but the
-// same for every arm.
+// with routing. Every request pays one round trip. Static chunks then cross ONE shared link at
+// the link's throughput, charged at their gzip size — so total compressed JS is what costs, as on
+// a real phone connection. Documents, RSC and server actions are delayed but never buffered, so
+// streaming still streams.
 const RTT_MS = 150;
 const BYTES_PER_MS = (12 * 1024 * 1024) / 8 / 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const wireBytes = new Map<string, number>();
 
 async function throttle(page: Page) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  let linkFreeAt = 0;
   await page.route(`${origin}/**`, async (route) => {
+    const requested = Date.now();
     if (!route.request().url().includes('/_next/static/')) {
       await sleep(RTT_MS);
       await route.continue();
@@ -211,7 +215,12 @@ async function throttle(page: Page) {
     }
     const response = await route.fetch();
     const body = await response.body();
-    await sleep(RTT_MS + body.length / BYTES_PER_MS);
+    const key = route.request().url();
+    const wire = wireBytes.get(key) ?? gzipSync(body).length;
+    wireBytes.set(key, wire);
+    const start = Math.max(requested + RTT_MS, linkFreeAt);
+    linkFreeAt = start + wire / BYTES_PER_MS;
+    await sleep(Math.max(0, linkFreeAt - Date.now()));
     await route.fulfill({ response, body });
   });
 }
@@ -361,12 +370,12 @@ async function main() {
   const browser = await chromium.launch();
   const { train, test } = split();
   const latency = {
-    rubric: 'onboarding-load-v3',
+    rubric: 'onboarding-load-v4',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
   const parity = {
-    rubric: 'onboarding-load-parity-v3',
+    rubric: 'onboarding-load-parity-v4',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
