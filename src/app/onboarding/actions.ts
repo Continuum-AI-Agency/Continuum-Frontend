@@ -201,8 +201,8 @@ async function completeOnboarding(
   return state;
 }
 
-// The staff skip reads the Auth server, not the token claims: `email_confirmed_at` is not a claim,
-// and the skip is a billing boundary. Only this path pays for the round trip.
+// The staff skip is a billing boundary, so it reads the Auth server rather than token claims that
+// can be up to an hour stale (a revoked admin). Only this path pays for the round trip.
 async function verifiedStaff(): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   const {

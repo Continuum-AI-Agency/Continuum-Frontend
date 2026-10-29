@@ -4,7 +4,7 @@ import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 const STAFF_EMAIL_DOMAINS = new Set(['continuumai.agency', 'trycontinuum.ai']);
 
 type StaffUserLike =
-  | { app_metadata?: unknown | null; email?: string | null; email_confirmed_at?: string | null }
+  | { app_metadata?: { providers?: unknown } | null; email?: string | null }
   | null
   | undefined;
 
@@ -14,15 +14,18 @@ function hasStaffEmail(user: StaffUserLike): boolean {
   return at > 0 && STAFF_EMAIL_DOMAINS.has(email.slice(at + 1));
 }
 
-/** Continuum staff as session claims tell it — enough to SHOW a staff-only affordance. */
-export function isStaffIdentity(user: StaffUserLike): boolean {
-  return isAdminUser(user) || hasStaffEmail(user);
+// Production auto-confirms email signups, so a "confirmed" staff address proves nothing: anyone can
+// register one with a password. A Google sign-in on the staff Workspace domain proves the mailbox.
+function signedInWithGoogle(user: StaffUserLike): boolean {
+  const providers = user?.app_metadata?.providers;
+  return Array.isArray(providers) && providers.includes('google');
 }
 
 /**
- * Continuum staff for a server boundary: an admin, or a CONFIRMED staff email. Pass the Auth
- * server's user (`auth.getUser()`), never token claims — claims carry no `email_confirmed_at`.
+ * Continuum staff: an admin, or a staff-domain email that signed in with Google. `app_metadata`
+ * is server-written, so this holds on verified claims; billing boundaries still pass the Auth
+ * server's user (`auth.getUser()`) so a revoked admin is not trusted until their token expires.
  */
 export function isStaffUser(user: StaffUserLike): boolean {
-  return isAdminUser(user) || (hasStaffEmail(user) && Boolean(user?.email_confirmed_at));
+  return isAdminUser(user) || (hasStaffEmail(user) && signedInWithGoogle(user));
 }
