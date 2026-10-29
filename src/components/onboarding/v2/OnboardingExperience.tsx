@@ -128,19 +128,29 @@ function ExperienceInner({
 
   const navigate = useCallback(
     async (next: ScreenIndex): Promise<boolean> => {
-      directionRef.current = next > screen ? 1 : -1;
-      if (next > persistedStepRef.current || (screen === 2 && next === 3)) {
+      const from = screen;
+      directionRef.current = next > from ? 1 : -1;
+      // Show the next step now and save it behind the transition: waiting for the save made
+      // every Continue cost a server round trip. A failed save brings the user back.
+      setScreen(next);
+      if (next > persistedStepRef.current || (from === 2 && next === 3)) {
         try {
           await updateState({
             step: next,
-            ...(screen === 2 && next === 3 ? { catalogCompleted: true } : {}),
+            ...(from === 2 && next === 3 ? { catalogCompleted: true } : {}),
           });
-          persistedStepRef.current = next;
+          persistedStepRef.current = Math.max(persistedStepRef.current, next) as ScreenIndex;
         } catch {
+          // updateState already told the user the save failed. Return to the last step that
+          // was saved, but only if they are still on the one that was not.
+          setScreen((current) => {
+            if (current !== next) return current;
+            directionRef.current = -1;
+            return persistedStepRef.current;
+          });
           return false;
         }
       }
-      setScreen(next);
       return true;
     },
     [screen, updateState],
