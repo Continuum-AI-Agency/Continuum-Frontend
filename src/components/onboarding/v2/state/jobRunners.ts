@@ -8,7 +8,12 @@ import { runStrategicAnalysis } from '@/lib/api/strategicAnalyses.client';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { getOnboardingAgentBaseUrl } from '@/lib/onboarding/agentClient';
 import type { ScrapeResult } from '@/lib/onboarding/scrape';
+import { sourceFailureMessage } from '@/lib/onboarding/sourceFailure';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
+
+// The Backend tries a direct read, Firecrawl and a grounded search in turn (10 + 25 + 30 s), so a
+// slow site can legitimately take over a minute. Past this the request is not coming back.
+const SOURCE_TIMEOUT_MS = 90_000;
 
 export async function readOnboardingSource(
   brandId: string,
@@ -17,6 +22,7 @@ export async function readOnboardingSource(
 ): Promise<OnboardingSourceResponse> {
   const t = timing();
   trackOnboardingEvent('onboarding_scrape_started', { url });
+  let failureTracked = false;
   try {
     const base = getOnboardingAgentBaseUrl();
     const token = await getBrowserAccessToken();
@@ -27,20 +33,20 @@ export async function readOnboardingSource(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ brand_id: brandId, url }),
-      signal,
+      signal: AbortSignal.any([signal, AbortSignal.timeout(SOURCE_TIMEOUT_MS)]),
     });
     if (!response.ok) {
-      const detail = await safeJson(response);
-      const reason = detail?.error ?? `Scrape failed (${response.status})`;
+      const reason = (await safeJson(response))?.error ?? '';
       const message = reason.startsWith('instagram_')
         ? 'We couldn’t read that Instagram profile. Add a business description or brand documents to continue.'
-        : reason;
+        : sourceFailureMessage(new Error(reason));
       trackOnboardingEvent('onboarding_scrape_failed', {
         url,
         duration_ms: t.sinceStart(),
         status: response.status,
-        message,
+        message: reason || message,
       });
+      failureTracked = true;
       throw new Error(message);
     }
     const result = onboardingSourceResponseSchema.parse(await response.json());
@@ -57,13 +63,18 @@ export async function readOnboardingSource(
     return result;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    if (!(error instanceof Error) || !error.message.startsWith('Scrape failed')) {
+    if (!failureTracked) {
       trackOnboardingEvent('onboarding_scrape_failed', {
         url,
         duration_ms: t.sinceStart(),
         message: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+    if (
+      error instanceof TypeError ||
+      (error instanceof DOMException && error.name === 'TimeoutError')
+    )
+      throw new Error(sourceFailureMessage(error), { cause: error });
     throw error;
   }
 }
