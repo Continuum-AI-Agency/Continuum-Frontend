@@ -229,6 +229,12 @@ async function runSample(
   await context.addInitScript(() => localStorage.setItem('continuum:welcome-seen', '1'));
   const page = await context.newPage();
   const serverErrors: string[] = [];
+  // Requests still running when a sample is recorded (a step saved behind its transition) must
+  // finish before the brand is deleted, or they write it back into the next sample's state.
+  const inflight = new Set<unknown>();
+  page.on('request', (r) => inflight.add(r));
+  page.on('requestfinished', (r) => inflight.delete(r));
+  page.on('requestfailed', (r) => inflight.delete(r));
   page.on('response', (r) => {
     if (r.status() >= 500 && r.url().startsWith(origin))
       serverErrors.push(`${r.status()} ${r.url()}`);
@@ -284,6 +290,9 @@ async function runSample(
       );
       return { ttfbMs: nav?.responseStart ?? 0, jsKb: js / 1024, errorToast };
     });
+    for (const deadline = Date.now() + 15_000; inflight.size > 0 && Date.now() < deadline; ) {
+      await sleep(100);
+    }
     const parity = !metrics.errorToast && serverErrors.length === 0;
     return {
       ms,
@@ -352,12 +361,12 @@ async function main() {
   const browser = await chromium.launch();
   const { train, test } = split();
   const latency = {
-    rubric: 'onboarding-load-v2',
+    rubric: 'onboarding-load-v3',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
   const parity = {
-    rubric: 'onboarding-load-parity-v2',
+    rubric: 'onboarding-load-parity-v3',
     train: {} as Record<string, number[]>,
     test: {} as Record<string, number[]>,
   };
