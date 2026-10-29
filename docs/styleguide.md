@@ -136,4 +136,4 @@ Uncontrolled primitives capture `defaultValue`/`defaultOpen` on first render, so
 - Keep theming synced via `data-theme` **and** `html.dark/.light` so Tailwind `dark:`, CSS vars, and chart/map theme detection agree.
 - Focus rings are mandatory and on-brand (`ring`/`ring-ring`); never remove the focus outline without an equally visible replacement.
 - No horizontal scroll on any viewport (`overflow-x-hidden` where needed). No layout shift.
-- Skeletons are neutral (`bg-muted/70`) and shaped like the real content (headers, controls, rows), never generic full-bleed blocks.
+- Skeletons are `<Skeleton>` / `<SkeletonText>` only: a neutral bar with a violet glint, shaped like the real content (headers, controls, rows), never generic full-bleed blocks. Content that replaces one resolves in row by row (`useRowResolve`, mounted once in the app shell); mark a subtree `data-row-resolve="skip"` to opt out.

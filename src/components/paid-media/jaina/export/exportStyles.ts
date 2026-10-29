@@ -132,8 +132,8 @@ body {
 
 /* Nothing should still be pulsing in a finished document. */
 .jaina-export-root .animate-pulse { animation: none !important; }
-.jaina-export-root .dither-skeleton::after,
-.jaina-export-root .dither-skeleton-inline { animation: none !important; }
+.jaina-export-root .skeleton-glint::after,
+.jaina-export-root .skeleton-glint-inline { animation: none !important; }
 
 /* ---- Document furniture ----------------------------------------------- */
 
