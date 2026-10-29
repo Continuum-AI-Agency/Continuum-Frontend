@@ -5,6 +5,7 @@ import { ArrowRight, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
+import { SentDocumentAttachments } from '@/components/chat/attachments';
 import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
@@ -251,6 +252,7 @@ export const OrganicMessageRow = memo(function OrganicMessageRow({
                 lightboxTitle="Attachment"
                 onRecoverItem={recoverAttachment}
               />
+              <SentDocumentAttachments documents={msg.metadata?.documents} />
             </>
           )}
           <OrganicThinkingPanel toolCalls={msg.toolCalls ?? []} isStreaming={isStreamingRow} />

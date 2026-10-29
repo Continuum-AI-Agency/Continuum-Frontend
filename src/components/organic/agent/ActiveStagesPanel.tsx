@@ -2,6 +2,8 @@
 
 import { AlertCircleIcon, CheckCircle2Icon, CircleDotIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { TraceStep, type TraceStepStatus } from '@/components/chat/TraceStep';
+import { Trace } from '@/components/ui/trace';
 import type { PipelineStage, PipelineStageNode } from './types';
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -16,47 +18,17 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
 
 const TOTAL_STAGES = 7;
 
-type StageRowProps = {
-  node: PipelineStageNode;
-  isLast: boolean;
-  index: number;
+const STAGE_STATUS: Record<PipelineStageNode['status'], TraceStepStatus | undefined> = {
+  pending: 'pending',
+  active: 'running',
+  done: undefined,
+  failed: 'error',
 };
 
-function StageRow({ node, isLast, index }: StageRowProps) {
-  const treeChar = isLast ? '└─' : '├─';
-  const label = STAGE_LABELS[node.stage] ?? node.stage;
-  const codename = node.agentName ?? node.stage;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-baseline gap-1.5 text-xs"
-    >
-      <span className="shrink-0 font-mono text-muted-foreground/50">{treeChar}</span>
-      <span className="font-medium text-foreground/80">{codename}</span>
-      <span className="text-muted-foreground/40">·</span>
-      <span className="text-muted-foreground/60">{label}</span>
-      <span className="text-muted-foreground/40">·</span>
-      {node.status === 'done' ? (
-        <span className="flex items-center gap-1 text-emerald-500/70">
-          <CheckCircle2Icon className="size-3" />
-          done
-        </span>
-      ) : node.status === 'failed' ? (
-        <span className="flex items-center gap-1 text-destructive/70">
-          <AlertCircleIcon className="size-3" />
-          failed
-        </span>
-      ) : (
-        <span className="flex items-center gap-1 text-muted-foreground/50">
-          <CircleDotIcon className="size-3 animate-pulse" />
-          running
-        </span>
-      )}
-    </motion.div>
-  );
+function StageIcon({ status }: { status: PipelineStageNode['status'] }) {
+  if (status === 'done') return <CheckCircle2Icon className="text-emerald-500/70" />;
+  if (status === 'failed') return <AlertCircleIcon />;
+  return <CircleDotIcon className={status === 'active' ? 'animate-pulse' : undefined} />;
 }
 
 type ActiveStagesPanelProps = {
@@ -76,24 +48,24 @@ export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProp
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-0.5 space-y-0.5 px-3 pb-1"
+        className="mt-0.5 space-y-1 px-3 pb-1"
       >
-        <div className="mb-0.5 flex items-center gap-2 text-xs text-muted-foreground/50">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
           <span className="font-mono">Pipeline</span>
           <span className="tabular-nums">
             {doneCount}/{TOTAL_STAGES}
           </span>
         </div>
-        <AnimatePresence initial={false}>
-          {stages.map((node, index) => (
-            <StageRow
+        <Trace className="gap-1">
+          {stages.map((node) => (
+            <TraceStep
               key={node.stage}
-              node={node}
-              isLast={index === stages.length - 1}
-              index={index}
+              status={STAGE_STATUS[node.status]}
+              icon={<StageIcon status={node.status} />}
+              title={`${node.agentName ?? node.stage} · ${STAGE_LABELS[node.stage] ?? node.stage}`}
             />
           ))}
-        </AnimatePresence>
+        </Trace>
       </motion.div>
     </AnimatePresence>
   );

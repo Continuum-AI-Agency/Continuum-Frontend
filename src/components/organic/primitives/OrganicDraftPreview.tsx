@@ -1075,11 +1075,11 @@ export function OrganicDraftPreview({
       const next = checked
         ? [...selectedPlatforms, platform]
         : selectedPlatforms.filter((value) => value !== platform);
-      // A new row copies the card's row, so the typing goes to the server first.
-      if (!(await fieldEditor.flush())) return;
+      // A new row copies the card's row, so the typing and the media go to the server first.
+      if (!(await fieldEditor.flush()) || !(await placement.flushMedia())) return;
       await membership.setPlatforms(storedDraft, next);
     },
-    [fieldEditor, membership, selectedPlatforms, storedDraft],
+    [fieldEditor, membership, placement, selectedPlatforms, storedDraft],
   );
 
   const handleFormatChange = React.useCallback(
@@ -1164,7 +1164,7 @@ export function OrganicDraftPreview({
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft();
 
   // The frame's caption on every other row, each saved against its own row's token. Explicit:
-  // nothing else ever copies a caption between platforms.
+  // otherwise a caption only reaches a row that has none of its own (`groupRowsToFill`).
   const { persistDraftFields } = useDraftFieldPersistence();
   const { show } = useToast();
   const [groupCaptionBusy, setGroupCaptionBusy] = React.useState<'apply' | 'adapt' | null>(null);
@@ -1777,6 +1777,12 @@ export function OrganicDraftPreview({
 
   // ── Footer: when, go, and why not ─────────────────────────────────────────────
   const blocked = readinessItems.length > 0;
+  // Scheduling and publishing now meet the same gate, so both say why they are unavailable.
+  const actionBlockedReason = isUploading
+    ? 'Uploading your media…'
+    : blocked
+      ? `${readinessItems.length} to fix`
+      : null;
   const approveVerb = isMultiPlatform
     ? `Approve for ${selectedPlatforms.length} platforms`
     : 'Approve & schedule';
@@ -1786,30 +1792,27 @@ export function OrganicDraftPreview({
           label: whenLabel ? `${approveVerb} · ${whenLabel}` : approveVerb,
           busyLabel: 'Approving…',
           busy: isApproving,
-          disabledReason: isUploading
-            ? 'Uploading your media…'
-            : blocked
-              ? `${readinessItems.length} to fix`
-              : null,
+          disabledReason: actionBlockedReason,
           onClick: () => void handleApprove(),
         }
       : null;
-  const publishNowAction =
-    canPublish && !blocked && !isUploading
-      ? {
-          label: 'Publish now',
-          busyLabel:
-            stage === 'container_created'
-              ? 'Uploading media…'
-              : stage === 'polling'
-                ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
-                : 'Publishing…',
-          busy: isPublishing,
-          disabledReason: null,
-          onClick: () => void handlePublishNow(),
-          icon: <Send aria-hidden />,
-        }
-      : null;
+  // Always offered beside the schedule, never hidden: a button that only appears once the
+  // post is ready reads as a feature that does not exist.
+  const publishNowAction = canPublish
+    ? {
+        label: 'Publish now',
+        busyLabel:
+          stage === 'container_created'
+            ? 'Uploading media…'
+            : stage === 'polling'
+              ? `Processing video${pollingAttempt > 0 ? ` (${pollingAttempt})` : ''}…`
+              : 'Publishing…',
+        busy: isPublishing,
+        disabledReason: actionBlockedReason,
+        onClick: () => void handlePublishNow(),
+        icon: <Send aria-hidden />,
+      }
+    : null;
   const footerNote =
     !editable || isScheduled ? null : isUploading ? (
       <p data-footer-reason className="text-xs text-muted-foreground">

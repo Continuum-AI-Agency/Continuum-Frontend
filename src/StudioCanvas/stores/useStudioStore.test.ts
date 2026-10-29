@@ -457,6 +457,54 @@ describe('clipboard carries the edges inside the selection', () => {
   });
 });
 
+describe('a copied Video Editor node never shares its project', () => {
+  const editor = (id: string, selected = true): StudioNode => ({
+    id,
+    position: { x: 0, y: 0 },
+    type: 'timelineEditor',
+    data: {
+      items: [],
+      videoProjectId: 'project-1',
+      videoProductionSeeded: true,
+      productionSeed: { recipe: 'storyboard' },
+    } as unknown as StudioNode['data'],
+    selected,
+  });
+  const projectOf = (node: StudioNode | undefined) =>
+    (node?.data as { videoProjectId?: string } | undefined)?.videoProjectId;
+
+  beforeEach(() => {
+    useStudioStore.setState({ nodes: [], edges: [], clipboard: [], clipboardEdges: [] });
+    useStudioStore.getState().setNodes([editor('editor')]);
+  });
+
+  it('duplicate and copy-paste start their own project and keep the seed', () => {
+    useStudioStore.getState().duplicateNode('editor');
+    useStudioStore.getState().copySelectedNodes();
+    useStudioStore.getState().pasteNodes();
+    const copies = useStudioStore.getState().nodes.filter((node) => node.id !== 'editor');
+    expect(copies).toHaveLength(2);
+    for (const copy of copies) {
+      expect(projectOf(copy)).toBeUndefined();
+      expect(
+        (copy.data as { videoProductionSeeded?: boolean }).videoProductionSeeded,
+      ).toBeUndefined();
+      expect((copy.data as { productionSeed?: unknown }).productionSeed).toBeDefined();
+    }
+    expect(projectOf(useStudioStore.getState().nodes.find((node) => node.id === 'editor'))).toBe(
+      'project-1',
+    );
+  });
+
+  it('cut and paste is a move and keeps the project', () => {
+    useStudioStore.getState().cutSelectedNodes();
+    useStudioStore.getState().pasteNodes();
+    const [moved] = useStudioStore.getState().nodes;
+    expect(moved?.id).not.toBe('editor');
+    expect(projectOf(moved)).toBe('project-1');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // normalizeEdges — legacy handle remapping and survival tests
 // These verify the root cause fix: setEdges/setNodes must not silently drop

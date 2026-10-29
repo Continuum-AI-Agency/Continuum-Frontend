@@ -26,6 +26,7 @@ import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { TEXT_DISCLOSURE } from '../../components/disclosure';
 import { asOfLine } from '../recQueueModel';
@@ -148,7 +149,7 @@ export function PortfolioHero({
       <section className={cn(NEWS_PANE, 'flex flex-col gap-6')} data-testid="portfolio-hero">
         <div className={MODULE} data-testid="portfolio-module">
           {facts}
-          <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+          <Skeleton className="h-24 rounded-md" />
           <p className="text-muted-foreground text-xs">
             Jaina writes her first read after the first cycle.
           </p>
@@ -188,42 +189,58 @@ export function PortfolioHero({
     </motion.div>
   );
 
-  const row = news.cards.slice(0, NEWS_ROW_SIZE);
-  const more = news.cards.slice(NEWS_ROW_SIZE);
-  const anchor = headline
-    ? anchorOf({
-        growth: view.brief.growth,
-        words: headline.words,
-        currency,
-        days: headline.days,
-        beforeAfter: beforeAfter?.model ?? null,
-      })
-    : null;
+  // Unread (HeroView.unread), the growth is a placeholder: the calm lead would read its zeros as
+  // "No spend and no leads in 14 days", and the anchor as "no leads". The headline says why instead.
+  const unread = view.unread ?? null;
+  const cards = unread
+    ? news.cards.filter((card) => card !== news.lead || view.brief.hero.module !== 'none')
+    : news.cards;
+  const row = cards.slice(0, NEWS_ROW_SIZE);
+  const more = cards.slice(NEWS_ROW_SIZE);
+  const anchor =
+    headline && !unread
+      ? anchorOf({
+          growth: view.brief.growth,
+          words: headline.words,
+          currency,
+          days: headline.days,
+          beforeAfter: beforeAfter?.model ?? null,
+          figure: view.figure,
+        })
+      : null;
   const tiles = headline
     ? relevantTiles({ headline, brief: view.brief, items, dailyTotal, currency })
     : [];
   const hasModule = Boolean(header || headline || beforeAfter || jaina);
   const asOf = asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle';
-  const findingCount = news.cards.length;
+  const findingCount = cards.length;
 
   return (
     <motion.section
       animate="visible"
       className={cn(NEWS_PANE, 'flex flex-col gap-6')}
+      data-hero-read={unread?.reason ?? 'read'}
       data-testid="portfolio-hero"
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
       {hasModule ? (
         <motion.div className={MODULE} data-testid="portfolio-module" variants={tileVariants}>
-          {headline && anchor ? (
-            <div className="grid grid-cols-1 items-start gap-4 @[40rem]/news:grid-cols-[auto_minmax(0,1fr)] @[40rem]/news:gap-9">
-              <PortfolioAnchor
-                anchor={anchor}
-                currency={currency}
-                onEditSetting={onEditSetting}
-                window={beforeAfter?.window ?? view.brief.growth.window}
-              />
+          {headline ? (
+            <div
+              className={cn(
+                'grid grid-cols-1 items-start gap-4',
+                anchor && '@[40rem]/news:grid-cols-[auto_minmax(0,1fr)] @[40rem]/news:gap-9',
+              )}
+            >
+              {anchor ? (
+                <PortfolioAnchor
+                  anchor={anchor}
+                  currency={currency}
+                  onEditSetting={onEditSetting}
+                  window={beforeAfter?.window ?? view.brief.growth.window}
+                />
+              ) : null}
               <div className="flex min-w-0 max-w-[64ch] flex-col gap-2">
                 <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
                 {facts}

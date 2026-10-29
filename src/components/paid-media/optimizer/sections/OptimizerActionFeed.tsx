@@ -18,15 +18,17 @@
 // again.
 
 import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
-import { skipToken, useQueries } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { ArrowRightIcon, ListChecksIcon } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import {
+  enrolledAdsetsQuery,
   type OptimizerActionFeedRow,
-  optimizerQueryKeys,
   useOptimizerActions,
+  useOptimizerAdAccounts,
+  useOptimizerPortfolios,
 } from '../useOptimizerData';
 import {
   ActionDelta,
@@ -36,7 +38,13 @@ import {
   NO_ENTITY_NAMES,
   printChangeValue,
 } from './actionCardParts';
-import { actionPlatform, actorLabel, readActionChange, readReceiptTrace } from './actionRows';
+import {
+  actionCurrency,
+  actionPlatform,
+  actorLabel,
+  readActionChange,
+  readReceiptTrace,
+} from './actionRows';
 import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
 import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
 import { FeedFooter, FeedSkeleton, formatWhen, PortfolioFilter, ReceiptToken } from './feedChrome';
@@ -53,11 +61,6 @@ import { PlatformChip } from './platforms/PlatformChip';
 
 type OptimizerActionFeedProps = {
   brandId: string;
-  /** The selected ad account's currency, for the minor-unit budget amounts. The feed is
-   *  brand-scoped and a brand can own portfolios on more than one ad account, so this is the
-   *  currency of the account being viewed — not one carried per row. Null prints the amounts
-   *  bare: an account whose currency nobody recorded is not an account that spends dollars. */
-  currency: string | null;
   windowDays?: OptimizerFeedWindowDays;
   /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
   controls?: ReactNode;
@@ -99,22 +102,27 @@ export function ActionRow({
     >
       <div className="min-w-0">
         <p className="text-sm leading-snug">
-          <span className="font-semibold text-foreground">{change.label}</span>{' '}
+          <span className="font-semibold text-foreground">{change.sentence ?? change.label}</span>{' '}
           {row.op !== 'setting' ? (
             <span className="text-foreground" title={entity.id ?? undefined}>
               {entity.name}
             </span>
           ) : null}{' '}
-          <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
-            <span className="font-mono text-muted-foreground tabular-nums">
-              {printChangeValue(change, change.before, currency)}
+          {change.sentence ? null : (
+            <span className="inline-flex items-center gap-1.5 text-xs" data-figure-role="change">
+              <span className="font-mono text-muted-foreground tabular-nums">
+                {printChangeValue(change, change.before, currency)}
+              </span>
+              <ArrowRightIcon
+                aria-hidden="true"
+                className="size-3 shrink-0 text-muted-foreground"
+              />
+              <span className="font-mono font-semibold text-foreground tabular-nums">
+                {printChangeValue(change, change.after, currency)}
+              </span>
+              <ActionDelta change={change} />
             </span>
-            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-            <span className="font-mono font-semibold text-foreground tabular-nums">
-              {printChangeValue(change, change.after, currency)}
-            </span>
-            <ActionDelta change={change} />
-          </span>
+          )}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-muted-foreground text-xs">
           <time dateTime={row.ts}>{formatWhen(row.ts)}</time>
@@ -153,12 +161,13 @@ function namesFromRosters(rosters: { data: unknown }[]): ActionEntityNames {
 }
 
 /**
- * Names for the ids the action rows carry, from the enrolled rosters the portfolio screen
- * already loaded (`optimizerQueryKeys.enrolledAdsets`, filled by the portfolio detail and its
- * hover prefetch, the Actions groups and the manage panel). It OBSERVES that cache and never
- * fetches (`skipToken`): the feed spans every portfolio of the brand, and a read per portfolio
- * just to decorate a card is not this surface's job. A roster that lands later re-renders
- * the cards named; an id no roster knows stays an id.
+ * Names for the ids the action rows carry, from the enrolled roster of each portfolio the feed
+ * mentions (`enrolledAdsetsQuery` — the same key and staleTime the portfolio detail, its hover
+ * prefetch, the Actions groups and the manage panel read, so a roster already loaded costs
+ * nothing). It used to only observe that cache, and an operator who opened Activity first read
+ * "Daily budget 120252366915460236" on every row. A brand holds a handful of portfolios, so
+ * one small roster read each is the price of a feed people can read. Until a roster lands — or
+ * when it never does, or the ad set has since left the portfolio — the id stays an id.
  */
 export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEntityNames {
   const portfolioIds = useMemo(
@@ -169,10 +178,7 @@ export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEnti
     [rows],
   );
   return useQueries({
-    queries: portfolioIds.map((portfolioId) => ({
-      queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
-      queryFn: skipToken,
-    })),
+    queries: portfolioIds.map((portfolioId) => enrolledAdsetsQuery(portfolioId)),
     combine: namesFromRosters,
   });
 }
@@ -242,7 +248,7 @@ function ActionTimelineEntry({
       ts={row.ts}
     >
       <p className="text-sm leading-snug">
-        <span className="font-semibold text-foreground">{change.label}</span>{' '}
+        <span className="font-semibold text-foreground">{change.sentence ?? change.label}</span>{' '}
         <span className="text-foreground" title={entity.id ?? undefined}>
           {entity.name}
         </span>
@@ -251,17 +257,22 @@ function ActionTimelineEntry({
         ) : null}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-        <span className="inline-flex items-center gap-1.5" data-figure-role="change">
-          <span className="font-mono tabular-nums">
-            {printChangeValue(change, change.before, currency)}
+        {change.sentence ? null : (
+          <span className="inline-flex items-center gap-1.5" data-figure-role="change">
+            <span className="font-mono tabular-nums">
+              {printChangeValue(change, change.before, currency)}
+            </span>
+            <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
+            <span className="font-mono font-semibold text-foreground tabular-nums">
+              {printChangeValue(change, change.after, currency)}
+            </span>
+            <ActionDelta change={change} />
           </span>
-          <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0" />
-          <span className="font-mono font-semibold text-foreground tabular-nums">
-            {printChangeValue(change, change.after, currency)}
-          </span>
-          <ActionDelta change={change} />
+        )}
+        <span>
+          {change.sentence ? '' : '· '}
+          {actorLabel(row)}
         </span>
-        <span>· {actorLabel(row)}</span>
         <PlatformChip platform={platform} />
       </div>
       {row.justification ? (
@@ -274,16 +285,22 @@ function ActionTimelineEntry({
   );
 }
 
-function ActionTimeline({
-  rows,
-  brandId,
-  currency,
-}: {
-  rows: OptimizerActionFeedRow[];
-  brandId: string;
-  currency: string | null;
-}) {
+/**
+ * Each row's currency (actionCurrency), from the brand's portfolios and ad accounts — the same
+ * cached reads the Optimizer page already holds, so it costs no request of its own.
+ */
+function useActionCurrency(brandId: string): (row: OptimizerActionFeedRow) => string | null {
+  const portfolios = useOptimizerPortfolios(brandId, null).brandPortfolios;
+  const accounts = useOptimizerAdAccounts(brandId).data;
+  return useCallback(
+    (row: OptimizerActionFeedRow) => actionCurrency(row, portfolios, accounts),
+    [portfolios, accounts],
+  );
+}
+
+function ActionTimeline({ rows, brandId }: { rows: OptimizerActionFeedRow[]; brandId: string }) {
   const entityNames = useActionEntityNames(rows);
+  const currencyOf = useActionCurrency(brandId);
   // A cross-platform move is ONE decision, however many writes it took: its legs fold into a
   // single entry where its newest write stood.
   const items = groupActionFeed(rows);
@@ -296,14 +313,14 @@ function ActionTimeline({
             item.kind === 'move' ? (
               <MoveDecisionCard
                 className="space-y-2 rounded-none border-0 bg-transparent py-2 pr-0 pl-[4.75rem]"
-                currency={currency}
+                currency={currencyOf(item.move.actorRow)}
                 key={item.move.moveId}
                 move={item.move}
               />
             ) : (
               <ActionTimelineEntry
                 brandId={brandId}
-                currency={currency}
+                currency={currencyOf(item.row)}
                 entityNames={entityNames}
                 key={item.row.id}
                 row={item.row}
@@ -318,7 +335,6 @@ function ActionTimeline({
 
 export function OptimizerActionFeed({
   brandId,
-  currency,
   windowDays = 7,
   controls,
 }: OptimizerActionFeedProps) {
@@ -386,7 +402,7 @@ export function OptimizerActionFeed({
           No actions for this portfolio in what has loaded.
         </p>
       ) : (
-        <ActionTimeline rows={visible} brandId={brandId} currency={currency} />
+        <ActionTimeline rows={visible} brandId={brandId} />
       )}
       <FeedFooter
         loaded={actions.length}

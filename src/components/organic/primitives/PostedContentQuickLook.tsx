@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, GalleryHorizontalEnd, Play } from 'lucide-react';
+import { ExternalLink, GalleryHorizontalEnd, Play, Trash2 } from 'lucide-react';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -20,10 +20,15 @@ import type { OrganicCalendarPostedContent } from './types';
 function PostedActions({
   post,
   onViewMetrics,
+  onDelete,
+  isDeleting,
 }: {
   post: OrganicCalendarPostedContent;
   onViewMetrics?: () => void;
+  onDelete?: () => void;
+  isDeleting?: boolean;
 }) {
+  const platformLabel = postPlatformLabel(post.platform);
   return (
     <>
       {post.permalink ? (
@@ -48,6 +53,19 @@ function PostedActions({
           View post metrics <ExternalLink data-icon="inline-end" />
         </Button>
       )}
+      {onDelete && (
+        <Button
+          type="button"
+          variant="destructive"
+          size="xs"
+          className="w-full justify-between"
+          onClick={onDelete}
+          disabled={isDeleting}
+        >
+          {isDeleting ? `Deleting from ${platformLabel}…` : `Delete from ${platformLabel}`}
+          <Trash2 data-icon="inline-end" />
+        </Button>
+      )}
     </>
   );
 }
@@ -61,11 +79,16 @@ function PostedActions({
 export const PostedContentPreview = React.memo(function PostedContentPreview({
   post,
   onViewMetrics,
+  onDelete,
+  isDeleting,
   brandName,
   className,
 }: {
   post: OrganicCalendarPostedContent;
   onViewMetrics?: () => void;
+  /** Offered only where the platform lets us delete a live post. */
+  onDelete?: () => void;
+  isDeleting?: boolean;
   brandName?: string;
   className?: string;
 }) {
@@ -115,7 +138,12 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
               {post.caption}
             </p>
           ) : null}
-          <PostedActions post={post} onViewMetrics={onViewMetrics} />
+          <PostedActions
+            post={post}
+            onViewMetrics={onViewMetrics}
+            onDelete={onDelete}
+            isDeleting={isDeleting}
+          />
         </div>
       </div>
     );
@@ -206,7 +234,12 @@ export const PostedContentPreview = React.memo(function PostedContentPreview({
         />
       </div>
       <div className="flex shrink-0 flex-col gap-2">
-        <PostedActions post={post} onViewMetrics={onViewMetrics} />
+        <PostedActions
+          post={post}
+          onViewMetrics={onViewMetrics}
+          onDelete={onDelete}
+          isDeleting={isDeleting}
+        />
       </div>
     </div>
   );

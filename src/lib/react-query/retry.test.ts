@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { FunctionsFetchError } from '@supabase/supabase-js';
+import { markRetried } from '@/lib/api/errors';
 import { RequestTimeoutError } from '@/lib/api/timeout';
 import { retryUnlessTimeout } from './retry';
 
@@ -18,5 +19,10 @@ describe('retryUnlessTimeout', () => {
     expect(retry(0, new FunctionsFetchError(timeout))).toBe(false);
     expect(retry(0, { message: timeout.message, details: '', hint: '', code: '' })).toBe(false);
     expect(retry(0, { name: 'TimeoutError' })).toBe(false);
+  });
+
+  it('never retries an error the call already retried itself: one retry layer, not two', () => {
+    const cut = markRetried(Object.assign(new Error('Service Unavailable'), { status: 503 }));
+    expect(retry(0, cut)).toBe(false);
   });
 });

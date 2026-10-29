@@ -26,6 +26,7 @@
 import { Check, ImageOff, RefreshCw } from 'lucide-react';
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { OrganicPost } from '@/lib/schemas/organicMetrics';
 import { cn } from '@/lib/utils';
 
@@ -195,7 +196,7 @@ export function PostPicker({
     return (
       <div className="grid grid-cols-3 gap-2">
         {SKELETON_KEYS.map((key) => (
-          <div key={key} className="aspect-[4/5] animate-pulse rounded-lg bg-muted/70" />
+          <Skeleton key={key} className="aspect-[4/5] rounded-lg" />
         ))}
       </div>
     );

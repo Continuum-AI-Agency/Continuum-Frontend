@@ -1,4 +1,5 @@
 import {
+  canvasNodeBindingId,
   editorCommandBatchSchema,
   TIMELINE_MEDIA_INPUT_HANDLE,
   TIMELINE_MEDIA_POOL_LIMIT,
@@ -100,6 +101,7 @@ export function TimelineEditorBlock({
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const { show } = useToast();
   const router = useRouter();
+  const roomId = useStudioStore((state) => state.activeRoomId);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   // The editor runs against a host adapter, not the canvas store. The canvas one
   // is built here and shared by the node's Render button and the editor dialog.
@@ -130,10 +132,14 @@ export function TimelineEditorBlock({
   };
 
   useEffect(() => {
-    if (!adapter.brandId || data.videoProjectId || projectSetup.current) return;
+    if (!adapter.brandId || !roomId || data.videoProjectId || projectSetup.current) return;
     projectSetup.current = true;
     let cancelled = false;
-    const binding = { bindingType: 'canvas_node' as const, externalId: id };
+    // Room-qualified: node ids repeat across canvases (#405), a project belongs to one room.
+    const binding = {
+      bindingType: 'canvas_node' as const,
+      externalId: canvasNodeBindingId(roomId, id),
+    };
     void (async () => {
       let projectId = await resolveVideoProject({ brandId: adapter.brandId as string, binding });
       if (!projectId) {
@@ -177,7 +183,7 @@ export function TimelineEditorBlock({
     return () => {
       cancelled = true;
     };
-  }, [adapter.brandId, data.label, data.videoProjectId, id, show, triggerSave, updateNode]);
+  }, [adapter.brandId, data.label, data.videoProjectId, id, roomId, show, triggerSave, updateNode]);
 
   useEffect(() => {
     if (!data.videoProjectId) return;

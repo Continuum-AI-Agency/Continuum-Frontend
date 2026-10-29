@@ -1,6 +1,7 @@
 // The portfolio's "By platform" rows (frontend.html §3, feature 08; §4 for the source rule):
 // one text row per platform — cost per result, results and their share, spend and its share,
-// state — and no chart; the share column is the comparison a pie would draw worse.
+// state. A portfolio on more than one platform adds one stacked bar of the spend shares
+// (presentation standard §7), never a blended cost per result across platforms.
 //
 // Under 'platform' attribution a row's results are the platform's own KPI. Under GA4 or a
 // spreadsheet they are what that source attributed (`conversions`), and the platform's own
@@ -12,6 +13,7 @@ import {
   type PlatformMetricTotals,
   type PortfolioMetrics,
 } from '@continuum/contracts';
+import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 
 /** Within ±5% of the target reads as on target: a cent's difference is not news. */
 const ON_TARGET_BAND = 0.05;
@@ -43,6 +45,8 @@ export type ByPlatformView = {
   sourceIsNotPlatform: boolean;
   /** A portfolio on Meta alone keeps today's screens; the block has nothing to compare. */
   metaOnly: boolean;
+  /** Every platform's spend, summed in the read's one currency. */
+  totalSpend: number;
 };
 
 function resultsOf(row: PlatformMetricTotals, sourceIsNotPlatform: boolean): number {
@@ -90,7 +94,22 @@ export function buildByPlatform(metrics: PortfolioMetrics): ByPlatformView {
     };
   });
   const metaOnly = rows.every((row) => row.platform === 'meta');
-  return { rows, sourceIsNotPlatform, metaOnly };
+  return { rows, sourceIsNotPlatform, metaOnly, totalSpend };
+}
+
+/** The stacked bar's words: each platform that spent, with its share of the spend. */
+export function spendShareLabel(rows: readonly PlatformRow[]): string {
+  const parts = rows
+    .filter((row) => row.spendShare !== null && row.spendShare > 0)
+    .map((row) => `${PLATFORM_NAMES[row.platform]} ${formatShare(row.spendShare)}`);
+  return `Share of spend: ${parts.join(', ')}`;
+}
+
+/** Why the block prints no cost per result for the portfolio as a whole. */
+export function noBlendNote(sourceIsNotPlatform: boolean, resultKind: string): string {
+  return sourceIsNotPlatform
+    ? `Cost per ${resultKind} stays per platform, in the rows above.`
+    : `Cost per ${resultKind} stays per platform: each one counts its ${resultKind}s its own way, so they are not blended.`;
 }
 
 export function formatShare(share: number | null): string {

@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'bun:test';
-import { type CycleRunReport, getOptimizationMetricDefinition } from '@continuum/contracts';
+import {
+  type CycleRunReport,
+  getOptimizationMetricDefinition,
+  type PortfolioListItem,
+  type PortfolioMetrics,
+  PortfolioMetricsSchema,
+  type RangeSpec,
+  resolveRange,
+} from '@continuum/contracts';
 import formularios from '../../__fixtures__/optimizer-status-formularios.json';
 import { parseReport } from '../../reportModel';
-import { buildHeroView, ctaForCandidate, isQueueRowKey, queueRowKeyFor } from './heroModel';
+import { portfolioMetricsFixture } from '../attribution/__fixtures__/portfolioMetricsFixture';
+import { portfolioFigureFromReads } from '../portfolioFigure';
+import { buildPortfolioHeadline, segmentText } from './headlineModel';
+import {
+  buildHeroView,
+  crossPlatformRead,
+  ctaForCandidate,
+  heroMetricsWindow,
+  isQueueRowKey,
+  queueRowKeyFor,
+} from './heroModel';
 import { buildPortfolioNews } from './news/newsModel';
+import { buildRecap } from './recapModel';
+import type { PortfolioMetricsState } from './usePortfolioMetrics';
 
 const metric = {
   kpiField: 'leads',
@@ -479,5 +499,449 @@ describe('ctaForCandidate', () => {
         false,
       ),
     ).toEqual({ kind: 'audience_card', rowKey: 'rec:a', label: 'Open the audience proposal' });
+  });
+});
+
+// G8 deep test, F16. Easy Fit's Google portfolio at the 14-day range: the page's By platform
+// read said $4,332 MXN / 176 leads while the hero said "0 leads in 14 days, no spend. Blocked:
+// zero delivery". The hero priced its recap — the Meta account snapshots summed over the Meta
+// roster, both empty for a portfolio of Google campaigns — because the figure from the metrics
+// read (every platform) was computed at the default 7 days only. The window below, Oct 8–21,
+// ends before the account's Oct 25 suspension; the totals are the ones G8 read on the page.
+describe('F16 — a Google portfolio’s hero reads every platform for the range, or says it cannot', () => {
+  const TODAY = '2026-10-22';
+  const NOW = Date.parse('2026-10-22T15:00:00Z');
+  const lead = getOptimizationMetricDefinition('lead');
+  const easyFitGoogle = {
+    id: 'f16-easy-fit-google',
+    name: 'Easy Fit — Google',
+    objective: 'lead',
+    target_metric: null,
+    cpa_target: 35,
+    platforms: ['google_ads'],
+    apply_mode: 'recommend',
+    daily_total: 320,
+    last_actual_cycle_at: '2026-10-22T06:00:00Z',
+    period_start: null,
+    period_end: null,
+  } as unknown as PortfolioListItem;
+  const metaOnly = { ...easyFitGoogle, id: 'f16-meta', platforms: ['meta'] } as PortfolioListItem;
+  const cycle = {
+    portfolio: null,
+    latest_run: { id: 'run-f16', cycle_ts: '2026-10-22T06:00:00Z' } as never,
+    latest_items: [],
+    recommendations: [],
+    history: [],
+  };
+
+  /** optimizer_get_portfolio_metrics at d14: Google alone, 4,332 MXN for 176 leads. */
+  function googleRead14(): PortfolioMetrics {
+    const base = portfolioMetricsFixture({ platforms: ['google_ads'] });
+    const google = { spend: 4332, results: 176, conversions: 176, cost_per_result: 4332 / 176 };
+    return PortfolioMetricsSchema.parse({
+      ...base,
+      window: { since: '2026-10-08', until: '2026-10-21', label: 'd14', ends_yesterday: false },
+      totals: { ...base.totals, ...google },
+      by_platform: base.by_platform.map((row) => ({ ...row, ...google })),
+      conversions_by_source: base.conversions_by_source.map((row) => ({
+        ...row,
+        conversions: 176,
+      })),
+    });
+  }
+
+  /** The workspace's hero path for one range and one state of the metrics read. */
+  function hero(
+    spec: RangeSpec,
+    metrics: PortfolioMetricsState,
+    portfolio: PortfolioListItem = easyFitGoogle,
+  ) {
+    const range = resolveRange(spec, portfolio, TODAY);
+    const window = heroMetricsWindow(range);
+    const crossPlatform = crossPlatformRead({ portfolio, window, metrics });
+    const figure =
+      crossPlatform && window
+        ? portfolioFigureFromReads({
+            portfolio,
+            snapshots: [],
+            readAt: null,
+            memberIds: [],
+            series: [],
+            metrics: metrics.status === 'ready' ? metrics.metrics : null,
+            now: NOW,
+          })
+        : null;
+    // The Meta read: no Meta snapshot holds a Google campaign, and the Meta roster is empty.
+    const recap = buildRecap({ snapshots: [], enrolledIds: [], range, metric: lead, target: 35 });
+    const currency = figure?.currency ?? 'MXN';
+    const view = buildHeroView({
+      report: cycle,
+      recap,
+      flightPacing: null,
+      metric: lead,
+      currency,
+      portfolio,
+      target: 35,
+      window: range.window,
+      firstCycle: false,
+      figure,
+      crossPlatform,
+      now: '2026-10-22T15:00:00Z',
+    });
+    const headline = buildPortfolioHeadline({
+      view,
+      report: cycle,
+      portfolio,
+      metric: lead,
+      currency,
+      mismatch: null,
+      now: NOW,
+    });
+    return { view, headline, status: headline.status.map(segmentText).join('') };
+  }
+
+  const d14: RangeSpec = { kind: 'preset', preset: 'd14' };
+  const ready = (metrics: PortfolioMetrics): PortfolioMetricsState => ({
+    status: 'ready',
+    metrics,
+  });
+
+  it('14 days: 176 leads at $24.61 MXN from the 14-day metrics read, $4,332 MXN spent, no blocker', () => {
+    const { view, headline, status } = hero(d14, ready(googleRead14()));
+    expect(view.unread).toBeNull();
+    expect(view.brief.growth).toMatchObject({
+      spend: 4332,
+      results: 176,
+      window: 'd14',
+      currency: 'MXN',
+    });
+    expect(status).toBe('176 leads in 14 days at $24.61 MXN, 30% under the target of $35.00 MXN.');
+    expect(headline.tiles.find((tile) => tile.key === 'spend')?.value).toBe('$4,332 MXN');
+    expect(headline.blocker).toBeNull();
+    // A stored read, dated by the day after its window.
+    expect(view.figure).toMatchObject({ source: 'snapshot', asOfLabel: 'as of Oct 22' });
+  });
+
+  it('the page state G8 saw: the Meta recap alone is what said "no spend" and "zero delivery"', () => {
+    const range = resolveRange(d14, easyFitGoogle, TODAY);
+    const view = buildHeroView({
+      report: cycle,
+      recap: buildRecap({ snapshots: [], enrolledIds: [], range, metric: lead, target: 35 }),
+      flightPacing: null,
+      metric: lead,
+      currency: 'MXN',
+      portfolio: easyFitGoogle,
+      target: 35,
+      window: range.window,
+      firstCycle: false,
+    });
+    const headline = buildPortfolioHeadline({
+      view,
+      report: cycle,
+      portfolio: easyFitGoogle,
+      metric: lead,
+      currency: 'MXN',
+      mismatch: null,
+      now: NOW,
+    });
+    expect(headline.status.map(segmentText).join('')).toBe('0 leads in 14 days, no spend.');
+    expect(headline.blocker?.code).toBe('zero_delivery');
+  });
+
+  it('30 days reads the 14-day window — the widest the hero’s growth carries — never the recap', () => {
+    const { view, headline } = hero({ kind: 'preset', preset: 'd30' }, ready(googleRead14()));
+    expect(view.brief.growth).toMatchObject({ spend: 4332, results: 176, window: 'd14' });
+    expect(headline.days).toBe(14);
+    expect(headline.blocker).toBeNull();
+  });
+
+  const noClaim = (status: string, headline: ReturnType<typeof hero>['headline']) => {
+    expect(status).not.toMatch(/no spend/i);
+    expect(headline.blocker).toBeNull();
+    // Spend, results and cost would print the placeholder zeros; only the decisions stay.
+    expect(headline.tiles.map((tile) => tile.key)).toEqual(['decisions']);
+  };
+
+  it('a range no read covers (3 days, a custom range): says so, never "no spend" or "zero delivery"', () => {
+    for (const spec of [
+      { kind: 'preset', preset: 'd3' },
+      { kind: 'custom', from: '2026-10-01', to: '2026-10-20' },
+    ] as RangeSpec[]) {
+      // The workspace still reads d7 there, so the platforms are known.
+      const { view, headline, status } = hero(
+        spec,
+        ready(portfolioMetricsFixture({ platforms: ['google_ads'] })),
+      );
+      expect(view.unread?.reason).toBe('unavailable');
+      expect(status).toBe(
+        "Spend and leads for this range aren't available for a portfolio on Google Ads. Pick 7 or 14 days.",
+      );
+      noClaim(status, headline);
+    }
+  });
+
+  it('the 14-day read still loading: the pending sentence, never a zero', () => {
+    const { view, headline, status } = hero(d14, { status: 'loading' });
+    expect(view.unread?.reason).toBe('pending');
+    expect(status).toBe('Reading spend and leads across Google Ads…');
+    noClaim(status, headline);
+  });
+
+  it('the 14-day read failed, is not deployed, or there is no cycle yet: not available, never a zero', () => {
+    const cases: Array<[PortfolioMetricsState, PortfolioListItem]> = [
+      [{ status: 'error' }, easyFitGoogle],
+      [{ status: 'unavailable' }, easyFitGoogle],
+      [
+        ready(googleRead14()),
+        { ...easyFitGoogle, last_actual_cycle_at: null } as PortfolioListItem,
+      ],
+    ];
+    for (const [metrics, portfolio] of cases) {
+      const { view, headline, status } = hero(d14, metrics, portfolio);
+      expect(view.unread?.reason).toBe('unavailable');
+      expect(status).toBe(
+        "Spend and leads for this range aren't available yet for a portfolio on Google Ads.",
+      );
+      noClaim(status, headline);
+    }
+  });
+
+  it('a Meta-only portfolio is unchanged: its recap is the whole of it, and a zero is zero delivery', () => {
+    const { view, headline, status } = hero(
+      d14,
+      ready(portfolioMetricsFixture({ platforms: ['meta'] })),
+      metaOnly,
+    );
+    expect(view.unread).toBeNull();
+    expect(status).toBe('0 leads in 14 days, no spend.');
+    expect(headline.blocker?.code).toBe('zero_delivery');
+    expect(segmentText(headline.blocker?.sentence[0] ?? '')).toBe(
+      'Blocked: zero delivery, nothing spent in 14 days.',
+    );
+  });
+});
+
+// F16, half-fixed (Ramiro on beta 83460c01, 2026-10-28): a Google portfolio's hero printed
+// $9,921 MXN / 235 leads from its metrics read while the lead card under it said "No spend and
+// no leads in 14 days". The card was the stored brief's calm hero, which the worker composes in
+// code from the packet's growth — the Meta half, zero — and the hero kept those words when the
+// figure replaced the growth. Prod shape: the portfolio's 2026-10-28 brief, cycle run and items,
+// and its d7 metrics read (Oct 21–27); ids and numbers only.
+describe('F16 — a stored calm hero never speaks over the headline figure', () => {
+  const NOW = Date.parse('2026-10-28T22:30:00Z');
+  const RUN_ID = '8be13c28-3268-42b9-83c6-fd9d2c4dbc51';
+  const lead = getOptimizationMetricDefinition('lead');
+  const portfolio = {
+    id: 'e642c737-ddde-4622-af8f-4b5622da98d0',
+    name: 'Google portfolio',
+    objective: 'lead',
+    target_metric: null,
+    cpa_target: null,
+    platforms: ['google_ads'],
+    apply_mode: 'recommend',
+    daily_total: 1629,
+    currency: 'MXN',
+    ad_account_id: '3710693645',
+    last_actual_cycle_at: '2026-10-28T16:43:58.608Z',
+    period_start: null,
+    period_end: null,
+  } as unknown as PortfolioListItem;
+  const storedBrief = {
+    version: 1,
+    growth: {
+      as_of: '2026-10-28T16:43:58.608+00:00',
+      cost_per_result: null,
+      currency: null,
+      deltas: { cost_per_result: null, results: null, spend: null },
+      pacing: { note: 'No pacing state: using the provided total.', ratio: null, status: null },
+      result_label: 'leads',
+      results: 0,
+      scale: null,
+      spend: 0,
+      target: null,
+      window: 'd14',
+    },
+    growth_sentence: 'Reading the last 14 days',
+    hero: {
+      candidate_id: null,
+      confidence_note: null,
+      cta: null,
+      headline: 'No spend and no leads in 14 days',
+      impact_basis: null,
+      impact_per_day: null,
+      impact_unit: 'currency',
+      justification: null,
+      module: 'none',
+      why: 'Nothing delivered in the window. Check that the ad sets optimize for leads and the event is tracked, then the creatives.',
+    },
+    candidates: [],
+    secondary: [],
+    model: 'deterministic',
+    prompt_version: 'v2',
+    generated_at: '2026-10-28T16:44:27.504Z',
+  };
+  const item = (adsetId: string, current: number, change: number, ci: object) => ({
+    run_id: RUN_ID,
+    adset_id: adsetId,
+    platform: 'google_ads',
+    current_budget: current,
+    final_budget: current + change,
+    change_abs: change,
+    reason: null,
+    diagnostics: { status: 'active', ci },
+  });
+  const report = {
+    portfolio: null,
+    latest_run: {
+      id: RUN_ID,
+      cycle_ts: '2026-10-28T16:43:58.608+00:00',
+      total_budget: 1629,
+      confidence: { band: 'medium' },
+      pacing: {
+        dailyTotal: 1629,
+        idealCumulative: 0,
+        note: 'No pacing state: using the provided total.',
+        pacingRatio: 1,
+        source: 'observed',
+        status: 'unknown',
+      },
+    },
+    latest_items: [
+      item('20775796216', 1179, 157.5, {
+        cpa: 39.69452560872521,
+        events: 393.485557,
+        hi: 43.92829602582213,
+        lo: 35.95976138379022,
+      }),
+      item('24331887298', 450, -157.5, {
+        cpa: 114368.52532386528,
+        events: 0.052105,
+        hi: 5.690827014206214e34,
+        lo: 1569.1660588194125,
+      }),
+    ],
+    recommendations: [],
+    history: [],
+    hero_brief: {
+      id: '0fe16639-dd73-4160-9769-03a3210f96ff',
+      portfolio_id: 'e642c737-ddde-4622-af8f-4b5622da98d0',
+      cycle_run_id: RUN_ID,
+      utc_day: '2026-10-28',
+      status: 'ready',
+      model: 'deterministic',
+      brief: storedBrief,
+    },
+  } as never;
+
+  /** optimizer_get_portfolio_metrics at d7, as prod answered it at 22:30Z. */
+  function googleRead7(): PortfolioMetrics {
+    const base = portfolioMetricsFixture({ platforms: ['google_ads'], targetCpa: null });
+    const totals = {
+      spend: 9921.334477,
+      impressions: 67612,
+      clicks: 1881,
+      results: 235.326793,
+      cost_per_result: 42.1598167829534,
+      conversions: 235.326793,
+      delivering_entities: 2,
+      entities: 2,
+    };
+    return PortfolioMetricsSchema.parse({
+      ...base,
+      portfolio_id: 'e642c737-ddde-4622-af8f-4b5622da98d0',
+      window: { since: '2026-10-21', until: '2026-10-27', label: 'd7', ends_yesterday: false },
+      prior_window: {
+        since: '2026-10-14',
+        until: '2026-10-20',
+        label: 'd7',
+        ends_yesterday: false,
+      },
+      totals: { ...base.totals, ...totals },
+      prior_totals: {
+        ...base.totals,
+        spend: 11657.060054,
+        impressions: 91247,
+        clicks: 2823,
+        results: 158.210869,
+        cost_per_result: 11657.060054 / 158.210869,
+        conversions: 158.210869,
+        delivering_entities: 2,
+        entities: 2,
+      },
+      by_platform: base.by_platform.map((row) => ({ ...row, ...totals })),
+      read_at: '2026-10-28T22:30:32.509490Z',
+    });
+  }
+
+  it('the default range: the lead card reads the same 235 leads the hero prints, never "no spend"', () => {
+    const range = resolveRange({ kind: 'preset', preset: 'd7' }, portfolio, '2026-10-28');
+    const window = heroMetricsWindow(range);
+    const metrics: PortfolioMetricsState = { status: 'ready', metrics: googleRead7() };
+    const crossPlatform = crossPlatformRead({ portfolio, window, metrics });
+    const figure = portfolioFigureFromReads({
+      portfolio,
+      snapshots: [],
+      readAt: null,
+      memberIds: [],
+      series: [],
+      metrics: googleRead7(),
+      now: NOW,
+    });
+    const recap = buildRecap({ snapshots: [], enrolledIds: [], range, metric: lead, target: null });
+    const view = buildHeroView({
+      report,
+      recap,
+      flightPacing: null,
+      metric: lead,
+      currency: 'MXN',
+      portfolio,
+      target: null,
+      window: range.window,
+      firstCycle: false,
+      figure,
+      crossPlatform,
+      now: '2026-10-28T22:30:00Z',
+    });
+    const headline = buildPortfolioHeadline({
+      view,
+      report,
+      portfolio,
+      metric: lead,
+      currency: 'MXN',
+      mismatch: null,
+      now: NOW,
+    });
+    const news = buildPortfolioNews({ view, items: [], target: null });
+
+    // The stored brief still belongs to the latest run, so nothing waits on a new one.
+    expect(view.source).toBe('brief');
+    expect(view.brief.growth).toMatchObject({ spend: 9921.334477, results: 235, window: 'd7' });
+    expect(headline.status.map(segmentText).join('')).toMatch(
+      /^235 leads in 7 days at \$42\.16 MXN/,
+    );
+    // The cycle's real moves, priced at the figure's own cost per lead, lead the findings.
+    expect(view.brief.hero.module).toBe('budget');
+    expect(news.lead.claim).toBe('Move budget toward cheaper leads: $167 MXN/day at stake');
+    // beta-review-fixes test 6's false-zero check, over every word the lead card prints.
+    const words = [news.lead.eyebrow, news.lead.subject, news.lead.claim, news.lead.reason].join(
+      ' ',
+    );
+    expect(words).not.toMatch(/zero delivery|no spend|\$0(\.00)? [A-Z]{3} spent|\b0 leads\b/i);
+  });
+});
+
+describe('heroMetricsWindow', () => {
+  const flight = { period_start: '2026-10-01', period_end: '2026-10-31' };
+  const at = (spec: RangeSpec, fields = {}) =>
+    heroMetricsWindow(resolveRange(spec, fields, '2026-10-22'));
+  it('reads the trailing presets at the hero window; nothing for 3 days, a flight or custom dates', () => {
+    expect(at({ kind: 'preset', preset: 'd3' })).toBeNull();
+    expect(at({ kind: 'preset', preset: 'd7' })).toBe('d7');
+    expect(at({ kind: 'preset', preset: 'd14' })).toBe('d14');
+    expect(at({ kind: 'preset', preset: 'd30' })).toBe('d14');
+    expect(at({ kind: 'preset', preset: 'flight' }, flight)).toBeNull();
+    // No flight set: the range falls back to the default 7 days, and so does the read.
+    expect(at({ kind: 'preset', preset: 'flight' })).toBe('d7');
+    expect(at({ kind: 'custom', from: '2026-10-08', to: '2026-10-21' })).toBeNull();
   });
 });

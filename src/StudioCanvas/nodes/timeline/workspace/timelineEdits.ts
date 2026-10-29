@@ -421,6 +421,33 @@ export function placeAssetEdit(
   return { label, forward };
 }
 
+/**
+ * The `add_clip` calls that lay a canvas node's wired videos down as the starting cut, in
+ * wiring order, or none once the edit holds anything. Each lands at the running end of the
+ * ones before it, past the last clip's midpoint, so the magnetic main track appends; a
+ * length the pool does not know sends the rest to add_clip's 86 400 s ceiling, which appends
+ * too.
+ */
+export function canvasStartingCut(
+  project: EditorProjectV2,
+  pool: readonly VideoEditorPoolAsset[],
+): Array<{ assetId: string; versionId?: string; atSec: number }> {
+  if (project.production.shots.length > 0) return [];
+  if (project.tracks.some((track) => track.clips.length > 0)) return [];
+  let endSec = 0;
+  return pool
+    .filter((asset) => asset.origin === 'graph' && asset.kind === 'video')
+    .map((asset) => {
+      const atSec = endSec;
+      endSec = Math.min(86_400, endSec + (asset.durationSec ?? 86_400));
+      return {
+        assetId: asset.assetId,
+        ...(asset.versionId ? { versionId: asset.versionId } : {}),
+        atSec,
+      };
+    });
+}
+
 // ── Moving ────────────────────────────────────────────────────────────────────────────
 
 /**

@@ -22,6 +22,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { LibraryViewer } from '@/components/library/LibraryViewer';
 import { readLibraryViewPreferences } from '@/components/library/views/viewPreferences';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { isPaidBrand } from '@/lib/billing/productAccess';
@@ -47,12 +48,12 @@ export const metadata: Metadata = {
 function LibrarySkeleton() {
   return (
     <div className="flex h-full gap-4 p-4">
-      <div className="w-56 shrink-0 animate-pulse rounded-xl bg-muted/70" />
+      <Skeleton className="w-56 shrink-0 rounded-xl" />
       <div className="flex flex-1 flex-col gap-4">
-        <div className="h-9 w-full animate-pulse rounded-lg bg-muted/70" />
+        <Skeleton className="h-9 w-full rounded-lg" />
         <div className="grid grid-cols-3 gap-4 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-muted/70" />
+            <Skeleton key={i} className="aspect-[4/3] rounded-xl" />
           ))}
         </div>
       </div>

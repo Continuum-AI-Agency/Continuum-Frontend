@@ -27,6 +27,7 @@ import {
   getOptimizationMetricDefinition,
   toMinorUnits,
 } from '@continuum/contracts';
+import { humanize } from '../../format';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
   buildConversionDescriptor,
@@ -162,9 +163,53 @@ export function scratchMembers(
       ...(candidate.name?.trim() ? { name: candidate.name.trim() } : {}),
       ...(account.currency ? { currency: account.currency } : {}),
       daily_budget: candidate.daily_budget,
+      ...(candidate.channel_type ? { channel_type: candidate.channel_type } : {}),
     })),
   );
 }
+
+/** Google's advertising_channel_type in a person's words. */
+const CHANNEL_TYPE_WORDS: Readonly<Record<string, string>> = {
+  SEARCH: 'Search',
+  PERFORMANCE_MAX: 'Performance Max',
+  SHOPPING: 'Shopping',
+  DEMAND_GEN: 'Demand Gen',
+  DISPLAY: 'Display',
+  VIDEO: 'Video',
+  MULTI_CHANNEL: 'App',
+};
+
+/** A campaign's type ("Search", "Performance Max"), or null when the member carries none: a
+ *  Meta or TikTok member, or one from a suggest edge older than the field. */
+export function channelTypeLabel(channelType: string | null | undefined): string | null {
+  if (!channelType) return null;
+  return CHANNEL_TYPE_WORDS[channelType] ?? humanize(channelType.toLowerCase());
+}
+
+/** The members' campaign types and how many of each, in the order first seen. A member with no
+ *  type is not counted, so a suggestion from an older edge yields none. */
+export function channelTypeCounts(
+  members: readonly SuggestionMember[],
+): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const label = channelTypeLabel(member.channel_type);
+    if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([label, count]) => ({ label, count }));
+}
+
+/** "Search 2 · Performance Max 1", or null when no member carries a type. */
+export function channelTypeSummary(members: readonly SuggestionMember[]): string | null {
+  const counts = channelTypeCounts(members);
+  return counts.length > 0
+    ? counts.map(({ label, count }) => `${label} ${count}`).join(' · ')
+    : null;
+}
+
+/** What the optimizer moves on a campaign outside Meta: its daily budget, never its bids. */
+export const BUDGET_LEVER =
+  "The lever on these campaigns is each one's daily budget: the optimizer recommends raising or lowering it and leaves bids and targets as they are.";
 
 const normCurrency = (currency: string | null | undefined) =>
   currency?.trim().toUpperCase() || null;

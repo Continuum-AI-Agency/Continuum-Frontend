@@ -2,21 +2,31 @@
 
 // The Google tab's one read: the brand's granted Google Ads customer through the same edge the
 // dashboard already uses for google-ads (paid-media-metrics), scopes `account_overview` and
-// `top_campaigns`. When it cannot read, it says WHICH of the three reasons holds — no Google
-// login at all, a login whose Ads customer is not granted to this brand, or the API's own
-// error — because each one has a different fix and "No data" names none of them.
+// `top_campaigns`, counting the result the brand's Google portfolios are held to (their goal,
+// Ramiro 2026-10-28; none when they name no single one). When it cannot read, it says WHICH of
+// the three reasons holds — no Google login at all, a login whose Ads customer is not granted to
+// this brand, or the API's own error — because each one has a different fix and "No data" names
+// none of them.
 
-import type { AdAccount } from '@continuum/contracts';
+import {
+  type AdAccount,
+  type GoogleResultBucket,
+  googlePortfolioResult,
+} from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
-import { useOptimizerAdAccounts } from '../../useOptimizerData';
+import { useOptimizerAdAccounts, useOptimizerPlatformPortfolios } from '../../useOptimizerData';
+import {
+  type GoogleReadWindow,
+  invokeGoogleMetrics,
+  parseGoogleAccountOverview,
+  parseGoogleCampaigns,
+  rangeOf,
+} from '../google/googleReads';
 import {
   buildGoogleOverview,
   completeDaysWindow,
-  GoogleAccountOverviewSchema,
   type GoogleOverview,
-  GoogleTopCampaignsSchema,
 } from './googleAdsOverviewModel';
 import { accountsOn } from './platformTabsModel';
 
@@ -29,58 +39,50 @@ export type GoogleAdsOverviewState =
   | { status: 'no-connection' }
   | { status: 'no-grant' }
   | { status: 'error'; account: AdAccount | null; message: string }
-  | { status: 'ready'; account: AdAccount; overview: GoogleOverview };
-
-/** The window a read covers, as ISO dates. */
-export type GoogleReadWindow = { since: string; until: string };
+  | {
+      status: 'ready';
+      account: AdAccount;
+      overview: GoogleOverview;
+      /** The portfolios' goal result every Google read of the tab counts; null when none. */
+      resultBucket: GoogleResultBucket | null;
+    };
 
 export const googleAdsQueryKeys = {
-  overview: (brandId: string, customerId: string, window: GoogleReadWindow) =>
-    ['optimizer', 'google-ads-overview', brandId, customerId, window.since, window.until] as const,
+  overview: (
+    brandId: string,
+    customerId: string,
+    window: GoogleReadWindow,
+    resultBucket: GoogleResultBucket | null,
+  ) =>
+    [
+      'optimizer',
+      'google-ads-overview',
+      brandId,
+      customerId,
+      window.since,
+      window.until,
+      resultBucket ?? 'auto',
+    ] as const,
   connection: () => ['optimizer', 'google-connection'] as const,
 };
-
-async function invokeGoogleMetrics(
-  window: GoogleReadWindow,
-  body: Record<string, unknown>,
-): Promise<unknown> {
-  const { data, error } = await createSupabaseBrowserClient().functions.invoke(
-    'paid-media-metrics',
-    {
-      body: {
-        platform: 'google-ads',
-        range: { preset: 'custom', since: window.since, until: window.until },
-        ...body,
-      },
-    },
-  );
-  if (error) {
-    throw new Error(await readEdgeErrorMessage(error, 'The Google Ads read did not answer.'));
-  }
-  return data;
-}
 
 export async function fetchGoogleAdsOverview(
   brandId: string,
   customerId: string,
   window: GoogleReadWindow,
+  resultBucket: GoogleResultBucket | null = null,
 ): Promise<GoogleOverview> {
-  const base = { brandId, accountId: customerId };
+  const base = {
+    brandId,
+    accountId: customerId,
+    range: rangeOf(window),
+    ...(resultBucket ? { resultBucket } : {}),
+  };
   const [account, campaigns] = await Promise.all([
-    invokeGoogleMetrics(window, { ...base, scope: 'account_overview' }),
-    invokeGoogleMetrics(window, {
-      ...base,
-      scope: 'top_campaigns',
-      kpi: 'spend',
-      limit: CAMPAIGN_LIMIT,
-    }),
+    invokeGoogleMetrics({ ...base, scope: 'account_overview' }),
+    invokeGoogleMetrics({ ...base, scope: 'top_campaigns', kpi: 'spend', limit: CAMPAIGN_LIMIT }),
   ]);
-  const parsedAccount = GoogleAccountOverviewSchema.safeParse(account);
-  const parsedCampaigns = GoogleTopCampaignsSchema.safeParse(campaigns);
-  if (!parsedAccount.success || !parsedCampaigns.success) {
-    throw new Error('The Google Ads read came back in a shape this page does not know.');
-  }
-  return buildGoogleOverview(parsedAccount.data, parsedCampaigns.data);
+  return buildGoogleOverview(parseGoogleAccountOverview(account), parseGoogleCampaigns(campaigns));
 }
 
 /** Whether the signed-in user has a Google login at all. RLS scopes user_integrations to its
@@ -112,11 +114,14 @@ export function useGoogleAdsOverview(
   const customerId = granted?.account_id ?? null;
   const fallbackWindow = completeDaysWindow(7);
   const range = window === 'pending' ? fallbackWindow : (window ?? fallbackWindow);
+  // A portfolios read that failed leaves no goal: each result type is then counted apart.
+  const portfolios = useOptimizerPlatformPortfolios(brandId, 'google_ads');
+  const resultBucket = portfolioGoalOf(portfolios.data);
 
   const overview = useQuery({
-    queryKey: googleAdsQueryKeys.overview(brandId, customerId ?? 'none', range),
-    queryFn: () => fetchGoogleAdsOverview(brandId, customerId as string, range),
-    enabled: Boolean(brandId && customerId) && window !== 'pending',
+    queryKey: googleAdsQueryKeys.overview(brandId, customerId ?? 'none', range, resultBucket),
+    queryFn: () => fetchGoogleAdsOverview(brandId, customerId as string, range, resultBucket),
+    enabled: Boolean(brandId && customerId) && window !== 'pending' && !portfolios.isPending,
     staleTime: FIVE_MINUTES,
     retry: 1,
   });
@@ -154,5 +159,14 @@ export function useGoogleAdsOverview(
     return { status: 'error', account, message };
   }
   if (!overview.data) return { status: 'loading' };
-  return { status: 'ready', account, overview: overview.data };
+  return { status: 'ready', account, overview: overview.data, resultBucket };
+}
+
+/** The goal result of the brand's live Google portfolios (an archived one holds nothing). */
+export function portfolioGoalOf(
+  portfolios: readonly { objective: string; status: string }[],
+): GoogleResultBucket | null {
+  return googlePortfolioResult(
+    portfolios.filter((portfolio) => portfolio.status !== 'archived').map((p) => p.objective),
+  );
 }

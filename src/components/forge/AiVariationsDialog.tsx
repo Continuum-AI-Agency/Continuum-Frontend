@@ -91,10 +91,43 @@ type DraftFile = {
   kind: 'document' | 'media';
   status: 'uploading' | 'processing' | 'ready' | 'error';
 };
-type SelectedFile = { file: File; name: string };
+export type SelectedFile = { file: File; name: string };
 type AttachedSheet = { name: string; file: File; tables: ApiRenderAssistGrid['tables'] };
 
 const isSheetFile = (file: File) => /\.(xlsx|csv|tsv)$/i.test(file.name);
+
+/**
+ * What was dropped, folders walked. Call it inside the drop event: the browser empties
+ * `dataTransfer` once the handler returns, so the entries are taken before the first await.
+ */
+export function filesFromDrop(dataTransfer: DataTransfer): Promise<SelectedFile[]> {
+  const loose = Array.from(dataTransfer.files);
+  return folderFilesFromDrop(dataTransfer.items).then((entries) =>
+    entries
+      ? entries.map(({ file, folders }) => ({ file, name: [...folders, file.name].join('/') }))
+      : loose.map((file) => ({ file, name: file.name })),
+  );
+}
+
+/** Drop files on whatever opens the draft, and it opens with them attached. Text drags pass by. */
+export function draftDropTarget(
+  onDrop: ((dropped: Promise<SelectedFile[]>) => void) | null,
+): Pick<React.HTMLAttributes<HTMLElement>, 'onDragOver' | 'onDrop'> {
+  if (!onDrop) return {};
+  const carriesFiles = (event: React.DragEvent) => event.dataTransfer.types.includes('Files');
+  return {
+    onDragOver: (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    onDrop: (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      onDrop(filesFromDrop(event.dataTransfer));
+    },
+  };
+}
 
 /** Every tab of a spreadsheet, located (header, data block, notes, legend), as the assistant reads it. */
 async function readAttachedSheet(file: File): Promise<AttachedSheet> {
@@ -144,6 +177,7 @@ export function AiDraftDialog({
   initialVaryKeys,
   maxRows = API_RENDER_SUGGEST_ROWS_MAX,
   anchor,
+  dropped,
   onDrafted,
   gridContext,
   onAssist,
@@ -167,6 +201,8 @@ export function AiDraftDialog({
   initialVaryKeys?: string[] | null;
   maxRows?: number;
   anchor?: Element | null;
+  /** Files dropped on the button that opened this, still being read: attached on opening. */
+  dropped?: Promise<SelectedFile[]> | null;
   onDrafted: (response: ApiRenderSuggestRowsResponse) => void;
   /** The grid as it stands when the person sends — rows, selection and the set's rules. */
   gridContext?: () => Omit<ApiRenderAssistGrid, 'tables' | 'mapColumns'>;
@@ -201,6 +237,7 @@ export function AiDraftDialog({
     setSheets([]);
     setAnswer(null);
     setProblem(null);
+    if (dropped) attach(dropped, []);
   }, [open, parent?.id]);
 
   useEffect(() => {
@@ -232,7 +269,8 @@ export function AiDraftDialog({
     return () => clearTimeout(timer);
   }, [brandId, files, open]);
 
-  const upload = async (all: SelectedFile[]) => {
+  /** `attached`: the files counted against the limits — none yet when this opening just reset them. */
+  const upload = async (all: SelectedFile[], attached = files) => {
     if (!all.length || uploading || busy) return;
     setProblem(null);
     // A spreadsheet is read here for the assistant, never uploaded — unless this drafts
@@ -268,7 +306,7 @@ export function AiDraftDialog({
       setProblem(`Unsupported file: ${unsupported.pending.name}`);
       return;
     }
-    const active = files.filter((file) => file.status !== 'error');
+    const active = attached.filter((file) => file.status !== 'error');
     if (
       active.filter((file) => file.kind === 'document').length +
         entries.filter(({ pending }) => pending.kind === 'document').length >
@@ -334,25 +372,19 @@ export function AiDraftDialog({
     }
   };
 
+  const attach = (pending: Promise<SelectedFile[]>, attached?: DraftFile[]) => {
+    void pending
+      .then((entries) => upload(entries, attached))
+      .catch((error: unknown) =>
+        setProblem(error instanceof Error ? error.message : 'Could not read the folder.'),
+      );
+  };
+
   const dropFiles = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     if (uploading || busy) return;
-    const loose = Array.from(event.dataTransfer.files);
-    void folderFilesFromDrop(event.dataTransfer.items)
-      .then((entries) =>
-        upload(
-          entries
-            ? entries.map(({ file, folders }) => ({
-                file,
-                name: [...folders, file.name].join('/'),
-              }))
-            : loose.map((file) => ({ file, name: file.name })),
-        ),
-      )
-      .catch((error: unknown) =>
-        setProblem(error instanceof Error ? error.message : 'Could not read the folder.'),
-      );
+    attach(filesFromDrop(event.dataTransfer));
   };
 
   const grid = gridContext?.();
@@ -837,6 +869,11 @@ export function DraftWithAiButton({
         className="gap-1.5"
         disabled={!templateKey}
         onClick={() => templateKey && onOpenRender?.({ templateKey, draftWithAi: true })}
+        {...draftDropTarget(
+          templateKey && onOpenRender
+            ? (dropped) => onOpenRender({ templateKey, draftWithAi: true, draftDrop: dropped })
+            : null,
+        )}
       >
         <Sparkles className="size-3.5" aria-hidden />
         Draft rows with AI

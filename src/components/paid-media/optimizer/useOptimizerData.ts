@@ -30,6 +30,7 @@ import {
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
   type AdsetTargeting,
+  type InactiveAdsetWindows,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -1187,6 +1188,7 @@ const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
 const EMPTY_TARGETING: AdsetTargeting[] = [];
+const EMPTY_INACTIVE_WINDOWS: InactiveAdsetWindows[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
@@ -2188,6 +2190,24 @@ export function useOptimizerSuggestions(
   });
 }
 
+/** The account snapshot read as query options: one definition for every surface that reads
+ *  `optimizerQueryKeys.accountSnapshots`, so the portfolio detail and the portfolio lists
+ *  (whose headline figures sum it, see sections/portfolioFigure.ts) share one cache entry. */
+export function accountSnapshotsQuery(
+  brandId: string,
+  adAccountId: string,
+  level: PortfolioLevel = 'adset',
+) {
+  const scope = level === 'campaign' ? 'campaign_snapshots' : 'adset_snapshots';
+  return {
+    queryKey: optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
+    queryFn: () => withReadTimeout(fetchAccountSnapshots(brandId, adAccountId, scope, false)),
+    staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: retryUnlessTimeout(1),
+  };
+}
+
 /** The account's snapshots (engine input) — powers the client-side "what-if"
  *  preview. `level` selects ad sets (default) or campaigns; campaign mode reads
  *  the campaign_snapshots scope. Cached like every other read (30-min TTL).
@@ -2211,13 +2231,9 @@ export function useOptimizerAccountSnapshots(
   const enabled = Boolean(brandId && adAccountId);
 
   const query = useQuery({
+    ...accountSnapshotsQuery(brandId, adAccountId as string, level),
     queryKey,
-    queryFn: () =>
-      withReadTimeout(fetchAccountSnapshots(brandId, adAccountId as string, scope, false)),
     enabled,
-    staleTime: TEN_MINUTES,
-    gcTime: THIRTY_MINUTES,
-    retry: retryUnlessTimeout(1),
   });
 
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -2250,6 +2266,8 @@ export function useOptimizerAccountSnapshots(
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
     targeting: query.data?.targeting ?? EMPTY_TARGETING,
+    inactiveWindows: query.data?.inactiveWindows ?? EMPTY_INACTIVE_WINDOWS,
+    timezone: query.data?.timezone ?? null,
     fetchedAt: query.data?.fetchedAt ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     refresh,
@@ -2313,6 +2331,19 @@ export function useOptimizerAdsetInventory(
     refresh,
     canRefresh,
     isRefreshing: query.isFetching,
+  };
+}
+
+/** The enrolled-roster read as query options: one definition for every surface that reads
+ *  `optimizerQueryKeys.enrolledAdsets`, so the detail, its prefetch and the Activity feed's
+ *  names share one cache entry. */
+export function enrolledAdsetsQuery(portfolioId: string) {
+  return {
+    queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
+    queryFn: () => withReadTimeout(fetchEnrolledAdsets(portfolioId)),
+    staleTime: TEN_MINUTES,
+    gcTime: THIRTY_MINUTES,
+    retry: retryUnlessTimeout(1),
   };
 }
 
@@ -2622,11 +2653,7 @@ export function usePrefetchPortfolioDetail(brandId: string) {
         queryFn: () => withReadTimeout(fetchTimelineEvents(portfolioId)),
         staleTime: FIVE_MINUTES,
       });
-      void queryClient.prefetchQuery({
-        queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
-        queryFn: () => withReadTimeout(fetchEnrolledAdsets(portfolioId)),
-        staleTime: TEN_MINUTES,
-      });
+      void queryClient.prefetchQuery(enrolledAdsetsQuery(portfolioId));
     },
     [brandId, queryClient],
   );

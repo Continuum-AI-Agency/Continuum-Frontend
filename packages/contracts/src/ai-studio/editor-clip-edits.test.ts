@@ -4,8 +4,13 @@ import {
   editorCaptionWordsWithText,
   editorClipAtSourceIn,
   editorClipAtSpeed,
+  editorClipRateAt,
+  editorClipSourceAt,
+  editorClipSourceSpan,
+  editorClipWindow,
   editorClipWithLocalFades,
   editorClipWithRetainedFades,
+  editorTimeRemapRateAt,
 } from './editor-clip-edits';
 import {
   editorAudioClipSchema,
@@ -65,7 +70,23 @@ test('speed keeps source span and scales keyframes, fades and automation togethe
   expect(next.keyframes[0].timeSec).toBe(3);
   expect([next.fadeInSec, next.fadeOutSec]).toEqual([1, 2]);
   expect(() => editorClipAtSpeed(clip, 0)).toThrow();
-  expect(() => editorClipAtSpeed({ ...clip, reverse: true }, 2)).toThrow();
+  // Reverse is a direction, not a rate: the same source span plays backwards in half the time.
+  const reversed = editorClipAtSpeed({ ...clip, reverse: true }, 2);
+  expect([reversed.reverse, reversed.durationSec, reversed.sourceInSec]).toEqual([true, 4, 2]);
+  // A remap curve carries its own rate; a constant speed would silently flatten it.
+  expect(() =>
+    editorClipAtSpeed(
+      {
+        ...clip,
+        durationSec: 2,
+        timeRemap: [
+          { timeSec: 0, sourceSec: 2, interpolation: 'linear' },
+          { timeSec: 2, sourceSec: 3, interpolation: 'linear' },
+        ],
+      },
+      2,
+    ),
+  ).toThrow('speed-ramped or frozen');
 });
 
 test('caption spelling keeps timing and metadata and refuses an implicit realignment', () => {
@@ -154,4 +175,95 @@ test('retained fade clocks survive source trim, speed and explicit local reautho
       audioFadeClock: { offsetSec: NaN, durationSec: 10 },
     }),
   ).toThrow();
+});
+
+const ramp = [
+  { timeSec: 0, sourceSec: 10, interpolation: 'linear' as const },
+  { timeSec: 1, sourceSec: 11, interpolation: 'linear' as const },
+  { timeSec: 3, sourceSec: 11.4, interpolation: 'linear' as const },
+  { timeSec: 4, sourceSec: 12.4, interpolation: 'linear' as const },
+];
+
+test('the source clock answers for constant rate, reverse and a remap curve alike', () => {
+  const plain = { durationSec: 4, sourceInSec: 10, playbackRate: 2 };
+  expect(editorClipSourceAt(plain, 1.5)).toBe(13);
+  expect(editorClipRateAt(plain, 1.5)).toBe(2);
+  expect(editorClipSourceSpan(plain)).toEqual({ startSec: 10, endSec: 18 });
+  const reversed = { ...plain, reverse: true };
+  expect(editorClipSourceAt(reversed, 0)).toBe(18);
+  expect(editorClipSourceAt(reversed, 4)).toBe(10);
+  expect(editorClipRateAt(reversed, 1)).toBe(-2);
+  const remapped = { durationSec: 4, timeRemap: ramp };
+  expect(editorClipSourceAt(remapped, 0.5)).toBe(10.5);
+  // 20% in the middle, normal either side.
+  expect(editorClipRateAt(remapped, 2)).toBeCloseTo(0.2, 9);
+  expect(editorClipRateAt(remapped, 3.5)).toBe(1);
+  expect(editorClipSourceAt(remapped, 99)).toBe(12.4);
+  expect(editorClipSourceSpan(remapped)).toEqual({ startSec: 10, endSec: 12.4 });
+});
+
+test('a hold segment freezes the frame and a smoothstep segment eases both ends', () => {
+  const held = [
+    { timeSec: 0, sourceSec: 1, interpolation: 'hold' as const },
+    { timeSec: 2, sourceSec: 5, interpolation: 'linear' as const },
+  ];
+  expect(editorClipSourceAt({ durationSec: 2, timeRemap: held }, 1.9)).toBe(1);
+  expect(editorClipRateAt({ durationSec: 2, timeRemap: held }, 1)).toBe(0);
+  const eased = [
+    { timeSec: 0, sourceSec: 0, interpolation: 'bezier' as const },
+    { timeSec: 2, sourceSec: 2, interpolation: 'linear' as const },
+  ];
+  expect(editorTimeRemapRateAt(eased, 0)).toBeCloseTo(0, 9);
+  expect(editorTimeRemapRateAt(eased, 1)).toBeCloseTo(1.5, 9);
+  expect(editorClipSourceAt({ durationSec: 2, timeRemap: eased }, 1)).toBeCloseTo(1, 9);
+});
+
+test('a window re-bases a clip so each piece shows exactly the frames it did', () => {
+  const remapped = { durationSec: 4, timeRemap: ramp };
+  const right = editorClipWindow(remapped, 2, 4);
+  expect(right.durationSec).toBe(2);
+  expect(right.timeRemap?.[0]).toEqual({ timeSec: 0, sourceSec: 11.2, interpolation: 'linear' });
+  for (const local of [0, 0.5, 1, 1.5, 2])
+    expect(editorClipSourceAt(right, local)).toBeCloseTo(
+      editorClipSourceAt(remapped, 2 + local),
+      9,
+    );
+  const left = editorClipWindow(remapped, 0, 2);
+  for (const local of [0, 0.5, 1, 1.5, 2])
+    expect(editorClipSourceAt(left, local)).toBeCloseTo(editorClipSourceAt(remapped, local), 9);
+  const reversed = { durationSec: 4, sourceInSec: 10, playbackRate: 2, reverse: true };
+  const tail = editorClipWindow(reversed, 3, 4);
+  expect(tail.sourceInSec).toBe(10);
+  expect(editorClipSourceAt(tail, 0)).toBe(editorClipSourceAt(reversed, 3));
+  const bezier = [
+    { timeSec: 0, sourceSec: 0, interpolation: 'bezier' as const },
+    { timeSec: 4, sourceSec: 4, interpolation: 'linear' as const },
+  ];
+  const middle = editorClipWindow({ durationSec: 4, timeRemap: bezier }, 1, 3);
+  for (const local of [0, 0.4, 1, 1.6, 2])
+    expect(editorClipSourceAt(middle, local)).toBeCloseTo(
+      editorClipSourceAt({ durationSec: 4, timeRemap: bezier }, 1 + local),
+      1,
+    );
+  expect(() => editorClipWindow(remapped, 3, 3)).toThrow('inside the clip');
+});
+
+test('a clip schema holds a remap curve to the clip: start 0, end at the duration, no rate beside it', () => {
+  const base = {
+    id: 'v',
+    kind: 'video',
+    timelineStartSec: 0,
+    durationSec: 4,
+    source: { sourceType: 'library_asset', assetId: 'a' },
+    sourceInSec: 10,
+  };
+  expect(editorVideoClipSchema.parse({ ...base, timeRemap: ramp }).timeRemap).toHaveLength(4);
+  expect(editorVideoClipSchema.parse({ ...base, timeRemap: [] }).timeRemap).toEqual([]);
+  const bad = (patch: object) => editorVideoClipSchema.safeParse({ ...base, ...patch });
+  expect(bad({ timeRemap: ramp.slice(0, 3) }).success).toBe(false);
+  expect(bad({ timeRemap: ramp.slice(1) }).success).toBe(false);
+  expect(bad({ timeRemap: [ramp[0]] }).success).toBe(false);
+  expect(bad({ timeRemap: ramp, playbackRate: 2 }).success).toBe(false);
+  expect(bad({ timeRemap: ramp, reverse: true }).success).toBe(false);
+  expect(bad({ timeRemap: [ramp[0], ramp[0], ramp[3]] }).success).toBe(false);
 });

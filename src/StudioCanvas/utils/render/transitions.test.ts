@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
+import { EDITOR_OVERLAP_TRANSITION_TYPES } from '@continuum/contracts';
 import {
   computeOutputPlacements,
   fadeColorFor,
+  glitchSlices,
   headFadeFor,
   isOverlapTransition,
   overlapInSecFor,
@@ -146,5 +148,97 @@ describe('transitionOverlayAt', () => {
 
   it('returns null in the clear middle', () => {
     expect(transitionOverlayAt(5, 10, head, tail)).toBeNull();
+  });
+});
+
+describe('the new transition vocabulary', () => {
+  it('overlaps exactly the types the contract says overlap, and flash is a colour ramp', () => {
+    for (const type of [
+      'blur',
+      'whipLeft',
+      'whipRight',
+      'whipUp',
+      'whipDown',
+      'zoomBlur',
+      'glitch',
+    ] as const)
+      expect(isOverlapTransition(type)).toBe(true);
+    expect(isOverlapTransition('flash')).toBe(false);
+    expect(fadeColorFor('flash')).toBe('#ffffff');
+    expect(
+      ['blur', 'whip', 'zoom_blur', 'glitch'].every((type) =>
+        EDITOR_OVERLAP_TRANSITION_TYPES.has(type as never),
+      ),
+    ).toBe(true);
+    expect(EDITOR_OVERLAP_TRANSITION_TYPES.has('flash')).toBe(false);
+    expect(overlapInSecFor({ type: 'whipLeft', durationSec: 0.4 })).toBe(0.4);
+    expect(overlapInSecFor({ type: 'flash', durationSec: 0.4 })).toBe(0);
+  });
+
+  it('a flash snaps white in at the cut and falls away faster than a dip', () => {
+    const head = headFadeFor({ type: 'flash', durationSec: 0.4 }, false);
+    const dip = headFadeFor({ type: 'dipWhite', durationSec: 0.4 }, false);
+    expect(head).toEqual({ color: '#ffffff', durationSec: 0.2, curve: 2.5 });
+    expect(dip?.curve).toBeUndefined();
+    const flashAt = (local: number) =>
+      transitionOverlayAt(local, 4, head, tailFadeFor({ type: 'flash', durationSec: 0.4 }))
+        ?.alpha ?? 0;
+    const dipAt = (local: number) => transitionOverlayAt(local, 4, dip, undefined)?.alpha ?? 0;
+    expect(flashAt(0)).toBe(1);
+    expect(flashAt(0.1)).toBeLessThan(dipAt(0.1));
+    // Arriving: late then sudden; the very last frame before the cut is white.
+    expect(flashAt(3.9)).toBeLessThan(0.5);
+    expect(flashAt(3.999)).toBeGreaterThan(0.98);
+    expect(flashAt(2)).toBe(0);
+  });
+
+  it('a whip moves both shots one way with a smear that is longest mid-whip and gone at rest', () => {
+    const at = (k: number) => overlapTransitionAt('whipLeft', k, 1080, 1920);
+    expect(at(0).outgoing.translateX).toBe(0);
+    expect(at(1).outgoing.translateX).toBe(-1080);
+    expect(at(1).incoming.translateX).toBeCloseTo(0, 9);
+    expect(at(0.5).incoming.translateX - at(0.5).outgoing.translateX).toBeCloseTo(1080, 6);
+    const smear = (k: number) => Math.abs(at(k).outgoing.fx?.trail?.dx ?? 0);
+    expect(smear(0.5)).toBeGreaterThan(smear(0.2));
+    expect(smear(0.2)).toBeGreaterThan(smear(0.05));
+    expect(smear(0)).toBe(0);
+    expect(at(0.5).outgoing.fx?.trail?.dy).toBe(0);
+    const up = overlapTransitionAt('whipUp', 0.5, 1080, 1920);
+    expect(up.outgoing.translateX).toBe(0);
+    expect(up.outgoing.translateY).toBeLessThan(0);
+    expect(up.outgoing.fx?.trail?.dx).toBe(0);
+    expect(overlapTransitionAt('whipRight', 0.5, 1080, 1920).outgoing.translateX).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('blur and zoom-through peak in the middle and rest sharp at both ends', () => {
+    const blur = (k: number) => overlapTransitionAt('blur', k, 1000, 500).incoming;
+    expect(blur(0).fx?.blurPx).toBe(0);
+    expect(blur(1).fx?.blurPx).toBeCloseTo(0, 9);
+    expect(blur(0.5).fx?.blurPx).toBeCloseTo(20, 9);
+    expect(blur(0.25).alpha).toBe(0.25);
+    const zoom = (k: number) => overlapTransitionAt('zoomBlur', k, 1000, 500);
+    expect(zoom(0).outgoing.scale).toBe(1);
+    expect(zoom(1).outgoing.scale).toBeCloseTo(2.2, 9);
+    expect(zoom(1).incoming.scale).toBe(1);
+    expect(zoom(0.5).incoming.fx?.zoomTrail).toBeGreaterThan(zoom(0.1).incoming.fx?.zoomTrail ?? 1);
+  });
+
+  it('a glitch cuts hard at the middle and tears hardest there, identically on every render', () => {
+    const at = (k: number) => overlapTransitionAt('glitch', k, 1000, 500);
+    expect([at(0.49).outgoing.alpha, at(0.49).incoming.alpha]).toEqual([1, 0]);
+    expect([at(0.5).outgoing.alpha, at(0.5).incoming.alpha]).toEqual([0, 1]);
+    expect(at(0.5).incoming.fx?.rgbSplitPx).toBeCloseTo(25, 9);
+    expect(at(0).outgoing.fx?.rgbSplitPx).toBe(0);
+    expect(at(0).outgoing.fx?.slices).toEqual([]);
+    expect(at(0.5).incoming.fx?.slices).toHaveLength(4);
+    expect(at(0.45)).toEqual(at(0.45));
+    expect(glitchSlices(3, 1, 1000, 500)).toEqual(glitchSlices(3, 1, 1000, 500));
+    expect(glitchSlices(3, 1, 1000, 500)).not.toEqual(glitchSlices(4, 1, 1000, 500));
+    for (const slice of glitchSlices(6, 1, 1000, 500)) {
+      expect(slice.y).toBeGreaterThanOrEqual(0);
+      expect(slice.y + slice.h).toBeLessThanOrEqual(500);
+    }
   });
 });

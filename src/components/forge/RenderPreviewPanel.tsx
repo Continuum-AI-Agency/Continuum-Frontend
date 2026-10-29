@@ -47,6 +47,8 @@ import {
   effectiveValues,
   type RequestRow,
   type RequestRowMedia,
+  isRenderable,
+  rowStatusOf,
   validateRow,
 } from './renderRequestRows';
 
@@ -428,6 +430,8 @@ type RenderPreviewPanelProps = {
   rows: RequestRow[];
   rowId: string | null;
   renderSetId: string | null;
+  /** What the render confirmation found this row's own preflight refusing: a refused row is not proofed. */
+  refusal?: string;
   /** Previews another row: what a thumbnail in the strip does. No strip without it. */
   onRowChange?: (rowId: string) => void;
 };
@@ -458,6 +462,7 @@ function TemplatePreviewPanel({
   rows,
   rowId,
   renderSetId,
+  refusal,
   onRowChange,
 }: RenderPreviewPanelProps): JSX.Element {
   const queryClient = useQueryClient();
@@ -648,8 +653,8 @@ function TemplatePreviewPanel({
       contract.template.motion &&
         isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate),
     ) &&
-    Object.keys(validateRow(contract.variables, values)).length === 0 &&
-    (renderSetId === null || row?.check.state === 'ready') &&
+    // Proofed once the row would render: no wrong value, and no refusal the confirmation found.
+    isRenderable(rowStatusOf(validateRow(contract.variables, values), undefined, refusal)) &&
     !row?.proposed;
   const proofStart = useQuery({
     queryKey: ['forge-motion-proof', proofSettled],

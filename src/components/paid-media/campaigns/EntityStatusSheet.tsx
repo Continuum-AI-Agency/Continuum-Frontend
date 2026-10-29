@@ -22,6 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { useJainaOperatorAction } from '@/hooks/useJainaOperatorAction';
@@ -386,11 +387,11 @@ function PreparingCard() {
         <Spinner className="size-3.5" />
         Jaina is preparing the approval…
       </p>
-      <div className="h-4 w-2/3 rounded-md bg-muted/70 motion-safe:animate-pulse" />
-      <div className="h-14 rounded-md bg-muted/70 motion-safe:animate-pulse" />
+      <Skeleton className="h-4 w-2/3 rounded-md" />
+      <Skeleton className="h-14 rounded-md" />
       <div className="flex gap-2">
-        <div className="h-7 w-20 rounded-md bg-muted/70 motion-safe:animate-pulse" />
-        <div className="h-7 w-16 rounded-md bg-muted/70 motion-safe:animate-pulse" />
+        <Skeleton className="h-7 w-20 rounded-md" />
+        <Skeleton className="h-7 w-16 rounded-md" />
       </div>
     </div>
   );

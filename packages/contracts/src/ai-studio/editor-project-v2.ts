@@ -175,6 +175,14 @@ export const editorMaskSchema = z
   });
 export type EditorMask = z.infer<typeof editorMaskSchema>;
 
+/**
+ * One point of a clip's time-remap curve. `timeSec` is clip-local OUTPUT time (0 .. the clip's
+ * durationSec); `sourceSec` is the ABSOLUTE source-file second shown then (the same clock as
+ * `sourceInSec`). `interpolation` is how the segment STARTING at this point reaches the next:
+ * `linear` (constant speed), `bezier` (ease in and out, smoothstep) or `hold` (stay on this
+ * frame until the next point, then jump). A slow-motion ramp is a rising curve whose slope falls
+ * below 1; a freeze is two points with the same `sourceSec`; a reverse is a falling curve.
+ */
 export const editorTimeRemapPointSchema = z
   .object({
     timeSec: secondsSchema,
@@ -183,6 +191,30 @@ export const editorTimeRemapPointSchema = z
   })
   .strict();
 export type EditorTimeRemapPoint = z.infer<typeof editorTimeRemapPointSchema>;
+
+/**
+ * Why a clip's `timeRemap` cannot stand, or undefined. A curve starts at 0, rises strictly in
+ * time and ends at the clip's duration; it REPLACES `playbackRate` and `reverse`, so both stay
+ * at their defaults beside it (an empty array is "no remap"). Audio and video clips share it.
+ */
+export const editorTimeRemapIssue = (clip: {
+  durationSec: number;
+  playbackRate: number;
+  reverse: boolean;
+  timeRemap?: readonly { timeSec: number }[];
+}): string | undefined => {
+  const points = clip.timeRemap;
+  if (!points?.length) return undefined;
+  if (points.length < 2) return 'timeRemap needs at least two points';
+  if (clip.playbackRate !== 1 || clip.reverse)
+    return 'a time-remapped clip keeps playbackRate 1 and reverse false; the curve carries both';
+  if (Math.abs(points[0].timeSec) > 0.001) return 'timeRemap must start at clip time 0';
+  if (Math.abs(points[points.length - 1].timeSec - clip.durationSec) > 0.002)
+    return 'timeRemap must end at the clip duration';
+  if (points.some((point, index) => index > 0 && point.timeSec <= points[index - 1].timeSec))
+    return 'timeRemap times must rise strictly';
+  return undefined;
+};
 
 export const editorAudioAutomationPointSchema = z
   .object({
@@ -432,7 +464,11 @@ export const editorVideoClipSchema = z
     {
       message: 'video audio fades cannot exceed clip duration',
     },
-  );
+  )
+  .superRefine((clip, context) => {
+    const message = editorTimeRemapIssue(clip);
+    if (message) context.addIssue({ code: 'custom', path: ['timeRemap'], message });
+  });
 export type EditorVideoClip = z.infer<typeof editorVideoClipSchema>;
 
 export const editorAudioClipSchema = z
@@ -462,7 +498,11 @@ export const editorAudioClipSchema = z
     {
       message: 'audio fades cannot exceed clip duration',
     },
-  );
+  )
+  .superRefine((clip, context) => {
+    const message = editorTimeRemapIssue(clip);
+    if (message) context.addIssue({ code: 'custom', path: ['timeRemap'], message });
+  });
 export type EditorAudioClip = z.infer<typeof editorAudioClipSchema>;
 
 export const editorOverlayClipSchema = z
@@ -674,23 +714,50 @@ export const editorTrackSchema = z.discriminatedUnion('kind', [
 ]);
 export type EditorTrack = z.infer<typeof editorTrackSchema>;
 
+/**
+ * The transition vocabulary. `crossfade`, `slide`, `wipe`, `zoom`, `blur`, `whip`, `zoom_blur`,
+ * `glitch` and `custom` OVERLAP the two clips (the next one starts that much earlier);
+ * `dip_to_black`, `dip_to_white` and `flash` are single-clip colour ramps and do not.
+ * `parameters.direction` (left | right | up | down) aims slide, wipe and whip.
+ */
+export const EDITOR_TRANSITION_TYPES = [
+  'cut',
+  'crossfade',
+  'dip_to_black',
+  'dip_to_white',
+  'flash',
+  'wipe',
+  'slide',
+  'zoom',
+  'blur',
+  'whip',
+  'zoom_blur',
+  'glitch',
+  'custom',
+] as const;
+export const editorTransitionTypeSchema = z.enum(EDITOR_TRANSITION_TYPES);
+export type EditorTransitionType = z.infer<typeof editorTransitionTypeSchema>;
+
+/** Transitions that overlap the two clips; the rest sit on the cut (cut, dips, flash). */
+export const EDITOR_OVERLAP_TRANSITION_TYPES: ReadonlySet<EditorTransitionType> = new Set([
+  'crossfade',
+  'slide',
+  'wipe',
+  'zoom',
+  'blur',
+  'whip',
+  'zoom_blur',
+  'glitch',
+  'custom',
+]);
+
 export const editorTransitionSchema = z
   .object({
     id: editorIdSchema,
     trackId: editorIdSchema,
     fromClipId: editorIdSchema,
     toClipId: editorIdSchema,
-    transitionType: z.enum([
-      'cut',
-      'crossfade',
-      'dip_to_black',
-      'dip_to_white',
-      'wipe',
-      'slide',
-      'zoom',
-      'blur',
-      'custom',
-    ]),
+    transitionType: editorTransitionTypeSchema,
     transitionId: editorIdSchema.optional(),
     durationSec: positiveSecondsSchema,
     alignment: z.enum(['before_cut', 'centered', 'after_cut']).default('centered'),

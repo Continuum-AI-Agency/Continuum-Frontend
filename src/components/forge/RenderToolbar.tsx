@@ -29,6 +29,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Fragment, type ReactNode, type Ref, useId, useMemo, useState } from 'react';
+import { draftDropTarget, type SelectedFile } from '@/components/forge/AiVariationsDialog';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -244,8 +245,7 @@ export function RenderToolbar({
   fireHint,
   busy,
   onRender,
-  onReviewReady,
-  readyCount,
+  heldLabel,
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
@@ -268,8 +268,11 @@ export function RenderToolbar({
   inputSets: ApiRenderInputSet[];
   canAddRows: boolean;
   onAddRow: () => void;
-  /** Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. */
-  onDraftWithAi: () => void;
+  /**
+   * Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. `dropped`:
+   * files dropped on Add, attached when the draft opens.
+   */
+  onDraftWithAi: (dropped?: Promise<SelectedFile[]>) => void;
   draftAnchorRef?: Ref<HTMLButtonElement>;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
   /** Layer Show switches no row can change yet; picking one asks for it per row. */
@@ -304,8 +307,8 @@ export function RenderToolbar({
   fireHint: string | null;
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
-  onReviewReady?: () => void;
-  readyCount?: number;
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
+  heldLabel?: string;
 }) {
   const current = templates.find(
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
@@ -422,6 +425,8 @@ export function RenderToolbar({
                     size="sm"
                     variant="outline"
                     className="gap-1.5"
+                    title="Add rows — or drop files here to draft them with AI"
+                    {...draftDropTarget(canAddRows ? onDraftWithAi : null)}
                   >
                     <Plus className="size-3.5" aria-hidden /> Add
                     <ChevronDown className="size-3.5" aria-hidden />
@@ -432,7 +437,7 @@ export function RenderToolbar({
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
                   <Plus aria-hidden /> Blank row
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canAddRows} onClick={onDraftWithAi}>
+                <DropdownMenuItem disabled={!canAddRows} onClick={() => onDraftWithAi()}>
                   <Sparkles aria-hidden /> Draft with AI…
                 </DropdownMenuItem>
                 <DropdownMenuSub>
@@ -547,8 +552,7 @@ export function RenderToolbar({
               fireHint={fireHint}
               firing={busy === 'firing'}
               onRender={onRender}
-              onReviewReady={onReviewReady}
-              readyCount={readyCount}
+              heldLabel={heldLabel}
             />
           </Control>
         </>
@@ -645,8 +649,7 @@ function RenderButton({
   fireHint,
   firing,
   onRender,
-  onReviewReady,
-  readyCount,
+  heldLabel,
 }: {
   selectedCount: number;
   files: { total: number; byRatio: Array<[ratio: string, count: number]>; replacements: number };
@@ -654,8 +657,8 @@ function RenderButton({
   fireHint: string | null;
   firing: boolean;
   onRender: () => void;
-  onReviewReady?: () => void;
-  readyCount?: number;
+  /** The set holds an unconfirmed render: Render opens it, and says so. */
+  heldLabel?: string;
 }) {
   const hintId = useId();
   const showHint = disabled && selectedCount > 0 && Boolean(fireHint);
@@ -674,41 +677,39 @@ function RenderButton({
       ) : (
         <Play className="size-3.5" aria-hidden />
       )}
-      {selectedCount
-        ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
-        : 'Render'}
+      {heldLabel
+        ? heldLabel
+        : selectedCount
+          ? `Render ${plural(selectedCount, 'row')} · ${plural(files.total, 'file')}`
+          : 'Render'}
     </Button>
   );
-  const content = !selectedCount ? (
-    button
-  ) : (
-    <Tooltip>
-      <TooltipTrigger render={button} />
-      <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
-        {files.byRatio.map(([ratio, count], index) => (
-          <Fragment key={ratio}>
-            {index > 0 ? <span aria-hidden>·</span> : null}
-            <RatioGlyph ratio={ratio} />
-            {ratio} ×{count}
-          </Fragment>
-        ))}
-        {files.replacements ? (
-          <span>
-            {files.byRatio.length ? '· ' : ''}
-            {plural(files.replacements, 'ad replacement')}, one file each
-          </span>
-        ) : null}
-      </TooltipContent>
-    </Tooltip>
-  );
+  const content =
+    heldLabel || !selectedCount ? (
+      button
+    ) : (
+      <Tooltip>
+        <TooltipTrigger render={button} />
+        <TooltipContent side="bottom" className="font-mono text-2xs tabular-nums">
+          {files.byRatio.map(([ratio, count], index) => (
+            <Fragment key={ratio}>
+              {index > 0 ? <span aria-hidden>·</span> : null}
+              <RatioGlyph ratio={ratio} />
+              {ratio} ×{count}
+            </Fragment>
+          ))}
+          {files.replacements ? (
+            <span>
+              {files.byRatio.length ? '· ' : ''}
+              {plural(files.replacements, 'ad replacement')}, one file each
+            </span>
+          ) : null}
+        </TooltipContent>
+      </Tooltip>
+    );
   return (
     <div className="flex max-w-md flex-col items-start gap-1">
       {content}
-      {onReviewReady ? (
-        <Button type="button" size="xs" variant="outline" disabled={firing} onClick={onReviewReady}>
-          Review {readyCount} ready rows
-        </Button>
-      ) : null}
       {showHint ? (
         <p id={hintId} role="status" className="text-xs text-muted-foreground">
           {fireHint}

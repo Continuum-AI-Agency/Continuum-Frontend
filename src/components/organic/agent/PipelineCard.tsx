@@ -27,6 +27,7 @@ import {
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
 import { rankCardMedia, useDraftChatMedia } from '../hooks/useDraftStoryboard';
@@ -65,9 +66,7 @@ function PreviewImages({
   onRecover: (media: ChatMedia) => void;
 }) {
   if (media.length === 0) {
-    return pending ? (
-      <div aria-hidden="true" className="h-[220px] w-full animate-pulse rounded-lg bg-muted/60" />
-    ) : null;
+    return pending ? <Skeleton aria-hidden="true" className="h-[220px] w-full rounded-lg" /> : null;
   }
   return (
     <div className={cn('h-[220px] w-full overflow-hidden rounded-lg', IMAGE_OUTLINE)}>

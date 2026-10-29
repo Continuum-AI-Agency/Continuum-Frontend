@@ -18,8 +18,10 @@ import type {
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api/errors';
+import { forgetPageSession, isHeld, SESSION_EXPIRED, useRenderHold } from './renderHold';
 
 const signed = (token = 'batch-token', expiresAt = '2999-01-01T00:00:00.000Z') => ({
+  batchId: `batch-of-${token}`,
   confirmationToken: token,
   expiresAt,
   readiness: {
@@ -63,6 +65,13 @@ installPickerDomGlobals();
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const SET = '33333333-3333-4333-8333-333333333333';
+const SCOPE = {
+  userId: '77777777-7777-4777-8777-777777777777',
+  brandId: BRAND,
+  bindingId: null,
+  templateKey: '133',
+  renderSetId: SET,
+};
 const OPS = { id: '66666666-6666-4666-8666-666666666661', channelName: 'renders' };
 
 const CONTRACT = {
@@ -143,9 +152,13 @@ function setup(
   const onOpenChange = mock((_open: boolean) => undefined);
   const rows = over.rows ?? ROWS;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The set's hold, read live as the grid reads it.
+  function Held(props: Omit<Parameters<typeof RenderConfirmDialog>[0], 'holdScope' | 'held'>) {
+    return <RenderConfirmDialog {...props} holdScope={SCOPE} held={useRenderHold(SCOPE)} />;
+  }
   render(
     <QueryClientProvider client={client}>
-      <RenderConfirmDialog
+      <Held
         open
         onOpenChange={onOpenChange}
         brandId={BRAND}
@@ -176,7 +189,11 @@ beforeEach(() => {
   batchPreflightMock.mockImplementation(async () => signed());
   createBatchMock.mockClear();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  forgetPageSession();
+  localStorage.clear();
+});
 
 describe('RenderConfirmDialog', () => {
   test('one preflight signs the set’s delivery, and a row’s own target wins over its default', async () => {
@@ -273,6 +290,38 @@ describe('RenderConfirmDialog', () => {
     expect(within(dialog).getByRole('radio', { name: 'Final' }).hasAttribute('data-disabled')).toBe(
       true,
     );
+  });
+
+  test('a confirm with no answer holds the batch: the dialog shows what was sent, and Retry re-sends that token', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { dialog, onFired } = setup();
+    await waitFor(() => expect(renderButton().disabled).toBe(false));
+    fireEvent.click(renderButton());
+    const view = await screen.findByRole('region', { name: 'Held batch' });
+    expect(view.textContent).toContain('What was sent: 2 rows');
+    expect(isHeld(SCOPE)).toBe(true);
+    // Held: nothing is signed again while it is.
+    const checks = batchPreflightMock.mock.calls.length;
+    fireEvent.click(within(view).getByRole('button', { name: 'Retry this batch' }));
+    await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+    expect(createBatchMock.mock.calls[1]?.[0]).toEqual(createBatchMock.mock.calls[0]?.[0]);
+    expect(batchPreflightMock.mock.calls.length).toBe(checks);
+    await waitFor(() => expect(onFired).toHaveBeenCalled());
+    expect(isHeld(SCOPE)).toBe(false);
+    expect(dialog).toBeTruthy();
+  });
+
+  test('a first send the session refused made nothing: not held, and says sign in', async () => {
+    createBatchMock.mockImplementationOnce(async () => {
+      throw new ApiError('Unauthorized', 401);
+    });
+    setup();
+    await waitFor(() => expect(renderButton().disabled).toBe(false));
+    fireEvent.click(renderButton());
+    expect(await screen.findByText(SESSION_EXPIRED)).toBeTruthy();
+    expect(isHeld(SCOPE)).toBe(false);
   });
 
   test('a token about to lapse is re-signed before it is spent', async () => {

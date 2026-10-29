@@ -20,7 +20,7 @@ describe('Jaina analysis progress', () => {
           }),
           part({
             kind: 'layer',
-            id: 'campaign',
+            id: 'campaign_scoreboard',
             status: 'completed',
             label: 'Campaign evidence checked',
           }),
@@ -47,30 +47,49 @@ describe('Jaina analysis progress', () => {
     render(
       <JainaAnalysisProgress
         message={message([
-          part({ kind: 'notice', id: 'budget', status: 'running', label: 'This can take a few minutes.' }),
-          part({ kind: 'layer', id: 'campaign', status: 'completed', label: 'Campaign evidence checked' }),
-          part({ kind: 'layer', id: 'creative', status: 'running', label: 'Reading the creative tier' }),
+          part({
+            kind: 'notice',
+            id: 'budget',
+            status: 'running',
+            label: 'This can take a few minutes.',
+          }),
+          part({
+            kind: 'layer',
+            id: 'campaign_scoreboard',
+            status: 'completed',
+            label: 'Campaign evidence checked',
+          }),
+          part({
+            kind: 'layer',
+            id: 'creative_tier',
+            status: 'running',
+            label: 'Reading the creative tier',
+          }),
           part({ kind: 'hypothesis', id: 'cpm', status: 'completed', label: 'CPM closed' }),
         ])}
       />,
     );
-    const rows = Array.from(document.querySelectorAll('[data-testid="jaina-analysis-progress"] li'));
+    const rows = Array.from(
+      document.querySelectorAll('[data-testid="jaina-analysis-progress"] li'),
+    );
     expect(rows.map((row) => [row.textContent, row.getAttribute('data-status')])).toEqual([
-      ['Campaign evidence checked', 'completed'],
-      ['Reading the creative tier', 'running'],
-      ['CPM closed', 'completed'],
+      ['Reading campaign results', 'completed'],
+      ['Reading ads and creatives', 'running'],
+      ['Did it get more expensive to reach people?', 'completed'],
     ]);
-    expect(screen.getByRole('status').textContent?.startsWith('This can take a few minutes.')).toBe(true);
+    expect(screen.getByRole('status').textContent?.startsWith('This can take a few minutes.')).toBe(
+      true,
+    );
   });
 
   it('replaces the same progress identity and shows partial disclosure without duplicated entries', () => {
     render(
       <JainaAnalysisProgress
         message={message([
-          part({ kind: 'hypothesis', id: 'fatigue', status: 'running', label: 'Working' }),
+          part({ kind: 'drill', id: '1', status: 'running', label: 'Working' }),
           part({
-            kind: 'hypothesis',
-            id: 'fatigue',
+            kind: 'drill',
+            id: '1',
             status: 'partial',
             label: 'Some evidence is unfinished',
             detail: 'Reading deadline reached',
@@ -83,6 +102,49 @@ describe('Jaina analysis progress', () => {
       screen.getByText('Some evidence is unfinished').parentElement?.getAttribute('data-status'),
     ).toBe('partial');
     expect(screen.getByRole('status').textContent).toContain('Reading deadline reached');
+  });
+
+  // The Backend's layer label is the read's internal trigger and a hypothesis's is its id with
+  // spaces; the line is named from the code instead (field report 2026-10-21).
+  it('never prints the engine wording a layer or hypothesis row carries', () => {
+    render(
+      <JainaAnalysisProgress
+        message={message([
+          part({
+            kind: 'layer',
+            id: 'creative_tier',
+            status: 'running',
+            label: 'Entity explains >50% of account change.',
+          }),
+          part({
+            kind: 'hypothesis',
+            id: 'mix_vs_efficiency',
+            status: 'running',
+            label: 'mix vs efficiency',
+          }),
+          part({ kind: 'hypothesis', id: 'settling', status: 'completed', label: 'settling' }),
+          part({
+            kind: 'layer',
+            id: 'a_layer_from_tomorrow',
+            status: 'running',
+            label: 'Internal trigger.',
+          }),
+          part({
+            kind: 'hypothesis',
+            id: 'a_cause_from_tomorrow',
+            status: 'running',
+            label: 'raw id',
+          }),
+        ])}
+      />,
+    );
+    const text = screen.getByRole('status').textContent ?? '';
+    expect(text).not.toMatch(/>50%|mix vs efficiency|settling|Internal trigger|raw id/);
+    expect(text).toContain('Reading ads and creatives');
+    expect(text).toContain('Did spend move to weaker campaigns, or did the same ones get worse?');
+    expect(text).toContain('Are recent results still being reported?');
+    expect(text).toContain('Reading the account');
+    expect(text).toContain('Checking a possible cause');
   });
 
   it('renders no empty status and ignores invalid payloads', () => {

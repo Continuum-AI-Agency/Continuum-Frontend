@@ -67,17 +67,34 @@
  *      and long before any answer exists. That is the same disconnect, at the same risk point.
  * ---------------------------------------------------------------------------------------
  *
+ * P14 (run lifecycle) adds three, each the real observable a reader hit:
+ *
+ *   6. NO ORPHAN TOOL RESULT — on every SSE stream the bench read, each tool output chunk follows
+ *                     the tool part it lands on. One orphan is the SDK's "No tool invocation found",
+ *                     and the whole assistant message assembles with no parts.
+ *   7. ACCOUNT ON THE DTO — the live run, read off GET /api/agents/runs/active, names the ad account
+ *                     its conversation reads, so a toast's View opens it there.
+ *   8. DEPLOY DRILL  — with BENCH_DEPLOY_DRILL_PID naming the Backend process, the bench sends it
+ *                     SIGTERM (what `docker stop` sends) mid-run: the stream must end on the
+ *                     interrupted notice and the row read `failed` with the `interrupted` code —
+ *                     never `running`, never `cancelled`. The Backend is gone afterwards, so this
+ *                     phase runs last. Without the pid it is SKIPPED, by name.
+ *
  * Prerequisites (see e2e/README.md):
  *   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
  *   bun run dev:be
  * Run with: bun run jaina:runs:bench
+ *
+ * Where Docker (so the local stack) is unavailable, against production Supabase with a bench
+ * member: BENCH_EMAIL, BENCH_BRAND_ID and BENCH_AD_ACCOUNT_ID name the member, brand and account,
+ * and every session the bench writes is deleted at the end, as on the local stack.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { mintAccessTokenForEmail } from './support/auth';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-const OWNER_EMAIL = 'local@continuum.test';
+const OWNER_EMAIL = process.env.BENCH_EMAIL ?? 'local@continuum.test';
 // Must match the brand `supabase/baseline/fixtures.sql` seeds, or every brand-scoped call comes
 // back PERMISSION_DENIED before the run contract is ever reached.
 const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-4000-8000-0000000000b2';
@@ -85,11 +102,24 @@ const BRAND_ID = process.env.BENCH_BRAND_ID ?? '00000000-0000-4000-8000-00000000
 // Jaina's chat contract requires a `context.adAccountId`. The fixture brand has no linked
 // Meta account, so this is a well-formed id that Meta will reject — see (a) above. Seeding a
 // meta_ad_accounts row would not help: the token, not the row, is what Meta refuses.
-const AD_ACCOUNT_ID = 'act_000000000000000';
+const AD_ACCOUNT_ID = process.env.BENCH_AD_ACCOUNT_ID ?? 'act_000000000000000';
+
+/** The Backend process the deploy drill stops (phase 8). Unset, the drill is skipped by name. */
+const DRILL_PID = Number.parseInt(process.env.BENCH_DEPLOY_DRILL_PID ?? '', 10) || null;
+
+/** What the Backend tells a reader whose run the infrastructure stopped (`conversationRunStore`). */
+const INTERRUPTED_TEXT = 'This run was interrupted before Jaina finished.';
 
 // An inventory ask. Routes to the quick path, which reaches a real model call and a real tool
 // call in ~3.5s — long enough to walk away from. See (b) above.
 const PROMPT = 'List my active campaigns.';
+
+/**
+ * The drill needs a turn that is still working when the Backend stops: an analysis over two
+ * windows takes minutes, where the inventory ask above answers in seconds (from cache, faster).
+ */
+const DRILL_PROMPT =
+  'Why did the cost per conversation of my messaging campaigns change in the last 30 days versus the previous 30 days? Break it down by campaign and ad set.';
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -114,8 +144,28 @@ type Chunk = {
   toolCallId?: string;
   toolName?: string;
   delta?: string;
+  errorText?: string;
   transient?: boolean;
   data?: Record<string, unknown>;
+};
+
+/** Every SSE stream the bench read, for the orphan check (phase 6). */
+const streamsRead: Chunk[][] = [];
+
+/** Tool output chunks whose tool part had not reached the client before them. */
+const orphanToolResults = (chunks: readonly Chunk[]): string[] => {
+  const announced = new Set<string>();
+  const orphans: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.type === 'tool-input-available' && chunk.toolCallId) announced.add(chunk.toolCallId);
+    if (
+      (chunk.type === 'tool-output-available' || chunk.type === 'tool-output-error') &&
+      chunk.toolCallId &&
+      !announced.has(chunk.toolCallId)
+    )
+      orphans.push(chunk.toolCallId);
+  }
+  return orphans;
 };
 
 /** `createJainaUIChunkAdapter` addresses the assistant message by the run it projects. */
@@ -229,6 +279,7 @@ async function streamUntilAbandoned(
     await reader.cancel().catch(() => undefined);
   }
 
+  streamsRead.push(chunks);
   return { runId, messageId, chunks };
 }
 
@@ -260,7 +311,7 @@ const maxEventSeq = async (runId: string): Promise<number> => {
   return rows.reduce((max, row) => Math.max(max, row.seq ?? -1), -1);
 };
 
-const waitForTerminal = async (runId: string, timeoutMs = 180_000): Promise<string> => {
+const waitForTerminal = async (runId: string, timeoutMs = 300_000): Promise<string> => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const run = await getRun(runId);
@@ -268,6 +319,21 @@ const waitForTerminal = async (runId: string, timeoutMs = 180_000): Promise<stri
     await sleep(1000);
   }
   return 'timeout';
+};
+
+/**
+ * The row turns terminal a beat BEFORE the last frames land in the log (the frame goes out first,
+ * the append is flushed when the response ends), so a log read the instant the row flips can miss
+ * the tail. Against production Supabase that beat is seconds. Wait for the terminal frame itself.
+ */
+const waitForTerminalFrame = async (runId: string, timeoutMs = 60_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const rows = await listEventRows(runId);
+    if (rows.some((row) => row.event_type === 'response.done' || row.event_type === 'error'))
+      return;
+    await sleep(1000);
+  }
 };
 
 /** The durable replay the Frontend resumes from, parsed exactly as the Frontend parses it. */
@@ -356,6 +422,7 @@ async function main() {
 
   const seqAtAbandon = await maxEventSeq(runId);
   const finalStatus = await waitForTerminal(runId);
+  await waitForTerminalFrame(runId);
   const seqAfter = await maxEventSeq(runId);
 
   check(
@@ -470,6 +537,20 @@ async function main() {
   await queueReader.cancel().catch(() => undefined);
 
   const queuedNotice = secondChunks.find(isQueuedNotice);
+  // Phase 7, while the fenced run waits: it is certainly live, and the DTO the run store
+  // hydrates from must name the account its conversation reads.
+  const activeResponse = await fetch(
+    `${API}/api/agents/runs/active?brandId=${encodeURIComponent(BRAND_ID)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const activeBody = (await activeResponse.json().catch(() => ({}))) as {
+    runs?: Array<{ runId: string; adAccountId?: string | null }>;
+  };
+  // The bench's own live runs: the turn holding the session, and the one fenced behind it (whose
+  // row may not have landed yet on a loaded database). Each must name the account it reads.
+  const benchDtos = (activeBody.runs ?? []).filter((dto) =>
+    [sessionQueue, sessionDetach].includes((dto as { sessionId?: string }).sessionId ?? ''),
+  );
   check(
     'the second turn on a busy session is QUEUED, not run concurrently',
     !!queuedNotice,
@@ -510,10 +591,9 @@ async function main() {
   // `markConversationRunRunning` (agent.chat_started, response.created, response.run.created,
   // output_item.added) is deliberately silent on the SSE projection, so nothing can reach the
   // client until the run is marked running.
-  const toCancel = await streamUntilAbandoned(
-    accessToken,
-    sessionCancel,
-    (chunks) => chunks.length > 0,
+  // The `start` chunk, not merely the first: a slow lease claim sends a heartbeat notice first.
+  const toCancel = await streamUntilAbandoned(accessToken, sessionCancel, (chunks) =>
+    chunks.some((chunk) => chunk.type === 'start'),
   );
   check('captured a runId to cancel', toCancel.runId !== null, toCancel.messageId ?? '');
 
@@ -541,6 +621,113 @@ async function main() {
       'the run STAYS cancelled (the executor did not overwrite it)',
       run?.status === 'cancelled',
       run?.status ?? 'missing',
+    );
+  }
+
+  console.log('\n=== 6. NO ORPHAN TOOL RESULT (P14 row 1) ===');
+  const orphans = streamsRead.flatMap(orphanToolResults);
+  const toolOutputs = streamsRead
+    .flat()
+    .filter((c) => c.type === 'tool-output-available' || c.type === 'tool-output-error').length;
+  check(
+    'every tool output on every stream follows the tool part it lands on',
+    orphans.length === 0,
+    `${streamsRead.length} stream(s), ${toolOutputs} tool output chunk(s), ${orphans.length} orphan(s) ${orphans.slice(0, 3).join(', ')}`,
+  );
+
+  console.log('\n=== 7. ACCOUNT ON THE DTO (P14 row 7) ===');
+  check(
+    'the live run on /api/agents/runs/active names its ad account',
+    benchDtos.length > 0 && benchDtos.every((dto) => dto.adAccountId === AD_ACCOUNT_ID),
+    benchDtos.length > 0
+      ? benchDtos.map((dto) => `${dto.runId}: adAccountId=${String(dto.adAccountId)}`).join('; ')
+      : `no bench run in the active list (HTTP ${activeResponse.status}, ${activeBody.runs?.length ?? 0} runs)`,
+  );
+
+  console.log('\n=== 8. DEPLOY DRILL: SIGTERM mid-run (P14 rows 2–3) ===');
+  if (!DRILL_PID) {
+    console.log(
+      '  SKIP  deploy drill — BENCH_DEPLOY_DRILL_PID is not set, so no Backend was stopped',
+    );
+  } else {
+    const sessionDrill = `bench-jaina-drill-${stamp}`;
+    sessions.push(sessionDrill);
+    const drillController = new AbortController();
+    const drillResponse = await openChatStream(
+      accessToken,
+      sessionDrill,
+      DRILL_PROMPT,
+      drillController.signal,
+    );
+    const drillReader = drillResponse.body!.getReader();
+    const drillDecoder = new TextDecoder();
+    const drillChunks: Chunk[] = [];
+    let drillBuffer = '';
+    let signalled = false;
+    let drillRunId: string | null = null;
+    let startedAtMs: number | null = null;
+    const drillDeadline = Date.now() + 120_000;
+    // One read in flight at a time, polled once a second so the drill can fire while the wire is
+    // quiet; a read the timer outran is kept, never dropped with the chunk it carries.
+    let pendingRead: Promise<ReadableStreamReadResult<Uint8Array>> | null = null;
+    const timedRead = async (): Promise<{ done: boolean; value?: Uint8Array }> => {
+      pendingRead ??= drillReader.read();
+      const result = await Promise.race([pendingRead, sleep(1000).then(() => null)]).catch(
+        () => ({ done: true, value: undefined }) as const,
+      );
+      if (result) pendingRead = null;
+      return result ?? { done: false };
+    };
+    while (Date.now() < drillDeadline) {
+      // Mid-run: the model is reading (its first tool call is on the wire), or 15s past `start`.
+      if (
+        !signalled &&
+        startedAtMs !== null &&
+        (modelIsWorking(drillChunks) || Date.now() - startedAtMs >= 15_000)
+      ) {
+        // What a deploy's `docker stop` sends the API container.
+        process.kill(DRILL_PID, 'SIGTERM');
+        signalled = true;
+      }
+      const next = await timedRead();
+      if (next.done) break;
+      if (!next.value) continue;
+      const value = next.value;
+      drillBuffer += drillDecoder.decode(value, { stream: true });
+      const drained = drainSse(drillBuffer);
+      drillBuffer = drained.rest;
+      for (const chunk of drained.chunks) {
+        drillChunks.push(chunk);
+        if (chunk.type === 'start' && typeof chunk.messageId === 'string') {
+          drillRunId = RUN_ID_FROM_MESSAGE_ID.exec(chunk.messageId)?.[1] ?? null;
+          startedAtMs ??= Date.now();
+        }
+      }
+    }
+    drillController.abort();
+    streamsRead.push(drillChunks);
+    const errorChunk = drillChunks.find((c) => c.type === 'error');
+    check(
+      'the drill stopped the Backend mid-run',
+      signalled && drillRunId !== null,
+      `run ${drillRunId}`,
+    );
+    check(
+      'the stream ended on the interrupted notice, not "Run cancelled."',
+      errorChunk?.errorText?.startsWith(INTERRUPTED_TEXT) === true,
+      `error chunk: ${JSON.stringify(errorChunk?.errorText ?? null)}`,
+    );
+    if (drillRunId) await waitForTerminal(drillRunId, 60_000);
+    const drillRun = drillRunId ? await getRun(drillRunId) : null;
+    check(
+      'the run row reads failed with the interrupted code — never running, never cancelled',
+      drillRun?.status === 'failed' && (drillRun.error_message ?? '').startsWith('interrupted:'),
+      `status=${drillRun?.status} error_message=${JSON.stringify(drillRun?.error_message ?? null)}`,
+    );
+    check(
+      'the drill left no orphan tool result either',
+      orphanToolResults(drillChunks).length === 0,
+      `${drillChunks.length} chunk(s)`,
     );
   }
 

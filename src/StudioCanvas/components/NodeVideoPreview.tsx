@@ -18,11 +18,17 @@ import { cn } from '@/lib/utils';
  *
  * `nodrag` on the controls only — scrubbing must not drag the node, while the
  * picture itself stays a drag surface so the node can still be moved by it.
+ *
+ * No glass on the canvas. Loomix places its glass panes from screen-space rects as
+ * unscaled CSS offsets, so under the canvas zoom they land at zoom² of the buttons
+ * they back: stray lenses of the frame floating up and to the left (Airtable #406). The
+ * centre buttons keep a plain disc instead (50% black holds 3:1 over a white frame).
  */
 const CANVAS_PLAYER = [
   'aspect-auto! h-full w-full rounded-none border-0 bg-black/85',
   '[&_button]:nodrag [&_button]:nowheel',
   '[&_.pointer-events-auto]:nodrag [&_.pointer-events-auto]:nowheel',
+  '[&>[data-slot^=loomix-glass]]:hidden [&>div>button]:bg-black/50',
 ].join(' ');
 
 export function NodeVideoPreview({

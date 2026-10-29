@@ -51,7 +51,7 @@ afterEach(cleanup);
 
 describe('OptimizerActivity window', () => {
   it('defaults to 7 days and lets the operator pick 14 or 30', () => {
-    renderActivity(<OptimizerActivity brandId="brand-1" currency="USD" />);
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
     const seven = screen.getByRole('button', { name: '7d' });
     const fourteen = screen.getByRole('button', { name: '14d' });
     const thirty = screen.getByRole('button', { name: '30d' });
@@ -79,7 +79,7 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
         },
       }),
     ];
-    renderActivity(<OptimizerActivity brandId="brand-1" currency="MXN" />);
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
     expect(chip().getAttribute('data-platform')).toBe('google_ads');
     expect(chip().textContent).toBe('Google');
     expect(within(receiptLine()).getByTestId('receipt-label').textContent).toMatch(/^Google /);
@@ -92,7 +92,7 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
         receipt: { platform: 'tiktok_ads', requestId: 'tt-5d7', scheduled: 'next_day' },
       }),
     ];
-    renderActivity(<OptimizerActivity brandId="brand-1" currency="MXN" />);
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
     expect(chip().getAttribute('data-platform')).toBe('tiktok_ads');
     expect(chip().textContent).toBe('TikTok');
     expect(within(receiptLine()).getByTestId('receipt-label').textContent).toMatch(/^TikTok /);
@@ -101,7 +101,7 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
 
   it('a Meta row: Meta chip and the fbtrace id', () => {
     actions = [action({ receipt: { fbtrace_id: 'AbC123traceZ' } })];
-    renderActivity(<OptimizerActivity brandId="brand-1" currency="MXN" />);
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
     expect(chip().getAttribute('data-platform')).toBe('meta');
     expect(within(receiptLine()).getByTestId('receipt-label').textContent).toMatch(/^Meta /);
     expect(within(receiptLine()).getByText('AbC123traceZ')).toBeTruthy();
@@ -109,7 +109,7 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
 
   it('a malformed receipt falls back to Meta and invents no receipt line', () => {
     actions = [action({ receipt: { platform: 7, requestId: ['not', 'a', 'string'] } })];
-    renderActivity(<OptimizerActivity brandId="brand-1" currency="MXN" />);
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
     expect(chip().getAttribute('data-platform')).toBe('meta');
     expect(screen.queryByTestId('receipt-token')).toBeNull();
   });

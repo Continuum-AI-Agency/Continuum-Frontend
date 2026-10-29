@@ -373,12 +373,25 @@ export const RecommendationKindSchema = z.enum([
 ]);
 export type RecommendationKind = z.infer<typeof RecommendationKindSchema>;
 
+/** An ad set not ACTIVE on Meta now that spent inside d14 (a member paused this week): its
+ *  scoring windows only, carried beside the snapshot fleet so a portfolio's 7-day figure keeps
+ *  the spend it made before it stopped. Never engine input — it has no budget and no status. */
+export const InactiveAdsetWindowsSchema = z.object({
+  id: z.string().min(1),
+  windows: AdSetSnapshotSchema.shape.windows,
+});
+export type InactiveAdsetWindows = z.infer<typeof InactiveAdsetWindowsSchema>;
+
 /** The paid-media-metrics snapshot envelope. `snapshots` stays unknown here so each consumer
  * can preserve its existing per-row malformed-data policy. Nullable defaults keep cache rows
- * written before budget summaries/freshness metadata backward compatible. */
+ * written before budget summaries/freshness metadata backward compatible; `inactiveWindows`
+ * is [] from an edge or cache row older than it. */
 export const OptimizerSnapshotsEnvelopeSchema = z
   .object({
     snapshots: z.array(z.unknown()).catch([]).default([]),
+    inactiveWindows: z.array(InactiveAdsetWindowsSchema).catch([]).default([]),
+    /** The ad account's IANA timezone, which dated every window; null from an older edge. */
+    timezone: z.string().min(1).nullable().catch(null).default(null),
     fetchedAt: z.string().datetime().nullable().catch(null).default(null),
     budgetSummary: AboBudgetSummarySchema.nullable().catch(null).default(null),
     targeting: z.array(AdsetTargetingSchema).catch([]).default([]),
@@ -902,6 +915,25 @@ export const RecommendationEvidenceSchema = z
     window: z.enum(['d3', 'd7', 'd14']),
     estImpactPerDay: z.number().nullable(),
     source: z.string(),
+    /** S1 only: of `moves` movable items, `atCap` sat AT the velocity cap (the share S1 fires
+     *  on) and `breached` went PAST it, so the cap did not bind them. Absent on rows written
+     *  before the engine told the two apart; a malformed value reads as absent. */
+    capBinding: z
+      .object({
+        atCap: z.number().int().nonnegative(),
+        breached: z.number().int().nonnegative(),
+        moves: z.number().int().nonnegative(),
+      })
+      .optional()
+      .catch(undefined),
+    /** D1 only: the calendar day (YYYY-MM-DD) the ad set went missing, in the ad account's
+     *  timezone (UTC when the cycle held none). Count days from it at read time; `value` is
+     *  frozen at cycle time. Absent on older rows; a malformed value reads as absent. */
+    missingSinceDay: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional()
+      .catch(undefined),
   })
   .loose();
 export type RecommendationEvidence = z.infer<typeof RecommendationEvidenceSchema>;
@@ -1332,6 +1364,9 @@ export const SuggestionMemberSchema = z.object({
    *  what the wizard sums and holds to one currency. Absent from an older suggest edge. */
   currency: z.string().optional(),
   daily_budget: z.number().nonnegative().optional(),
+  /** The campaign's type on its platform (Google advertising_channel_type, verbatim:
+   *  SEARCH, PERFORMANCE_MAX…). Absent on Meta members and from an older suggest edge. */
+  channel_type: z.string().optional(),
 });
 export type SuggestionMember = z.infer<typeof SuggestionMemberSchema>;
 

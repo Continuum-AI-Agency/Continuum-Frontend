@@ -1,5 +1,6 @@
 @import "tailwindcss" source("../");
 @import "tw-animate-css";
+@import "./dither-tiles.css";
 @source "../../packages/contracts/src";
 @source "../node_modules/streamdown/dist/*.js";
 /* Relative to this file, so the Frontend's own node_modules (the standalone install
@@ -1248,26 +1249,150 @@ body {
   }
 }
 
-@utility skeleton-shimmer {
-  background-image: linear-gradient(
-    105deg,
-    color-mix(in oklch, var(--muted) 80%, transparent) 0%,
-    color-mix(in oklch, var(--muted) 65%, transparent) 40%,
-    color-mix(in oklch, var(--card) 90%, transparent) 50%,
-    color-mix(in oklch, var(--muted) 65%, transparent) 60%,
-    color-mix(in oklch, var(--muted) 80%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  animation: skeleton-shimmer 1.6s linear infinite;
+/* Skeleton loaders (ui/skeleton.tsx): ascii-reveal's `dither` look
+   (github.com/quanhoangindex/ascii-reveal). A faint field of block shades, and a band of
+   denser shades that sweeps across and flickers between two patterns. The shades are mask
+   tiles from dither-tiles.css (scripts/gen-dither-skeleton.mjs), inked with the theme's
+   foreground, so they follow every theme.
+
+   In `components`, not `@utility`: any utility a caller passes (absolute inset-0,
+   rounded-full, a bg-* backdrop tint) has to win, and twMerge can't see custom classes. */
+:root {
+  --dither-band: linear-gradient(90deg, transparent, #000 45%, #000 55%, transparent);
+  /* The glyphs useDitherReveal decodes content through. */
+  --ascii-font: var(--font-mono);
 }
 
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: -200% 0;
+@layer components {
+  .dither-skeleton {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
   }
-  100% {
-    background-position: 200% 0;
+
+  /* Behind the host's own content (z-index -1 inside the isolated host). */
+  .dither-skeleton::before,
+  .dither-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: var(--foreground);
+  }
+
+  .dither-skeleton::before {
+    opacity: 0.22;
+    -webkit-mask: var(--dither-base) 0 0 / var(--dither-tile) repeat;
+    mask: var(--dither-base) 0 0 / var(--dither-tile) repeat;
+  }
+
+  .dither-skeleton::after {
+    opacity: 0.75;
+    -webkit-mask-image: var(--dither-wave-a), var(--dither-band);
+    mask-image: var(--dither-wave-a), var(--dither-band);
+    -webkit-mask-size:
+      var(--dither-tile),
+      55% 100%;
+    mask-size:
+      var(--dither-tile),
+      55% 100%;
+    -webkit-mask-repeat: repeat, no-repeat;
+    mask-repeat: repeat, no-repeat;
+    -webkit-mask-position:
+      0 0,
+      -120% 0;
+    mask-position:
+      0 0,
+      -120% 0;
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+    animation-name: dither-sweep, dither-scramble;
+    animation-duration: 1.8s, 0.24s;
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95), steps(1, end);
+    animation-delay: var(--dither-delay, 0s), 0s;
+    animation-iteration-count: infinite;
+  }
+
+  /* Neighbouring bars sweep as one diagonal band instead of in lockstep. */
+  .dither-skeleton:nth-child(3n + 2) {
+    --dither-delay: 0.09s;
+  }
+  .dither-skeleton:nth-child(3n) {
+    --dither-delay: 0.18s;
+  }
+
+  /* A skeleton line that wraps like the sentence it stands in for (SkeletonText wrap). An
+     inline box can't hold the absolutely positioned layers above, so the host itself is
+     masked: the soft base field plus the wave inside the band. With box-decoration-clone
+     (SkeletonText adds it) each line fragment gets its own field and its own sweep. */
+  .dither-skeleton-inline {
+    background-color: color-mix(in oklab, var(--foreground) 75%, transparent);
+    -webkit-mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-a);
+    mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-a);
+    -webkit-mask-size:
+      var(--dither-tile),
+      55% 100%,
+      var(--dither-tile);
+    mask-size:
+      var(--dither-tile),
+      55% 100%,
+      var(--dither-tile);
+    -webkit-mask-repeat: repeat, no-repeat, repeat;
+    mask-repeat: repeat, no-repeat, repeat;
+    -webkit-mask-position:
+      0 0,
+      -120% 0,
+      0 0;
+    mask-position:
+      0 0,
+      -120% 0,
+      0 0;
+    -webkit-mask-composite: source-over, source-in, source-over;
+    mask-composite: add, intersect, add;
+    animation-name: dither-sweep-inline, dither-scramble-inline;
+    animation-duration: 1.8s, 0.24s;
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95), steps(1, end);
+    animation-iteration-count: infinite;
+  }
+}
+
+@keyframes dither-sweep {
+  to {
+    -webkit-mask-position:
+      0 0,
+      220% 0;
+    mask-position:
+      0 0,
+      220% 0;
+  }
+}
+
+@keyframes dither-scramble {
+  50% {
+    -webkit-mask-image: var(--dither-wave-b), var(--dither-band);
+    mask-image: var(--dither-wave-b), var(--dither-band);
+  }
+}
+
+@keyframes dither-sweep-inline {
+  to {
+    -webkit-mask-position:
+      0 0,
+      220% 0,
+      0 0;
+    mask-position:
+      0 0,
+      220% 0,
+      0 0;
+  }
+}
+
+@keyframes dither-scramble-inline {
+  50% {
+    -webkit-mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-b);
+    mask-image: var(--dither-base-soft), var(--dither-band), var(--dither-wave-b);
   }
 }
 
@@ -1377,10 +1502,7 @@ body {
         calc(100% + var(--hit-area-gap-x, 100vw))
       )
     );
-    height: max(
-      100%,
-      min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))
-    );
+    height: max(100%, min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh))));
     transform: translate(var(--hit-area-tx, -50%), -50%);
     opacity: 0;
   }
@@ -1408,10 +1530,7 @@ body {
         calc(100% + var(--hit-area-gap-x, 100vw))
       )
     );
-    height: max(
-      100%,
-      min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh)))
-    );
+    height: max(100%, min(var(--hit-area-floor), calc(100% + var(--hit-area-gap-y, 100vh))));
     transform: translate(var(--hit-area-tx, -50%), -50%);
     opacity: 0;
   }
@@ -1447,9 +1566,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer {
+  /* The still shade field stays; the sweeping band goes (parked off the edge when inline). */
+  .dither-skeleton::after {
+    display: none;
+  }
+  .dither-skeleton-inline {
     animation: none;
-    background: var(--muted);
   }
   .live-pulse {
     animation: none;
@@ -1466,15 +1588,6 @@ body {
   .btn-fill:focus-visible::before,
   .btn-fill[data-pressed]::before {
     opacity: 1;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
   }
 }
 
@@ -1514,6 +1627,171 @@ body {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Utilities required by ui/attachment.tsx (scroll-fade-x on AttachmentGroup) and ui/trace.tsx +
+   ui/attachment.tsx (shimmer on running titles). Copied from upstream shadcn@4.22.1
+   dist/tailwind.css; the installed shadcn package predates them. `tw-shimmer` is a distinct
+   keyframe from the `shimmer` one ui/skeleton.tsx animates. */
+
+@property --scroll-fade-s {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-e {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-mask {
+  syntax: "*";
+  inherits: false;
+}
+
+@theme inline {
+  @keyframes scroll-fade-reveal-s {
+    from {
+      --scroll-fade-s: 0px;
+    }
+    to {
+      --scroll-fade-s: var(--_scroll-fade-size-s, var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10))));
+    }
+  }
+  @keyframes scroll-fade-reveal-e {
+    from {
+      --scroll-fade-e: var(--_scroll-fade-size-e, var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10))));
+    }
+    to {
+      --scroll-fade-e: 0px;
+    }
+  }
+}
+
+@utility scroll-fade-x {
+  --_scroll-fade-size-s: var(
+    --scroll-fade-s-size,
+    var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10)))
+  );
+  --_scroll-fade-size-e: var(
+    --scroll-fade-e-size,
+    var(--scroll-fade-size, min(12%, calc(var(--spacing) * 10)))
+  );
+  --scroll-fade-inline: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--scroll-fade-s, 0px),
+    #000 calc(100% - var(--scroll-fade-e, 0px)),
+    transparent 100%
+  );
+  &:where([dir="rtl"], [dir="rtl"] *) {
+    --scroll-fade-inline: linear-gradient(
+      to left,
+      transparent 0,
+      #000 var(--scroll-fade-s, 0px),
+      #000 calc(100% - var(--scroll-fade-e, 0px)),
+      transparent 100%
+    );
+  }
+  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
+  mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+
+  @supports (animation-timeline: scroll()) {
+    animation:
+      scroll-fade-reveal-s 1ms ease-in-out,
+      scroll-fade-reveal-e 1ms ease-in-out;
+    animation-timeline: scroll(self inline), scroll(self inline);
+    animation-range:
+      0 var(--scroll-fade-reveal, calc(var(--spacing) * 24)),
+      calc(100% - var(--scroll-fade-reveal, calc(var(--spacing) * 24))) 100%;
+    animation-fill-mode: both;
+  }
+
+  @supports not (animation-timeline: scroll()) {
+    --scroll-fade-s: var(--_scroll-fade-size-s);
+    --scroll-fade-e: var(--_scroll-fade-size-e);
+  }
+}
+
+@property --shimmer-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 20deg;
+}
+@property --shimmer-image {
+  syntax: "*";
+  inherits: false;
+}
+@property --shimmer-text-fill {
+  syntax: "*";
+  inherits: false;
+}
+
+@theme inline {
+  @keyframes tw-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+}
+
+@utility shimmer {
+  --_spread: var(--shimmer-spread, calc(3ch + 40px));
+  --_base: currentColor;
+  --_highlight: var(
+    --shimmer-color,
+    oklch(from currentColor l c h / calc(alpha* 0.2))
+  );
+
+  background-image: var(
+    --shimmer-image,
+    linear-gradient(
+      calc(90deg + var(--shimmer-angle)),
+      var(--_base) calc(50% - var(--_spread)),
+      color-mix(in oklch, var(--_highlight), var(--_base) 50%)
+        calc(50% - var(--_spread) * 0.5),
+      var(--_highlight) 50%,
+      color-mix(in oklch, var(--_highlight), var(--_base) 50%)
+        calc(50% + var(--_spread) * 0.5),
+      var(--_base) calc(50% + var(--_spread))
+    )
+  );
+  background-repeat: no-repeat;
+  background-size: calc(200% + var(--_spread) * 2) 100%;
+  background-position: 0 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: var(--shimmer-text-fill, transparent);
+  animation: tw-shimmer var(--shimmer-duration, 2s) linear infinite;
+
+  @variant dark {
+    --_highlight: var(
+      --shimmer-color,
+      oklch(from currentColor max(0.8, calc(l + 0.4)) c h / calc(alpha + 0.4))
+    );
+  }
+
+  &:where([dir="rtl"], [dir="rtl"] *) {
+    animation-direction: reverse;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+@utility shimmer-none {
+  --shimmer-image: none;
+  --shimmer-text-fill: currentColor;
 }
 
 /* Legacy mirror-highlight classes kept inert so any residual mark markup

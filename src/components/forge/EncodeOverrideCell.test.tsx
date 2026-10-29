@@ -26,7 +26,6 @@ const ROOT: RequestRow = {
   clearedKeys: [],
   outputIds: [],
   media: {},
-  check: { state: 'idle' },
 };
 
 /** The grid's part: it owns the rows and applies each patch the cell sends. */

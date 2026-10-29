@@ -478,7 +478,8 @@ function scenario01Input(over: Partial<{ tiktok: CrossPlatformLeg; meta: CrossPl
       (cycle.ruleSkips ?? [])
         .filter((s) => s.adSetId === mapped.id)
         .map((s) => `${s.family}:${s.reason}`)
-        .join(',') === 'delivery:not_applicable:tiktok_ads,creative:not_applicable:tiktok_ads',
+        .join(',') ===
+        'delivery:not_applicable:tiktok_ads,creative:not_applicable:tiktok_ads,pause:not_applicable:tiktok_ads',
   );
   const member = tiktokMember(messages, [messages]);
   rec.check(

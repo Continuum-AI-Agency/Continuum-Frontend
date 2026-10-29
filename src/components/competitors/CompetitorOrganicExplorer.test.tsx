@@ -66,3 +66,18 @@ describe('CompetitorOrganicExplorer sync-fault banner', () => {
     expect(queryByText(/Showing results for/)).not.toBeNull();
   });
 });
+
+describe('CompetitorOrganicExplorer platforms', () => {
+  it('reads Facebook posts without the Instagram handle search or Instagram-only sorts', () => {
+    postsMock.mockClear();
+    const { getByRole, queryByLabelText, queryByRole, getByText } = render(
+      <CompetitorOrganicExplorer brandId="b1" />,
+    );
+    fireEvent.click(getByRole('button', { name: 'Facebook' }));
+    expect(postsMock.mock.calls.at(-1)?.[0]).toMatchObject({ platform: 'facebook', sort: 'recent' });
+    expect(queryByLabelText('Search competitors')).toBeNull();
+    expect(getByRole('button', { name: 'Outlier' })).toBeDefined();
+    expect(queryByRole('button', { name: 'For your brand' })).toBeNull();
+    expect(getByText(/tag a competitor's Facebook Page/)).toBeDefined();
+  });
+});

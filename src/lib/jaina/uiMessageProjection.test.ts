@@ -15,6 +15,12 @@ import { JAINA_UI_DATA_PART, type JainaUIMessage } from '@continuum/contracts';
 
 import { buildThinkingSegments } from '@/components/paid-media/jaina/components/thinkingUtils';
 import {
+  CLARIFICATION_ID,
+  CLARIFICATION_OPTIONS,
+  CLARIFICATION_QUESTION,
+  clarificationTurn,
+} from './clarificationTurn.fixture';
+import {
   approvalsOf,
   canvasActionsOf,
   checkpointSummaryOf,
@@ -337,6 +343,43 @@ describe('toJainaChatMessage fills the whole render model', () => {
     expect(asking.pendingClarification).toEqual({ id: 'clar_1', question: 'Which ad account?' });
     expect(asking.content).toBe('Which ad account?');
     expect(asking.renderAsReport).toBe(false);
+  });
+
+  it('reads the request nested in the Backend frame, with the survey s alternatives as options', () => {
+    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+
+    expect(asking.pendingClarification).toEqual({
+      id: CLARIFICATION_ID,
+      question: CLARIFICATION_QUESTION,
+      options: CLARIFICATION_OPTIONS,
+    });
+    expect(asking.content).toBe(CLARIFICATION_QUESTION);
+  });
+
+  it('never projects the survey that asked the question as a report', () => {
+    const asking = toJainaChatMessage(clarificationTurn(), { isStreaming: false });
+
+    expect(asking.reportV2).toBeUndefined();
+    expect(asking.report).toBeUndefined();
+    expect(asking.renderAsReport).toBe(false);
+  });
+
+  it('falls back to the streamed text, never a fixed label, when the request has no question', () => {
+    const asking = toJainaChatMessage(
+      uiMessage([
+        text('¿Qué cuenta publicitaria debo revisar?'),
+        data(JAINA_UI_DATA_PART.clarification, 'run_1:clarification', {
+          item_id: 'item_1',
+          clarification: { id: 'clar_2' },
+        }),
+      ]),
+      { isStreaming: false },
+    );
+
+    expect(asking.pendingClarification).toEqual({
+      id: 'clar_2',
+      question: '¿Qué cuenta publicitaria debo revisar?',
+    });
   });
 });
 
@@ -962,5 +1005,35 @@ describe('scaffoldOf', () => {
       ]),
     );
     expect(scaffold).toMatchObject({ version: 3, contentHash: 'a'.repeat(64), name: 'Summer' });
+  });
+});
+
+describe('a user turn keeps what the reader attached', () => {
+  const mentions = {
+    references: [],
+    attachments: [{ url: 'https://cdn.example.com/a.png', name: 'a.png', mediaType: 'image/png' }],
+    documents: [
+      {
+        documentId: '0b3e8c1a-5d2f-4e7a-9c10-123456789abc',
+        name: 'Q3 brief.pdf',
+        retention: 'ephemeral' as const,
+      },
+    ],
+  };
+
+  it('carries the mentions onto the projected message metadata', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([text('Use this brief')], { role: 'user', metadata: { mentions } }),
+      { isStreaming: false },
+    );
+    expect(projected.content).toBe('Use this brief');
+    expect(projected.metadata).toEqual(mentions);
+  });
+
+  it('leaves a bare user turn without metadata', () => {
+    const projected = toJainaChatMessage(uiMessage([text('Hi')], { role: 'user' }), {
+      isStreaming: false,
+    });
+    expect(projected.metadata).toBeUndefined();
   });
 });

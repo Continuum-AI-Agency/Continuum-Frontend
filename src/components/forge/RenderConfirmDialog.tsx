@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  type ApiRenderBatch,
+  type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
   type ApiRenderBatchRecord,
   type ApiRenderDeliveryTarget,
@@ -32,6 +34,27 @@ import {
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { useSetApprovalRooms } from '@/components/forge/RenderSetSettingsDialog';
 import { readinessLine } from '@/components/forge/readinessCopy';
+import {
+  canRetry,
+  clearHold,
+  confirmUnderHold,
+  type HeldBatch,
+  type HoldScope,
+  heldCopy,
+  isHeld,
+  isPermissionRefusal,
+  isSessionRefusal,
+  isSetChanged,
+  madeNothing,
+  NOT_SAVED,
+  permissionCopy,
+  retryHeld,
+  SESSION_EXPIRED,
+  SET_CHANGED,
+  SIGNED_OUT,
+  STALE_MS,
+  sendingElsewhere,
+} from '@/components/forge/renderHold';
 import {
   overrideFor,
   RENDER_OVERRIDES,
@@ -74,7 +97,14 @@ export type FiredRow = { rowId: string; job: ApiRenderJob };
 type Verdict =
   | { state: 'loading' }
   | { state: 'ready'; preflight: ApiRenderBatchPreflightResponse }
-  | { state: 'refused'; message: string; details: string[]; override: RenderOverride | null }
+  | {
+      state: 'refused';
+      message: string;
+      details: string[];
+      override: RenderOverride | null;
+      /** Each row's own preflight was asked and none refused: the refusal is the batch's. */
+      wholeBatch?: boolean;
+    }
   | { state: 'failed'; message: string };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -106,6 +136,19 @@ function describeFailure(error: unknown): {
     details: findings.map((finding) => finding.message).filter(Boolean),
     override: error instanceof ApiError ? overrideFor(error.code ?? error.message, findings) : null,
   };
+}
+
+/**
+ * A row's own preflight refusing it, in its words: a 422 about the row's values that no tick
+ * overrides. Anything else (an outage, a throttle, a set or revision that moved, a refusal a tick
+ * lets through) says nothing about the row, and the row stays in the batch.
+ */
+function rowRefusalOf(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 422) return null;
+  if (/render_set|revision/.test(error.code ?? error.message)) return null;
+  const { message, details, override } = describeFailure(error);
+  if (override) return null;
+  return details.length ? details.join(' ') : message;
 }
 
 /**
@@ -164,6 +207,10 @@ function Section({
   );
 }
 
+/** A light, see-through blur that leaves the app sidebar uncovered: the grid stays in sight. */
+const CONFIRM_OVERLAY =
+  'bg-background/20 backdrop-blur-[2px] md:left-[var(--app-sidebar-width,3.5rem)]';
+
 export function RenderConfirmDialog({
   open,
   onOpenChange,
@@ -185,6 +232,9 @@ export function RenderConfirmDialog({
   onChangeSettings,
   onFired,
   onOpenLedger,
+  onRowsRefused,
+  holdScope,
+  held,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -212,6 +262,12 @@ export function RenderConfirmDialog({
   onFired: (fired: FiredRow[]) => void;
   /** Opens the Render ledger on these jobs — the tab shell switches to it. */
   onOpenLedger?: (jobIds: string[]) => void;
+  /** Rows this batch's refusal turned out to be about: the grid marks them and skips them. */
+  onRowsRefused?: (found: ReadonlyArray<{ rowId: string; message: string }>) => void;
+  /** The set's hold key (renderHold.ts); null with no user id, which renders nothing. */
+  holdScope: HoldScope | null;
+  /** The set's unconfirmed batch: while it is held, this dialog is its view, never a new one. */
+  held: HeldBatch | null;
 }) {
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
@@ -311,6 +367,48 @@ export function RenderConfirmDialog({
   // What would be signed, as text: a re-check follows a change to it, never a new object for
   // the same thing (rows re-render on every keystroke and every dry-run that lands).
   const signed = JSON.stringify(request());
+
+  // ponytail: legacy-batch bridge; delete when the batch preflight names the rows it refuses (E2).
+  // Today's batch preflight refuses all-or-nothing and names no row. A refusal no tick overrides
+  // is asked again of each row's own preflight: once per signed batch, three at a time, with no
+  // retries (fifty rows times three retries is a fan-out, not a check). A grid edit never does this.
+  const passedFor = useRef<string | null>(null);
+  const reportRefused = useRef(onRowsRefused);
+  reportRefused.current = onRowsRefused;
+  const rowIds = useRef<string[]>([]);
+  rowIds.current = rows.map((row) => row.rowId);
+  const findRefusedRows = useCallback(async (): Promise<number> => {
+    if (!reportRefused.current || passedFor.current === signed) return 0;
+    passedFor.current = signed;
+    const {
+      records: asked,
+      delivery,
+      slack: _slack,
+      ...batch
+    } = JSON.parse(signed) as ApiRenderBatchPreflightRequest;
+    const queue = asked.map((record, index) => ({ record, rowId: rowIds.current[index] }));
+    const found: Array<{ rowId: string; message: string }> = [];
+    const ask = async () => {
+      for (let item = queue.shift(); item; item = queue.shift()) {
+        const { record, rowId } = item;
+        if (!rowId) continue;
+        // The row's own target wins, as at confirm; else the set's default.
+        const target = record.delivery ?? delivery;
+        try {
+          await apiRendersApi.preflight(
+            { ...batch, ...record, ...(target ? { delivery: target } : {}) },
+            { retry: false },
+          );
+        } catch (error) {
+          const message = rowRefusalOf(error);
+          if (message) found.push({ rowId, message });
+        }
+      }
+    };
+    await Promise.all([ask(), ask(), ask()]);
+    if (found.length) reportRefused.current?.(found);
+    return found.length;
+  }, [signed]);
   const runCheck = useCallback(async (): Promise<ApiRenderBatchPreflightResponse | null> => {
     const mine = ++latest.current;
     setCheck({ state: 'loading' });
@@ -321,14 +419,22 @@ export function RenderConfirmDialog({
     } catch (error) {
       if (mine !== latest.current) return null;
       const failure = describeFailure(error);
-      setCheck(
-        error instanceof ApiError && error.status < 500
-          ? { state: 'refused', ...failure }
-          : { state: 'failed', message: failure.message },
-      );
+      // A 429 is a wait, not a refusal: it is retried, never something to fix in the grid.
+      if (!(error instanceof ApiError) || error.status >= 500 || error.status === 429) {
+        setCheck({ state: 'failed', message: failure.message });
+        return null;
+      }
+      // Rows found refused leave the batch, and the batch that is left is checked again.
+      const found = failure.override ? 0 : await findRefusedRows();
+      if (found || mine !== latest.current) return null;
+      setCheck({
+        state: 'refused',
+        ...failure,
+        wholeBatch: !failure.override && Boolean(reportRefused.current),
+      });
       return null;
     }
-  }, [signed]);
+  }, [signed, findRefusedRows]);
 
   // A fresh look every time it opens: nothing ticked, the set's own Final, the newest rows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: opening resets; the next effect checks.
@@ -342,7 +448,7 @@ export function RenderConfirmDialog({
 
   // Every change to what would be signed re-checks it, once the rows' ad ids have resolved.
   useEffect(() => {
-    if (!open || resolving || !rooms.ready) return;
+    if (!open || held || resolving || !rooms.ready) return;
     void runCheck();
   }, [open, resolving, rooms.ready, runCheck]);
 
@@ -378,18 +484,63 @@ export function RenderConfirmDialog({
 
   const fire = async () => {
     if (check.state !== 'ready') return;
+    if (!holdScope) return setProblem(SIGNED_OUT);
     setFiring(true);
     setProblem(null);
+    let batch: ApiRenderBatch;
+    let preflight: ApiRenderBatchPreflightResponse | null;
     try {
       // The token is spent as it was signed, unless it is about to lapse.
-      const preflight =
+      preflight =
         Date.parse(check.preflight.expiresAt) - Date.now() > TOKEN_MARGIN_MS
           ? check.preflight
           : await runCheck();
       if (!preflight) return;
-      const batch = await apiRendersApi.createBatch({
-        confirmationToken: preflight.confirmationToken,
-      });
+      const token = preflight.confirmationToken;
+      // Under the set's hold (renderHold.ts): written ahead, and held on any failure that may
+      // have made rows, so a second batch is never sent for the same rows.
+      batch = await confirmUnderHold(
+        holdScope,
+        {
+          token,
+          request: JSON.parse(signed),
+          expiresAt: preflight.expiresAt,
+          batchId: preflight.batchId,
+        },
+        () => apiRendersApi.createBatch({ confirmationToken: token }),
+        { onNotSaved: () => toast.warning(NOT_SAVED) },
+      );
+    } catch (error) {
+      setFiring(false);
+      // Refused before anything was made: said, not held.
+      if (madeNothing(error))
+        return setProblem(
+          isSessionRefusal(error)
+            ? SESSION_EXPIRED
+            : isPermissionRefusal(error)
+              ? permissionCopy(error)
+              : isSetChanged(error)
+                ? SET_CHANGED
+                : describeRenderDiscoveryFailure(error),
+        );
+      // Held (by this failure, or by another tab since the check): the dialog becomes its view.
+      if (holdScope && isHeld(holdScope)) {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+        return;
+      }
+      const { message, details } = describeFailure(error);
+      return setProblem([message, ...details].join(' '));
+    }
+    // Answered: the dialog closes first, and nothing after it is a failed render.
+    setFiring(false);
+    onOpenChange(false);
+    try {
+      onFired(
+        batch.jobs.flatMap((job, index) => {
+          const row = rows[index];
+          return row ? [{ rowId: row.rowId, job }] : [];
+        }),
+      );
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
       // Not awaited: the jobs are already cached above, and the lists can follow.
@@ -409,24 +560,56 @@ export function RenderConfirmDialog({
             : {}),
         });
       if (preflight.approval?.warning) toast.warning(preflight.approval.warning);
-      onFired(
-        batch.jobs.flatMap((job, index) => {
-          const row = rows[index];
-          return row ? [{ rowId: row.rowId, job }] : [];
-        }),
-      );
-      onOpenChange(false);
     } catch (error) {
-      const { message, details } = describeFailure(error);
-      setProblem([message, ...details].join(' '));
-    } finally {
-      setFiring(false);
+      console.error('[forge] after a confirmed render', error);
     }
   };
 
+  if (held && holdScope)
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl"
+          overlayClassName={CONFIRM_OVERLAY}
+        >
+          <DialogHeader>
+            <DialogTitle>Unconfirmed render</DialogTitle>
+            <DialogDescription>
+              {templateName} · this set’s last Render didn’t confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <HeldBatchView
+            brandId={brandId}
+            scope={holdScope}
+            held={held}
+            current={records}
+            templateNow={{
+              contractHash: contract.template.contractHash,
+              templateRef: templateRef ?? null,
+            }}
+            onOpenLedger={() => {
+              onOpenChange(false);
+              onOpenLedger?.([]);
+            }}
+            onLanded={(jobs) => {
+              onOpenChange(false);
+              onFired(
+                jobs.flatMap((job) =>
+                  job.renderSetRowId ? [{ rowId: job.renderSetRowId, job }] : [],
+                ),
+              );
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+
   return (
     <Dialog open={open} onOpenChange={(next) => (firing ? undefined : onOpenChange(next))}>
-      <DialogContent className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl">
+      <DialogContent
+        className="flex max-h-[85vh] flex-col gap-3 sm:max-w-2xl"
+        overlayClassName={CONFIRM_OVERLAY}
+      >
         <DialogHeader>
           <DialogTitle>
             Render {plural(rows.length, 'row')} · {plural(fileCount, 'file')}
@@ -596,7 +779,8 @@ export function RenderConfirmDialog({
           <Section title="Files per row">
             <ul
               aria-label="Output per row"
-              className="divide-y divide-border border-y border-border"
+              // Its own scroll: a long batch keeps Goes to, Render as and the footer in view.
+              className="max-h-[min(16rem,35vh)] divide-y divide-border overflow-y-auto border-y border-border"
             >
               {rows.map((row, index) => (
                 <li
@@ -643,7 +827,11 @@ export function RenderConfirmDialog({
                 <AlertTriangle className="mr-1 inline size-3.5" aria-hidden />
                 {check.override
                   ? 'Tick “Render anyway” above, or fix the row in the grid.'
-                  : `${check.message}${check.details.length ? ` ${check.details.join(' ')}` : ''} Fix the row in the grid, then render again.`}
+                  : `${check.message}${check.details.length ? ` ${check.details.join(' ')}` : ''}${
+                      check.wholeBatch
+                        ? ' No row is refused on its own, so none was skipped.'
+                        : ' Fix the row in the grid, then render again.'
+                    }`}
               </span>
             ) : check.state === 'failed' ? (
               <span className="flex items-center gap-2 text-destructive">
@@ -680,5 +868,162 @@ export function RenderConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * A held batch, read-only: what was sent, why it is held, and the only two ways on. Retry this
+ * batch re-sends its token (each row dedupes, so it never makes a row twice) while the token is
+ * in memory and unexpired; Open Render ledger lets the hold go.
+ */
+export function HeldBatchView({
+  brandId,
+  scope,
+  held,
+  onOpenLedger,
+  onLanded,
+  current,
+  templateNow,
+}: {
+  brandId: string;
+  scope: HoldScope;
+  held: HeldBatch;
+  /** The template as the set renders it now; a held request signed for another says so. */
+  templateNow?: { contractHash: string; templateRef: string | null };
+  /** The records Render would sign now: said apart when their rows or values differ. */
+  current: readonly ApiRenderBatchRecord[];
+  onOpenLedger: (batchId: string | null) => void;
+  /** Retry landed: the jobs, for the same result a normal confirm shows. */
+  onLanded: (jobs: ApiRenderJob[]) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [retrying, setRetrying] = useState(false);
+  const [, setNow] = useState(0);
+  const expiresAt = held.signed?.expiresAt;
+  const sending = sendingElsewhere(held);
+  // Retry goes the moment the token's own expiry passes, and a send elsewhere stops counting as
+  // live once its time is up, not on whatever render happens by next.
+  useEffect(() => {
+    const waits = [
+      expiresAt ? Date.parse(expiresAt) - Date.now() : 0,
+      sending ? held.heldAt + STALE_MS - Date.now() : 0,
+    ].filter((wait) => wait > 0);
+    if (!waits.length) return;
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.min(Math.min(...waits) + 50, 2_147_483_647),
+    );
+    return () => clearTimeout(timer);
+  }, [expiresAt, sending, held.heldAt]);
+  const request = held.signed?.request;
+  const metaRows = request?.records.filter((record) => record.delivery).length ?? 0;
+  const labels = request?.records.map((record) => record.label ?? 'Untitled') ?? [];
+  // The rows, names and values sent, against what Render would take now.
+  const rowsOf = (records: readonly ApiRenderBatchRecord[]) =>
+    JSON.stringify(
+      records.map((record) => [record.renderSetRowId, record.label, record.variables]),
+    );
+  const differs = request !== undefined && rowsOf(request.records) !== rowsOf(current);
+  const heldTime = new Date(held.heldAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const facts = request
+    ? [
+        `${plural(request.records.length, 'row')} (${labels.slice(0, 5).join(', ')}${
+          labels.length > 5 ? `, +${labels.length - 5} more` : ''
+        })`,
+        request.final ? 'Final' : 'Proof',
+        [
+          'Library',
+          ...(request.slack ? ['a Slack room'] : []),
+          ...(request.approvalDestinationIds?.length
+            ? [plural(request.approvalDestinationIds.length, 'approval room')]
+            : []),
+          ...(metaRows ? [`Meta ads for ${plural(metaRows, 'row')}`] : []),
+        ].join(', '),
+        ...(request.acceptMissingFonts ? ['missing fonts accepted'] : []),
+        ...(request.renderer === 'experimental' ? ['experimental renderer'] : []),
+      ]
+    : null;
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      // Read fresh: nothing is sent once another tab has let it go. Still held on any failure.
+      const batch = await retryHeld(scope, (token) =>
+        apiRendersApi.createBatch({ confirmationToken: token }),
+      );
+      try {
+        // Landed first, so the batch reads done whatever throws in what follows.
+        onLanded(batch.jobs);
+        for (const job of batch.jobs)
+          queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
+        toast.success(`${plural(batch.jobs.length, 'render')} queued`);
+      } catch (error) {
+        // Landed: showing it may fail, the render did not.
+        console.error('[forge] after a retried render', error);
+      }
+    } catch {
+      // The hold already says why.
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+      setRetrying(false);
+    }
+  };
+  return (
+    <section
+      aria-label="Held batch"
+      className="flex h-full min-h-0 flex-col gap-1.5 px-[var(--card-pad)] py-2 text-xs"
+    >
+      <p role="alert" className="font-medium text-destructive">
+        {heldCopy(held)}
+      </p>
+      <p className="text-muted-foreground">
+        {facts ? `What was sent: ${facts.join(' · ')}` : 'What was sent isn’t known on this page.'}
+      </p>
+      {differs ? (
+        <p className="text-muted-foreground">Your edits and selection aren’t part of this batch.</p>
+      ) : null}
+      {request &&
+      templateNow &&
+      (request.contractHash !== templateNow.contractHash ||
+        (request.templateRef ?? null) !== templateNow.templateRef) ? (
+        <p className="text-muted-foreground">
+          This set’s template changed since this batch was sent. Retry sends the earlier version.
+        </p>
+      ) : null}
+      {held.saved ? null : <p className="text-muted-foreground">{NOT_SAVED}</p>}
+      <p className="text-muted-foreground">
+        In the Render ledger, look for the batch from {heldTime}.
+      </p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {canRetry(held) || held.sending ? (
+          <Button
+            type="button"
+            size="xs"
+            disabled={retrying || held.sending}
+            onClick={() => void retry()}
+          >
+            {retrying || held.sending ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+            ) : null}
+            Retry this batch
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          // Opening the ledger lets the hold go: not while a send is still out, here or elsewhere.
+          disabled={sending || held.sending}
+          onClick={() => {
+            clearHold(scope, held.batchId);
+            onOpenLedger(held.batchId);
+          }}
+        >
+          Open Render ledger
+        </Button>
+      </div>
+    </section>
   );
 }

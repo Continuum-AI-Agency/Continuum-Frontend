@@ -1,12 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import type { PaidMetricsTrendPoint } from '@/components/paid-media/dashboard/PerformanceDetails';
 import type { CampaignPerformanceMetricKey } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
-import type { DailyMetric } from '@/types/timeline';
 
 type MetricSparklineProps = {
-  trends: DailyMetric[] | undefined;
+  trends: PaidMetricsTrendPoint[] | undefined;
   metric: CampaignPerformanceMetricKey;
   tone?: 'positive' | 'negative' | 'flat';
   width?: number;
@@ -18,7 +18,9 @@ type MetricSparklineProps = {
 // (gaSessions/gaConversions) are brand/property-level, absent from the per-campaign
 // DailyMetric series and never selectable in the matrix — they map to nothing and
 // fall through to the flat placeholder below.
-const TREND_FIELD_BY_METRIC: Partial<Record<CampaignPerformanceMetricKey, keyof DailyMetric>> = {
+const TREND_FIELD_BY_METRIC: Partial<
+  Record<CampaignPerformanceMetricKey, keyof PaidMetricsTrendPoint>
+> = {
   spend: 'spend',
   roas: 'roas',
   ctr: 'ctr_pct',

@@ -22,28 +22,31 @@ export type TransitionInput = {
 
 export const TRANSITION_TYPES = VIDEO_EDITOR_OPS.add_transition.input.shape.type
   .options as readonly TransitionType[];
-export const TRANSITION_LABELS: Record<TransitionType, string> = {
+export const TRANSITION_LABELS: Record<
+  TransitionType | EditorTransition['transitionType'],
+  string
+> = {
   cut: 'Cut',
   crossfade: 'Crossfade',
   dip_to_black: 'Dip to black',
   dip_to_white: 'Dip to white',
+  flash: 'Flash',
   wipe: 'Wipe',
   slide: 'Slide',
   zoom: 'Zoom',
   blur: 'Blur',
+  whip: 'Whip pan',
+  zoom_blur: 'Zoom through',
+  glitch: 'Glitch',
+  custom: 'Custom',
 };
-/**
- * The looks a seam can take; `cut` is how one is removed.
- * ponytail: `blur` is in the contract but add_transition refuses it until the compositor
- * draws a blur ramp — offered again once it renders.
- */
-export const SEAM_TRANSITIONS = TRANSITION_TYPES.filter(
-  (type) => type !== 'cut' && type !== 'blur',
-);
+/** The looks a seam can take; `cut` is how one is removed. */
+export const SEAM_TRANSITIONS = TRANSITION_TYPES.filter((type) => type !== 'cut');
 export const DEFAULT_TRANSITION_SEC = 0.5;
 
+// The type the picker should open on: the seam's own when add_transition can place it again.
 const knownType = (type: EditorTransition['transitionType'] | undefined): TransitionType =>
-  type && type !== 'custom' && type !== 'cut' ? type : 'crossfade';
+  TRANSITION_TYPES.find((candidate) => candidate === type && candidate !== 'cut') ?? 'crossfade';
 
 /**
  * The seam between two adjacent clips on the main track: a small handle that opens a

@@ -9,22 +9,28 @@
 // this is a DB-derived read model, so an op the contract has not caught up with (today,
 // 'convert') must still render as something honest rather than crash the page.
 
-import { currencyMinorOffset } from '@continuum/contracts';
+import { type AdAccount, currencyMinorOffset, type PortfolioListItem } from '@continuum/contracts';
+import { bareAccountId } from '@/lib/paid-media/accountId';
+import { normalizeCurrency } from '../format';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type AdPlatform,
   OPTIMIZER_MANAGED_PLATFORM,
   readAdPlatform,
 } from './platforms/platformTabsModel';
+import { settingLabel, settingMoneyUnit, settingSentence, settingValue } from './settingChange';
 
-/** How one action's before/after should be printed. `unit` decides the formatter:
- *  'money' values are MINOR units and the caller applies its currency; 'text' is printed
- *  verbatim. */
+/** How one action's before/after should be printed. `unit` decides the formatter: 'money'
+ *  values are MINOR units and 'money_major' MAJOR units (a portfolio setting such as its daily
+ *  total), both printed in the caller's currency; 'text' is printed verbatim. */
 export type ActionChange = {
   label: string;
-  unit: 'money' | 'text';
+  unit: 'money' | 'money_major' | 'text';
   before: string | number | null;
   after: string | number | null;
+  /** The whole change as one sentence, when it reads better that way than before → after:
+   *  a switch flipped ("Creative analysis turned on", "Autopilot resumed"). */
+  sentence?: string;
 };
 
 /** MINOR → MAJOR by the currency's ISO 4217 exponent: 100 for MXN and USD, 1 for JPY, 1000
@@ -40,6 +46,52 @@ export function minorToMajor(minor: number, currency: string | null): number {
   }
 }
 
+/** "customers/5251780631/campaignBudgets/…" → "5251780631": the customer a Google write landed
+ *  on, as its applier's receipt names it. */
+function receiptAccountId(row: OptimizerActionFeedRow): string | null {
+  const names = row.receipt?.['resourceNames'];
+  if (!Array.isArray(names)) return null;
+  for (const name of names) {
+    const match = typeof name === 'string' ? /^customers\/(\d+)\//.exec(name) : null;
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+/**
+ * The currency one action's amounts are in: its own portfolio's, else its own ad account's —
+ * never the account the page has selected. The feed is brand-wide and a brand runs portfolios
+ * on several accounts, so one page-level code stripped every row whenever the selected account
+ * recorded none (Easy Fit's and Vivo Center's do not) and mislabelled rows from another account.
+ *
+ * The portfolio's code is the one stamped at creation. An account's is the account list's, or
+ * the one stamped on any portfolio on that account (a Google asset row carries none). A write
+ * with no portfolio — the Google tab's — names its account in its receipt. Null when nothing
+ * records it: the amounts then print bare, the money rule's answer, never a guessed "$".
+ */
+export function actionCurrency(
+  row: OptimizerActionFeedRow,
+  portfolios: readonly Pick<PortfolioListItem, 'id' | 'ad_account_id' | 'currency'>[],
+  accounts: readonly Pick<AdAccount, 'account_id' | 'currency'>[],
+): string | null {
+  const portfolio = row.portfolio_id
+    ? portfolios.find((candidate) => candidate.id === row.portfolio_id)
+    : undefined;
+  const accountId = portfolio?.ad_account_id ?? receiptAccountId(row);
+  const onAccount = (id: string | null) =>
+    accountId != null && id != null && bareAccountId(id) === bareAccountId(accountId);
+  const recorded = [
+    portfolio?.currency,
+    ...accounts.filter((account) => onAccount(account.account_id)).map((a) => a.currency),
+    ...portfolios.filter((other) => onAccount(other.ad_account_id)).map((p) => p.currency),
+  ];
+  for (const currency of recorded) {
+    const code = normalizeCurrency(currency);
+    if (code) return code;
+  }
+  return null;
+}
+
 function readMinor(value: Record<string, unknown> | null | undefined): number | null {
   const minor = value?.minor;
   if (typeof minor === 'number') return Number.isFinite(minor) ? minor : null;
@@ -48,6 +100,13 @@ function readMinor(value: Record<string, unknown> | null | undefined): number | 
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+/** An audited value as a number; null when the audit stored none or not a number. */
+function asAmount(raw: string | null): number | null {
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function readKey(value: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -89,13 +148,44 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
         before: readKey(row.before, 'status'),
         after: readKey(row.after, 'status'),
       };
-    case 'setting':
+    case 'setting': {
+      // `entity_id` is the audited COLUMN here, and the values are the text the audit stored.
+      const after = readKey(row.after, 'value');
+      // An ad set moved between portfolios is audited on BOTH (old value the ad set id, new
+      // value the receiving portfolio's id). Two ids say nothing to a reader; which side of the
+      // move this portfolio is on does.
+      if (row.entity_id === 'member_moved') {
+        return {
+          label: 'Ad set moved',
+          unit: 'text',
+          before: null,
+          after: null,
+          sentence:
+            after !== null && after === row.portfolio_id
+              ? 'Ad set moved into this portfolio'
+              : 'Ad set moved to another portfolio',
+        };
+      }
+      const money = settingMoneyUnit(row.entity_id);
+      if (money) {
+        const amount = (value: Record<string, unknown> | null | undefined) =>
+          asAmount(readKey(value, 'value'));
+        return {
+          label: settingLabel(row.entity_id),
+          unit: money === 'minor' ? 'money' : 'money_major',
+          before: amount(row.before),
+          after: amount(row.after),
+        };
+      }
+      const sentence = settingSentence(row.entity_id, after);
       return {
-        label: row.entity_id ?? 'Setting',
+        label: settingLabel(row.entity_id),
         unit: 'text',
-        before: readKey(row.before, 'value'),
-        after: readKey(row.after, 'value'),
+        before: settingValue(readKey(row.before, 'value')),
+        after: settingValue(after),
+        ...(sentence ? { sentence } : {}),
       };
+    }
     case 'decision':
       return {
         label: 'Recommendation',

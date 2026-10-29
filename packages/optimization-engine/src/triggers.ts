@@ -9,6 +9,7 @@
 
 import { formatMoney } from '@continuum/contracts';
 import type { EngineConfig } from './config';
+import { familyApplies } from './multiplatform/capabilities';
 import { costPerEvent, kpiEvents, scoreAdSet, upperFunnelEvents } from './scoring';
 import {
   action,
@@ -60,7 +61,10 @@ export type TriggerOutput = {
   starveIds: Set<string>;
 };
 
-export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig): TriggerOutput {
+export function evaluateTriggers(roster: AdSetSnapshot[], cfg: EngineConfig): TriggerOutput {
+  // A pause is a Meta ad-set write: a Google or TikTok entity is neither judged here nor
+  // allowed to set the references a Meta ad set is judged against.
+  const snapshots = roster.filter((s) => familyApplies(s, 'pause'));
   const recs: Recommendation[] = [];
   const starve = new Set<string>();
   const money = (v: number): string => formatMoney(v, cfg.currency);

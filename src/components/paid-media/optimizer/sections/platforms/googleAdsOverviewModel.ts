@@ -9,59 +9,28 @@
 // figure and what that figure is compared with; grouped by campaign type — Search, Performance
 // Max, YouTube/Demand Gen — because that is the unit a Google buyer decides in.
 
-import { z } from 'zod';
+import {
+  GOOGLE_RESULT_BUCKETS,
+  type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
+  type GoogleResultBucket,
+  type GoogleResultCounts,
+  type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
+} from '@continuum/contracts';
 import type { FigureWindow } from '../../format';
 
-const ComparisonValueSchema = z.object({
-  current: z.number(),
-  previous: z.number(),
-  percentageChange: z.number().nullable().optional(),
-});
-
-const RangeSchema = z.object({ since: z.string(), until: z.string() });
-
-/** The customer's currency code, when the edge carries it (Google reports money in it). */
-const CurrencyFields = {
-  currency: z.string().nullable().optional(),
-  currency_code: z.string().nullable().optional(),
+// The two reads' shapes are contracts (paid/google-tab), shared with the tab's own views.
+export {
+  type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
+  type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
 };
-
-export const GoogleAccountOverviewSchema = z.object({
-  metrics: z.object({
-    spend: z.number(),
-    impressions: z.number(),
-    clicks: z.number(),
-    ctr: z.number(),
-    cpa: z.number(),
-  }),
-  comparison: z.object({ spend: ComparisonValueSchema }).partial().optional(),
-  range: RangeSchema,
-  ...CurrencyFields,
-});
-export type GoogleAccountOverview = z.infer<typeof GoogleAccountOverviewSchema>;
-
-export const GoogleTopCampaignsSchema = z.object({
-  rows: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      labels: z.record(z.string(), z.string()).optional(),
-      metrics: z.object({
-        spend: z.number(),
-        impressions: z.number(),
-        clicks: z.number(),
-        conversions: z.number(),
-      }),
-    }),
-  ),
-  range: RangeSchema,
-  ...CurrencyFields,
-});
-export type GoogleTopCampaigns = z.infer<typeof GoogleTopCampaignsSchema>;
 
 export type CampaignTypeKey = 'search' | 'pmax' | 'video' | 'display' | 'shopping' | 'other';
 
-const CAMPAIGN_TYPE_LABELS: Record<CampaignTypeKey, string> = {
+export const CAMPAIGN_TYPE_LABELS: Record<CampaignTypeKey, string> = {
   search: 'Search',
   pmax: 'Performance Max',
   video: 'YouTube / Demand Gen',
@@ -98,7 +67,10 @@ export type CampaignGroup = {
   label: string;
   campaigns: number;
   spend: number;
-  conversions: number;
+  /** Null when no single result is defined for the account (see `resultsDefined`). */
+  conversions: number | null;
+  /** Each business result counted apart; null when a campaign's read lacks them. */
+  byResult: GoogleResultCounts | null;
   impressions: number;
   /** Share of the Google spend in the window, 0–100. */
   sharePct: number;
@@ -113,8 +85,15 @@ export type GoogleOverview = {
   spend: number;
   /** Null when the prior-window read came back empty or failed — there is nothing to compare. */
   priorSpend: number | null;
-  conversions: number;
+  /** False when the account's goals name no single business result, so the edge counted none:
+   *  conversions and every cost per conversion are null, never zero. */
+  resultsDefined: boolean;
+  conversions: number | null;
   costPerConversion: number | null;
+  /** With no single result, the result types counted apart, one column each (resultTypesOf). */
+  resultTypes: GoogleResultBucket[];
+  /** The account's spending campaigns' results, counted apart. */
+  byResult: GoogleResultCounts | null;
   clicks: number;
   ctr: number;
   /** True when every spending campaign carried its channel type, so the tiles are by type. */
@@ -174,6 +153,10 @@ export function buildGoogleOverview(
   const byType =
     spending.length > 0 && spending.every((row) => campaignTypeOf(row.labels?.channel_type));
   const totalSpend = account.metrics.spend;
+  const resultsDefined =
+    account.result_basis?.unambiguous !== false &&
+    campaigns.result_basis?.unambiguous !== false &&
+    spending.every((row) => row.metrics.conversions != null);
 
   const groups = new Map<string, CampaignGroup>();
   for (const row of spending) {
@@ -184,13 +167,15 @@ export function buildGoogleOverview(
       label: type ? CAMPAIGN_TYPE_LABELS[type] : row.name,
       campaigns: 0,
       spend: 0,
-      conversions: 0,
+      conversions: resultsDefined ? 0 : null,
+      byResult: {},
       impressions: 0,
       sharePct: 0,
     };
     group.campaigns += 1;
     group.spend += row.metrics.spend;
-    group.conversions += row.metrics.conversions;
+    if (group.conversions != null) group.conversions += row.metrics.conversions ?? 0;
+    group.byResult = addResults(group.byResult, row.metrics.byResult);
     group.impressions += row.metrics.impressions;
     groups.set(key, group);
   }
@@ -201,7 +186,9 @@ export function buildGoogleOverview(
     }))
     .sort((a, b) => b.spend - a.spend);
 
-  const conversions = spending.reduce((sum, row) => sum + row.metrics.conversions, 0);
+  const conversions = resultsDefined
+    ? spending.reduce((sum, row) => sum + (row.metrics.conversions ?? 0), 0)
+    : null;
   const prior = account.comparison?.spend?.previous;
   return {
     currency: googleCurrencyOf(account) ?? googleCurrencyOf(campaigns),
@@ -210,13 +197,90 @@ export function buildGoogleOverview(
     days: daysBetween(account.range.since, account.range.until),
     spend: totalSpend,
     priorSpend: prior != null && prior > 0 ? prior : null,
+    resultsDefined,
     conversions,
-    costPerConversion: conversions > 0 ? totalSpend / conversions : null,
+    costPerConversion: conversions != null && conversions > 0 ? totalSpend / conversions : null,
+    resultTypes: resultsDefined ? [] : resultTypesOf(spending.map((row) => row.metrics)),
+    byResult: spending.reduce<GoogleResultCounts | null>(
+      (sum, row) => addResults(sum, row.metrics.byResult),
+      {},
+    ),
     clicks: account.metrics.clicks,
     ctr: account.metrics.ctr,
     byType,
     groups: ordered,
   };
+}
+
+/** Said wherever a conversion count or its cost would sit when the account has no single result. */
+export const NO_SINGLE_RESULT = 'No single result defined';
+
+// ── No single result: each result type apart (Ramiro, 2026-10-28) ──────────────────────────
+// The tab counts its portfolios' goal result. With no portfolio goal and campaigns whose goals
+// name several, each result type gets its own column with its own cost, never "—" throughout.
+
+export const RESULT_WORDS: Readonly<
+  Record<GoogleResultBucket, { one: string; many: string; column: string }>
+> = {
+  leads: { one: 'lead', many: 'leads', column: 'Leads' },
+  purchases: { one: 'purchase', many: 'purchases', column: 'Purchases' },
+  signups: { one: 'sign-up', many: 'sign-ups', column: 'Sign-ups' },
+};
+
+/** Null as soon as one side lacks the counts: a sum over part of the campaigns is not a total. */
+export function addResults(
+  sum: GoogleResultCounts | null,
+  next: GoogleResultCounts | null | undefined,
+): GoogleResultCounts | null {
+  if (!sum || !next) return null;
+  const out: GoogleResultCounts = { ...sum };
+  for (const bucket of GOOGLE_RESULT_BUCKETS) {
+    if (next[bucket] != null) out[bucket] = (out[bucket] ?? 0) + (next[bucket] ?? 0);
+  }
+  return out;
+}
+
+/** The result types any of the rows counted, in a fixed order. Empty when one row lacks the
+ *  counts (a payload cached before the edge sent them): the tab then says NO_SINGLE_RESULT. */
+export function resultTypesOf(
+  rows: readonly { byResult?: GoogleResultCounts | null }[],
+): GoogleResultBucket[] {
+  if (rows.some((row) => !row.byResult)) return [];
+  return GOOGLE_RESULT_BUCKETS.filter((bucket) =>
+    rows.some((row) => (row.byResult?.[bucket] ?? 0) > 0),
+  );
+}
+
+/** "236 leads", "1 sign-up": whole, as every screen counts conversions. */
+export function resultCountLabel(bucket: GoogleResultBucket, count: number): string {
+  const shown = formatConversions(count);
+  return `${shown} ${shown === '1' ? RESULT_WORDS[bucket].one : RESULT_WORDS[bucket].many}`;
+}
+
+/** "236 leads · 2 sign-ups" over `types`; null without counts or types. */
+export function resultsApartLabel(
+  byResult: GoogleResultCounts | null,
+  types: readonly GoogleResultBucket[],
+): string | null {
+  if (!byResult || types.length === 0) return null;
+  return types.map((bucket) => resultCountLabel(bucket, byResult[bucket] ?? 0)).join(' · ');
+}
+
+/** One campaign's results apart, the types it counted: "236 leads · 2 sign-ups", or "0" when it
+ *  counted none. Null without the counts. */
+export function ownResultsLabel(byResult: GoogleResultCounts | null): string | null {
+  if (!byResult) return null;
+  return resultsApartLabel(byResult, resultTypesOf([{ byResult }])) ?? '0';
+}
+
+/** Spend per result of one type; null when there is none to price. */
+export function costPerResult(
+  spend: number,
+  byResult: GoogleResultCounts | null,
+  bucket: GoogleResultBucket,
+): number | null {
+  const count = byResult?.[bucket] ?? 0;
+  return count > 0 ? spend / count : null;
 }
 
 /** Room for six tiles: spend, conversions, and up to four campaign groups. */
@@ -225,7 +289,9 @@ export const MAX_GROUP_TILES = 4;
 export const MIN_TILES = 4;
 
 export function costPerConversion(group: CampaignGroup): number | null {
-  return group.conversions > 0 ? group.spend / group.conversions : null;
+  return group.conversions != null && group.conversions > 0
+    ? group.spend / group.conversions
+    : null;
 }
 
 /** Signed % of `value` against `base`, rounded; null when there is no base to compare with. */

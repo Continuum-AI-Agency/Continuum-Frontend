@@ -254,6 +254,33 @@ describe('API render contracts', () => {
     expect(apiRenderPreflightResponseSchema.safeParse({ ...base, engine: 'crayon' }).success).toBe(
       false,
     );
+
+    const { inputKeys: _inputKeys, ...batchBase } = base;
+    const batch = {
+      ...batchBase,
+      batchId: '00000000-0000-4000-8000-000000000001',
+      records: [{ label: 'FC Cajamarca vs. UTC', inputKeys: ['draw_bet'], engine: 'fleet' }],
+    };
+    for (const engine of ['fleet', 'paint', 'micro', 'web']) {
+      expect(
+        apiRenderBatchPreflightResponseSchema.parse({
+          ...batch,
+          records: [{ ...batch.records[0], engine }],
+        }).records[0]?.engine,
+      ).toBe(engine);
+    }
+    expect(
+      apiRenderBatchPreflightResponseSchema.parse({
+        ...batch,
+        records: [{ label: 'Legacy response', inputKeys: [] }],
+      }).records[0]?.engine,
+    ).toBe('fleet');
+    expect(
+      apiRenderBatchPreflightResponseSchema.safeParse({
+        ...batch,
+        records: [{ ...batch.records[0], engine: 'crayon' }],
+      }).success,
+    ).toBe(false);
   });
 
   // A URL in the pin slot is the exact failure this feature exists to prevent: it

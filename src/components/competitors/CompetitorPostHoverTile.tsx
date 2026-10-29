@@ -7,6 +7,8 @@
 // A YouTube card is raw metrics only (its API policies): a YouTube badge, an
 // "updated Xh ago" freshness label, the thumbnail unaltered, no multiplier, and a
 // click opens the video on YouTube. It cannot be analysed or saved.
+// A Facebook card keeps the Instagram face but, like YouTube, opens the post on
+// Facebook: only Instagram posts are analysed.
 
 import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
 import { Images, Play } from 'lucide-react';
@@ -55,6 +57,7 @@ export function CompetitorPostHoverTile({
   const videoUrl = reelVideoUrl(post);
   const age = post.timestamp ? formatRelativeTime(post.timestamp) : null;
   const youtube = post.platform === 'youtube';
+  const opensOn = youtube ? 'YouTube' : post.platform === 'facebook' ? 'Facebook' : null;
   const mediaClassName = youtube
     ? 'aspect-[4/5] h-full bg-black object-contain'
     : 'aspect-[4/5] h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-[1.03]';
@@ -108,12 +111,12 @@ export function CompetitorPostHoverTile({
         open ? 'border-primary' : 'border-border hover:border-foreground/25',
       )}
     >
-      {youtube ? (
+      {opensOn ? (
         <a
           href={post.permalink}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`Open ${view.competitorName} on YouTube`}
+          aria-label={`Open ${view.competitorName} on ${opensOn}`}
           className={faceClassName}
         >
           {face}
@@ -145,7 +148,7 @@ export function CompetitorPostHoverTile({
           </p>
         ) : null}
         <PostMetrics view={view} />
-        {youtube && post.capturedAt ? (
+        {opensOn && post.capturedAt ? (
           <p data-testid="captured-at" className="text-2xs text-muted-foreground">
             Updated {formatRelativeTime(post.capturedAt)}
           </p>

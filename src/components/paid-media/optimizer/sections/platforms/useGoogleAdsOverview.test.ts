@@ -1,5 +1,9 @@
 import { describe, expect, it, mock } from 'bun:test';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
+import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+} from './__fixtures__/googleAmbiguousResultBasis';
 
 // The edge is the boundary under test: what the page sends to paid-media-metrics and what it
 // does with the answer. The client is replaced; the parsing and the fold are the real ones.
@@ -20,7 +24,7 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { fetchGoogleAdsOverview } = await import('./useGoogleAdsOverview');
+const { fetchGoogleAdsOverview, portfolioGoalOf } = await import('./useGoogleAdsOverview');
 
 const WINDOW = { since: '2026-09-30', until: '2026-10-06' };
 
@@ -65,10 +69,45 @@ describe('fetchGoogleAdsOverview', () => {
     );
   });
 
+  it('reads an account with no single result instead of calling its shape unknown', async () => {
+    invoke = async (_name, { body }) => ({
+      data: body.scope === 'account_overview' ? ambiguousAccountOverview : ambiguousTopCampaigns,
+      error: null,
+    });
+    const overview = await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW);
+    expect(overview.resultsDefined).toBe(false);
+    expect(overview.conversions).toBeNull();
+    expect(overview.groups.map((group) => group.label)).toEqual(['Search', 'Display']);
+  });
+
   it('refuses a payload it does not know rather than print zeros', async () => {
     invoke = async () => ({ data: { rows: 'nope' }, error: null });
     await expect(fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW)).rejects.toThrow(
       'shape this page does not know',
     );
+  });
+});
+
+describe("the portfolios' goal result (Ramiro, 2026-10-28)", () => {
+  it('names it on both reads, so the header and the campaign types count the same result', async () => {
+    calls.length = 0;
+    invoke = async (_name, { body }) => ({
+      data: body.scope === 'account_overview' ? recorded.account_overview : recorded.top_campaigns,
+      error: null,
+    });
+    await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW, 'leads');
+    expect(calls.map((call) => call.body.resultBucket)).toEqual(['leads', 'leads']);
+    calls.length = 0;
+    await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW, null);
+    expect(calls.every((call) => !('resultBucket' in call.body))).toBe(true);
+  });
+
+  it("is the one result the brand's live Google portfolios are held to", () => {
+    const portfolio = (objective: string, status = 'active') => ({ objective, status });
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('lead')])).toBe('leads');
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('purchase', 'archived')])).toBe('leads');
+    expect(portfolioGoalOf([portfolio('lead'), portfolio('purchase')])).toBeNull();
+    expect(portfolioGoalOf([portfolio('traffic')])).toBeNull();
+    expect(portfolioGoalOf([])).toBeNull();
   });
 });

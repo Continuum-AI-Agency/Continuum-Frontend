@@ -3,6 +3,7 @@
 import { datasetCreativeRefSchema } from '@continuum/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   fetchJainaCreativePreview,
   isResolvableCreativeRef,
@@ -69,10 +70,10 @@ export function CreativeCell({
         ) : !resolvable || preview.status === 'error' ? (
           <span className="text-xs text-muted-foreground">Preview unavailable</span>
         ) : (
-          <span
+          <Skeleton
             role="status"
             aria-label={`Loading preview for ${alt}`}
-            className="size-full animate-pulse bg-muted/60"
+            className="size-full rounded-none"
           />
         )}
       </div>
@@ -120,7 +121,7 @@ export function CreativeCell({
             Preview unavailable
           </div>
         ) : (
-          <div className="h-32 w-full animate-pulse rounded-md bg-muted/60" />
+          <Skeleton className="h-32 w-full rounded-md" />
         )}
       </HoverCardContent>
     </HoverCard>

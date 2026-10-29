@@ -66,7 +66,10 @@ export type JainaChatMessage = {
   optimizerHyperframes?: JainaHyperframeSet[];
   pendingClarification?: {
     id?: string;
+    /** Exactly as Jaina asked it — in the question's language, never translated or relabelled. */
     question: string;
+    /** Answers Jaina offered (a survey block's alternatives); each one is sendable as the reply. */
+    options?: string[];
   };
   objectives?: JainaObjective[];
   /** Cross-agent calls made during this turn, latest state per callId. */

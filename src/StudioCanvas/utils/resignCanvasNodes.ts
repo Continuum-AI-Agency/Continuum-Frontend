@@ -7,7 +7,7 @@ import {
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import type { CanvasDocument, StudioNode } from '../types';
+import type { CanvasDocument, GeneratedImageVariation, StudioNode } from '../types';
 import { resolveSignedUrls, type SignedUrlCoordinate } from './signedUrlCache';
 
 // Same-origin Next route (NOT the Backend `request` helper): it is what mints from an
@@ -34,6 +34,10 @@ function addSignItem(items: SignedUrlCoordinate[], bucket: unknown, path: unknow
   if (isCanvasMediaCoordinate(item) || bucket === LIBRARY_PREVIEW_BUCKET) items.push(item);
 }
 
+function variationsOf(data: Record<string, unknown>): GeneratedImageVariation[] {
+  return Array.isArray(data.generatedImages) ? (data.generatedImages as GeneratedImageVariation[]) : [];
+}
+
 function collectSignItems(nodes: StudioNode[]): SignedUrlCoordinate[] {
   const items: SignedUrlCoordinate[] = [];
   for (const node of nodes) {
@@ -52,6 +56,12 @@ function collectSignItems(nodes: StudioNode[]): SignedUrlCoordinate[] {
       : [];
     for (const asset of collectionAssets) {
       addSignItem(items, asset.storageBucket, asset.storagePath);
+    }
+
+    // 4-up image variations: the saved row keeps each one's coordinates and drops every
+    // preview, so without this a reloaded grid paints four empty tiles.
+    for (const variation of variationsOf(data)) {
+      addSignItem(items, variation.storageBucket, variation.storagePath);
     }
 
     // Uploaded reference nodes (image/video). sourcePath + bucket re-sign into the
@@ -364,7 +374,17 @@ function applySignedUrls(
       };
     }
 
-    if (!imgUrl && !vidUrl && !mediaUrl && !collectionChanged) return node;
+    const variations = variationsOf(data);
+    const resignedVariations = variations.map((variation) => {
+      const fresh =
+        typeof variation?.storageBucket === 'string' && typeof variation.storagePath === 'string'
+          ? urlMap.get(signKey(variation.storageBucket, variation.storagePath))
+          : undefined;
+      return fresh ? { ...variation, preview: fresh } : variation;
+    });
+    const variationsChanged = resignedVariations.some((v, i) => v !== variations[i]);
+
+    if (!imgUrl && !vidUrl && !mediaUrl && !collectionChanged && !variationsChanged) return node;
 
     const refField = MEDIA_FIELD.get(node.type ?? '') ?? 'image';
     return {
@@ -373,6 +393,7 @@ function applySignedUrls(
         ...data,
         ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
         ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
+        ...(variationsChanged ? { generatedImages: resignedVariations } : {}),
         // Restore the completed badge for a re-signed generated output; the flag
         // is stripped on save, so a reloaded finished node would otherwise look
         // unfinished. Reference (image/video) nodes carry no completed state.

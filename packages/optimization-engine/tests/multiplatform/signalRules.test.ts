@@ -226,6 +226,22 @@ describe('G05 negative terms', () => {
     expect(r.abstentions[0]!.reason).toContain('10-word');
   });
 
+  test('G8 F5: a paused campaign gets no negative, no promoted term and no keyword pause', () => {
+    const signals = google({
+      search_terms: [term('gym barato', 500), term('gym 24 horas', 30, 3)],
+      keywords: [
+        keyword('k1', 'gym', { quality_score: 3, totals: totals(500) }),
+        keyword('k2', 'gimnasio'),
+      ],
+    });
+    // Live, the same signals fire all three: the filter is the campaign's status, nothing else.
+    expect(rules(evaluate(signals)).sort()).toEqual(['G05', 'G05_promote', 'G11']);
+    for (const status of ['PAUSED', 'REMOVED', 'ENDED']) {
+      const r = evaluate(signals, ctx({ snapshots: [campaign('c1', { status })] }));
+      expect(rules(r)).toEqual([]);
+    }
+  });
+
   test('no target, or one in another currency: G05, promote and G11 abstain by name', () => {
     for (const cpaTarget of [null, { amount: 100, currency: 'USD' }]) {
       const r = evaluate(google({ search_terms: [term('x', 500)] }), ctx({ cpaTarget }));
@@ -861,6 +877,58 @@ describe('G03 budget limited (escenario 07)', () => {
       entityId: '20775796216',
       reason: 'VIVO 47-EKATAR has shown no ad for 4 days; its delivery comes first.',
     });
+  });
+
+  test('G8 F8: suspended by Google, not yet dark → no raise, abstains by name', () => {
+    const signals = PlatformSignalsSchema.parse({
+      ...vivo(),
+      google: {
+        ...vivo().google,
+        delivery: [
+          {
+            campaign_id: '20775796216',
+            campaign_name: 'VIVO 47-EKATAR',
+            primary_status: 'ELIGIBLE',
+            primary_status_reasons: [],
+            serving_status: 'SUSPENDED',
+            budget_per_day: 1179,
+            dark_days: 2,
+            disapproved_ads: [],
+          },
+        ],
+      },
+    });
+    const r = evaluate(
+      signals,
+      ctx({ snapshots: [ekatar], cpaTarget: { amount: 900, currency: 'MXN' }, objective: 'lead' }),
+    );
+    expect(rules(r)).not.toContain('G03');
+    expect(r.abstentions).toContainEqual({
+      rule: 'G03',
+      entityId: '20775796216',
+      reason:
+        'VIVO 47-EKATAR is suspended by Google (serving status SUSPENDED); its delivery comes first.',
+    });
+    // Serving again: the same campaign gets its card back.
+    const serving = PlatformSignalsSchema.parse({
+      ...signals,
+      google: {
+        ...signals.google,
+        delivery: [{ ...signals.google!.delivery![0]!, serving_status: 'SERVING', dark_days: 0 }],
+      },
+    });
+    expect(
+      rules(
+        evaluate(
+          serving,
+          ctx({
+            snapshots: [ekatar],
+            cpaTarget: { amount: 900, currency: 'MXN' },
+            objective: 'lead',
+          }),
+        ),
+      ),
+    ).toContain('G03');
   });
 
   test('a campaign losing nothing to budget, or another account’s, says nothing', () => {

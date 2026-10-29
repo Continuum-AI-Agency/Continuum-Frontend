@@ -1,4 +1,9 @@
-import type { ActionId, EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
+import type {
+  ActionId,
+  EditorAudioFadeClock,
+  EditorTimeRemapPoint,
+  NumericKeyframe,
+} from '@continuum/contracts';
 import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
@@ -46,6 +51,9 @@ export type TimelineWorkerItem = {
   audioFadeOutSec?: number;
   effects?: ClipEffectSpec;
   transition?: ClipTransition;
+  /** Reversed / speed-ramped clip; see TimelineRenderItem. */
+  reverse?: boolean;
+  timeRemap?: EditorTimeRemapPoint[];
 };
 
 // One overlay-track placement. Structurally matches composeTimeline's

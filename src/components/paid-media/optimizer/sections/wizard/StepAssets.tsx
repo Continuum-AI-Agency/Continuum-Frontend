@@ -22,6 +22,7 @@ import type {
   SuggestionMember,
 } from '@continuum/contracts';
 import { useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -39,6 +40,8 @@ import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { questionHeading } from './OptionRow';
 import {
   type AssetMode,
+  BUDGET_LEVER,
+  channelTypeLabel,
   memberBlockReason,
   memberKey,
   membersByAccount,
@@ -333,7 +336,8 @@ function OtherPlatformMembers({
       <p className="text-xs text-muted-foreground">
         {scratch
           ? 'Campaigns on the brand\u2019s other platforms. Tick any of them, with or without Meta ad sets: one portfolio holds one currency. The optimizer recommends moves on them and you make the change on that platform: it only applies changes on Meta.'
-          : `The suggestion also proposed these ${names} campaigns, which buy the same result in the same currency. Create adds the ticked ones to the portfolio. The optimizer recommends moves on them and you make the change in ${names}: it only applies changes on Meta.`}
+          : `The suggestion also proposed these ${names} campaigns, which buy the same result in the same currency. Create adds the ticked ones to the portfolio. The optimizer recommends moves on them and you make the change in ${names}: it only applies changes on Meta.`}{' '}
+        {BUDGET_LEVER}
       </p>
       {groups.map((group) => (
         <div className="space-y-1" key={`${group.platform}:${group.accountId}`}>
@@ -348,6 +352,7 @@ function OtherPlatformMembers({
               const id = `wizard-member-${key}`;
               const label = member.name ?? member.entity_id;
               const blocked = memberBlockReason(member, draft, currency);
+              const channel = channelTypeLabel(member.channel_type);
               return (
                 <li
                   className="flex items-center gap-2 py-1.5"
@@ -364,11 +369,18 @@ function OtherPlatformMembers({
                     onCheckedChange={() => toggle(key)}
                   />
                   <Label className="min-w-0 flex-1 cursor-pointer font-normal" htmlFor={id}>
-                    <span className="block truncate text-xs">{label}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-xs">{label}</span>
+                      {channel ? (
+                        <Badge data-testid="wizard-member-channel" variant="muted">
+                          {channel}
+                        </Badge>
+                      ) : null}
+                    </span>
                     {member.daily_budget != null || blocked ? (
                       <span className="block text-xs text-muted-foreground tabular-nums">
                         {member.daily_budget != null
-                          ? `${formatCurrency(member.daily_budget, member.currency ?? null)}/day`
+                          ? `${formatCurrency(member.daily_budget, member.currency ?? null)}/day budget`
                           : ''}
                         {member.daily_budget != null && blocked ? ' · ' : ''}
                         {blocked}

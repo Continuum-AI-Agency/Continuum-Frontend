@@ -27,6 +27,25 @@ type ActionsState = {
 };
 let actionsState: ActionsState = { data: [], isLoading: false };
 
+// The enrolled roster the feed reads its ad-set names from. Everything else the client is asked
+// is refused, so a read this suite did not expect fails loudly instead of hanging.
+let rosterRows: unknown[] = [];
+let rosterReads = 0;
+mock.module('@/lib/supabase/client', () => {
+  const rpc = async (name: string) => {
+    if (name !== 'optimizer_list_portfolio_adsets') return { data: null, error: 'unmocked' };
+    rosterReads += 1;
+    return { data: rosterRows, error: null };
+  };
+  return {
+    createSupabaseBrowserClient: () => ({
+      rpc,
+      schema: () => ({ rpc }),
+      functions: { invoke: rpc },
+    }),
+  };
+});
+
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
 const realOptimizerData = await import('../useOptimizerData');
@@ -69,6 +88,17 @@ const render = (ui: ReactElement) =>
 
 const PORTFOLIO_ID = '11111111-1111-4111-8111-111111111111';
 
+/** The feed prices each row in its own portfolio's currency, read from the brand's cached
+ *  portfolio list — seeded here, as the Optimizer page has always filled it first. */
+const renderFeed = (currency: string | null) => {
+  queryClient.setQueryData(optimizerQueryKeys.portfolios('brand-1'), {
+    rows: [{ id: PORTFOLIO_ID, ad_account_id: 'act_100', currency }],
+    dropped: 0,
+  });
+  queryClient.setQueryData(optimizerQueryKeys.adAccounts('brand-1'), []);
+  return render(<OptimizerActionFeed brandId="brand-1" />);
+};
+
 const action = (over: Partial<OptimizerActionFeedRow> = {}): OptimizerActionFeedRow =>
   ({
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -88,6 +118,8 @@ const action = (over: Partial<OptimizerActionFeedRow> = {}): OptimizerActionFeed
 
 beforeEach(() => {
   actionsState = { data: [], isLoading: false };
+  rosterRows = [];
+  rosterReads = 0;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
@@ -95,7 +127,7 @@ afterEach(cleanup);
 
 describe('OptimizerActionFeed', () => {
   it('shows the empty state when nothing has been changed yet', () => {
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByText('Nothing has changed yet')).toBeTruthy();
   });
 
@@ -107,7 +139,7 @@ describe('OptimizerActionFeed', () => {
       error: new Error('optimizer_read_timeout'),
       refetch: () => {},
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.queryByText('Nothing has changed yet')).toBeNull();
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
   });
@@ -119,7 +151,7 @@ describe('OptimizerActionFeed', () => {
       data: [action({ justification: 'Earned a larger share of the pool.' })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getAllByText('Daily budget').length).toBeGreaterThan(0);
     expect(screen.getByText('$5,000 USD')).toBeTruthy();
     expect(screen.getByText('$4,500 USD')).toBeTruthy();
@@ -130,7 +162,7 @@ describe('OptimizerActionFeed', () => {
 
   it('offers a one-click revert when the RPC says the write is reversible', () => {
     actionsState = { data: [action()], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByRole('button', { name: 'Revert' })).toBeTruthy();
   });
 
@@ -139,7 +171,7 @@ describe('OptimizerActionFeed', () => {
       data: [action({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByRole('button', { name: 'Unpause' })).toBeTruthy();
     expect(screen.getByText('PAUSED')).toBeTruthy();
   });
@@ -147,7 +179,7 @@ describe('OptimizerActionFeed', () => {
   // The flag is the SERVER's answer. A client-side guess is how a button starts lying.
   it('offers no revert when the RPC says the write is not reversible', () => {
     actionsState = { data: [action({ reversible: false })], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });
 
@@ -156,7 +188,7 @@ describe('OptimizerActionFeed', () => {
       data: [action({ reversible: true, reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByText('Reverted')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
   });
@@ -177,10 +209,47 @@ describe('OptimizerActionFeed', () => {
       ],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
-    expect(screen.getAllByText('daily_total').length).toBeGreaterThan(0);
-    expect(screen.getByText('4200')).toBeTruthy();
+    renderFeed('USD');
+    expect(screen.getAllByText('Total daily budget').length).toBeGreaterThan(0);
+    expect(screen.queryByText('daily_total')).toBeNull();
+    expect(screen.getByText('$4,200 USD')).toBeTruthy();
+    expect(screen.queryByText('4200')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Revert' })).toBeNull();
+  });
+
+  it('reads a switch flipped as one sentence, never the column and its raw values', () => {
+    actionsState = {
+      data: [
+        action({
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          family: 'settings',
+          op: 'setting',
+          entity_id: 'creative_analysis',
+          before: { value: 'off' },
+          after: { value: 'on' },
+          reversible: false,
+          actor_kind: 'human',
+          receipt: null,
+        }),
+        action({
+          id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          family: 'settings',
+          op: 'setting',
+          entity_id: 'autopilot_paused',
+          before: { value: 'true' },
+          after: { value: 'false' },
+          reversible: false,
+          actor_kind: 'human',
+          receipt: null,
+        }),
+      ],
+      isLoading: false,
+    };
+    renderFeed('USD');
+    const timeline = screen.getByTestId('action-timeline');
+    expect(within(timeline).getByText('Creative analysis turned on')).toBeTruthy();
+    expect(within(timeline).getByText('Autopilot resumed')).toBeTruthy();
+    expect(timeline.textContent).not.toMatch(/creative_analysis|autopilot_paused|true|false/);
   });
 
   it('paginates on the RPC cursor rather than calling one page the world', () => {
@@ -193,7 +262,7 @@ describe('OptimizerActionFeed', () => {
         loadedMore += 1;
       },
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByText('1 actions loaded — there are older ones.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(loadedMore).toBe(1);
@@ -226,7 +295,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
       data: [nth(1), nth(2), nth(3, { ts: yesterdayNoon() })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const days = screen.getAllByTestId('action-day');
     expect(days.map((day) => day.getAttribute('data-day'))).toEqual(['Today', 'Yesterday']);
     expect(within(days[1] as HTMLElement).getByText('12:00')).toBeTruthy();
@@ -239,7 +308,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
 
   it('draws every action as a line, never a bordered card', () => {
     actionsState = { data: [nth(1), nth(2), nth(3)], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     for (const entry of entries()) {
       expect(entry.className).not.toMatch(/\bborder\b|rounded-lg|bg-card/);
       expect(entry.querySelector('time')?.className).toContain('font-mono');
@@ -256,7 +325,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
       ],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const tones = entries().map((entry) =>
       entry.querySelector('[data-tone]')?.getAttribute('data-tone'),
     );
@@ -268,7 +337,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
       data: [nth(1, { before: { minor: 634000 }, after: { minor: 697400 } })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
+    renderFeed('MXN');
     const timeline = screen.getByTestId('action-timeline');
     expect(within(timeline).getByText('$6,340 MXN')).toBeTruthy();
     expect(within(timeline).getByText('$6,974 MXN')).toBeTruthy();
@@ -282,7 +351,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
       data: [nth(1, { before: { minor: 634000 }, after: { minor: 570600 } })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency={null} />);
+    renderFeed(null);
     const timeline = screen.getByTestId('action-timeline');
     expect(within(timeline).getByText('5,706')).toBeTruthy();
     expect(within(timeline).getByText('-10%')).toBeTruthy();
@@ -294,7 +363,7 @@ describe('OptimizerActionFeed — timeline by day', () => {
       data: [nth(1, { reverted_by: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const [entry] = entries();
     expect(entry?.textContent).toContain('· Prospecting');
     expect(within(entry as HTMLElement).getByText('Reverted')).toBeTruthy();
@@ -306,13 +375,13 @@ describe('OptimizerActionFeed — timeline by day', () => {
       data: [nth(1, { justification: 'why' }), nth(2), nth(3)],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(screen.getByTestId('action-timeline').outerHTML).not.toMatch(/text-(2|3)xs/);
   });
 });
 
-// The rows carry ids; a person reads names. The name comes from the enrolled roster the
-// portfolio screen already holds in the React Query cache — never a new read.
+// The rows carry ids; a person reads names. The name comes from each portfolio's enrolled
+// roster — from the cache when another screen loaded it, read once otherwise.
 describe('OptimizerActionFeed — entity names', () => {
   const KNOWN_ID = '120251303880680236';
   const seedRoster = () =>
@@ -323,15 +392,33 @@ describe('OptimizerActionFeed — entity names', () => {
   it('shows a known ad set name, with its id kept on hover', () => {
     seedRoster();
     actionsState = { data: [action()], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const name = within(screen.getByTestId('action-timeline')).getByText('Lookalike 3% — Spain');
     expect(name.getAttribute('title')).toBe(KNOWN_ID);
+  });
+
+  it('reads the roster itself when no other screen has loaded it yet', async () => {
+    rosterRows = [{ adset_id: KNOWN_ID, adset_name: 'Lookalike 3% — Spain', active: true }];
+    actionsState = { data: [action()], isLoading: false };
+    renderFeed('USD');
+    const timeline = screen.getByTestId('action-timeline');
+    const name = await waitFor(() => within(timeline).getByText('Lookalike 3% — Spain'));
+    expect(name.getAttribute('title')).toBe(KNOWN_ID);
+    expect(within(timeline).queryByText(KNOWN_ID)).toBeNull();
+    expect(rosterReads).toBe(1);
+  });
+
+  it('reads nothing when the roster is already in the cache', () => {
+    seedRoster();
+    actionsState = { data: [action()], isLoading: false };
+    renderFeed('USD');
+    expect(rosterReads).toBe(0);
   });
 
   it('falls back to the id when no name is known for it', () => {
     seedRoster();
     actionsState = { data: [action({ entity_id: '555000111' })], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const timeline = screen.getByTestId('action-timeline');
     expect(within(timeline).getByText('555000111')).toBeTruthy();
     expect(within(timeline).queryByText('Lookalike 3% — Spain')).toBeNull();
@@ -339,7 +426,7 @@ describe('OptimizerActionFeed — entity names', () => {
 
   it('gives the revert trigger at least text-xs', () => {
     actionsState = { data: [action()], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const trigger = screen.getByRole('button', { name: 'Revert' });
     expect(trigger.className).toContain('text-xs');
     expect(trigger.className).not.toMatch(/text-[23]xs/);
@@ -364,13 +451,13 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
       ],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(chipsIn(timeline())).toEqual(['meta', 'meta', 'meta']);
   });
 
   it('labels the copyable receipt as the Meta trace id', () => {
     actionsState = { data: [action()], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     const receipt = within(timeline()).getByTestId('receipt-token');
     expect(receipt.getAttribute('aria-label')).toBe('Copy Meta trace id AbC123traceZ');
     expect(within(receipt).getByTestId('receipt-label').textContent).toBe('Meta trace id');
@@ -381,7 +468,7 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
       data: [action({ platform: 'google_ads', receipt: { requestId: 'req-9Xy' } })],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(chipsIn(timeline())).toEqual(['google_ads']);
     const receipt = within(timeline()).getByTestId('receipt-token');
     expect(receipt.getAttribute('aria-label')).toBe('Copy Google request id req-9Xy');
@@ -390,7 +477,7 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
 
   it('falls back to Meta when the row names a platform the contract does not know', () => {
     actionsState = { data: [action({ platform: 'snapchat' })], isLoading: false };
-    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    renderFeed('USD');
     expect(chipsIn(timeline())).toEqual(['meta']);
   });
 
@@ -399,7 +486,7 @@ describe('OptimizerActionFeed — platform chip and receipt', () => {
       data: [action(), action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000009' })],
       isLoading: false,
     };
-    const { container } = render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const { container } = renderFeed('USD');
     const figures = Array.from(container.querySelectorAll('[data-figure-role]'));
     expect(figures.length).toBeGreaterThan(0);
     for (const figure of figures) {
@@ -449,17 +536,100 @@ describe('ActionRow — the quiet Recently applied row', () => {
 });
 
 // A yen budget is whole yen: the old hard-coded /100 printed it a hundred times too small.
+// Ramiro on beta 83460c01: Activity read "775 800 +3%" on a brand whose selected ad account
+// records no currency — the feed priced every row in that one account's code. Prod shapes, ids
+// and numbers only: a Google-tab campaign write with no portfolio, a Google portfolio's write,
+// and a portfolio whose account and stamp both record nothing.
+describe('each row is priced in its own currency, never the selected account’s', () => {
+  const GOOGLE_PORTFOLIO = '5aaf5931-7407-4940-aab6-52e914bced45';
+  const UNRECORDED_PORTFOLIO = '8b890196-0db1-44b2-8394-21b2f08322ec';
+  const googleReceipt = (requestId: string, budget: string) => ({
+    platform: 'google_ads',
+    requestId,
+    resourceNames: [`customers/5251780631/campaignBudgets/${budget}`],
+  });
+  const rows = [
+    action({
+      id: 'eb17e176-9bc5-4dda-9a85-5db2bb4e9405',
+      portfolio_id: null,
+      portfolio_name: null,
+      entity_id: '20249528111',
+      before: { minor: 77500 },
+      after: { minor: 80000 },
+      actor_kind: 'human',
+      reversible: false,
+      receipt: googleReceipt('BazCWFaa8WNphefUXzUlDg', '12677560956'),
+    }),
+    action({
+      id: '4ba72377-f941-4247-aec1-94806a31df57',
+      portfolio_id: GOOGLE_PORTFOLIO,
+      portfolio_name: 'Google portfolio',
+      entity_id: '20249528111',
+      before: { minor: 80100 },
+      after: { minor: 80000 },
+      actor_kind: 'human',
+      receipt: googleReceipt('0c1-req', '12677560956'),
+    }),
+    action({
+      id: '81f8e056-04ce-43cf-ba02-623eb9c59e35',
+      portfolio_id: UNRECORDED_PORTFOLIO,
+      portfolio_name: 'Meta portfolio',
+      entity_id: '120253319670510415',
+      before: { minor: 10000 },
+      after: { minor: 7982 },
+      receipt: { fbtraceId: 'AhZlVKXvP1V' },
+    }),
+  ];
+
+  it('prices each row from its portfolio or its own account, whatever account is selected', () => {
+    actionsState = { data: rows, isLoading: false };
+    queryClient.setQueryData(optimizerQueryKeys.portfolios('brand-1'), {
+      rows: [
+        { id: GOOGLE_PORTFOLIO, ad_account_id: '5251780631', currency: 'MXN' },
+        { id: UNRECORDED_PORTFOLIO, ad_account_id: 'act_2870759213321514', currency: null },
+      ],
+      dropped: 0,
+    });
+    // A Google asset row carries no currency, and the brand's selected account records none.
+    queryClient.setQueryData(optimizerQueryKeys.adAccounts('brand-1'), [
+      {
+        platform: 'google_ads',
+        account_id: '5251780631',
+        name: null,
+        status: null,
+        currency: null,
+      },
+      {
+        platform: 'meta_ads',
+        account_id: 'act_2870759213321514',
+        name: null,
+        status: null,
+        currency: null,
+      },
+    ]);
+    render(<OptimizerActionFeed brandId="brand-1" />);
+    const change = (id: string) =>
+      document.querySelector(`[data-action-id="${id}"] [data-figure-role="change"]`)?.textContent ??
+      '';
+    // The Google tab's write: its receipt names the customer, whose portfolio is stamped MXN.
+    expect(change('eb17e176-9bc5-4dda-9a85-5db2bb4e9405')).toBe('$775 MXN$800 MXN+3%');
+    expect(change('4ba72377-f941-4247-aec1-94806a31df57')).toBe('$801 MXN$800 MXN0%');
+    // Nothing on the client records this one: the bare figure, never another account's code.
+    expect(change('81f8e056-04ce-43cf-ba02-623eb9c59e35')).toBe('10079.82-20%');
+  });
+});
+
 describe('money is divided by the currency’s own minor unit', () => {
   it('JPY prints the ledger figure whole; MXN divides by 100', () => {
     actionsState = {
       data: [action({ before: { minor: 5000 }, after: { minor: 6000 } })],
       isLoading: false,
     };
-    const { container, unmount } = render(<OptimizerActionFeed brandId="brand-1" currency="JPY" />);
+    const { container, unmount } = renderFeed('JPY');
     expect(container.textContent).toContain('¥5,000 JPY');
     expect(container.textContent).toContain('¥6,000 JPY');
     unmount();
-    render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
+    renderFeed('MXN');
     expect(screen.getAllByText(/50\.00 MXN/).length).toBeGreaterThan(0);
   });
 
@@ -508,7 +678,7 @@ describe('a cross-platform move in the action feed', () => {
       ],
       isLoading: false,
     };
-    render(<OptimizerActionFeed brandId="brand-1" currency="MXN" />);
+    renderFeed('MXN');
     const cards = screen.getAllByTestId('move-decision');
     expect(cards).toHaveLength(1);
     const card = cards[0] as HTMLElement;

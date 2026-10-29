@@ -3,6 +3,7 @@
 import { type ChatMediaItem, type ChatMediaKind, chatMediaRefKey } from '@continuum/contracts';
 import { ExternalLink, Layers, Play } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
+import { SkeletonText } from '@/components/ui/skeleton';
 import {
   type SignedChatMediaTile,
   useChatMediaTiles,
@@ -66,7 +67,7 @@ function MediaStripTile({
         onRecover={onRecover}
       />
     ) : state === 'pending' ? (
-      <span aria-hidden="true" className="block size-full animate-pulse bg-muted/70" />
+      <SkeletonText className="block size-full rounded-none" />
     ) : (
       <MediaFallbackTile seed={item.label} />
     );

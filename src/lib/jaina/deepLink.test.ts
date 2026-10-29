@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  jainaAdAccountParam,
   jainaNewConversationParam,
   jainaOpeningSessionId,
   jainaPlatformParam,
   jainaPromptHref,
+  jainaSessionHref,
 } from './deepLink';
 
 describe('jainaPromptHref', () => {
@@ -92,5 +94,23 @@ describe('jainaOpeningSessionId — which conversation the Jaina tab opens on', 
         latestSessionId: 's-latest',
       }),
     ).toBe('s-1');
+  });
+});
+
+describe('jainaSessionHref', () => {
+  it('pins the conversation and, when known, its ad account', () => {
+    expect(jainaSessionHref('jaina_session_c41d')).toBe(
+      '/scale?tab=jaina&sessionId=jaina_session_c41d',
+    );
+    const href = jainaSessionHref('jaina_session_c41d', 'act_1234567890');
+    const params = new URL(href, 'https://app.example').searchParams;
+    expect(params.get('tab')).toBe('jaina');
+    expect(params.get('sessionId')).toBe('jaina_session_c41d');
+    expect(jainaAdAccountParam(params.get('adAccountId'))).toBe('act_1234567890');
+  });
+
+  it('reads a blank or absent account as none', () => {
+    expect(jainaAdAccountParam(null)).toBeNull();
+    expect(jainaAdAccountParam('  ')).toBeNull();
   });
 });

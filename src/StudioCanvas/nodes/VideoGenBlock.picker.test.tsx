@@ -115,7 +115,7 @@ describe('#293 VideoGenBlock model picker', () => {
 
     // Positive control: the same click on a reachable model DOES write.
     await act(async () => {
-      fireEvent.click(modelItem('Veo 3.1'));
+      fireEvent.click(modelItem('Omni 1.1 Flash'));
     });
     expect(updateNode).toHaveBeenCalled();
   });
@@ -123,10 +123,19 @@ describe('#293 VideoGenBlock model picker', () => {
   it('leaves every reachable model selectable and unannotated', async () => {
     await openModelPicker(nodeData());
 
+    const item = modelItem('Omni 1.1 Flash');
+    expect(item.getAttribute('aria-disabled')).not.toBe('true');
+    expect(item.textContent).not.toContain('Returning soon');
+  });
+
+  // Google retired Veo on the Gemini API (2026-10-23); the Backend renders a saved Veo node on Omni.
+  it('greys out the retired Veo models and says they run on Omni', async () => {
+    await openModelPicker(nodeData());
+
     for (const label of ['Veo 3.1', 'Veo 3.1 Fast', 'Veo 3.1 Lite']) {
       const item = modelItem(label);
-      expect(item.getAttribute('aria-disabled')).not.toBe('true');
-      expect(item.textContent).not.toContain('Returning soon');
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      expect(item.textContent).toContain('Retired by Google');
     }
   });
 

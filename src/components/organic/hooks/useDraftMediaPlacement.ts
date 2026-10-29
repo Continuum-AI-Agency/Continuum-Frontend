@@ -18,6 +18,7 @@ import * as React from 'react';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
 import { useToast } from '@/components/ui/ToastProvider';
 import { isCarouselFormat } from '@/lib/organic/carousel';
+import { groupRowsToFill } from '@/lib/organic/groupDraft';
 import { useCalendarStore } from '@/lib/organic/store';
 import { useDraftFieldPersistence } from './useDraftFieldEditor';
 
@@ -141,6 +142,13 @@ function snapshotMedia(draft: OrganicCalendarDraft): MediaSnapshot {
   };
 }
 
+/** Which media a row holds, by slide; '' for none. A fill is judged on this, not on identity. */
+function mediaKey(assets: OrganicCalendarDraft['publishingAssets']): string {
+  return (assets ?? [])
+    .map((asset) => asset.storagePath || asset.storageUrl || asset.assetId || '')
+    .join('|');
+}
+
 function findStoreDraft(draftId: string): OrganicCalendarDraft | undefined {
   for (const day of useCalendarStore.getState().days) {
     const slot = day.slots.find((s) => s.id === draftId);
@@ -206,6 +214,42 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
   const confirmedRef = React.useRef<MediaSnapshot | null>(null);
   const [isSavingMedia, setIsSavingMedia] = React.useState(false);
 
+  // Group rows that had no media take this draft's, and keep following it while they still hold
+  // exactly what they were given — slides are placed one save at a time.
+  const filledMediaRef = React.useRef(new Map<string, string>());
+  const fillEmptyGroupMedia = React.useCallback(
+    async (source: OrganicCalendarDraft): Promise<void> => {
+      const publishingAssets = source.publishingAssets ?? [];
+      if (publishingAssets.length === 0) return;
+      const filled = filledMediaRef.current;
+      const rows = groupRowsToFill(
+        useCalendarStore.getState().days,
+        draftId,
+        (row) => mediaKey(row.publishingAssets),
+        filled,
+      );
+      await Promise.all(
+        rows.map(async (row) => {
+          const mediaSuggestion = source.mediaSuggestion ?? undefined;
+          const saved = await persistDraftFields(row, { media: { publishingAssets, mediaSuggestion } });
+          if (!saved.ok) return;
+          filled.set(row.id, mediaKey(publishingAssets));
+          updateDraft(row.id, (current) =>
+            withDerivedMediaStage(
+              withMediaFormat({
+                ...current,
+                publishingAssets,
+                mediaSuggestion: source.mediaSuggestion,
+                updatedAt: saved.updatedAt ?? current.updatedAt,
+              }),
+            ),
+          );
+        }),
+      );
+    },
+    [draftId, updateDraft, persistDraftFields],
+  );
+
   const saveLatestMedia = React.useCallback(
     async (fallback: OrganicCalendarDraft): Promise<boolean> => {
       const latest = findStoreDraft(draftId) ?? fallback;
@@ -233,6 +277,8 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
         confirmedRef.current = snapshotMedia(latest);
         const { updatedAt } = result;
         if (updatedAt) updateDraft(draftId, (current) => ({ ...current, updatedAt }));
+        // Inside the save, so flushMedia() — which approve and publish await — covers it.
+        await fillEmptyGroupMedia(latest);
         return true;
       }
 
@@ -246,7 +292,7 @@ export function useDraftMediaPlacement(draftId: string): UseDraftMediaPlacementR
       });
       return false;
     },
-    [draftId, updateDraft, persistDraftFields, show],
+    [draftId, updateDraft, persistDraftFields, show, fillEmptyGroupMedia],
   );
 
   /**

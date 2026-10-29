@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { PortfolioOpenPlan } from './portfolioAccounts';
 
@@ -40,6 +40,36 @@ mock.module('../useOptimizerData', () => ({
   }),
 }));
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
+
+// The rows' headline figures (usePortfolioFigures) read the account snapshots and each
+// roster through React Query. Here the cycle series stands in for the live read, priced by
+// the REAL `portfolioFigure()`, so the rows print what they printed before the live read
+// existed; `figuresLive = false` makes the live read miss so the snapshot fallback shows.
+const realPortfolioFigure = await import('./portfolioFigure');
+const realPortfolioFigures = await import('./usePortfolioFigures');
+let figuresLive = true;
+mock.module('./usePortfolioFigures', () => ({
+  ...realPortfolioFigures,
+  usePortfolioFigures: ({
+    portfolios,
+    series,
+  }: {
+    portfolios: readonly PortfolioListItem[];
+    series: readonly (readonly EfficiencySeriesPoint[])[];
+  }) => {
+    const figures = new Map<string, ReturnType<typeof realPortfolioFigure.portfolioFigure>>();
+    portfolios.forEach((row, index) => {
+      const cycle = realPortfolioFigure.seriesWindowFigures(series[index] ?? []);
+      const figure = realPortfolioFigure.portfolioFigure({
+        portfolio: row,
+        live: figuresLive ? cycle : null,
+        snapshot: cycle,
+      });
+      if (figure) figures.set(row.id, figure);
+    });
+    return { figures, pending: false };
+  },
+}));
 
 const { OptimizerPortfolios } = await import('./OptimizerPortfolios');
 
@@ -86,6 +116,7 @@ function renderList(
 }
 
 afterEach(() => {
+  figuresLive = true;
   accountReadCandidates = [];
   efficiencySeries = [];
   archivedPortfolios = [];
@@ -431,6 +462,32 @@ describe('OptimizerPortfolios — a live table, one row per portfolio', () => {
     );
     expect(container.querySelector('[data-testid="portfolio-cost-bar"]')).not.toBeNull();
     expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe('33% over');
+  });
+
+  it('prints a live figure with no caveat', () => {
+    efficiencySeries = [[cycle]];
+    const { container, getByRole } = renderList({
+      portfolios: [portfolio({ id: 'p1', name: 'Prospecting', cpa_target: 30 })],
+    });
+    const row = getByRole('button', { name: 'Open Prospecting' });
+    expect(row.querySelector('[data-figure-source="live"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="portfolio-figure-as-of"]')).toBeNull();
+  });
+
+  it('dates the last cycle’s figure when the live read cannot supply one, and says it is old', () => {
+    figuresLive = false;
+    efficiencySeries = [[cycle]];
+    const { getByRole } = renderList({
+      portfolios: [portfolio({ id: 'p1', name: 'Prospecting', cpa_target: 30 })],
+    });
+    const row = getByRole('button', { name: 'Open Prospecting' });
+    expect(row.querySelector('[data-figure-source="snapshot"]')).not.toBeNull();
+    // The figure is still the cycle's — only now it says when it was measured.
+    expect(row.querySelector('[data-testid="portfolio-state-chip"]')?.textContent).toBe('33% over');
+    const asOf = row.querySelector('[data-testid="portfolio-figure-as-of"]');
+    expect(asOf?.textContent).toMatch(/^as of Sep 27 · \d+ days old$/);
+    expect(asOf?.getAttribute('data-stale')).toBe('true');
+    expect(asOf?.className).toContain('text-warning');
   });
 
   it('still names the target before the first cycle, and says no cycle has run', () => {

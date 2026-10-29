@@ -10,8 +10,9 @@
 // with `PortfolioTableHeader`; narrow (a 390px panel) it collapses to the name line and ONE
 // figures line, where each figure carries the word its column header would have said.
 //
-// The Overview's figures come from `portfolioWindow()` in account/overviewModel, the same rows
-// the headline sentence is built from, so a row can be checked against the tiles.
+// The figures come from `portfolioFigure()` in ./portfolioFigure — the function the portfolio
+// hero prints from too — and the headline sentence sums the same rows, so a row can be checked
+// against the tiles and against the portfolio it opens.
 
 import type { AccountCandidate, PacingStamp, PortfolioListItem } from '@continuum/contracts';
 import { getOptimizationMetricDefinition, rankAccountCandidates } from '@continuum/contracts';
@@ -37,6 +38,7 @@ import {
 } from './account/overviewModel';
 import { PlatformChip } from './platforms/PlatformChip';
 import { type AdPlatform, orderPlatforms } from './platforms/platformTabsModel';
+import { figureAsOfText, type PortfolioFigure } from './portfolioFigure';
 import { pacingStaleLine, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 
 // ---------------------------------------------------------------------------
@@ -122,6 +124,10 @@ export function PortfolioRowName({ name, badges }: { name: string; badges?: Reac
 // ---------------------------------------------------------------------------
 
 /** The cost figure wears the state's colour; every other figure is a plain fact. */
+/** A row's figure: a priced window, and — from `portfolioFigure()` — where it came from. */
+export type RowFigure = PortfolioWindow &
+  Partial<Pick<PortfolioFigure, 'source' | 'asOfLabel' | 'ageDays' | 'stale'>>;
+
 const STATE_TONE: Record<TileState, string> = {
   ok: 'text-success',
   warn: 'text-warning',
@@ -153,7 +159,7 @@ export function CostVsTargetCell({
   caption,
   testId,
 }: {
-  window: PortfolioWindow | null;
+  window: RowFigure | null;
   target: number | null;
   currency?: string | null;
   figureKey: (name: string) => string;
@@ -164,7 +170,7 @@ export function CostVsTargetCell({
   const cost = window?.costPerResult ?? null;
   const fill = cost != null && target != null && target > 0 ? Math.min(1, cost / target) : null;
   return (
-    <div className="min-w-0" data-testid={testId}>
+    <div className="min-w-0" data-figure-source={window?.source} data-testid={testId}>
       <p className="flex flex-wrap items-center gap-x-1 tabular-nums">
         <span
           className={cn('font-mono font-semibold text-sm', STATE_TONE[state])}
@@ -285,15 +291,30 @@ const STATUS_TONE: Record<TileState, string> = {
   none: 'text-muted-foreground',
 };
 
-/** The state in words, coloured by verdict. */
-export function StatusCell({ window }: { window: PortfolioWindow | null }) {
+/** The state in words, coloured by verdict. A figure the live read could not supply is the
+ *  last cycle's, and says so under the state: "as of Oct 15", plus its age once it is stale. */
+export function StatusCell({ window }: { window: RowFigure | null }) {
   const state: TileState = window?.state ?? 'none';
-  return (
+  const chip = (
     <span
       className={cn('font-semibold text-xs @[40rem]:text-right', STATUS_TONE[state])}
       data-testid="portfolio-state-chip"
     >
       {stateChipLabel(window)}
+    </span>
+  );
+  const asOf = figureAsOfText(window);
+  if (!asOf) return chip;
+  return (
+    <span className="flex flex-col @[40rem]:items-end">
+      {chip}
+      <span
+        className={cn('text-xs', window?.stale ? 'text-warning' : 'text-muted-foreground')}
+        data-stale={window?.stale ? 'true' : 'false'}
+        data-testid="portfolio-figure-as-of"
+      >
+        {asOf}
+      </span>
     </span>
   );
 }
@@ -389,9 +410,10 @@ type PortfolioRowCardProps = {
   onSelect?: () => void;
   /** Warm the portfolio's detail reads on hover/focus so opening it paints from cache. */
   onPrefetch?: () => void;
-  /** This portfolio's 7-day window from `portfolioWindow()` in sections/account/overviewModel.ts.
-   *  Null/absent = no cycle yet: the figures render as '—' and the status says 'no cycle yet'. */
-  window?: PortfolioWindow | null;
+  /** This portfolio's headline figure from `portfolioFigure()` in sections/portfolioFigure.ts —
+   *  the same function the portfolio hero prints. Null/absent = nothing measured yet: the
+   *  figures render as '—' and the status says 'no cycle yet'. */
+  window?: RowFigure | null;
   /** The platform the portfolio buys on; the row names it in a chip before the objective.
    *  Ignored when `platforms` is given. */
   platform?: AdPlatform;

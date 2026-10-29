@@ -10,14 +10,15 @@ type CampaignMetrics = {
   roas: number;
   ctr: number;
   cpc: number;
-  cpa: number;
+  /** Null when no member has a CPA — the Google edge names no single result. Never 0. */
+  cpa: number | null;
   impressions: number;
   clicks: number;
 };
 
 type CampaignLike = {
   id: string;
-  metrics?: Partial<CampaignMetrics>;
+  metrics?: Partial<Record<keyof CampaignMetrics, number | null>>;
   comparison?: PaidMetricsComparison;
   trends?: PaidMetricsTrendPoint[];
 };
@@ -177,7 +178,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
     roas: average(metricsByKey.roas),
     ctr: average(metricsByKey.ctr),
     cpc: average(metricsByKey.cpc),
-    cpa: average(metricsByKey.cpa),
+    cpa: metricsByKey.cpa.length > 0 ? average(metricsByKey.cpa) : null,
     impressions: average(metricsByKey.impressions),
     clicks: average(metricsByKey.clicks),
   };

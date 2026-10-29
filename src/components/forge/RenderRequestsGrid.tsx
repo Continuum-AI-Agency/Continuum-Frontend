@@ -11,7 +11,6 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
-  apiRenderPreflightResponseSchema,
   effectiveRenderValues,
   FORGE_RENDER_SET_DEFAULT_SETTINGS,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
@@ -20,10 +19,8 @@ import {
   type ForgeRenderSetRow,
   type ForgeRenderSetSettings,
   isWebTemplateKey,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
   type TemplateRevisionRef,
   templateRefOf,
 } from '@continuum/contracts';
@@ -53,7 +50,11 @@ import {
 import { ChevronDown, ChevronRight, ClipboardPaste, Loader2, Send, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout } from 'react-resizable-panels';
-import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
+import {
+  AiDraftDialog,
+  type AiDraftParent,
+  type SelectedFile,
+} from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import {
   AdDrillDown,
@@ -94,6 +95,14 @@ import { RenderSetTabs, templateJobsKey } from '@/components/forge/RenderSetTabs
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import { explainFinding } from '@/components/forge/readinessCopy';
 import {
+  HELD_SET,
+  type HoldScope,
+  heldConfirmCopy,
+  isHeld,
+  SIGNED_OUT,
+  useRenderHold,
+} from '@/components/forge/renderHold';
+import {
   addSibling,
   applyAssistOps,
   applyFormats,
@@ -110,6 +119,7 @@ import {
   emptyHistory,
   forkLabel,
   fromRenderSetRows,
+  isRenderable,
   keepProposed,
   MAX_BATCH_ROWS,
   mergeSetRows,
@@ -117,15 +127,13 @@ import {
   moveRow,
   nestRows,
   newRowId,
-  overridableFinding,
-  overrideFor,
-  PREFLIGHT_DEBOUNCE_MS,
   parseDelimited,
   proposedIds,
   pushHistory,
   type RenderOverride,
   type RequestRow,
   type RowDrop,
+  type RowStatus,
   rebaseRows,
   renderedRatios,
   resetKey,
@@ -135,6 +143,7 @@ import {
   rowDepth,
   rowFileCount,
   rowMediaOf,
+  rowStatusOf,
   rowsFromSuggestion,
   seedRow,
   toPreflightDelivery,
@@ -243,7 +252,6 @@ function readDrafts(key: string): RequestRow[] | null {
       clearedKeys: row.clearedKeys ?? [],
       outputIds: row.outputIds ?? [],
       label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
-      check: { state: 'idle' },
     }));
   } catch {
     return null;
@@ -360,11 +368,16 @@ function readinessSummary(
     .join(' · ');
 }
 
-/** A server refusal that needs fixing, as opposed to a call, a wait, or a check that never ran. */
-const hardRefusal = (row: RequestRow) =>
-  row.check.state === 'error' &&
-  !row.check.transient &&
-  overrideFor(row.check.code, row.check.guardrails) === null;
+/**
+ * What a refusal the render confirmation found is about: the row as it was asked, of the template
+ * as it was asked. An edit to the row, to what it inherits, or a different checkpoint retires it.
+ */
+const refusalKey = (
+  rows: RequestRow[],
+  id: string,
+  templateRef: string | null,
+  contractHash: string | null,
+) => JSON.stringify([preflightSnapshot(rows, id), templateRef, contractHash]);
 
 /** "Deleted 3 rows, 2 variations included" — variations are named only when nobody picked them. */
 function deletedMessage(picked: number, all: number): string {
@@ -416,6 +429,8 @@ export type ForgeRenderIntent = {
   bindingId?: string;
   renderSetId?: string;
   draftWithAi?: boolean;
+  /** Files dropped on the template's Draft button: the draft opens with them attached. */
+  draftDrop?: Promise<SelectedFile[]>;
   templateRevision?: TemplateRevisionRef;
   templateRef?: string;
   /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
@@ -466,7 +481,12 @@ export function RenderRequestsGrid({
 }) {
   const queryClient = useQueryClient();
   // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
-  const brandRole = useActiveBrandContext().permissions.find(
+  const brandContext = useActiveBrandContext();
+  // A batch whose createBatch failed is held per user, brand, binding, template and render set
+  // (renderHold.ts), in every tab: while it is, Render opens it, never a new confirmation. With no
+  // user id there is no key to hold under, so Render is disabled.
+  const userId = brandContext.user?.id ?? null;
+  const brandRole = brandContext.permissions.find(
     (permission) => permission.brand_profile_id === brandId,
   )?.role;
   const finalBlocked =
@@ -508,11 +528,6 @@ export function RenderRequestsGrid({
   );
   const pinCheckpoint = (ref: string | null) => {
     setTemplateRef(ref);
-    setRows((current) =>
-      current.map((row) =>
-        row.check.state === 'idle' ? row : { ...row, check: { state: 'idle' } },
-      ),
-    );
   };
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
@@ -550,11 +565,15 @@ export function RenderRequestsGrid({
   const [aiDraft, setAiDraft] = useState<{
     parent: AiDraftParent | null;
     varyKeys?: string[];
+    dropped?: Promise<SelectedFile[]>;
   } | null>(null);
   /** A menu-driven draft in flight: what the banner says, and what blocks a second click. */
   const [generating, setGenerating] = useState<{ count: number; of: string } | null>(null);
   /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
-  const [draftFor, setDraftFor] = useState<string | null>(null);
+  const [draftFor, setDraftFor] = useState<{
+    templateKey: string;
+    dropped?: Promise<SelectedFile[]>;
+  } | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [emptyVariant, setEmptyVariant] = useState('');
   const [savedSignature, setSavedSignature] = useState('');
@@ -572,13 +591,33 @@ export function RenderRequestsGrid({
   const [dropHint, setDropHint] = useState<RowDrop | null>(null);
   /** The render confirmation is open on the rows selected when Render was clicked. */
   const [confirming, setConfirming] = useState(false);
-  /** "Review N ready rows": the confirmation renders only these and lists the selected rest. */
+  /** The rows Render opened the confirmation on, and the selected rest with why they stay behind. */
   const [subset, setSubset] = useState<{
     rowIds: string[];
     skippedRows: { label: string; message: string }[];
   } | null>(null);
   /** "Send to ad set…" is open over the selected rows. */
   const [sendingTo, setSendingTo] = useState(false);
+  const holdOf = (renderSetId: string): HoldScope | null =>
+    userId && contract
+      ? { userId, brandId, bindingId, templateKey: contract.template.key, renderSetId }
+      : null;
+  const holdScope = activeSet ? holdOf(activeSet.id) : null;
+  const held = useRenderHold(holdScope);
+  /**
+   * A held set warns, never blocks: Duplicate, Delete, Restore as new set, Change set template
+   * revision, Run on other variants, Update to current template (tab menu and banner) and Import
+   * browser draft each ask one confirm while it is held (read fresh), then go. Retry still sends
+   * the frozen batch; a copy starts with no hold. Rename, describe and row edits never ask.
+   * True when it asked: the caller returns, and `run` goes on Continue.
+   */
+  const [heldConfirm, setHeldConfirm] = useState<{ copy: boolean; run: () => void } | null>(null);
+  const askIfHeld = (set: { id: string } | null, run: () => void, copy = false): boolean => {
+    const scope = set ? holdOf(set.id) : null;
+    if (!scope || !isHeld(scope)) return false;
+    setHeldConfirm({ copy, run });
+    return true;
+  };
   /** The set whose delivery settings are open. */
   const [settingsFor, setSettingsFor] = useState<ForgeRenderSet | null>(null);
   /** Each rendered row's newest job, and the row as it was rendered: an edit ends its run view. */
@@ -990,20 +1029,18 @@ export function RenderRequestsGrid({
   const updateRow = useCallback(
     (id: string, patch: (row: RequestRow) => RequestRow, coalesce?: string) => {
       record(coalesce ?? null);
-      setRows((current) => {
-        const affected = descendantsOf(current, [id]);
-        return current.map((row) => {
-          if (row.id !== id)
-            return affected.has(row.id) ? { ...row, check: { state: 'idle' } } : row;
+      setRows((current) =>
+        current.map((row) => {
+          if (row.id !== id) return row;
           const next = patch(row);
           const evidence = Object.fromEntries(
             Object.entries(next.evidence ?? {}).filter(
               ([key]) => JSON.stringify(row.values[key]) === JSON.stringify(next.values[key]),
             ),
           );
-          return { ...next, evidence, check: { state: 'idle' } };
-        });
-      });
+          return { ...next, evidence };
+        }),
+      );
     },
     [],
   );
@@ -1098,14 +1135,6 @@ export function RenderRequestsGrid({
     [updateRow],
   );
 
-  // --- server preflight, per dirty row, debounced ---------------------------------------
-  // At most PREFLIGHT_CONCURRENCY at once: an imported sheet arms fifty rows in one go, and fifty
-  // simultaneous dry-runs queue behind each other on the server anyway.
-  const PREFLIGHT_CONCURRENCY = 3;
-  const checksInFlight = useRef(0);
-  const timers = useRef(
-    new Map<string, { timer: ReturnType<typeof setTimeout>; snapshot: string }>(),
-  );
   const variables = contract?.variables;
   // Per row: what is wrong with it (`clientErrors`, which keeps it from rendering), and what a
   // person may render through on purpose (`calls`, decided at Render, never an error in the row).
@@ -1132,195 +1161,11 @@ export function RenderRequestsGrid({
             key: problem.key,
           });
         else errors[problem.key] ??= problem.message;
-      if (row.check.state === 'ready' || row.check.state === 'error')
-        for (const finding of row.check.guardrails ?? []) {
-          if (finding.severity !== 'block') continue;
-          const override = overridableFinding(finding);
-          if (override)
-            rowCalls.push({ override, message: finding.message, key: finding.variableKey });
-          else errors[finding.variableKey ?? finding.code] = finding.message;
-        }
       errorsByRow.set(row.id, errors);
       if (rowCalls.length) callsByRow.set(row.id, rowCalls);
     }
     return { clientErrors: errorsByRow, calls: callsByRow };
   }, [rows, variables, linkedFields]);
-
-  const readiness = useMemo(() => {
-    const findings = new Map<string, { message: string; rows: string[] }>();
-    let blocked = 0;
-    let needsInput = 0;
-    let review = 0;
-    let call = 0;
-    let checking = 0;
-    let ready = 0;
-    const labelOf = (key: string | undefined) => {
-      const label = variables?.find((variable) => variable.key === key)?.label;
-      return label ? readableLayerName(label) : undefined;
-    };
-    for (const row of rows) {
-      const errors = clientErrors.get(row.id) ?? {};
-      // The same findings, and the same words, as the row's "Needs review" badge.
-      const unknown =
-        row.check.state === 'ready'
-          ? readinessFindings(row.check).filter(leavesCheckIncomplete)
-          : [];
-      for (const item of unknown) {
-        const key = `${item.code}:${item.variableKey ?? ''}`;
-        const finding = findings.get(key) ?? { message: explainFinding(item, labelOf), rows: [] };
-        finding.rows.push(row.label || 'Untitled');
-        findings.set(key, finding);
-      }
-      const asked = [...(calls.get(row.id) ?? [])];
-      const refused = hardRefusal(row);
-      if (Object.keys(errors).length > 0 || refused) {
-        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
-        const blank =
-          row.check.state !== 'error' && Object.keys(errors).every((key) => missing.includes(key));
-        if (blank) needsInput += 1;
-        else blocked += 1;
-        for (const [key, message] of Object.entries(errors)) {
-          const finding = findings.get(key) ?? { message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set(key, finding);
-        }
-        if (row.check.state === 'error') {
-          const finding = findings.get('server') ?? { message: row.check.message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set('server', finding);
-        }
-      } else if (asked.length || (row.check.state === 'error' && !row.check.transient)) {
-        // Renders once someone says so at Render: a question, not a block.
-        call += 1;
-        const refusal =
-          row.check.state === 'error' ? overrideFor(row.check.code, row.check.guardrails) : null;
-        if (refusal && row.check.state === 'error')
-          asked.push({ override: refusal, message: row.check.message });
-        for (const call of asked) {
-          const finding = findings.get(call.override) ?? { message: call.message, rows: [] };
-          finding.rows.push(row.label || 'Untitled');
-          findings.set(call.override, finding);
-        }
-      } else if (unknown.length) review += 1;
-      else if (row.check.state === 'ready') ready += 1;
-      else checking += 1;
-    }
-    return { blocked, needsInput, call, review, checking, ready, findings: [...findings.entries()] };
-  }, [rows, clientErrors, calls, variables]);
-
-  useEffect(() => {
-    if (!contract) return;
-    const { key, contractHash } = contract.template;
-    const pending = timers.current;
-    for (const row of rows) {
-      const snapshot = preflightSnapshot(rows, row.id);
-      const armedFor = `${snapshot}|${templateRef ?? ''}`;
-      const scheduled = pending.get(row.id);
-      // A true debounce: an edit restarts the wait instead of racing a timer armed for older values.
-      if (scheduled?.snapshot === armedFor) continue;
-      if (scheduled) {
-        clearTimeout(scheduled.timer);
-        pending.delete(row.id);
-      }
-      if (row.check.state !== 'idle') continue;
-      if (Object.keys(clientErrors.get(row.id) ?? {}).length > 0) continue;
-      const resolved = effectiveValues(rows, row.id);
-      const encode = effectiveEncode(rows, row.id);
-      const outputIds = effectiveOutputIds(rows, row.id);
-      // Both updates return `current` untouched when the row moved on: a no-op must not be a new
-      // array, or every stale response re-renders the grid under the person typing in it.
-      const settle = (next: RequestRow['check'], from: RequestRow['check']['state']) =>
-        setRows((current) => {
-          const target = current.find((item) => item.id === row.id);
-          if (
-            !target ||
-            target.check.state !== from ||
-            preflightSnapshot(current, row.id) !== snapshot
-          )
-            return current;
-          return current.map((item) => (item === target ? { ...item, check: next } : item));
-        });
-      const run = async () => {
-        if (checksInFlight.current >= PREFLIGHT_CONCURRENCY) {
-          pending.set(row.id, { timer: setTimeout(run, 250), snapshot: armedFor });
-          return;
-        }
-        pending.delete(row.id);
-        checksInFlight.current += 1;
-        settle({ state: 'checking' }, 'idle');
-        let check: RequestRow['check'];
-        try {
-          const response = await apiRendersApi.preflight({
-            brandId,
-            ...(bindingId ? { bindingId } : {}),
-            templateKey: key,
-            contractHash,
-            variables: resolved,
-            ...(outputIds.length ? { outputIds } : {}),
-            ...(templateRevision ? { templateRevision } : {}),
-            ...(templateRef ? { templateRef } : {}),
-            ...(activeSet && signatureOf(rows, contract) === savedSignature
-              ? {
-                  renderSetId: activeSet.id,
-                  renderSetRowId: row.id,
-                  expectedRenderSetRevision: activeSet.revision,
-                }
-              : {}),
-            ...(encode ? { encode } : {}),
-            // The person decides the line count at Render; everything else is still checked now.
-            ...(calls.get(row.id)?.some((call) => call.override === 'acceptLinkedLineMismatch')
-              ? { acceptLinkedLineMismatch: true }
-              : {}),
-          });
-          check = {
-            state: 'ready',
-            fit: response.fit,
-            test: response.test,
-            guardrails: response.guardrails ?? [],
-          };
-        } catch (error) {
-          const guardrails = apiRenderPreflightResponseSchema.shape.guardrails.safeParse(
-            error instanceof ApiError ? error.payload?.guardrails : undefined,
-          );
-          const detail =
-            error instanceof ApiError && typeof error.payload?.detail === 'string'
-              ? error.payload.detail
-              : null;
-          check = {
-            state: 'error',
-            code: error instanceof ApiError ? (error.code ?? error.message) : undefined,
-            message:
-              detail ?? describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''),
-            guardrails: guardrails.success ? guardrails.data : [],
-            // No answer is not a refusal: Render re-checks it rather than being held by it.
-            transient: !(error instanceof ApiError) || error.status >= 500 || error.status === 429,
-          };
-        }
-        checksInFlight.current -= 1;
-        settle(check, 'checking');
-      };
-      pending.set(row.id, { timer: setTimeout(run, PREFLIGHT_DEBOUNCE_MS), snapshot: armedFor });
-    }
-  }, [
-    rows,
-    contract,
-    clientErrors,
-    calls,
-    brandId,
-    bindingId,
-    templateRevision,
-    templateRef,
-    activeSet,
-    savedSignature,
-  ]);
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const { timer } of pending.values()) clearTimeout(timer);
-      pending.clear();
-    };
-  }, []);
 
   // --- row operations ---------------------------------------------------------------------
   // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
@@ -1429,7 +1274,6 @@ export function RenderRequestsGrid({
           ...structuredClone(row),
           id: newRowId(),
           label: duplicateLabel(row.label),
-          check: { state: 'idle' },
         })),
     );
 
@@ -1520,9 +1364,9 @@ export function RenderRequestsGrid({
   const pinnedRevisionLabel = revisionVariants
     ?.flatMap((variant) => variant.revisions.map((revision) => ({ variant, revision })))
     .find((item) => item.revision.id === activeSet?.templateRevision?.revisionId);
-  const changeRevision = async () => {
+  const changeRevision = async (confirmed = false) => {
     const picked = publishedRevisions.find((item) => item.id === pickedRevision);
-    if (!picked) return;
+    if (!picked || (!confirmed && askIfHeld(activeSet, () => void changeRevision(true)))) return;
     setRevisionChangeBusy(true);
     try {
       if (activeSet) {
@@ -1594,8 +1438,9 @@ export function RenderRequestsGrid({
         ? [{ variant, head, target }]
         : [];
     }) ?? [];
-  const runOnVariants = async () => {
-    if (!activeSet) return;
+  const runOnVariants = async (confirmed = false) => {
+    if (!activeSet || (!confirmed && askIfHeld(activeSet, () => void runOnVariants(true), true)))
+      return;
     setRevisionChangeBusy(true);
     const made: string[] = [];
     const refused: string[] = [];
@@ -1996,7 +1841,8 @@ export function RenderRequestsGrid({
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
-    if (intent.draftWithAi) setDraftFor(intent.templateKey);
+    if (intent.draftWithAi)
+      setDraftFor({ templateKey: intent.templateKey, dropped: intent.draftDrop });
     setFocusRow(
       intent.rowId
         ? { setId: intent.renderSetId, id: intent.rowId, select: intent.rerender === true }
@@ -2023,9 +1869,9 @@ export function RenderRequestsGrid({
 
   // The draft opens once the template it was asked for is on screen, not over the previous one.
   useEffect(() => {
-    if (!draftFor || contract?.template.key !== draftFor) return;
+    if (!draftFor || contract?.template.key !== draftFor.templateKey) return;
     setDraftFor(null);
-    setAiDraft({ parent: null });
+    setAiDraft({ parent: null, dropped: draftFor.dropped });
   }, [draftFor, contract]);
 
   // ponytail: drafts are no longer written — the server autosaves. Browser drafts written before
@@ -2329,8 +2175,9 @@ export function RenderRequestsGrid({
   };
 
   /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
-  const duplicateSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const duplicateSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void duplicateSet(set, true), true)))
+      return;
     const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
     const copy = rebaseRows(
       source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
@@ -2347,8 +2194,12 @@ export function RenderRequestsGrid({
   };
 
   /** A kept version as a new set. The set it came from is never written back over. */
-  const restoreRevision = async (revision: ForgeRenderSetRevision) => {
-    if (!contract) return;
+  const restoreRevision = async (revision: ForgeRenderSetRevision, confirmed = false) => {
+    if (
+      !contract ||
+      (!confirmed && askIfHeld(historyFor, () => void restoreRevision(revision, true), true))
+    )
+      return;
     if (
       revision.templateRevision &&
       (revision.templateRevision.templateKey !== contract.template.key ||
@@ -2382,8 +2233,8 @@ export function RenderRequestsGrid({
     toast.success(`Restored as “${created.name}”`);
   };
 
-  const deleteSet = async (set: ForgeRenderSet) => {
-    if (!contract) return;
+  const deleteSet = async (set: ForgeRenderSet, confirmed = false) => {
+    if (!contract || (!confirmed && askIfHeld(set, () => void deleteSet(set, true)))) return;
     try {
       await apiRendersApi.deleteRenderSet(brandId, set.id);
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
@@ -2417,7 +2268,7 @@ export function RenderRequestsGrid({
         : [],
     [contract],
   );
-  const fitOf = useLiveFit({
+  const fit = useLiveFit({
     brandId,
     environment: contract?.template.environment ?? null,
     templateKey: templateKey || null,
@@ -2427,19 +2278,95 @@ export function RenderRequestsGrid({
   const liveFit = useMemo(
     () =>
       new Map(
-        fitOf
+        fit.state === 'measured'
           ? rows.map((row) => {
               const media = effectiveMedia(rows, row.id);
               const sizeOf = (key: string) => {
                 const dims = media[key];
                 return dims?.w && dims.h ? { w: dims.w, h: dims.h } : null;
               };
-              return [row.id, fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
+              return [row.id, fit.fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
             })
           : [],
       ),
-    [fitOf, rows],
+    [fit, rows],
   );
+  const fitLoading = fit.state === 'loading';
+  // What the render confirmation found a row's own preflight refusing: kept while the row is what
+  // was refused (refusalKey), so an edit retires it. Nothing else here asks the server anything.
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, { message: string; key: string }>>(
+    () => new Map(),
+  );
+  const contractHash = contract?.template.contractHash ?? null;
+  const statuses = useMemo(
+    () =>
+      new Map(
+        rows.map((row) => {
+          const refusal = refusals.get(row.id);
+          return [
+            row.id,
+            rowStatusOf(
+              clientErrors.get(row.id) ?? {},
+              liveFit.get(row.id),
+              refusal?.key === refusalKey(rows, row.id, templateRef, contractHash)
+                ? refusal.message
+                : undefined,
+              calls.get(row.id),
+            ),
+          ] as const;
+        }),
+      ),
+    [rows, clientErrors, liveFit, refusals, calls, templateRef, contractHash],
+  );
+  const statusOf = (id: string): RowStatus =>
+    statuses.get(id) ?? { state: 'unchecked', findings: [] };
+  const onRowsRefused = (found: ReadonlyArray<{ rowId: string; message: string }>) =>
+    setRefusals((previous) => {
+      const next = new Map(previous);
+      for (const { rowId, message } of found)
+        next.set(rowId, {
+          message,
+          key: refusalKey(latestRows.current, rowId, templateRef, contractHash),
+        });
+      return next;
+    });
+  const readiness = useMemo(() => {
+    const findings = new Map<string, { message: string; rows: string[] }>();
+    const counts = { blocked: 0, needsInput: 0, call: 0, review: 0, checking: 0, ready: 0 };
+    const labelOf = (key: string | undefined) => {
+      const label = variables?.find((variable) => variable.key === key)?.label;
+      return label ? readableLayerName(label) : undefined;
+    };
+    const note = (key: string, message: string, row: string) => {
+      const finding = findings.get(key) ?? { message, rows: [] };
+      finding.rows.push(row);
+      findings.set(key, finding);
+    };
+    for (const row of rows) {
+      const status = statuses.get(row.id);
+      const label = row.label || 'Untitled';
+      if (status?.state === 'invalid') {
+        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
+        if (Object.keys(status.errors).every((key) => missing.includes(key)))
+          counts.needsInput += 1;
+        else counts.blocked += 1;
+        for (const [key, message] of Object.entries(status.errors)) note(key, message, label);
+      } else if (status?.state === 'refused') {
+        counts.blocked += 1;
+        note(`server:${status.reason}`, status.reason, label);
+      } else if (status?.state === 'call') {
+        // Renders once someone says so at Render: a question, not a block.
+        counts.call += 1;
+        for (const call of status.calls) note(call.override, call.message, label);
+      } else if (status?.state === 'unchecked' && status.findings.length) {
+        counts.review += 1;
+        for (const item of status.findings)
+          note(`${item.code}:${item.variableKey ?? ''}`, explainFinding(item, labelOf), label);
+      } else if (status?.state === 'unchecked' && fitLoading) counts.checking += 1;
+      else counts.ready += 1;
+    }
+    return { ...counts, findings: [...findings.entries()] };
+  }, [rows, statuses, variables, fitLoading]);
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   // Where renders go: the brand's rooms and ad accounts, the open set's defaults, each row's own.
   const destinations = useDeliveryDestinations(brandId);
@@ -2505,6 +2432,8 @@ export function RenderRequestsGrid({
         hiddenColumns,
         generating: generating !== null,
         liveFit,
+        statuses,
+        fitLoading,
         calls,
         runs,
         destination: web
@@ -2548,10 +2477,26 @@ export function RenderRequestsGrid({
   const actionContext: GridActionContext | null = contract
     ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
     : null;
+  // Render opens the confirmation over the selected rows that can render, and lists the rest with
+  // why: a wrong value, or a refusal no tick can override, leaves its row behind, never the batch.
+  // A row whose layout is still being measured, and one that needs a person's call, both go: the
+  // confirmation's one preflight is the server's answer.
+  const selectedReady = selected.filter((row) => isRenderable(statusOf(row.id)));
+  const skipped = selected.filter((row) => !isRenderable(statusOf(row.id)));
+  /** Why a selected row stays behind, in the words its Status cell uses. */
+  const skipReason = (row: RequestRow): string => {
+    const status = statusOf(row.id);
+    if (status.state === 'refused') return status.reason;
+    const [key, message] =
+      status.state === 'invalid' ? (Object.entries(status.errors)[0] ?? []) : [];
+    return key && message
+      ? `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`
+      : 'Fix this row before rendering.';
+  };
   // What Render will make, counted the way the render confirmation counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
-    for (const row of selected) {
+    for (const row of selectedReady) {
       const outputIds = effectiveOutputIds(rows, row.id);
       files.total += rowFileCount(contract, { outputIds, delivery: row.delivery });
       if (row.delivery?.action === 'replace') files.replacements += 1;
@@ -2564,34 +2509,25 @@ export function RenderRequestsGrid({
     rows.length < MAX_BATCH_ROWS &&
     selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
   const renderingProposed = selected.some((row) => proposed.has(row.id));
-  // Render opens the confirmation unless a selected row has something to FIX: a client error, or
-  // a refusal no tick can override. A row still being checked, one whose check never answered,
-  // and one that needs a person's call all go — the confirmation's one preflight is the answer.
-  const selectedReady = selected.filter(
-    (row) => Object.keys(clientErrors.get(row.id) ?? {}).length === 0 && !hardRefusal(row),
-  );
   const canRender = !updateRequired && !renderingProposed && selected.length <= MAX_BATCH_ROWS;
-  const readyToFire =
-    canRender && selected.length > 0 && selectedReady.length === selected.length;
-  // Some selected rows can go and some cannot: render the ones that can, and say which stay behind.
-  const canReviewReady =
-    canRender && selectedReady.length > 0 && selectedReady.length < selected.length;
-  const selectedProblem = selected.flatMap((row) =>
-    hardRefusal(row) && row.check.state === 'error'
-      ? [row.check.message]
-      : Object.values(clientErrors.get(row.id) ?? {}),
-  )[0];
-  const fireHint = updateRequired
-    ? 'Update this set to the current template first'
-    : renderingProposed
-      ? 'Keep or discard the proposed rows first'
-      : selected.length === 0
-        ? 'Select the rows to render'
-        : selected.length > MAX_BATCH_ROWS
-          ? `At most ${MAX_BATCH_ROWS} renders per batch`
-          : !readyToFire
-            ? (selectedProblem ?? 'Fix the selected rows first')
-            : null;
+  const readyToFire = Boolean(userId) && (held !== null || (canRender && selectedReady.length > 0));
+  const fireHint = !userId
+    ? SIGNED_OUT
+    : held
+      ? HELD_SET
+      : updateRequired
+        ? 'Update this set to the current template first'
+        : renderingProposed
+          ? 'Keep or discard the proposed rows first'
+          : selected.length === 0
+            ? 'Select the rows to render'
+            : selected.length > MAX_BATCH_ROWS
+              ? `At most ${MAX_BATCH_ROWS} renders per batch`
+              : selectedReady.length === 0
+                ? skipReason(selected[0]!)
+                : skipped.length
+                  ? `${skipped.length} selected ${skipped.length === 1 ? 'row' : 'rows'} can’t render and ${skipped.length === 1 ? 'is' : 'are'} skipped`
+                  : null;
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -2660,8 +2596,14 @@ export function RenderRequestsGrid({
 
   // Saves the set, then opens the render confirmation on the exact selection. The save is part of
   // Render, so it is silent — and a set with no edits is already saved, so it writes no revision.
-  const openConfirm = async (readyOnly = false) => {
-    if (!contract || (!readyToFire && !(readyOnly && canReviewReady))) return;
+  const openConfirm = async () => {
+    if (!contract || !readyToFire) return;
+    // A held batch is what Render opens: read-only, nothing to save or sign.
+    if (held) {
+      setSubset(null);
+      setConfirming(true);
+      return;
+    }
     setBusy('firing');
     try {
       const submittedSet =
@@ -2669,26 +2611,13 @@ export function RenderRequestsGrid({
           ? activeSet
           : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
-      const rowIds = selectedReady.map((row) => row.id);
-      setSubset(
-        readyOnly
-          ? {
-              rowIds,
-              skippedRows: selected
-                .filter((row) => !rowIds.includes(row.id))
-                .map((row) => ({
-                  label: row.label.trim() || 'Untitled',
-                  message:
-                    hardRefusal(row) && row.check.state === 'error'
-                      ? row.check.message
-                      : (Object.entries(clientErrors.get(row.id) ?? {}).map(
-                          ([key, message]) =>
-                            `${variables?.find((variable) => variable.key === key)?.label ?? key}: ${message}`,
-                        )[0] ?? 'Fix this row before rendering.'),
-                })),
-            }
-          : null,
-      );
+      setSubset({
+        rowIds: selectedReady.map((row) => row.id),
+        skippedRows: skipped.map((row) => ({
+          label: row.label.trim() || 'Untitled',
+          message: skipReason(row),
+        })),
+      });
       setConfirming(true);
     } finally {
       setBusy(null);
@@ -2733,18 +2662,28 @@ export function RenderRequestsGrid({
   };
 
   // The batch is rebuilt from the rows on screen every render, never kept from when the dialog
-  // opened: each record pins the saved revision, and the dialog re-checks what changed.
+  // opened: each record pins the saved revision, and the dialog re-checks what changed. A row the
+  // dialog finds its own preflight refusing leaves the batch for the skipped list.
   const batch = useMemo(() => {
     if (!confirming || !activeSet)
       return {
         rows: [],
         records: [] as ApiRenderBatchRecord[],
         calls: [] as Array<{ override: RenderOverride; message: string }>,
+        skippedRows: [] as Array<{ label: string; message: string }>,
       };
-    const chosen = rows.filter((row) =>
+    const picked = rows.filter((row) =>
       subset ? subset.rowIds.includes(row.id) : rowSelection[row.id],
     );
+    const refused = picked.flatMap((row) => {
+      const status = statuses.get(row.id);
+      return status?.state === 'refused'
+        ? [{ label: row.label.trim() || 'Untitled', message: status.reason }]
+        : [];
+    });
+    const chosen = picked.filter((row) => statuses.get(row.id)?.state !== 'refused');
     return {
+      skippedRows: [...(subset?.skippedRows ?? []), ...refused],
       rows: chosen.map((row) => ({
         rowId: row.id,
         label: row.label.trim() || 'Untitled',
@@ -2767,18 +2706,9 @@ export function RenderRequestsGrid({
           ...(effectiveEncode(rows, row.id) ? { encode: effectiveEncode(rows, row.id) } : {}),
         }),
       ),
-      calls: chosen.flatMap((row) => {
-        const refusal =
-          row.check.state === 'error' ? overrideFor(row.check.code, row.check.guardrails) : null;
-        return [
-          ...(calls.get(row.id) ?? []),
-          ...(refusal && row.check.state === 'error'
-            ? [{ override: refusal, message: row.check.message }]
-            : []),
-        ];
-      }),
+      calls: chosen.flatMap((row) => calls.get(row.id) ?? []),
     };
-  }, [confirming, subset, activeSet, rows, rowSelection, calls]);
+  }, [confirming, subset, activeSet, rows, rowSelection, calls, statuses]);
 
   // --- keyboard ---------------------------------------------------------------------------
   /** The same column's field one row down (or up), selected for typing over. */
@@ -2877,7 +2807,7 @@ export function RenderRequestsGrid({
   });
 
   // --- render -----------------------------------------------------------------------------
-  const ready = rows.filter((row) => row.check.state === 'ready').length;
+  const ready = readiness.ready;
   // The pinned revision's own file when the set pins one, else the template's source.
   const settingsAssetId =
     pinnedRevisionLabel?.revision.sourceAssetId ?? contract?.template.sourceAssetId ?? null;
@@ -2978,14 +2908,13 @@ export function RenderRequestsGrid({
             current.map((row) => ({
               ...row,
               outputIds: id ? [id] : allOutputIdsOf(contract),
-              check: { state: 'idle' },
             })),
           );
         }}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={addRow}
-        onDraftWithAi={() => setAiDraft({ parent: null })}
+        onDraftWithAi={(dropped) => setAiDraft({ parent: null, dropped })}
         draftAnchorRef={draftAnchor}
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
@@ -3026,14 +2955,13 @@ export function RenderRequestsGrid({
                 ? { phase: 'saved', at: activeSet.updatedAt }
                 : null
         }
-        selectedCount={selected.length}
+        selectedCount={selectedReady.length}
         files={{ ...files, byRatio: [...files.byRatio] }}
         readyToFire={readyToFire}
         fireHint={fireHint}
         busy={busy === 'saving' || busy === 'firing' ? busy : null}
         onRender={() => void openConfirm()}
-        readyCount={selectedReady.length}
-        onReviewReady={canReviewReady ? () => void openConfirm(true) : undefined}
+        heldLabel={held ? 'Unconfirmed render — check' : undefined}
       />
       {contract && inputSetLoad.phase === 'error' ? (
         <Alert variant="destructive" className="shrink-0 py-2">
@@ -3101,13 +3029,16 @@ export function RenderRequestsGrid({
             size="xs"
             variant="outline"
             disabled={busy === 'saving'}
-            onClick={async () => {
-              setBusy('saving');
-              try {
-                await saveRenderSet();
-              } finally {
-                setBusy(null);
-              }
+            onClick={() => {
+              const update = async () => {
+                setBusy('saving');
+                try {
+                  await saveRenderSet();
+                } finally {
+                  setBusy(null);
+                }
+              };
+              if (!askIfHeld(activeSet, () => void update())) void update();
             }}
           >
             Update set
@@ -3236,15 +3167,20 @@ export function RenderRequestsGrid({
             onDelete={deleteSet}
             onDuplicate={(set) => void duplicateSet(set)}
             onHistory={setHistoryFor}
-            onUpdate={() => void saveNow()}
+            onUpdate={() => {
+              if (!askIfHeld(activeSet, () => void saveNow())) void saveNow();
+            }}
             onSettings={setSettingsFor}
             onImportDraft={() => {
               if (!draftOffer) return;
-              activeSetRef.current = null;
-              savedBase.current = [];
-              setActiveSet(null);
-              showRows(draftOffer, null, contract);
-              setDraftOffer(null);
+              const importDraft = () => {
+                activeSetRef.current = null;
+                savedBase.current = [];
+                setActiveSet(null);
+                showRows(draftOffer, null, contract);
+                setDraftOffer(null);
+              };
+              if (!askIfHeld(activeSet, importDraft)) importDraft();
             }}
           />
           <section
@@ -3423,6 +3359,10 @@ export function RenderRequestsGrid({
                     rows={rows}
                     rowId={previewId}
                     renderSetId={activeSet?.id ?? null}
+                    refusal={(() => {
+                      const status = previewId ? statusOf(previewId) : null;
+                      return status?.state === 'refused' ? status.reason : undefined;
+                    })()}
                     onRowChange={setPreviewRowId}
                   />
                 </div>
@@ -3476,6 +3416,11 @@ export function RenderRequestsGrid({
               <span className="min-w-0 truncate font-medium">
                 {readinessSummary(readiness, rows.length)}
               </span>
+              {fit.state === 'unmeasured' && rows.length ? (
+                <span className="min-w-0 truncate text-muted-foreground">
+                  · Layout fit isn’t measured for this template — rows can still render
+                </span>
+              ) : null}
               {fireHint && selected.length ? (
                 <span className="min-w-0 truncate text-muted-foreground">· {fireHint}</span>
               ) : null}
@@ -3536,6 +3481,7 @@ export function RenderRequestsGrid({
           initialVaryKeys={aiDraft?.varyKeys ?? null}
           maxRows={MAX_BATCH_ROWS - rows.length}
           anchor={draftAnchor.current}
+          dropped={aiDraft?.dropped ?? null}
           onDrafted={acceptDraft}
           gridContext={assistContext}
           onAssist={applyAssist}
@@ -3556,7 +3502,7 @@ export function RenderRequestsGrid({
           templateRef={templateRef}
           contract={contract}
           rows={batch.rows}
-          skippedRows={subset?.skippedRows}
+          skippedRows={batch.skippedRows}
           records={batch.records}
           settings={setSettings}
           calls={batch.calls}
@@ -3569,6 +3515,9 @@ export function RenderRequestsGrid({
           onChangeSettings={() => setSettingsFor(activeSet)}
           onFired={onBatchFired}
           onOpenLedger={onFired}
+          onRowsRefused={onRowsRefused}
+          holdScope={holdScope}
+          held={held}
         />
       ) : null}
       <RenderSetSettingsDialog
@@ -3590,7 +3539,7 @@ export function RenderRequestsGrid({
         brandId={brandId}
         set={historyFor}
         contractHash={contract?.template.contractHash ?? ''}
-        onRestore={restoreRevision}
+        onRestore={(revision) => restoreRevision(revision)}
         onOpenChange={(open) => !open && setHistoryFor(null)}
       />
       <NameDialog
@@ -3606,6 +3555,31 @@ export function RenderRequestsGrid({
           setNameRequest(null);
         }}
       />
+      <AlertDialog
+        open={heldConfirm !== null}
+        onOpenChange={(open) => !open && setHeldConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unconfirmed render</AlertDialogTitle>
+            <AlertDialogDescription>
+              {heldConfirmCopy(heldConfirm?.copy ?? false)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = heldConfirm;
+                setHeldConfirm(null);
+                action?.run();
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog
         open={pendingDiscard !== null}
         onOpenChange={(open) => !open && setPendingDiscard(null)}

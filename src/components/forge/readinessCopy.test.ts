@@ -45,7 +45,7 @@ describe('what a finding means, in words', () => {
         readinessOf([[finding(READINESS_CODE.checkedAfterRender, 'title')], []]),
         labelOf,
       ),
-    ).toBe('Ready · 2 rows · Title is checked after render');
-    expect(readinessLine(readinessOf([[], []]), labelOf)).toBe('Ready · 2 rows checked');
+    ).toBe('Can render · 2 rows · Title is checked after render');
+    expect(readinessLine(readinessOf([[], []]), labelOf)).toBe('Can render · 2 rows checked');
   });
 });

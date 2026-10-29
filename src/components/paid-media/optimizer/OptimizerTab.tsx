@@ -647,7 +647,7 @@ export function OptimizerTab({
         value="logs"
         className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
       >
-        <OptimizerActivity brandId={brandId} currency={currency} />
+        <OptimizerActivity brandId={brandId} />
         <div className="mt-4 border-t border-border/60 pt-4">
           <SectionHeader title="Notifications" />
           <p className="mt-2 text-xs text-muted-foreground">

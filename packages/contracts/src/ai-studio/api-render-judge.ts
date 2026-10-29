@@ -5,8 +5,9 @@ import { z } from 'zod';
  *
  * Mirrors `forge-judge/src/schema.ts` rather than importing it: forge-judge is a separate repo
  * run by bun on the fleet, and nothing crosses between the two trees. Copied deliberately and
- * kept narrow — the nine finding kinds are a CLOSED set on both sides, so a tenth arriving here
- * is a version skew worth failing on rather than rendering as an unlabelled chip.
+ * kept narrow. The nine finding kinds are the ones this build has words for; a finding's `kind`
+ * is still any string, so a tenth from a newer judge reads as its note rather than failing the
+ * whole job read.
  *
  * The judge is the residue, not the gate. `asset_fit` predicts placement in closed form,
  * `product_footprint` locates the product in the rendered pixels, `frame_measure` compares ink
@@ -30,7 +31,7 @@ export type JudgeFindingKind = z.infer<typeof judgeFindingKindSchema>;
 
 export const judgeFindingSchema = z
   .object({
-    kind: judgeFindingKindSchema,
+    kind: z.string(),
     layerHint: z.string(),
     /** Present once the fleet has mapped the hint onto a real measured layer. */
     layerId: z.number().int().nullable().default(null),

@@ -24,9 +24,15 @@ import { useShallow } from 'zustand/react/shallow';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type RunEventAgentKind, useAgentRunStream } from '@/hooks/useAgentRunStream';
+import {
+  browserStorage,
+  createAcknowledgedRuns,
+  shouldAnnounceRunEnd,
+} from '@/lib/agents/runCompletionToast';
 import { selectLiveRuns, useAgentRunStore } from '@/lib/agents/runStore';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { jainaSessionHref } from '@/lib/jaina/deepLink';
 import { DurableAiStudioRunTail } from './CanvasComposerRunTail';
 
 function EventLogRunTail({ run, agent }: { run: AgentRunDto; agent: RunEventAgentKind }) {
@@ -55,53 +61,60 @@ const AGENT_LABEL: Record<AgentRunDto['agent'], string> = {
 };
 
 /** Where a session lives, so a completion toast can take you back to it. */
-const SESSION_HREF: Record<AgentRunDto['agent'], (sessionId: string) => string> = {
-  organic: (sessionId) => `/organic?tab=agent&sessionId=${sessionId}`,
-  jaina: (sessionId) => `/scale?tab=jaina&sessionId=${sessionId}`,
+const SESSION_HREF: Record<AgentRunDto['agent'], (run: AgentRunDto) => string> = {
+  organic: (run) => `/organic?tab=agent&sessionId=${run.sessionId}`,
+  // A Jaina conversation lives under one ad account; the run names it, so View lands there.
+  jaina: (run) => jainaSessionHref(run.sessionId, run.adAccountId),
   hyperframes: () => '/ai-studio',
   // A composer run's sessionId IS its canvas room.
-  canvas: (sessionId) => `/ai-studio?roomId=${sessionId}`,
+  canvas: (run) => `/ai-studio?roomId=${run.sessionId}`,
 };
+
+function runHref(run: AgentRunDto): string {
+  // Room-level runs (the composer) carry no nodeId — link to the room alone.
+  if (run.origin?.surface === 'ai-studio') {
+    return `/ai-studio?roomId=${encodeURIComponent(run.origin.roomId)}${
+      run.origin.nodeId ? `&focusNodeId=${encodeURIComponent(run.origin.nodeId)}` : ''
+    }`;
+  }
+  return SESSION_HREF[run.agent](run);
+}
 
 /**
  * Toast a run that reached a terminal status while you were elsewhere — the point of
  * detaching runs is that you stop having to babysit them, so the run has to come find you.
- *
- * Runs already terminal the first time we see them (the hydrate on page load) are adopted
- * silently; otherwise every reload would re-toast work that finished yesterday.
+ * Which ends are worth a toast, and the once-per-run memory, are `shouldAnnounceRunEnd` and
+ * `createAcknowledgedRuns`.
  */
 function useCompletionToasts(): void {
   const runs = useAgentRunStore((state) => state.runs);
   const viewingSessionId = useAgentRunStore((state) => state.viewingSessionId);
   const { show } = useToast();
   const router = useRouter();
-  const announced = useRef<Set<string>>(new Set());
-  const seeded = useRef(false);
+  const listeningSinceMs = useRef(Date.now());
+  const acknowledged = useRef<ReturnType<typeof createAcknowledgedRuns> | null>(null);
 
   useEffect(() => {
-    for (const { run } of Object.values(runs)) {
-      if (!isTerminalAgentRunStatus(run.status) || announced.current.has(run.runId)) continue;
-      announced.current.add(run.runId);
+    acknowledged.current ??= createAcknowledgedRuns(browserStorage());
+    const memory = acknowledged.current;
 
-      if (!seeded.current) continue;
-      // `cancelled` is a user action — they already know.
-      if (run.status === 'cancelled') continue;
-      // They watched it finish. A toast is for work that completed somewhere they weren't.
-      if (run.sessionId && run.sessionId === viewingSessionId) continue;
+    for (const { run, events } of Object.values(runs)) {
+      if (!isTerminalAgentRunStatus(run.status)) continue;
+      const announce = shouldAnnounceRunEnd({
+        run,
+        events,
+        listeningSinceMs: listeningSinceMs.current,
+        acknowledged: memory,
+        viewingSessionId,
+      });
+      // Said or adopted, a run's end is settled here once — the next pass, reload or tab skips it.
+      memory.add(run.runId);
+      if (!announce) continue;
 
       const label = AGENT_LABEL[run.agent];
-      // Room-level runs (the composer) carry no nodeId — link to the room alone.
-      const href =
-        run.origin?.surface === 'ai-studio'
-          ? `/ai-studio?roomId=${encodeURIComponent(run.origin.roomId)}${
-              run.origin.nodeId ? `&focusNodeId=${encodeURIComponent(run.origin.nodeId)}` : ''
-            }`
-          : SESSION_HREF[run.agent](run.sessionId);
+      const href = runHref(run);
       const openSession = run.sessionId
-        ? {
-            label: 'View',
-            onClick: () => router.push(href),
-          }
+        ? { label: 'View', onClick: () => router.push(href) }
         : undefined;
 
       show({
@@ -115,7 +128,6 @@ function useCompletionToasts(): void {
         dedupeKey: `agent-run:${run.runId}`,
       });
     }
-    seeded.current = true;
   }, [runs, show, router, viewingSessionId]);
 }
 

@@ -25,6 +25,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
@@ -52,6 +53,7 @@ import { useAttachCreative } from '../hooks/useAttachCreative';
 import { useCalendarDnD } from '../hooks/useCalendarDnD';
 import { useCalendarDraftPersistence } from '../hooks/useCalendarDraftPersistence';
 import { useCalendarPostedContent } from '../hooks/useCalendarPostedContent';
+import { canDeletePublishedPost, useDeletePublishedPost } from '../hooks/useDeletePublishedPost';
 import { useCalendarRealtimeSync } from '../hooks/useCalendarRealtimeSync';
 import {
   findSelectionFocusTarget,
@@ -794,6 +796,18 @@ function OrganicCalendarWorkspaceInner({
   const handleViewSelectedPostMetrics = React.useCallback(() => {
     if (selectedPostMetricsHref) router.push(selectedPostMetricsHref);
   }, [router, selectedPostMetricsHref]);
+  const handlePublishedPostDeleted = React.useCallback(() => {
+    closePreview();
+    // The server sent the post's draft back to `draft`.
+    void refetchCalendarDrafts();
+  }, [closePreview, refetchCalendarDrafts]);
+  const { deletePost: deletePublishedPost, deletingId: deletingPublishedPostId } =
+    useDeletePublishedPost(handlePublishedPostDeleted);
+  const deletablePost =
+    previewPost && canDeletePublishedPost(previewPost.post) ? previewPost.post : null;
+  const handleDeleteSelectedPost = React.useCallback(() => {
+    if (deletablePost) void deletePublishedPost(deletablePost);
+  }, [deletablePost, deletePublishedPost]);
   const hasSelection = Boolean(selectedId || previewPost);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
@@ -1515,6 +1529,8 @@ function OrganicCalendarWorkspaceInner({
             brandName={brandName}
             className="h-full w-full overflow-y-auto border-0"
             onViewMetrics={selectedPostMetricsHref ? handleViewSelectedPostMetrics : undefined}
+            onDelete={deletablePost ? handleDeleteSelectedPost : undefined}
+            isDeleting={deletingPublishedPostId === previewPost.post.id}
           />
         ) : previewDraft ? (
           <OrganicDraftPreview
@@ -1543,10 +1559,10 @@ function OrganicCalendarWorkspaceInner({
             aria-busy="true"
             aria-label="Loading post preview"
           >
-            <div className="h-24 w-full animate-pulse rounded-md bg-muted/70" />
-            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
-            <div className="mt-auto h-9 w-full animate-pulse rounded-md bg-muted/70" />
+            <Skeleton className="h-24 w-full rounded-md" />
+            <Skeleton className="h-4 w-2/3 rounded" />
+            <Skeleton className="h-4 w-1/2 rounded" />
+            <Skeleton className="mt-auto h-9 w-full rounded-md" />
           </div>
         )}
       </div>

@@ -78,6 +78,15 @@ export function PortfolioAnchor({ anchor, currency, window, onEditSetting }: Por
             </>
           ) : null}
         </p>
+        {anchor.asOf ? (
+          <p
+            className={anchor.asOf.stale ? 'text-warning' : undefined}
+            data-stale={anchor.asOf.stale ? 'true' : 'false'}
+            data-testid="anchor-as-of"
+          >
+            {anchor.asOf.text}
+          </p>
+        ) : null}
         {anchor.windows.length > 0 ? (
           <p className="flex flex-wrap gap-x-1.5" data-testid="anchor-prior">
             {anchor.windows.map((w, index) => (

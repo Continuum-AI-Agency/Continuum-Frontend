@@ -1343,8 +1343,8 @@ function AudienceCard({
             </span>
             {demographicsLoading ? (
               <div className="flex flex-col items-center gap-2">
-                <div className="h-48 w-48 animate-pulse rounded-full bg-muted/70" />
-                <div className="h-3 w-32 animate-pulse rounded bg-muted/70" />
+                <Skeleton className="h-48 w-48 rounded-full" />
+                <Skeleton className="h-3 w-32 rounded" />
               </div>
             ) : genderDemographics.length === 0 ? (
               <span className="text-xs text-muted-foreground">Gender breakdown unavailable.</span>
@@ -1430,12 +1430,9 @@ function AudienceCard({
               <div className="flex flex-col gap-3">
                 {[70, 45, 85, 30, 55, 25].map((width, index) => (
                   <div key={index} className="space-y-1">
-                    <div className="h-3 w-10 animate-pulse rounded bg-muted/70" />
+                    <Skeleton className="h-3 w-10 rounded" />
                     <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                      <div
-                        className="h-full animate-pulse rounded-full bg-muted/70"
-                        style={{ width: `${width}%` }}
-                      />
+                      <Skeleton className="h-full rounded-full" style={{ width: `${width}%` }} />
                     </div>
                   </div>
                 ))}

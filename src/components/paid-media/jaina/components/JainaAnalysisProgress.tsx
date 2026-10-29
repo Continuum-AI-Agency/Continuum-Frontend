@@ -1,4 +1,5 @@
 import { type JainaUIMessage, jainaAnalysisProgressSchema } from '@continuum/contracts';
+import { analysisProgressLabel } from './analysisProgressLabels';
 
 /** Progress is a typed run part, so reconnect/history uses the same visible notice as live. */
 export function JainaAnalysisProgress({ message }: { message?: JainaUIMessage }) {
@@ -39,7 +40,7 @@ export function JainaAnalysisProgress({ message }: { message?: JainaUIMessage })
               data-status={row.status}
               className={row.status === 'running' ? 'text-foreground' : undefined}
             >
-              <span>{row.label}</span>
+              <span>{analysisProgressLabel(row)}</span>
               {row.detail ? <span> — {row.detail}</span> : null}
             </li>
           ))}

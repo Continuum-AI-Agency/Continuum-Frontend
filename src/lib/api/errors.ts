@@ -52,6 +52,42 @@ export async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(message, response.status, code, payload);
 }
 
+// A snake_case code in `payload.error` (`render_fonts_unverifiable`, `template_*`), which
+// `ApiError.code` does not read. A gateway, or Fastify closing during a deploy, puts a phrase there
+// ("Service Unavailable") or sends no body.
+const BACKEND_CODE = /^[a-z][a-z0-9_]*$/;
+
+/** The backend answered with its own error: a snake_case code, or a validation object. */
+export function hasBackendError(error: ApiError): boolean {
+  const said = error.payload?.error;
+  return typeof said === 'string'
+    ? BACKEND_CODE.test(said)
+    : typeof said === 'object' && said !== null;
+}
+
+const fetchFailures = new WeakSet<object>();
+
+/** Marks `fetch`'s own rejection (no answer at all), told apart from a TypeError thrown while
+ *  the request was being built. The error itself is untouched. */
+export function markFetchFailure(error: unknown): unknown {
+  if (error instanceof TypeError) fetchFailures.add(error);
+  return error;
+}
+
+export const isFetchFailure = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && fetchFailures.has(error);
+
+const retriedOut = new WeakSet<object>();
+
+/** Marks an error a caller already retried through: one retry layer, not two stacked. */
+export function markRetried(error: unknown): unknown {
+  if (typeof error === 'object' && error !== null) retriedOut.add(error);
+  return error;
+}
+
+export const wasRetried = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && retriedOut.has(error);
+
 export async function assertOk(response: Response): Promise<void> {
   if (!response.ok) {
     throw await toApiError(response);

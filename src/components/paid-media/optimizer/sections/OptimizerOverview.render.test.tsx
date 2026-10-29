@@ -97,6 +97,13 @@ mock.module('./platforms/useTikTokAdsOverview', () => ({
     return advertiserId ? tiktokState : { status: 'not-connected' };
   },
 }));
+// The Google tab's own sections read Google live; they have render tests of their own.
+mock.module('./google/GoogleTabSections', () => ({
+  GoogleTabSections: () => <div data-testid="google-tab-sections" />,
+}));
+mock.module('./google/GoogleRecentChanges', () => ({
+  GoogleRecentChanges: () => <div data-testid="google-recent-changes" />,
+}));
 const { buildGoogleOverview, GoogleAccountOverviewSchema, GoogleTopCampaignsSchema } = await import(
   './platforms/googleAdsOverviewModel'
 );
@@ -137,6 +144,36 @@ mock.module('../useOptimizerData', () => ({
   // A card's own control asks the service through this; nothing here confirms a write.
   useApplyOptimizerActions: () => ({ mutateAsync: async () => null }),
   useRevertOptimizerAction: () => ({ mutateAsync: async () => null, isPending: false }),
+}));
+
+// The rows' headline figures (usePortfolioFigures) read the account snapshots and each
+// roster through React Query. Here the cycle series stands in for the live read, priced by
+// the REAL `portfolioFigure()`, so the rows print what they printed before the live read
+// existed; `figuresLive = false` makes the live read miss so the snapshot fallback shows.
+const realPortfolioFigure = await import('./portfolioFigure');
+const realPortfolioFigures = await import('./usePortfolioFigures');
+const figuresLive = true;
+mock.module('./usePortfolioFigures', () => ({
+  ...realPortfolioFigures,
+  usePortfolioFigures: ({
+    portfolios,
+    series,
+  }: {
+    portfolios: readonly PortfolioListItem[];
+    series: readonly (readonly EfficiencySeriesPoint[])[];
+  }) => {
+    const figures = new Map<string, ReturnType<typeof realPortfolioFigure.portfolioFigure>>();
+    portfolios.forEach((row, index) => {
+      const cycle = realPortfolioFigure.seriesWindowFigures(series[index] ?? []);
+      const figure = realPortfolioFigure.portfolioFigure({
+        portfolio: row,
+        live: figuresLive ? cycle : null,
+        snapshot: cycle,
+      });
+      if (figure) figures.set(row.id, figure);
+    });
+    return { figures, pending: false };
+  },
 }));
 
 const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
@@ -395,7 +432,7 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   it('says it is still reading while no series has landed', () => {
     efficiency = { series: [], pending: true, failed: 0, retryFailed };
     const { getByTestId } = mount();
-    expect(getByTestId('overview-headline').textContent).toBe("Reading the account's cycles…");
+    expect(getByTestId('overview-headline').textContent).toBe("Reading the account's last 7 days…");
     expect(getByTestId('overview-headline').getAttribute('data-pending')).toBe('true');
   });
 
@@ -650,6 +687,8 @@ describe('OptimizerOverview — the Jaina band follows the platform tab', () => 
       'Is Search limited by budget?',
       'Which asset group is missing assets?',
       'Is any campaign not serving?',
+      'Are the bid targets serving the goal?',
+      'What changed this week, and did it help?',
     ]);
     for (const href of hrefs) {
       expect(href).toStartWith('/scale?tab=jaina&platform=google_ads&new=1&prompt=');
@@ -1610,6 +1649,23 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
       getByTestId('overview-recommendations'),
       getByTestId('overview-links'),
       getByTestId('portfolio-rows'),
+    ];
+    for (let i = 1; i < order.length; i += 1) {
+      expect(follows(order[i - 1] as Element, order[i] as Element)).toBe(true);
+    }
+  });
+
+  it("mounts Google's parity sections under its read, and its recent changes after the rows", () => {
+    onGoogleTab();
+    brandRows = [GOOGLE_ONLY];
+    platformCardsState = { status: 'ready', cards: [BUDGET] };
+    const { getByTestId } = mount();
+    const order = [
+      getByTestId('google-tab'),
+      getByTestId('google-tab-sections'),
+      getByTestId('overview-recommendations'),
+      getByTestId('portfolio-rows'),
+      getByTestId('google-recent-changes'),
     ];
     for (let i = 1; i < order.length; i += 1) {
       expect(follows(order[i - 1] as Element, order[i] as Element)).toBe(true);

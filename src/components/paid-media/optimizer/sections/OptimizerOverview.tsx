@@ -30,11 +30,7 @@
 // portfolio rows — the same components, fed the brand's Google portfolios and cards whichever
 // ad account the page has selected.
 
-import type {
-  CycleRunPacing,
-  EfficiencySeriesPoint,
-  PortfolioListItem,
-} from '@continuum/contracts';
+import type { CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
 import {
   ArrowDownIcon,
@@ -76,8 +72,6 @@ import {
   decisionsLabel,
   latestCycle,
   type PortfolioWindow,
-  portfolioWindow,
-  portfolioWindowFromMetrics,
   type ResultKind,
   type RowSortDir,
   type RowSortKey,
@@ -90,6 +84,7 @@ import {
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
+import { GoogleRecentChanges } from './google/GoogleRecentChanges';
 import { JainaEntryChips } from './JainaEntryChips';
 import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import {
@@ -127,7 +122,9 @@ import {
   type AccountPlatformMetricsState,
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
+import { type PortfolioFigure, portfolioFigureFromReads } from './portfolioFigure';
 import { underManagement } from './portfolioStaleness';
+import { usePortfolioFigures } from './usePortfolioFigures';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
@@ -220,19 +217,6 @@ function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/** Each portfolio's 7-day window from its own efficiency series, by id. */
-function portfolioWindows(
-  portfolios: readonly PortfolioListItem[],
-  series: readonly (readonly EfficiencySeriesPoint[])[],
-): Map<string, PortfolioWindow> {
-  const byId = new Map<string, PortfolioWindow>();
-  portfolios.forEach((portfolio, index) => {
-    const window = portfolioWindow(portfolio, series[index] ?? []);
-    if (window) byId.set(portfolio.id, window);
-  });
-  return byId;
-}
-
 export function OptimizerOverview({
   brandId,
   adAccountId,
@@ -273,10 +257,16 @@ export function OptimizerOverview({
     };
   }, [adAccounts.data, adAccountId, platformMetrics]);
 
-  const windows = useMemo(
-    () => portfolioWindows(portfolios, efficiency.series),
-    [portfolios, efficiency.series],
-  );
+  // Each row's headline figure, from the ONE function the portfolio hero uses too
+  // (portfolioFigure.ts): the live 7 complete days first, the last cycle's window only when
+  // the live read cannot see the portfolio — and then dated.
+  const { figures: windows, pending: figuresPending } = usePortfolioFigures({
+    brandId,
+    adAccountId,
+    portfolios,
+    series: efficiency.series,
+  });
+  const readingFigures = efficiency.pending || figuresPending;
   const names = useMemo(
     () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
     [portfolios],
@@ -465,7 +455,7 @@ export function OptimizerOverview({
               Retry
             </button>
           </p>
-        ) : spend ? (
+        ) : spend && !readingFigures ? (
           <HeadlineSentence
             segments={accountHeadlineSegments({
               spends: [
@@ -481,11 +471,11 @@ export function OptimizerOverview({
         ) : (
           <p
             className={`${typeScale.headline} text-muted-foreground`}
-            data-pending={efficiency.pending ? 'true' : undefined}
+            data-pending={readingFigures ? 'true' : undefined}
             data-testid="overview-headline"
           >
-            {efficiency.pending
-              ? "Reading the account's cycles…"
+            {readingFigures
+              ? "Reading the account's last 7 days…"
               : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
           </p>
         )}
@@ -673,7 +663,7 @@ export function OptimizerOverview({
        *  (no placeholder can know how many) and the cycles re-sort the rows, so rows painted
        *  earlier were pushed and reordered on every load (768 CLS 0.065 + 2 × 0.019). Arriving
        *  last, at the bottom, they move nothing. */}
-      {accountRead.isLoading || efficiency.pending ? null : (
+      {accountRead.isLoading || readingFigures ? null : (
         <PortfolioRows
           empty={<p className="text-xs text-muted-foreground">No portfolios yet.</p>}
           onPrefetchPortfolio={onPrefetchPortfolio}
@@ -873,20 +863,27 @@ function PlatformPortfolioSections({
   const portfolioIds = useMemo(() => portfolios.map((portfolio) => portfolio.id), [portfolios]);
   const efficiency = useOptimizerPortfolioEfficiency(portfolioIds);
   const pacingById = useOptimizerPortfolioPacing(portfolios);
-  // A row's window and currency come from its metrics read first: the efficiency series sums
-  // Meta ad-set snapshots, which a Google portfolio never writes ("no cycle yet" beside 218
-  // leads). The series stands in while that read is missing or failed.
+  // A row's figure and currency come from its metrics read: the efficiency series sums Meta
+  // ad-set snapshots, which a Google portfolio never writes ("no cycle yet" beside 218 leads),
+  // and a mixed one's would price its Meta half as the whole. The figure is the ONE function the
+  // portfolio hero prints (portfolioFigure.ts): the stored read, dated "as of", never live.
   const metricsById = usePortfolioMemberStates(portfolioIds);
   const metricsOf = (portfolio: PortfolioListItem) => {
     const state = metricsById.get(portfolio.id);
     return state?.status === 'ready' ? state.metrics : null;
   };
-  const windows = portfolioWindows(portfolios, efficiency.series);
-  for (const portfolio of portfolios) {
-    const metrics = metricsOf(portfolio);
-    const window = metrics ? portfolioWindowFromMetrics(portfolio, metrics) : null;
-    if (window) windows.set(portfolio.id, window);
-  }
+  const windows = new Map<string, PortfolioFigure>();
+  portfolios.forEach((portfolio, index) => {
+    const figure = portfolioFigureFromReads({
+      portfolio,
+      snapshots: null,
+      readAt: null,
+      memberIds: null,
+      series: efficiency.series[index] ?? [],
+      metrics: metricsOf(portfolio),
+    });
+    if (figure) windows.set(portfolio.id, figure);
+  });
   const names = useMemo(
     () => new Map(portfolios.map((portfolio) => [portfolio.id, portfolio.name])),
     [portfolios],
@@ -966,6 +963,10 @@ function PlatformPortfolioSections({
         rowPlatforms={(portfolio) => portfolio.platforms}
         windows={windows}
       />
+
+      {platform === 'google_ads' ? (
+        <GoogleRecentChanges brandId={brandId} onOpenActivity={onOpenActivity} />
+      ) : null}
     </>
   );
 }

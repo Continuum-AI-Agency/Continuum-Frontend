@@ -2,7 +2,7 @@
 
 import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
 import { type ReactNode, useState } from 'react';
-
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { CompetitorPostHoverTile } from './CompetitorPostHoverTile';
 import {
@@ -43,7 +43,7 @@ export function CompetitorPostGrid({
     return (
       <div className={gridClassName}>
         {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-          <div key={index} className="aspect-[4/6] w-full animate-pulse rounded-lg bg-muted/70" />
+          <Skeleton key={index} className="aspect-[4/6] w-full rounded-lg" />
         ))}
       </div>
     );

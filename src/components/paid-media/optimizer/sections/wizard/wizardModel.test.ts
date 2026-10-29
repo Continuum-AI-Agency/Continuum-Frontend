@@ -2,6 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import type { PlatformCandidateAccount, PortfolioSuggestion } from '@continuum/contracts';
 import {
   buildCreateConfig,
+  channelTypeCounts,
+  channelTypeLabel,
+  channelTypeSummary,
   draftFromScratch,
   draftFromSuggestion,
   effectiveTargetMetric,
@@ -554,5 +557,34 @@ describe('platformAccountNotes', () => {
       'Google Ads account 999 bills in USD and this Meta account in MXN, and a portfolio holds one currency, so its campaigns are under Start from scratch.',
       'Google Ads account 5 could not be read just now, so its campaigns are missing here.',
     ]);
+  });
+});
+
+describe('campaign types', () => {
+  it('a from-scratch member carries its campaign type from the candidate', () => {
+    const members = draftFromScratch(CANDIDATES).proposedMembers;
+    expect(members.map((member) => member.channel_type)).toEqual([
+      'SEARCH',
+      'PERFORMANCE_MAX',
+      'SEARCH',
+    ]);
+  });
+
+  it("says Google's channel type in words, and nothing for a member without one", () => {
+    expect(channelTypeLabel('PERFORMANCE_MAX')).toBe('Performance Max');
+    expect(channelTypeLabel('DEMAND_GEN')).toBe('Demand Gen');
+    expect(channelTypeLabel('SOME_NEW_TYPE')).toBe('Some new type');
+    expect(channelTypeLabel(undefined)).toBeNull();
+  });
+
+  it('counts the types in the order first seen, skipping untyped members', () => {
+    const members = draftFromScratch(CANDIDATES).proposedMembers;
+    expect(channelTypeCounts(members)).toEqual([
+      { label: 'Search', count: 2 },
+      { label: 'Performance Max', count: 1 },
+    ]);
+    expect(channelTypeSummary(members)).toBe('Search 2 · Performance Max 1');
+    const untyped = members.map(({ channel_type: _type, ...member }) => member);
+    expect(channelTypeSummary(untyped)).toBeNull();
   });
 });

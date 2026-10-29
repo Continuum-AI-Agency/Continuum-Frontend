@@ -9,6 +9,8 @@ import {
   type EditorTextClip,
   type EditorTransition,
   type EditorVideoClip,
+  editorClipIsRetimed,
+  editorClipSourceSpan,
   LOOK_EFFECTS,
   type LookEffectId,
   parentPositionTracks,
@@ -501,6 +503,19 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
         return direction === 'left' ? 'wipeLeft' : 'wipeRight';
       case 'zoom':
         return 'zoomIn';
+      case 'blur':
+        return 'blur';
+      case 'whip':
+        if (direction === 'right') return 'whipRight';
+        if (direction === 'up') return 'whipUp';
+        if (direction === 'down') return 'whipDown';
+        return 'whipLeft';
+      case 'zoom_blur':
+        return 'zoomBlur';
+      case 'flash':
+        return 'flash';
+      case 'glitch':
+        return 'glitch';
       case 'custom':
         return transition.transitionId === 'spin' ? 'spin' : 'crossDissolve';
       default:
@@ -811,8 +826,12 @@ export async function buildTimelineEditorRenderPlan(input: {
       itemId: clip.id,
       kind: 'video' as const,
       blob: await blobFor(clip.id),
-      trimStartSec: clip.sourceInSec,
-      trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
+      // The source span the clip reaches. A plain clip's is sourceInSec .. + duration * rate; a
+      // reversed or speed-ramped one's is the lowest and highest second its curve touches.
+      trimStartSec: editorClipSourceSpan(clip).startSec,
+      trimEndSec: editorClipSourceSpan(clip).endSec,
+      ...(clip.timeRemap?.length ? { timeRemap: clip.timeRemap } : {}),
+      ...(clip.reverse && !clip.timeRemap?.length ? { reverse: true } : {}),
       durationSec: clip.durationSec,
       muteAudio: !clip.audioEnabled || !audibleTracks.has(primary!.id),
       volume: clip.volume,
@@ -856,6 +875,18 @@ export async function buildTimelineEditorRenderPlan(input: {
   const overlayFor = async (
     clip: EditorOverlayClip | EditorVideoClip,
     space: EditorProjectV2,
+  ): Promise<TimelineOverlayWorkerItem> => {
+    // Only the main video track has a source clock; a reversed or ramped clip anywhere else
+    // would silently export at plain speed, which is worse than saying so.
+    if (clip.kind === 'video' && editorClipIsRetimed(clip))
+      throw new Error(
+        `Clip "${clip.id}" is reversed or speed-ramped on a track above the main video track; only the main track can render that.`,
+      );
+    return overlayItemFor(clip, space);
+  };
+  const overlayItemFor = async (
+    clip: EditorOverlayClip | EditorVideoClip,
+    space: EditorProjectV2,
   ): Promise<TimelineOverlayWorkerItem> => ({
     itemId: clip.id,
     kind: clip.kind === 'overlay' && clip.mediaKind === 'image' ? 'image' : 'video',
@@ -884,6 +915,10 @@ export async function buildTimelineEditorRenderPlan(input: {
       .flatMap((track) => track.clips)
       .filter((clip) => clip.enabled && !clip.muted)
       .map(async (clip) => {
+        if (editorClipIsRetimed(clip))
+          throw new Error(
+            `Audio clip "${clip.id}" is reversed or speed-ramped; only main-track video clips can render that.`,
+          );
         const volumeKeyframes = volumeKeyframesOf(clip.keyframes);
         return {
           itemId: clip.id,

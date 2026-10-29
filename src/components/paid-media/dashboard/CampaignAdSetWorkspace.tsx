@@ -21,6 +21,7 @@ import {
   figureProps,
   formatCurrency,
 } from '@/components/paid-media/optimizer/format';
+import { NO_SINGLE_RESULT } from '@/components/paid-media/optimizer/sections/platforms/googleAdsOverviewModel';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -120,7 +121,8 @@ type Campaign = {
     roas: number;
     ctr: number;
     cpc: number;
-    cpa: number;
+    /** Null when the Google edge names no single result for the campaign. */
+    cpa: number | null;
     impressions: number;
     clicks: number;
   };
@@ -158,7 +160,7 @@ type CompareEntity = {
   label: string;
   type: 'index' | 'campaign';
   trends: PaidMetricsTrendPoint[];
-  metrics?: Partial<Record<MetricKey, number>>;
+  metrics?: Partial<Record<MetricKey, number | null>>;
   comparison?: PaidMetricsComparison;
 };
 
@@ -272,8 +274,9 @@ export function metricFigure(
   );
 }
 
-/** One metric as the cards and rails print it, stamped with the figure it prints. */
-function MetricValue({
+/** One metric as the cards and rails print it, stamped with the figure it prints. Exported so
+ *  the null-CPA rule is render-testable without the workspace's fetch tree. */
+export function MetricValue({
   className,
   scope,
   metric,
@@ -284,10 +287,18 @@ function MetricValue({
   className: string;
   scope: string;
   metric: MetricKey;
-  value: number;
+  /** Null: the edge named no single result, so there is no CPA to print. */
+  value: number | null;
   currency: string | null | undefined;
   dayCount: number;
 }) {
+  if (value === null) {
+    return (
+      <span className={className} title={NO_SINGLE_RESULT}>
+        —<span className="sr-only"> {NO_SINGLE_RESULT}</span>
+      </span>
+    );
+  }
   return (
     <span className={className} {...metricFigure(scope, metric, value, currency, dayCount)}>
       {formatMetric(metric, value, currency)}
@@ -348,7 +359,9 @@ function isActiveStatus(status: string | undefined): boolean {
   return (status ?? '').toUpperCase() === 'ACTIVE';
 }
 
-function toMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): number {
+/** Null where the day has no CPA: the edge nulled it, or nothing converted (an undefined
+ *  ratio, never a free result). Every other metric keeps its 0 fallback. */
+function toMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): number | null {
   if (metric === 'spend') return point.spend ?? 0;
   if (metric === 'roas') return point.roas ?? 0;
   if (metric === 'impressions') return point.impressions ?? 0;
@@ -371,8 +384,7 @@ function toMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): number 
   if (metric === 'cpa') {
     if (typeof point.cpa === 'number') return point.cpa;
     const conversions = point.conversions ?? 0;
-    const spend = point.spend ?? 0;
-    return conversions > 0 ? spend / conversions : 0;
+    return point.cpa !== null && conversions > 0 ? (point.spend ?? 0) / conversions : null;
   }
 
   return 0;
@@ -393,8 +405,9 @@ function mapTrendPoints(
   const deduped = new Map<number, number>();
   trends.forEach((point) => {
     const time = toUtcTimestamp(point.date);
-    if (!time) return;
-    deduped.set(Number(time), toMetricValue(point, metric));
+    const value = toMetricValue(point, metric);
+    if (!time || value === null) return;
+    deduped.set(Number(time), value);
   });
 
   return Array.from(deduped.entries())
@@ -404,10 +417,11 @@ function mapTrendPoints(
 
 function latestMetricValue(
   metric: MetricKey,
-  metrics?: Partial<Record<MetricKey, number>>,
+  metrics?: Partial<Record<MetricKey, number | null>>,
   trends?: PaidMetricsTrendPoint[],
-): number {
+): number | null {
   const direct = metrics?.[metric];
+  if (direct === null) return null;
   if (typeof direct === 'number' && Number.isFinite(direct)) {
     return direct;
   }
@@ -415,10 +429,15 @@ function latestMetricValue(
   if (!trends?.length) return 0;
   for (let index = trends.length - 1; index >= 0; index -= 1) {
     const value = toMetricValue(trends[index], metric);
-    if (Number.isFinite(value)) return value;
+    if (value !== null && Number.isFinite(value)) return value;
   }
 
   return 0;
+}
+
+/** A rail/row figure: absent metrics read 0 as before, a null CPA stays null (prints "—"). */
+function rowMetric(value: number | null | undefined): number | null {
+  return value === undefined ? 0 : value;
 }
 
 function metricPercentageChange(
@@ -469,13 +488,13 @@ function averageTrendPoints(pointSets: ObservabilityChartPoint[][]): Observabili
 }
 
 type AggregatedMetricsContext = {
-  metrics: Partial<Record<MetricKey, number>>;
+  metrics: Partial<Record<MetricKey, number | null>>;
   comparison: PaidMetricsComparison;
   trends: PaidMetricsTrendPoint[];
 };
 
 type AggregatableEntity = {
-  metrics?: Partial<Record<MetricKey, number>>;
+  metrics?: Partial<Record<MetricKey, number | null>>;
   comparison?: PaidMetricsComparison;
   trends?: PaidMetricsTrendPoint[];
 };
@@ -1786,7 +1805,7 @@ export function CampaignAdSetWorkspace({
       key: `index:${entry.index.id}`,
       label: entry.index.name,
       type: 'index' as const,
-      value: entry.aggregate.metrics[adSetMetric] ?? 0,
+      value: rowMetric(entry.aggregate.metrics[adSetMetric]),
       count: entry.members.length,
     }));
 
@@ -1794,7 +1813,7 @@ export function CampaignAdSetWorkspace({
       key: `campaign:${campaign.id}`,
       label: campaign.name,
       type: 'campaign' as const,
-      value: campaign.metrics?.[adSetMetric] ?? 0,
+      value: rowMetric(campaign.metrics?.[adSetMetric]),
       campaignId: campaign.id,
     }));
 
@@ -2117,7 +2136,13 @@ export function CampaignAdSetWorkspace({
                             />
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <MetricCardDelta metric={card.metric} changePct={card.changePct} />
+                            {card.value === null ? (
+                              <span className="text-2xs font-medium text-muted-foreground">
+                                {NO_SINGLE_RESULT}
+                              </span>
+                            ) : (
+                              <MetricCardDelta metric={card.metric} changePct={card.changePct} />
+                            )}
                           </div>
                           {card.spark.length > 0 ? (
                             <div className="mt-1 h-8">
@@ -2385,7 +2410,7 @@ export function CampaignAdSetWorkspace({
                                       className="text-sidebar-foreground/65"
                                       scope="dashboard.campaign-rail"
                                       metric={campaignMetric}
-                                      value={entry.aggregate.metrics[campaignMetric] ?? 0}
+                                      value={rowMetric(entry.aggregate.metrics[campaignMetric])}
                                       currency={currency}
                                       dayCount={timeWindow.dayCount}
                                     />
@@ -2437,7 +2462,7 @@ export function CampaignAdSetWorkspace({
                                       className="text-sidebar-foreground/65"
                                       scope="dashboard.campaign-rail"
                                       metric={campaignMetric}
-                                      value={campaign.metrics?.[campaignMetric] ?? 0}
+                                      value={rowMetric(campaign.metrics?.[campaignMetric])}
                                       currency={currency}
                                       dayCount={timeWindow.dayCount}
                                     />
@@ -2505,9 +2530,9 @@ export function CampaignAdSetWorkspace({
                                                     className="text-sidebar-foreground/65"
                                                     scope="dashboard.campaign-rail"
                                                     metric={campaignMetric}
-                                                    value={
-                                                      entry.aggregate.metrics[campaignMetric] ?? 0
-                                                    }
+                                                    value={rowMetric(
+                                                      entry.aggregate.metrics[campaignMetric],
+                                                    )}
                                                     currency={currency}
                                                     dayCount={timeWindow.dayCount}
                                                   />
@@ -2595,9 +2620,9 @@ export function CampaignAdSetWorkspace({
                                                       className="text-sidebar-foreground/65"
                                                       scope="dashboard.campaign-rail"
                                                       metric={campaignMetric}
-                                                      value={
-                                                        campaign.metrics?.[campaignMetric] ?? 0
-                                                      }
+                                                      value={rowMetric(
+                                                        campaign.metrics?.[campaignMetric],
+                                                      )}
                                                       currency={currency}
                                                       dayCount={timeWindow.dayCount}
                                                     />
@@ -2684,7 +2709,7 @@ export function CampaignAdSetWorkspace({
                                               className="text-sidebar-foreground/65"
                                               scope="dashboard.campaign-rail"
                                               metric={campaignMetric}
-                                              value={campaign.metrics?.[campaignMetric] ?? 0}
+                                              value={rowMetric(campaign.metrics?.[campaignMetric])}
                                               currency={currency}
                                               dayCount={timeWindow.dayCount}
                                             />
@@ -2744,7 +2769,7 @@ export function CampaignAdSetWorkspace({
                                       className="text-sidebar-foreground/65"
                                       scope="dashboard.campaign-rail"
                                       metric={campaignMetric}
-                                      value={entry.aggregate.metrics[campaignMetric] ?? 0}
+                                      value={rowMetric(entry.aggregate.metrics[campaignMetric])}
                                       currency={currency}
                                       dayCount={timeWindow.dayCount}
                                     />
@@ -2800,7 +2825,7 @@ export function CampaignAdSetWorkspace({
                                       className="text-sidebar-foreground/65"
                                       scope="dashboard.campaign-rail"
                                       metric={campaignMetric}
-                                      value={campaign.metrics?.[campaignMetric] ?? 0}
+                                      value={rowMetric(campaign.metrics?.[campaignMetric])}
                                       currency={currency}
                                       dayCount={timeWindow.dayCount}
                                     />

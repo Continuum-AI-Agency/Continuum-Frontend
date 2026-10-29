@@ -30,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
@@ -450,7 +451,7 @@ export function AiPostComposer({
               {assets.length === 0 && loading ? (
                 <div className="grid grid-cols-5 gap-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted/40" />
+                    <Skeleton key={i} className="aspect-square rounded-lg" />
                   ))}
                 </div>
               ) : assets.length === 0 ? (

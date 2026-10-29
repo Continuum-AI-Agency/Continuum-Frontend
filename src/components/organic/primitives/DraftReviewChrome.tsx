@@ -442,7 +442,7 @@ export function ReviewFooter({
           {secondary && (
             <ActionButton
               action={secondary}
-              variant="ghost"
+              variant="outline"
               size="sm"
               describedBy={shownNote ? noteId : undefined}
             />
@@ -470,7 +470,7 @@ function ActionButton({
   describedBy,
 }: {
   action: ReviewAction;
-  variant: 'cta' | 'ghost';
+  variant: 'cta' | 'outline';
   size: 'sm' | 'lg';
   describedBy: string | undefined;
 }) {

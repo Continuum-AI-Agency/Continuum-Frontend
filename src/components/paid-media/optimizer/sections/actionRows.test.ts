@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
+  actionCurrency,
   actionPlatform,
   actorLabel,
   minorToMajor,
@@ -58,8 +59,99 @@ describe('readActionChange reads one row shape across four unit systems', () => 
         after: { value: '4200' },
       }),
     );
-    expect(change.label).toBe('daily_total');
-    expect(change.after).toBe('4200');
+    expect(change.label).toBe('Total daily budget');
+    expect(change.after).toBe(4200);
+    expect(change.sentence).toBeUndefined();
+  });
+
+  it('reads a money setting as money in the unit the audit stored, never bare text', () => {
+    const setting = (entity_id: string, before: string, after: string) =>
+      readActionChange(
+        action({
+          family: 'settings',
+          op: 'setting',
+          entity_id,
+          before: { value: before },
+          after: { value: after },
+        }),
+      );
+    // Vivo Center (d666c706), 2026-10-26: Activity read "100 → 79.82" with no currency.
+    expect(setting('daily_total', '100', '79.82')).toEqual({
+      label: 'Total daily budget',
+      unit: 'money_major',
+      before: 100,
+      after: 79.82,
+    });
+    expect(setting('cpa_target', '300', '250').unit).toBe('money_major');
+    expect(setting('max_daily_apply_minor', '50000', '80000')).toMatchObject({
+      unit: 'money',
+      after: 80000,
+    });
+    expect(setting('velocity_cap_pct', '0.3', '0.25').unit).toBe('text');
+  });
+
+  it('reads an ad set moved between portfolios as a sentence, never the two ids', () => {
+    const moved = (portfolioId: string) =>
+      readActionChange(
+        action({
+          family: 'settings',
+          op: 'setting',
+          portfolio_id: portfolioId,
+          entity_id: 'member_moved',
+          before: { value: '120252387298200236' },
+          after: { value: '94ca5d79-77cd-4973-9d9d-4ae55ccd7ec4' },
+        }),
+      );
+    expect(moved('94ca5d79-77cd-4973-9d9d-4ae55ccd7ec4')).toEqual({
+      label: 'Ad set moved',
+      unit: 'text',
+      before: null,
+      after: null,
+      sentence: 'Ad set moved into this portfolio',
+    });
+    expect(moved(PORTFOLIO_ID).sentence).toBe('Ad set moved to another portfolio');
+  });
+
+  it('reads a platform-scoped setting in words (production rows of 2026-10-26)', () => {
+    const allowed = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'allowed_actions:google_ads',
+        before: { value: '["add_keyword", "add_negatives", "set_bid_target", "set_budget"]' },
+        after: { value: '[]' },
+      }),
+    );
+    expect(allowed).toEqual({
+      label: 'Allowed actions on Google',
+      unit: 'text',
+      before: 'Add keyword, Add negatives, Set bid target, Set budget',
+      after: 'None',
+    });
+    const host = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'host_account',
+        before: null,
+        after: { value: 'google_ads:3710693645' },
+      }),
+    );
+    expect([host.label, host.before, host.after]).toEqual([
+      'Host account',
+      null,
+      'Google 3710693645',
+    ]);
+    const autoApply = readActionChange(
+      action({
+        family: 'settings',
+        op: 'setting',
+        entity_id: 'apply_enabled:google_ads',
+        before: { value: 'true' },
+        after: { value: 'false' },
+      }),
+    );
+    expect(autoApply.sentence).toBe('Auto-apply on Google turned off');
   });
 
   it('reads a recommendation decision as its status transition', () => {
@@ -280,5 +372,24 @@ describe("minorToMajor divides by the currency's own minor unit (ISO 4217)", () 
   it('an unrecorded or malformed currency keeps the two-decimal reading', () => {
     expect(minorToMajor(5_341, null)).toBe(53.41);
     expect(minorToMajor(5_341, 'pesos')).toBe(53.41);
+  });
+});
+
+describe("actionCurrency reads the row's own portfolio or account, never the page's", () => {
+  const META = { account_id: 'act_521903353286118', currency: 'MXN' };
+  const stamped = { id: PORTFOLIO_ID, ad_account_id: '521903353286118', currency: 'usd' };
+  const unstamped = { ...stamped, currency: null };
+
+  it("the portfolio's stamped code first, normalized", () => {
+    expect(actionCurrency(action(), [stamped], [])).toBe('USD');
+  });
+
+  it("else its account's, matched with or without act_", () => {
+    expect(actionCurrency(action(), [unstamped], [META])).toBe('MXN');
+  });
+
+  it('a row with no portfolio and no account in its receipt records nothing', () => {
+    expect(actionCurrency(action({ portfolio_id: null }), [stamped], [META])).toBeNull();
+    expect(actionCurrency(action(), [unstamped], [])).toBeNull();
   });
 });

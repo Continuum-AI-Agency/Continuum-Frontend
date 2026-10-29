@@ -6,6 +6,7 @@
 import type {
   AdSetSnapshot,
   CandidateHeadline,
+  CycleItemRow,
   RecommendationEvidence,
   RecommendationRow,
 } from '@continuum/contracts';
@@ -136,6 +137,123 @@ export function queueSummary(
 export function triggerWords(trigger: string): string {
   const stripped = trigger.replace(/^[A-Z]\d+_/, '').replace(/^rule:/, 'rule ');
   return stripped.replace(/_/g, ' ');
+}
+
+/** The engine's trigger ids, in the words a reader needs. The queue summary used to print
+ *  `triggerWords` — "not being delivered for off meta", "change a setting for velocity cap
+ *  binding" — which is the id with its underscores swapped for spaces. Unknown triggers still
+ *  fall back to that, so a new engine trigger reads as something rather than nothing. */
+const TRIGGER_REASONS: Readonly<Record<string, string>> = {
+  P1_zero_upper_funnel: 'no upper-funnel results',
+  P2_sustained_poor: 'sustained poor cost',
+  P3_low_significance: 'too few results to judge',
+  C1_creative_drag: 'a creative dragging results down',
+  C2_creative_winner: 'a winning creative',
+  C3_no_variance: 'too few creatives to compare',
+  C4_creative_decay: 'a creative wearing out',
+  C5_auction_displacement: 'a creative losing the auction',
+  F1_creative_fatigue: 'creative fatigue',
+  F2_audience_saturation: 'audience saturation',
+  F3_audience_exhausted: 'an exhausted audience',
+  D1_off_meta: 'paused or removed on Meta',
+  D2_dark_with_budget: 'no delivery despite budget',
+  D3_learning_limited: 'stuck in limited learning',
+  S1_velocity_cap_binding: 'the per-cycle change cap',
+  S2_floor_too_high: 'floors above the pool',
+  S3_persistent_underspend: 'persistent underspend',
+  S5_tracking_gap: 'a tracking gap',
+};
+
+/** Why a group of recommendations fired, in words: 'D1_off_meta' → 'paused or removed on Meta'. */
+export function triggerReason(trigger: string): string {
+  return TRIGGER_REASONS[trigger] ?? triggerWords(trigger);
+}
+
+/** The ISO day (YYYY-MM-DD) an instant falls on in `timeZone` (the viewer's own when absent). */
+function isoDayIn(at: Date, timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  }).formatToParts(at);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+/**
+ * Whole calendar days from `sinceDay` (YYYY-MM-DD) to today in `timeZone`, never negative.
+ *
+ * The engine's `days_absent` is frozen at cycle time and floors a mid-day timestamp against the
+ * cycle's midnight, so an ad set that left Meta on the cycle's own day read "-1 days", and two
+ * rows absent since the same day printed different counts (one per cycle that wrote them).
+ * Counting calendar days from the date the row names, to today, gives one answer per date.
+ * Null when the day does not parse.
+ */
+export function daysSince(
+  sinceDay: string,
+  now: Date = new Date(),
+  timeZone?: string,
+): number | null {
+  const from = Date.parse(`${sinceDay}T00:00:00Z`);
+  const to = Date.parse(`${isoDayIn(now, timeZone)}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  return Math.max(0, Math.round((to - from) / 86_400_000));
+}
+
+// ── The velocity-cap settings finding, said truthfully ───────────────────────
+// S1 used to count a move as "bound by the cap" when its size equals the cap OR when the solver
+// had to breach it (cap_breached). A pacing-driven cut of -37% to -60% is the second kind: the
+// cap did not bind it, pacing carried it past the cap, which pacing is allowed to do — yet the
+// reason said "the ±30% velocity cap bound on 6 of 6 moves". The engine now counts the two apart
+// and carries both counts as `evidence.capBinding`; rows written before it did are recounted
+// here from the cycle's own items.
+
+const CAP_EPS = 0.005;
+
+/** The S1 recommendation, re-said from the cycle items when moves went past the cap; the
+ *  recommendation itself otherwise. Only the words change — id, status and patch are kept. */
+export function withHonestCapBinding<
+  T extends Pick<RecommendationRow, 'trigger' | 'reason' | 'evidence'>,
+>(rec: T, items: ReadonlyArray<Pick<CycleItemRow, 'change_pct'>>): T {
+  if (rec.trigger !== 'S1_velocity_cap_binding') return rec;
+  // The engine's own counts already say it right; the recount below is only the fallback for rows written before them.
+  if (rec.evidence?.capBinding) return rec;
+  const capMatch = /±(\d+(?:\.\d+)?)%/.exec(rec.evidence?.comparator ?? rec.reason ?? '');
+  if (!capMatch) return rec;
+  const capPct = Number(capMatch[1]);
+  const cap = capPct / 100;
+  const moved = items.filter(
+    (item) => typeof item.change_pct === 'number' && Math.abs(item.change_pct) > 1e-6,
+  );
+  const beyond = moved.filter((item) => Math.abs(item.change_pct as number) > cap + CAP_EPS);
+  if (beyond.length === 0) return rec;
+  const atCap = moved.filter(
+    (item) => Math.abs(Math.abs(item.change_pct as number) - cap) <= CAP_EPS,
+  ).length;
+  const n = moved.length;
+  const held =
+    atCap === 0
+      ? 'The cap held none of them back.'
+      : `The cap held ${atCap} other move${atCap === 1 ? '' : 's'} at ±${capPct}%.`;
+  const reason = `${beyond.length} of ${n} moves went past the ±${capPct}% per-cycle cap: pacing (or keeping the pool whole) may exceed it, so the cap did not bind them. ${held}`;
+  const headline = queueHeadline(rec);
+  const evidence = rec.evidence
+    ? {
+        ...rec.evidence,
+        comparator: `${beyond.length} of ${n} moves past the ±${capPct}% cap`,
+        ...(headline
+          ? {
+              headline: {
+                ...headline,
+                value: Math.round((beyond.length / n) * 100),
+                label: 'of moves went past the cap',
+              },
+            }
+          : {}),
+      }
+    : rec.evidence;
+  return { ...rec, reason, evidence };
 }
 
 const AS_OF_FMT = new Intl.DateTimeFormat('en-US', {

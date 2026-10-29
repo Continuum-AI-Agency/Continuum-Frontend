@@ -181,6 +181,25 @@ function findClip(project: EditorProjectV2, trackId: string, clipId: string): Ed
   return clip;
 }
 
+// The transitions the compositor draws beyond the original dissolve / slide / wipe / zoom set. The
+// layout needs the right one: `flash` sits on the cut while the rest overlap, and reading one as
+// a dissolve would place every clip after it half a transition off the render.
+const NEW_TRANSITION_TYPES: Partial<
+  Record<EditorTransition['transitionType'], ClipTransition['type']>
+> = { blur: 'blur', zoom_blur: 'zoomBlur', flash: 'flash', glitch: 'glitch' };
+
+function whipFor(transition: EditorTransition): ClipTransition['type'] | undefined {
+  if (transition.transitionType !== 'whip') return undefined;
+  const { direction } = transition.parameters;
+  return direction === 'right'
+    ? 'whipRight'
+    : direction === 'up'
+      ? 'whipUp'
+      : direction === 'down'
+        ? 'whipDown'
+        : 'whipLeft';
+}
+
 function clipTransitionForBoundary(
   transitions: readonly EditorTransition[],
   fromClipId: string,
@@ -211,7 +230,9 @@ function clipTransitionForBoundary(
                 : 'wipeLeft'
               : transition.transitionType === 'zoom'
                 ? 'zoomIn'
-                : 'crossDissolve';
+                : (NEW_TRANSITION_TYPES[transition.transitionType] ??
+                  whipFor(transition) ??
+                  'crossDissolve');
   return { type, durationSec: transition.durationSec };
 }
 

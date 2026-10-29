@@ -46,3 +46,21 @@ export function jainaOpeningSessionId(input: {
   if (input.newConversation) return null;
   return input.latestSessionId ?? null;
 }
+
+/**
+ * The link to one Jaina conversation. A conversation belongs to ONE ad account, and the Jaina
+ * tab reads history for the account it has selected — which, unasked, is the brand's default
+ * (the first portfolio holder). Without the account in the link a "View" from a run toast opened
+ * the default account's Jaina instead of the conversation it named.
+ */
+export function jainaSessionHref(sessionId: string, adAccountId?: string | null): string {
+  const params = new URLSearchParams({ tab: 'jaina', sessionId });
+  if (adAccountId) params.set('adAccountId', adAccountId);
+  return `/scale?${params.toString()}`;
+}
+
+/** `?adAccountId=` on /scale: the account a deep link pins, or null. */
+export function jainaAdAccountParam(raw: string | null): string | null {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : null;
+}

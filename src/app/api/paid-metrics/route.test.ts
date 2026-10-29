@@ -85,6 +85,70 @@ describe('POST /api/paid-metrics', () => {
     expect(body.metrics.spend).toBe(10);
   });
 
+  it('200s a Google campaign whose result basis is ambiguous, CPA null and the basis kept', async () => {
+    // The deployed Google edge answers an ambiguous basis with these nulls (handler.ts daily
+    // scopes); the route used to 502 them as "Invalid response format from backend".
+    edgeResponse = {
+      scope: 'campaign',
+      currency: 'MXN',
+      metrics: {
+        spend: 812.3,
+        roas: 0,
+        impressions: 20110,
+        clicks: 640,
+        ctr: 3.1825,
+        cpc: 1.2692,
+        cpa: null,
+      },
+      result_basis: { rule: 'google_conversion_rule_v1', bucket: null, unambiguous: false },
+      limitations: [
+        'Current conversion-action metadata is applied to historical windows; historical goal-setting changes are not reconstructed.',
+      ],
+      coverage: {
+        requested: { since: '2026-10-20', until: '2026-10-26' },
+        read: { since: '2026-10-20', until: '2026-10-26' },
+        truncated: false,
+        reason: null,
+      },
+      comparison: {
+        spend: { current: 812.3, previous: 700, percentageChange: 16.0429 },
+        cpa: null,
+      },
+      trends: [
+        {
+          date: '2026-10-20',
+          spend: 120.5,
+          clicks: 95,
+          impressions: 3010,
+          conversions: null,
+          roas: 0,
+          cpa: null,
+        },
+      ],
+      range: { since: '2026-10-20', until: '2026-10-26', preset: 'last_7d' },
+      previous_range: { since: '2026-10-13', until: '2026-10-19' },
+    };
+    const response = await post({
+      brandId: 'b1',
+      platform: 'google-ads',
+      accountId: '3710693645',
+      campaignId: '2211',
+      range: { preset: 'last_7d' },
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.metrics.cpa).toBeNull();
+    expect(body.trends[0].cpa).toBeNull();
+    expect(body.comparison.cpa).toBeUndefined();
+    expect(body.comparison.spend.percentageChange).toBe(16.0429);
+    expect(body.result_basis).toEqual({
+      rule: 'google_conversion_rule_v1',
+      bucket: null,
+      unambiguous: false,
+    });
+  });
+
   it('400s an unknown scope before it ever reaches the edge', async () => {
     edgeResponse = batchPayload;
     const response = await post({ ...batchRequest, scope: 'not_a_scope' });

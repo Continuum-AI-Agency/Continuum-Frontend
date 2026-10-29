@@ -260,12 +260,16 @@ export const VIDEO_GENERATOR_MODEL_GROUPS: readonly VideoGeneratorModelGroup[] =
  * instead, so there is no runtime signal to read and the Backend is out of scope for this
  * pass. When a Fal video model comes back, flip its entry here and it is selectable again.
  */
+const VEO_RETIRED_NOTE = 'Retired by Google · runs on Omni';
+
 export const VIDEO_MODEL_INFO: Record<VideoGeneratorModel, { status: ModelStatus; note?: string }> =
   {
     'gemini-omni-flash': { status: 'available' },
-    'veo-3.1': { status: 'available' },
-    'veo-3.1-fast': { status: 'available' },
-    'veo-3.1-lite': { status: 'available' },
+    // Google retired Veo on the Gemini API (2026-10-23). A saved Veo node keeps its model
+    // and its frame edges, and the Backend renders it on Omni; it just cannot be picked anew.
+    'veo-3.1': { status: 'unavailable', note: VEO_RETIRED_NOTE },
+    'veo-3.1-fast': { status: 'unavailable', note: VEO_RETIRED_NOTE },
+    'veo-3.1-lite': { status: 'unavailable', note: VEO_RETIRED_NOTE },
     'kling-omni': { status: 'unavailable' },
     'pixverse-v6': { status: 'unavailable' },
     'seedance-2.0': { status: 'unavailable' },
@@ -290,7 +294,7 @@ export function videoModelOptions(): readonly VideoModelOption[] {
       model,
       label: VIDEO_GENERATOR_MODEL_LABELS[model],
       status: info.status,
-      note: info.status === 'unavailable' ? VIDEO_MODEL_UNAVAILABLE_NOTE : info.note,
+      note: info.note ?? (info.status === 'unavailable' ? VIDEO_MODEL_UNAVAILABLE_NOTE : undefined),
       selectable: isModelSelectable(info.status),
     };
   });
@@ -2110,6 +2114,14 @@ export const CLIP_TRANSITION_TYPES = [
   'wipeRight',
   'zoomIn',
   'spin',
+  'blur',
+  'whipLeft',
+  'whipRight',
+  'whipUp',
+  'whipDown',
+  'zoomBlur',
+  'flash',
+  'glitch',
 ] as const;
 
 export type ClipTransitionType = (typeof CLIP_TRANSITION_TYPES)[number];

@@ -4,6 +4,7 @@ import type { TimelineItem } from '../../types';
 import {
   advancePlayhead,
   type ClipMedia,
+  cueVideoToClip,
   type PlaybackVideoElement,
   syncVideoToTimelineTime,
   usePlayheadPlayback,
@@ -478,5 +479,98 @@ describe('usePlayheadPlayback — the running loop follows edits made mid-playba
 
     expect(result.current.playheadSec).toBe(1);
     expect(result.current.isPlaying).toBe(false);
+  });
+});
+
+describe('retimed clips — the element follows the source clock instead of playing', () => {
+  const reversed: ClipMedia = {
+    kind: 'video',
+    url: 'blob:r',
+    trimStartSec: 10,
+    clock: { durationSec: 4, sourceInSec: 10, playbackRate: 1, reverse: true },
+  };
+  const ramped: ClipMedia = {
+    kind: 'video',
+    url: 'blob:r',
+    trimStartSec: 10,
+    clock: {
+      durationSec: 4,
+      timeRemap: [
+        { timeSec: 0, sourceSec: 10, interpolation: 'linear' },
+        { timeSec: 1, sourceSec: 11, interpolation: 'linear' },
+        { timeSec: 3, sourceSec: 11.4, interpolation: 'linear' },
+        { timeSec: 4, sourceSec: 12.4, interpolation: 'linear' },
+      ],
+    },
+  };
+  const landed = (atSec: number) => {
+    const video = new FakeVideoElement();
+    video.src = 'blob:r';
+    video.setAttribute('data-clip-src', 'blob:r');
+    video.finishLoad(atSec);
+    return video;
+  };
+  const layout = layoutOf([clipOf({ id: 'r', startSec: 2, durationSec: 4 })]);
+
+  it('cues a scrub to the clock: the end of the source for the first frame of a reverse', () => {
+    const video = landed(0);
+    const cue = cueVideoToClip(video, reversed, 'r', 0);
+    expect(video.currentTime).toBe(14);
+    expect(cue).toEqual({ clipId: 'r', sourceSec: 14, pending: true });
+    cueVideoToClip(video, ramped, 'r', 2);
+    expect(video.currentTime).toBeCloseTo(11.2, 9);
+  });
+
+  it('seeks a paused element along a reverse as the audio clock advances', () => {
+    const video = landed(14);
+    let cue = syncVideoToTimelineTime({
+      layout,
+      mediaFor: mediaLookup({ r: reversed }),
+      video,
+      timelineSec: 2,
+      cue: { clipId: 'r', sourceSec: 14, pending: false },
+    });
+    // The element is now seeking; once it lands the next tick moves it on.
+    video.finishLoad(video.currentTime);
+    cue = syncVideoToTimelineTime({
+      layout,
+      mediaFor: mediaLookup({ r: reversed }),
+      video,
+      timelineSec: 3.5,
+      cue,
+    });
+    expect(video.currentTime).toBe(12.5);
+    expect(video.paused).toBe(true);
+    expect(video.playCalls).toBe(0);
+    expect(cue).toEqual({ clipId: 'r', sourceSec: 12.5, pending: true });
+  });
+
+  it('does not re-seek an element already within a frame of the clock, or one mid-seek', () => {
+    const video = landed(11.2);
+    const media = mediaLookup({ r: ramped });
+    const cue = { clipId: 'r', sourceSec: 11.2, pending: false };
+    expect(syncVideoToTimelineTime({ layout, mediaFor: media, video, timelineSec: 4, cue })).toBe(
+      cue,
+    );
+    expect(video.currentTime).toBe(11.2);
+    video.seeking = true;
+    syncVideoToTimelineTime({ layout, mediaFor: media, video, timelineSec: 5, cue });
+    expect(video.currentTime).toBe(11.2);
+  });
+
+  it('runs the playhead on the wall clock for a retimed clip, never on the element clock', () => {
+    const video = landed(14);
+    const frame = advancePlayhead({
+      layout,
+      mediaFor: mediaLookup({ r: reversed }),
+      video,
+      playheadSec: 2.5,
+      dtSec: 1 / 60,
+      cue: { clipId: 'r', sourceSec: 14, pending: false },
+    });
+    expect(frame.playheadSec).toBeCloseTo(2.5 + 1 / 60, 9);
+    expect(video.paused).toBe(true);
+    expect(video.currentTime).toBe(13.5);
+    expect(video.playCalls).toBe(0);
   });
 });

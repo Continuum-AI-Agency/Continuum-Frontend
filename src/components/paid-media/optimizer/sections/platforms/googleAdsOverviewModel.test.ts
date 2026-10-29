@@ -1,14 +1,26 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+  ambiguousTopCampaignsByResult,
+} from './__fixtures__/googleAmbiguousResultBasis';
+import {
   buildGoogleOverview,
   campaignTypeOf,
   completeDaysWindow,
+  costPerConversion,
   figureWindowOf,
   formatConversions,
   type GoogleAccountOverview,
+  GoogleAccountOverviewSchema,
   type GoogleTopCampaigns,
+  GoogleTopCampaignsSchema,
   googleCurrencyOf,
+  ownResultsLabel,
   percentAgainst,
+  resultCountLabel,
+  resultsApartLabel,
+  resultTypesOf,
   windowRangeLabel,
 } from './googleAdsOverviewModel';
 
@@ -147,5 +159,106 @@ describe('googleCurrencyOf — the code the read carries', () => {
     );
     expect(overview.currency).toBe('MXN');
     expect(buildGoogleOverview(account(100), campaigns([])).currency).toBeNull();
+  });
+});
+
+describe('an account with no single business result — what the edge sends', () => {
+  const parsedAccount = GoogleAccountOverviewSchema.safeParse(ambiguousAccountOverview);
+  const ranked = GoogleTopCampaignsSchema.safeParse(ambiguousTopCampaigns);
+
+  it('parses the null CPA and null conversions instead of refusing the read', () => {
+    expect(parsedAccount.success).toBe(true);
+    expect(ranked.success).toBe(true);
+    expect(parsedAccount.data?.metrics.cpa).toBeNull();
+    expect(parsedAccount.data?.result_basis).toEqual({
+      rule: 'google_conversion_rule_v1',
+      bucket: null,
+      unambiguous: false,
+    });
+    expect(ranked.data?.rows.every((row) => row.metrics.conversions === null)).toBe(true);
+  });
+
+  it('keeps spend and the split by type, and reports conversions as unknown, never zero', () => {
+    if (!parsedAccount.success || !ranked.success) throw new Error('fixture did not parse');
+    const overview = buildGoogleOverview(parsedAccount.data, ranked.data);
+    expect(overview.resultsDefined).toBe(false);
+    expect(overview.spend).toBe(55205.2636);
+    expect(overview.conversions).toBeNull();
+    expect(overview.costPerConversion).toBeNull();
+    expect(overview.byType).toBe(true);
+    expect(overview.groups.map((g) => [g.label, g.conversions, g.sharePct])).toEqual([
+      ['Search', null, 81],
+      ['Display', null, 19],
+    ]);
+    expect(overview.groups.map(costPerConversion)).toEqual([null, null]);
+  });
+
+  it('still refuses a CPA that is neither a number nor null', () => {
+    expect(
+      GoogleAccountOverviewSchema.safeParse({
+        ...ambiguousAccountOverview,
+        metrics: { ...ambiguousAccountOverview.metrics, cpa: 'n/a' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('counts the single result when the basis names one', () => {
+    const overview = buildGoogleOverview(
+      { ...account(500), result_basis: { rule: 'r', bucket: 'leads', unambiguous: true } },
+      campaigns([row('1', 500, 5, 'SEARCH')]),
+    );
+    expect(overview.resultsDefined).toBe(true);
+    expect(overview.conversions).toBe(5);
+    expect(overview.costPerConversion).toBe(100);
+  });
+});
+
+// Ramiro, 2026-10-28: with no portfolio goal, each result type gets its own column and cost.
+describe('no single result: each result type counted apart', () => {
+  const read = (campaignsRead: unknown) =>
+    buildGoogleOverview(
+      GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
+      GoogleTopCampaignsSchema.parse(campaignsRead),
+    );
+
+  it('sums each result type per campaign type and names the types any campaign counted', () => {
+    const overview = read(ambiguousTopCampaignsByResult);
+    expect(overview.conversions).toBeNull();
+    expect(overview.resultTypes).toEqual(['leads', 'signups']);
+    expect(overview.byResult).toEqual({ leads: 122, purchases: 0, signups: 2 });
+    expect(
+      overview.groups.map((group) => [group.label, group.conversions, group.byResult]),
+    ).toEqual([
+      ['Search', null, { leads: 34, purchases: 0, signups: 2 }],
+      ['Display', null, { leads: 88, purchases: 0, signups: 0 }],
+    ]);
+  });
+
+  it('a read cached before the edge counted them apart names no type, and says so', () => {
+    const overview = read(ambiguousTopCampaigns);
+    expect(overview.resultTypes).toEqual([]);
+    expect(overview.byResult).toBeNull();
+  });
+
+  it('one result counted: nothing is split apart', () => {
+    const overview = buildGoogleOverview(
+      { ...account(500), result_basis: { rule: 'r', bucket: 'leads', unambiguous: true } },
+      campaigns([row('1', 500, 5, 'SEARCH')]),
+    );
+    expect(overview.resultTypes).toEqual([]);
+  });
+
+  it('labels a count by its result, whole', () => {
+    expect(resultCountLabel('leads', 236.3268)).toBe('236 leads');
+    expect(resultCountLabel('signups', 1)).toBe('1 sign-up');
+    expect(resultCountLabel('purchases', 0)).toBe('0 purchases');
+    expect(resultsApartLabel({ leads: 34, signups: 2 }, ['leads', 'signups'])).toBe(
+      '34 leads · 2 sign-ups',
+    );
+    expect(resultsApartLabel(null, ['leads'])).toBeNull();
+    expect(resultTypesOf([{ byResult: { leads: 1 } }, {}])).toEqual([]);
+    expect(ownResultsLabel({ leads: 26, purchases: 0, signups: 2 })).toBe('26 leads · 2 sign-ups');
+    expect(ownResultsLabel({ leads: 0, purchases: 0, signups: 0 })).toBe('0');
+    expect(ownResultsLabel(null)).toBeNull();
   });
 });

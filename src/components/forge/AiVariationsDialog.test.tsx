@@ -570,6 +570,46 @@ describe('DraftWithAiButton', () => {
     ).toBe(true);
     expect(screen.getByText('Available once this template is published.')).toBeTruthy();
   });
+
+  test('files dropped on it open the draft with them; a text drag is left alone', async () => {
+    const onOpenRender = mock((_intent: unknown) => undefined);
+    render(<DraftWithAiButton templateKey="133" onOpenRender={onOpenRender} />);
+    const button = screen.getByRole('button', { name: 'Draft rows with AI' });
+    fireEvent.drop(button, { dataTransfer: { types: ['text/plain'], files: [], items: [] } });
+    expect(onOpenRender).toHaveBeenCalledTimes(0);
+
+    const brief = new File(['offer'], 'brief.pdf', { type: 'application/pdf' });
+    fireEvent.drop(button, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [brief],
+        items: [{ kind: 'file', webkitGetAsEntry: () => null }],
+      },
+    });
+    const intent = onOpenRender.mock.calls[0]![0] as { draftDrop: Promise<unknown> };
+    expect(intent).toMatchObject({ templateKey: '133', draftWithAi: true });
+    expect(await intent.draftDrop).toEqual([{ file: brief, name: 'brief.pdf' }]);
+  });
+});
+
+describe('AiDraftDialog opened by a drop', () => {
+  test('uploads what was dropped on opening, as if dropped on the dialog', async () => {
+    const brief = new File(['offer'], 'offer.txt', { type: 'text/plain' });
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        dropped={Promise.resolve([{ file: brief, name: 'offer.txt' }])}
+        onDrafted={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(uploadBrandDocument).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/offer.txt · /)).toBeTruthy();
+  });
 });
 
 describe('AiDraftDialog as the grid assistant', () => {

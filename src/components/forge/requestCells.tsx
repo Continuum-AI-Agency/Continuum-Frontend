@@ -15,10 +15,8 @@ import {
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSetSettings,
   isLayerSwitch,
-  leavesCheckIncomplete,
   type MediaAsset,
   readableLayerName,
-  readinessFindings,
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -75,13 +73,13 @@ import {
   isEmptyInput,
   MAX_BATCH_ROWS,
   missingInputs,
-  overrideFor,
   ownChangeCount,
   RENDER_OVERRIDES,
   type RenderOverride,
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
+  type RowStatus,
   rowBreadcrumb,
   seededValue,
   toPreflightDelivery,
@@ -172,6 +170,10 @@ export type RequestGridMeta = {
   generating: boolean;
   /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
+  /** Per row, what the browser can tell about it (`rowStatusOf`): an edit asks the server nothing. */
+  statuses?: ReadonlyMap<string, RowStatus>;
+  /** A format's Live kit is still on its way: a row with nothing else to say is being measured. */
+  fitLoading?: boolean;
   /**
    * Per row, the refusals a person may render through, each with what it is about. Not errors:
    * the row still renders once someone says so at Render.
@@ -433,94 +435,91 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-/** What the row asks of the person at Render, said once each: the refusals they may render through. */
-export function rowCalls(
-  row: RequestRow,
-  calls: ReadonlyArray<{ override: RenderOverride; message: string }> = [],
-): Array<{ override: RenderOverride; message: string }> {
-  const server =
-    row.check.state === 'error' ? overrideFor(row.check.code, row.check.guardrails) : null;
-  return server && row.check.state === 'error'
-    ? [...calls, { override: server, message: row.check.message }]
-    : [...calls];
-}
-
 function StatusBadge({
-  row,
+  status,
   invalidReason,
-  calls,
   fitWarning,
+  fitLoading,
   labelOf,
 }: {
-  row: RequestRow;
+  status: RowStatus;
   invalidReason?: string;
-  calls: ReadonlyArray<{ override: RenderOverride; message: string }>;
   /** Text the Live kit says will not fit as typed: it still renders, shrunk or clipped. */
   fitWarning: string | null;
+  fitLoading: boolean;
   labelOf: LabelOf;
 }) {
-  if (invalidReason)
-    return (
-      <Explained why={invalidReason}>
-        <Badge variant="destructive">Invalid</Badge>
-      </Explained>
-    );
-  // A refusal a person may render through is a question for Render, not an error in the row.
-  if (calls.length)
-    return (
-      <Explained
-        why={calls
-          .map((call) => `${RENDER_OVERRIDES[call.override].title}: ${call.message}`)
-          .join(' ')}
-      >
-        <Badge variant="warning">Needs your call</Badge>
-      </Explained>
-    );
-  switch (row.check.state) {
-    case 'checking':
+  switch (status.state) {
+    case 'invalid':
       return (
-        <Badge variant="muted">
-          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
-        </Badge>
-      );
-    case 'error':
-      return row.check.transient ? (
-        <Explained why={`${row.check.message} It is checked again at Render.`}>
-          <Badge variant="muted">Not checked</Badge>
+        <Explained why={invalidReason ?? ''}>
+          <Badge variant="destructive">Invalid</Badge>
         </Explained>
-      ) : (
-        <Badge variant="destructive" title={row.check.message}>
-          Rejected
-        </Badge>
       );
-    case 'ready': {
-      if (row.check.guardrails?.some((finding) => finding.severity === 'block'))
-        return <Badge variant="destructive">Blocked</Badge>;
-      const review = readinessFindings(row.check).filter(leavesCheckIncomplete);
-      if (review.length)
+    case 'refused':
+      return (
+        <Explained why={status.reason}>
+          <Badge variant="destructive">Rejected</Badge>
+        </Explained>
+      );
+    // A refusal a person may render through is a question for Render, not an error in the row.
+    case 'call':
+      return (
+        <Explained
+          why={status.calls
+            .map((call) => `${RENDER_OVERRIDES[call.override].title}: ${call.message}`)
+            .join(' ')}
+        >
+          <Badge variant="warning">Needs your call</Badge>
+        </Explained>
+      );
+    case 'unchecked':
+      if (status.findings.length)
         return (
           <Explained
-            why={[...new Set(review.map((finding) => explainFinding(finding, labelOf)))].join(' ')}
+            why={[
+              ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+            ].join(' ')}
           >
             <Badge variant="warning">Needs review</Badge>
           </Explained>
         );
-      if (row.check.fit?.escalate || fitWarning)
-        return (
-          <Explained
-            why={[fitWarning, row.check.fit?.escalate ? aiCheckWhy(row.check.fit) : null]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            <Badge variant="warning">
-              <Info className="size-3" aria-hidden /> Ready · fit warning
-            </Badge>
-          </Explained>
-        );
-      return <Badge variant="success">Ready</Badge>;
-    }
+      // No kit for the template: the readiness line says so once, not per row.
+      return fitLoading ? (
+        <Badge variant="muted">
+          <Loader2 className="size-3 animate-spin" aria-hidden /> Checking
+        </Badge>
+      ) : null;
+    case 'warning':
+    case 'ai-check':
+      return (
+        <Explained
+          why={[
+            fitWarning,
+            status.state === 'ai-check'
+              ? aiCheckWhy(status.fit)
+              : [...new Set(status.findings.map((finding) => explainFinding(finding, labelOf)))].join(
+                  ' ',
+                ),
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          <Badge variant="warning">
+            <Info className="size-3" aria-hidden /> Ready · fit warning
+          </Badge>
+        </Explained>
+      );
     default:
-      return <Badge variant="muted">Draft</Badge>;
+      return fitWarning ? (
+        <Explained why={fitWarning}>
+          <Badge variant="warning">
+            <Info className="size-3" aria-hidden /> Ready · fit warning
+          </Badge>
+        </Explained>
+      ) : (
+        <Badge variant="success">Ready</Badge>
+      );
   }
 }
 
@@ -1316,7 +1315,7 @@ function RunBadge({ job }: { job: ApiRenderJob }) {
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors, calls, liveFit, runs } = gridMeta(table);
+  const { contract, rows, clientErrors, liveFit, runs, statuses, fitLoading } = gridMeta(table);
   const run = runs?.get(row.id);
   if (run) return <RunBadge job={run} />;
   const errors = clientErrors.get(row.id) ?? {};
@@ -1349,10 +1348,10 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
     : null;
   return (
     <StatusBadge
-      row={row}
+      status={statuses?.get(row.id) ?? { state: 'unchecked', findings: [] }}
       labelOf={labelOf}
-      calls={rowCalls(row, calls?.get(row.id))}
       fitWarning={fitWarning}
+      fitLoading={fitLoading ?? false}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
           const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;

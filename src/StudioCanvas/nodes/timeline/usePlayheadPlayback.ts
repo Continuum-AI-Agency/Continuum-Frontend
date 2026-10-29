@@ -1,3 +1,4 @@
+import { type EditorClipTiming, editorClipSourceAt } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { nextPlayhead, type PlaybackMode } from './motion/motionChrome';
 import type { TimelineAudioPreviewController } from './useTimelineAudioPreview';
@@ -22,9 +23,20 @@ export interface ClipMedia {
   trimStartSec: number;
   /** Playback rate for the clip; 1 when unset. */
   speed?: number;
+  /**
+   * A reversed or speed-ramped clip's source clock. An element cannot play backwards or follow
+   * a curve, so the clip is held paused and seeked along the clock on every tick instead.
+   */
+  clock?: EditorClipTiming;
 }
 
 const clipSpeed = (media: ClipMedia): number => (media.speed && media.speed > 0 ? media.speed : 1);
+
+/** The source second `media` shows `localSec` into its clip. */
+const sourceAtLocal = (media: ClipMedia, localSec: number): number =>
+  media.clock
+    ? Math.max(0, editorClipSourceAt(media.clock, localSec))
+    : media.trimStartSec + Math.max(0, localSec) * clipSpeed(media);
 
 /** The subset of HTMLVideoElement the playhead driver touches, so it can be faked in tests. */
 export interface PlaybackVideoElement {
@@ -71,6 +83,8 @@ const SNAP_EPSILON = 0.02;
 const HAVE_METADATA = 1;
 const HAVE_CURRENT_DATA = 2;
 const VIDEO_DRIFT_TOLERANCE_SEC = 0.08;
+// A retimed clip is re-seeked every tick, so its tolerance is a frame, not the drift window.
+const RETIMED_SEEK_TOLERANCE_SEC = 0.02;
 
 // The element's clock runs in source time, so a wall-clock tolerance has to be
 // scaled by the clip's speed: at 3.5x one animation frame consumes ~58ms of
@@ -104,7 +118,7 @@ export function cueVideoToClip(
   if (media.kind !== 'video' || !media.url) return null;
 
   const speed = clipSpeed(media);
-  const sourceSec = media.trimStartSec + Math.max(0, localSec) * speed;
+  const sourceSec = sourceAtLocal(media, localSec);
   const swapped = ensureVideoSrc(video, media.url);
   video.playbackRate = speed;
 
@@ -133,6 +147,36 @@ const reapplyPendingCue = (video: PlaybackVideoElement, sourceSec: number): void
   seekVideo(video, sourceSec);
 };
 
+// Keep the shared element on the source second a retimed clip shows `localSec` in: paused, and
+// re-seeked only when it has drifted a frame and no seek is already under way.
+function followClock(
+  video: PlaybackVideoElement,
+  media: ClipMedia,
+  clipId: string,
+  localSec: number,
+  cue: PlaybackCue | null,
+): PlaybackCue {
+  if (!video.paused) video.pause();
+  const desired = sourceAtLocal(media, localSec);
+  if (!cue || cue.clipId !== clipId)
+    return (
+      cueVideoToClip(video, media, clipId, localSec) ?? {
+        clipId,
+        sourceSec: desired,
+        pending: true,
+      }
+    );
+  if (
+    !video.seeking &&
+    video.readyState >= HAVE_METADATA &&
+    Math.abs(video.currentTime - desired) > RETIMED_SEEK_TOLERANCE_SEC
+  ) {
+    seekVideo(video, desired);
+    return { clipId, sourceSec: desired, pending: true };
+  }
+  return cue;
+}
+
 // Advance the playhead by one animation frame, driving the shared <video> element
 // as it goes. Exported so the hand-off logic can be tested against a fake element.
 export function advancePlayhead(params: {
@@ -158,6 +202,14 @@ export function advancePlayhead(params: {
   let nextCue = cue;
   if (!nextCue || nextCue.clipId !== clip.item.id) {
     nextCue = cueVideoToClip(video, media, clip.item.id, playheadSec - clip.startSec);
+  }
+
+  if (media.clock) {
+    // The playhead runs on the wall clock; the paused element is walked along the clip's clock.
+    return {
+      playheadSec: playheadSec + dtSec,
+      cue: followClock(video, media, clip.item.id, playheadSec - clip.startSec, nextCue),
+    };
   }
 
   const speed = clipSpeed(media);
@@ -211,6 +263,7 @@ export function syncVideoToTimelineTime(params: {
   }
 
   const localSec = Math.max(0, timelineSec - clip.startSec);
+  if (media.clock) return followClock(video, media, clip.item.id, localSec, cue);
   const desiredSourceSec = media.trimStartSec + localSec * clipSpeed(media);
   let nextCue = cue;
   if (!nextCue || nextCue.clipId !== clip.item.id) {

@@ -98,7 +98,7 @@ export function formatCompactNumber(value: number): string {
 
 export function formatMetric(
   metric: CampaignPerformanceMetricKey,
-  value: number | undefined,
+  value: number | null | undefined,
 ): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   if (metric === 'spend' || metric === 'cpc' || metric === 'cpa') return formatCurrency(value);

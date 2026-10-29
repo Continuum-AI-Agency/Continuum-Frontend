@@ -4,6 +4,7 @@ import {
   bindEditorProjectSources,
   createEditorProjectV2,
   type EditorCommandBatch,
+  editorClipSourceAt,
   editorProjectSourceSlots,
   editorTextClipSchema,
 } from './index';
@@ -1334,5 +1335,223 @@ test('text split, start trim, end trim and move preserve independent title and k
     textAnimationClock: { offsetSec: 2.5, durationSec: 4 },
     keyframeOffsetSec: 2.5,
     keyframes: title.keyframes,
+  });
+});
+
+describe('reversed and speed-ramped clips through split and trim', () => {
+  const ramp = [
+    { timeSec: 0, sourceSec: 10, interpolation: 'linear' as const },
+    { timeSec: 1, sourceSec: 11, interpolation: 'linear' as const },
+    { timeSec: 3, sourceSec: 11.4, interpolation: 'linear' as const },
+    { timeSec: 4, sourceSec: 12.4, interpolation: 'linear' as const },
+  ];
+  const projectWith = (patch: object) => {
+    const project = createEditorProjectV2({
+      projectId: 'project-retime',
+      title: 'Retime',
+      width: 1080,
+      height: 1920,
+      now: '2026-08-01T12:00:00.000Z',
+    });
+    return applyEditorCommandBatch(
+      project,
+      commandBatch(project, [
+        { commandType: 'set_project_metadata', durationSec: 4 },
+        {
+          commandType: 'add_track',
+          track: {
+            id: 'video-main',
+            name: 'Main',
+            order: 0,
+            enabled: true,
+            locked: false,
+            muted: false,
+            solo: false,
+            kind: 'video',
+            clips: [
+              {
+                ...videoClip({ id: 'clip', timelineStartSec: 0, durationSec: 4, sourceInSec: 10 }),
+                ...patch,
+              },
+            ],
+          },
+        },
+      ]),
+    );
+  };
+  const clips = (project: ReturnType<typeof projectWith>) =>
+    project.tracks.flatMap((track) => track.clips);
+
+  test('splitting a remapped clip leaves two clips that show the same frames as the one', () => {
+    const project = projectWith({ timeRemap: ramp });
+    const original = clips(project)[0] as Parameters<typeof editorClipSourceAt>[0];
+    const next = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip',
+        splitAtSec: 2,
+        rightClipId: 'clip-b',
+      }),
+    );
+    const [left, right] = clips(next) as unknown as [typeof original, typeof original];
+    expect([left.durationSec, right.durationSec]).toEqual([2, 2]);
+    for (const local of [0, 0.7, 1.9])
+      expect(editorClipSourceAt(left, local)).toBeCloseTo(editorClipSourceAt(original, local), 9);
+    for (const local of [0, 0.7, 1.9])
+      expect(editorClipSourceAt(right, local)).toBeCloseTo(
+        editorClipSourceAt(original, 2 + local),
+        9,
+      );
+  });
+
+  test('splitting a reversed clip puts the earlier source in the later piece', () => {
+    const project = projectWith({ reverse: true, sourceInSec: 10, durationSec: 4 });
+    const next = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip',
+        splitAtSec: 1,
+        rightClipId: 'clip-b',
+      }),
+    );
+    const [left, right] = clips(next) as unknown as {
+      reverse: boolean;
+      sourceInSec: number;
+      durationSec: number;
+    }[];
+    expect([left.reverse, left.sourceInSec, left.durationSec]).toEqual([true, 13, 1]);
+    expect([right.reverse, right.sourceInSec, right.durationSec]).toEqual([true, 10, 3]);
+  });
+
+  test('trimming a ramped clip keeps the window it shows; growing it is refused', () => {
+    const project = projectWith({ timeRemap: ramp });
+    const original = clips(project)[0] as Parameters<typeof editorClipSourceAt>[0];
+    const next = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'trim_clip',
+        trackId: 'video-main',
+        clipId: 'clip',
+        timelineStartSec: 1,
+        durationSec: 2,
+      }),
+    );
+    const trimmed = clips(next)[0] as typeof original & { timelineStartSec: number };
+    expect(trimmed.timelineStartSec).toBe(1);
+    for (const local of [0, 0.5, 1.5, 2])
+      expect(editorClipSourceAt(trimmed, local)).toBeCloseTo(
+        editorClipSourceAt(original, 1 + local),
+        9,
+      );
+    expect(() =>
+      applyEditorCommandBatch(
+        project,
+        command(project, {
+          commandType: 'trim_clip',
+          trackId: 'video-main',
+          clipId: 'clip',
+          durationSec: 6,
+        }),
+      ),
+    ).toThrow('trimmed shorter');
+  });
+
+  test('every overlap transition, new ones included, packs the next clip under the previous', () => {
+    for (const transitionType of ['blur', 'whip', 'zoom_blur', 'glitch'] as const) {
+      const base = createEditorProjectV2({
+        projectId: `p-${transitionType}`,
+        title: 't',
+        width: 1080,
+        height: 1920,
+        now: '2026-08-01T12:00:00.000Z',
+      });
+      const built = applyEditorCommandBatch(
+        base,
+        commandBatch(base, [
+          { commandType: 'set_project_metadata', durationSec: 7.5 },
+          {
+            commandType: 'add_track',
+            track: {
+              id: 'video-main',
+              name: 'Main',
+              order: 0,
+              enabled: true,
+              locked: false,
+              muted: false,
+              solo: false,
+              kind: 'video',
+              clips: [
+                videoClip({ id: 'a', timelineStartSec: 0, durationSec: 4 }),
+                videoClip({ id: 'b', timelineStartSec: 3.5, durationSec: 4 }),
+              ],
+            },
+          },
+          {
+            commandType: 'upsert_transition',
+            transition: {
+              id: 't1',
+              trackId: 'video-main',
+              fromClipId: 'a',
+              toClipId: 'b',
+              transitionType,
+              durationSec: 0.5,
+              alignment: 'centered',
+              parameters: {},
+            },
+          },
+        ]),
+      );
+      expect(built.transitions[0].transitionType).toBe(transitionType);
+    }
+    // flash is a colour ramp on the cut: it does not overlap, so the same geometry is refused.
+    const base = createEditorProjectV2({
+      projectId: 'p-flash',
+      title: 't',
+      width: 1080,
+      height: 1920,
+      now: '2026-08-01T12:00:00.000Z',
+    });
+    expect(() =>
+      applyEditorCommandBatch(
+        base,
+        commandBatch(base, [
+          { commandType: 'set_project_metadata', durationSec: 7.5 },
+          {
+            commandType: 'add_track',
+            track: {
+              id: 'video-main',
+              name: 'Main',
+              order: 0,
+              enabled: true,
+              locked: false,
+              muted: false,
+              solo: false,
+              kind: 'video',
+              clips: [
+                videoClip({ id: 'a', timelineStartSec: 0, durationSec: 4 }),
+                videoClip({ id: 'b', timelineStartSec: 3.5, durationSec: 4 }),
+              ],
+            },
+          },
+          {
+            commandType: 'upsert_transition',
+            transition: {
+              id: 't1',
+              trackId: 'video-main',
+              fromClipId: 'a',
+              toClipId: 'b',
+              transitionType: 'flash',
+              durationSec: 0.5,
+              alignment: 'centered',
+              parameters: {},
+            },
+          },
+        ]),
+      ),
+    ).toThrow('canonical transition geometry');
   });
 });

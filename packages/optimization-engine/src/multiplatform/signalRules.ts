@@ -14,6 +14,8 @@
 import {
   currencyMinorOffset,
   formatMoney,
+  G07_COOLDOWN_DAYS,
+  G07_STEP,
   type MultiPlatformSnapshot,
   NegativeTermSchema,
   type OptimizerAction,
@@ -51,12 +53,9 @@ export const G07_RANK_LOST_ABOVE = 0.3;
 /** G07: lower the Google Ads target CPA when the real cost is over this multiple of the
  *  portfolio's CPA goal — or over the goal at all while Google's target sits above it. */
 export const G07_LOWER_ABOVE = 1.3;
-/** G07: ±10% per change. */
-export const G07_STEP = 0.1;
-/** G07: Smart Bidding relearns after a target change; one change per this many days. */
-export const G07_COOLDOWN_DAYS = 14;
-/** G11: a Quality Score at or under this is low. */
-export const G11_MAX_QUALITY_SCORE = 3;
+/** G07's step and cooldown and G11's Quality Score floor live in contracts (google-tab.ts),
+ *  where the Google tab reads them too. */
+export { G07_COOLDOWN_DAYS, G07_STEP, G11_MAX_QUALITY_SCORE } from '@continuum/contracts';
 /** T1: a creative needs this many impressions before its 2-second hold is judged. */
 export const T1_MIN_IMPRESSIONS = 2000;
 /** T1: the portfolio's lower quartile needs at least this many judged creatives. */
@@ -281,7 +280,13 @@ function activeKeywordTexts(google: GoogleSignals): Set<string> {
 function g05NegativeTerms(run: Run, google: GoogleSignals, target: number, currency: string) {
   const keywords = activeKeywordTexts(google);
   const candidates = google.search_terms
-    .filter((t) => t.status === 'NONE' && t.totals.conversions === 0 && t.totals.spend > target)
+    .filter(
+      (t) =>
+        t.status === 'NONE' &&
+        t.totals.conversions === 0 &&
+        t.totals.spend > target &&
+        !isInactiveCampaign(run, t.campaign_id),
+    )
     .sort((a, b) => b.totals.spend - a.totals.spend || a.term.localeCompare(b.term));
   const picked: typeof candidates = [];
   for (const t of candidates) {
@@ -366,6 +371,7 @@ function promoteTerms(run: Run, google: GoogleSignals, target: number, currency:
   const seen = new Set<string>();
   for (const t of google.search_terms) {
     if (t.status === 'ADDED' || t.status === 'ADDED_EXCLUDED' || t.status === 'EXCLUDED') continue;
+    if (isInactiveCampaign(run, t.campaign_id)) continue;
     if (t.totals.conversions < PROMOTE_MIN_CONVERSIONS) continue;
     const cost = t.totals.spend / t.totals.conversions;
     if (cost > target) continue;
@@ -570,7 +576,7 @@ function g11Keywords(run: Run, google: GoogleSignals, target: number, currency: 
   }
   const window = `the last ${run.windowDays} days`;
   const ordered = google.keywords
-    .filter((k) => !k.negative)
+    .filter((k) => !k.negative && !isInactiveCampaign(run, k.campaign_id))
     .sort(
       (a, b) => b.totals.spend - a.totals.spend || a.criterion_id.localeCompare(b.criterion_id),
     );
@@ -631,6 +637,12 @@ function g11Keywords(run: Run, google: GoogleSignals, target: number, currency: 
 }
 
 const INACTIVE = new Set(['PAUSED', 'REMOVED', 'ENDED', 'NOT_ELIGIBLE']);
+
+/** A campaign read this cycle as paused, removed, ended or not eligible. Its search terms and
+ *  keywords are history, not something to change: G05 proposed negatives for a campaign paused
+ *  since 10-12 every cycle (G8 F5). Not read is not inactive. */
+const isInactiveCampaign = (run: Run, campaignId: string): boolean =>
+  INACTIVE.has((run.snapshot(campaignId)?.primaryStatus ?? '').toUpperCase());
 
 /** G18 (coverage half): a serving PMax asset group rated POOR or AVERAGE that Google says is
  *  missing assets → the PMax card, one per campaign. No write: assets are made in Studio. */
@@ -976,7 +988,7 @@ const RESULT_WORDS: Partial<Record<keyof WindowMetrics, string>> = {
  *  lost and what a result costs; with a proposal it carries the set_budget a person approves,
  *  in the budget's minor units, read from the very budget the snapshot holds. A shared budget
  *  is never changed in place, a campaign that loses nothing to budget is not news, and a dark
- *  one is G12's: more budget for a campaign that shows no ad is the wrong advice. */
+ *  or Google-suspended one shows no ad: more budget for it is the wrong advice. */
 function g03BudgetLimited(run: Run, google: GoogleSignals) {
   const { objective, kpiField, cpaTarget } = run.context;
   const campaigns = run.context.snapshots.filter(
@@ -994,18 +1006,19 @@ function g03BudgetLimited(run: Run, google: GoogleSignals) {
     return;
   }
   const resultLabel = RESULT_WORDS[kpiField] ?? 'results';
-  const dark = new Map(
-    (google.delivery ?? []).filter(isDarkCampaign).map((c) => [c.campaign_id, c.dark_days]),
-  );
+  // Dark for days, or suspended by Google now (Easy Fit 2026: ELIGIBLE, serving SUSPENDED, two
+  // days without an ad when G03 proposed 320 → 400, G8 F8): either way it shows no ad.
+  const blocked = new Map<string, string>();
+  for (const c of google.delivery ?? []) {
+    if (isDarkCampaign(c)) blocked.set(c.campaign_id, `has shown no ad for ${c.dark_days} days`);
+    else if ((c.serving_status ?? '').toUpperCase() === 'SUSPENDED')
+      blocked.set(c.campaign_id, 'is suspended by Google (serving status SUSPENDED)');
+  }
   for (const s of campaigns) {
-    const darkDays = dark.get(s.id);
-    if (darkDays !== undefined) {
+    const why = blocked.get(s.id);
+    if (why !== undefined) {
       if (isBudgetConstrained(s))
-        run.abstain(
-          'G03',
-          s.id,
-          `${s.name ?? s.id} has shown no ad for ${darkDays} days; its delivery comes first.`,
-        );
+        run.abstain('G03', s.id, `${s.name ?? s.id} ${why}; its delivery comes first.`);
       continue;
     }
     const verdict = g03BudgetLimitedRaise(s, { objective, kpiField, cpaTarget, historyDays: null });

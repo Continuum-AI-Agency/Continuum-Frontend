@@ -12,11 +12,7 @@
 // the fourteen-day figure minus the seven-day one — the same series, so "last week" cannot
 // come from a different read than "this week".
 
-import type {
-  EfficiencySeriesPoint,
-  PortfolioListItem,
-  PortfolioMetrics,
-} from '@continuum/contracts';
+import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import type { FigureProps } from '../../format';
 import { pendingWorkCount } from '../../reportModel';
@@ -110,42 +106,36 @@ export function portfolioWindow(
   portfolio: PortfolioListItem,
   series: readonly EfficiencySeriesPoint[],
 ): PortfolioWindow | null {
+  const figures = seriesWindowFigures(series);
+  return figures ? portfolioWindowOf(portfolio, figures) : null;
+}
+
+/** The latest cycle's 7-day window (and the 7 days before it) from an efficiency series,
+ *  oldest first. Null before the first cycle. */
+export function seriesWindowFigures(
+  series: readonly EfficiencySeriesPoint[],
+): WindowFigures | null {
   const latest = series.at(-1);
   if (!latest) return null;
-  return windowOf(portfolio, {
+  return {
     spend: latest.spend_d7,
     results: latest.conv_d7,
     priorSpend: Math.max(0, latest.spend_d14 - latest.spend_d7),
     priorResults: Math.max(0, latest.conv_d14 - latest.conv_d7),
     cycleTs: latest.cycle_ts,
-  });
+  };
 }
 
-/**
- * The same window from the portfolio's metrics read (optimizer_get_portfolio_metrics, d7).
- *
- * The efficiency series sums adset_snapshots, which only Meta ad sets write: a Google
- * portfolio's series is empty however many cycles ran, and a mixed one's counts its Meta half
- * only. Null before the first cycle has landed, as above.
- */
-export function portfolioWindowFromMetrics(
-  portfolio: PortfolioListItem,
-  metrics: PortfolioMetrics,
-): PortfolioWindow | null {
-  const cycleTs = portfolio.last_actual_cycle_at;
-  if (!cycleTs) return null;
-  return windowOf(portfolio, {
-    spend: metrics.totals.spend,
-    results: metrics.totals.results,
-    priorSpend: metrics.prior_totals?.spend ?? 0,
-    priorResults: metrics.prior_totals?.results ?? 0,
-    cycleTs,
-  });
-}
+/** The figures one window measured, before they are priced against the portfolio's target. */
+export type WindowFigures = Pick<
+  PortfolioWindow,
+  'spend' | 'results' | 'priorSpend' | 'priorResults' | 'cycleTs'
+>;
 
-function windowOf(
+/** A window's figures priced against the portfolio's own metric and target. */
+export function portfolioWindowOf(
   portfolio: PortfolioListItem,
-  figures: Pick<PortfolioWindow, 'spend' | 'results' | 'priorSpend' | 'priorResults' | 'cycleTs'>,
+  figures: WindowFigures,
 ): PortfolioWindow {
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
   const multiplier = metric.denominatorMultiplier;

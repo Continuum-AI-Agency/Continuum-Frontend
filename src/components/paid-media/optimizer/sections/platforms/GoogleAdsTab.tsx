@@ -8,31 +8,37 @@
 // PlatformPortfolioSections), not here: this is Google's own read of the account.
 //
 // When the read cannot happen, the empty state names the reason and the one thing that fixes it.
+// Under the read, in both modes: the parity sections (GoogleTabSections: the account read by
+// campaign type, the campaign explorer, the bidding panel), then Google's own views.
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { KpiTile } from '../../components/KpiTile';
 import { figureProps, formatCurrency } from '../../format';
 import * as typeScale from '../../typeScale';
+import { GoogleTabSections } from '../google/GoogleTabSections';
+import type { GoogleReadWindow } from '../google/googleReads';
+import { GoogleOwnViews } from '../google/views/GoogleOwnViews';
 import {
   type CampaignGroup,
   costPerConversion,
+  costPerResult,
   figureWindowOf,
   formatConversions,
   type GoogleOverview,
   MAX_GROUP_TILES,
   MIN_TILES,
+  NO_SINGLE_RESULT,
   percentAgainst,
+  RESULT_WORDS,
+  resultCountLabel,
+  resultsApartLabel,
   windowRangeLabel,
 } from './googleAdsOverviewModel';
 import { PlatformChip } from './PlatformChip';
 import { PlatformConnectLink } from './PlatformConnectLink';
 import { PlatformReadingNote } from './PlatformReadingNote';
-import {
-  type GoogleAdsOverviewState,
-  type GoogleReadWindow,
-  useGoogleAdsOverview,
-} from './useGoogleAdsOverview';
+import { type GoogleAdsOverviewState, useGoogleAdsOverview } from './useGoogleAdsOverview';
 
 /** Said once, where the window is named, when no source names the account's currency. */
 const UNKNOWN_CURRENCY = 'currency not reported by Google';
@@ -41,12 +47,33 @@ function signedPct(pct: number): string {
   return pct > 0 ? `+${pct}%` : `${pct}%`;
 }
 
+/** "$33.07 MXN per lead · no sign-up yet": each result type's own cost, when counted apart. */
+function costsApart(
+  item: Pick<CampaignGroup, 'spend' | 'byResult'>,
+  overview: GoogleOverview,
+  currency: string | null,
+): string {
+  return overview.resultTypes
+    .map((bucket) => {
+      const cost = costPerResult(item.spend, item.byResult, bucket);
+      const word = RESULT_WORDS[bucket].one;
+      return cost == null ? `no ${word} yet` : `${formatCurrency(cost, currency)} per ${word}`;
+    })
+    .join(' · ');
+}
+
 /** "18% below the account's 452 MXN" — the group's cost against Google's own average. */
 function costComparison(
   group: CampaignGroup,
   overview: GoogleOverview,
   currency: string | null,
 ): string {
+  if (group.conversions == null) {
+    if (overview.resultTypes.length > 0 && group.byResult) {
+      return `${costsApart(group, overview, currency)} · ${group.sharePct}% of spend`;
+    }
+    return `${formatCurrency(group.spend, currency)} spent · ${group.sharePct}% of spend · ${NO_SINGLE_RESULT.toLowerCase()}`;
+  }
   const cost = costPerConversion(group);
   if (cost == null) {
     return `${formatCurrency(group.spend, currency)} without a conversion · ${group.sharePct}% of spend`;
@@ -61,6 +88,13 @@ function costComparison(
   return `${formatCurrency(cost, currency)} each${against} · ${group.sharePct}% of spend`;
 }
 
+/** The group's count; with no single result each result type apart; a dash only when the read
+ *  carried neither. */
+function groupValue(group: CampaignGroup, overview: GoogleOverview): string {
+  if (group.conversions != null) return `${formatConversions(group.conversions)} conv.`;
+  return resultsApartLabel(group.byResult, overview.resultTypes) ?? '—';
+}
+
 function groupLabel(group: CampaignGroup, byType: boolean): string {
   if (!byType) return group.label;
   return `${group.label} · ${group.campaigns} ${group.campaigns === 1 ? 'campaign' : 'campaigns'}`;
@@ -69,7 +103,21 @@ function groupLabel(group: CampaignGroup, byType: boolean): string {
 function Headline({ overview, currency }: { overview: GoogleOverview; currency: string | null }) {
   const window = figureWindowOf(overview.days);
   const change = percentAgainst(overview.spend, overview.priorSpend);
-  const converting = overview.groups.filter((group) => group.conversions > 0).slice(0, 3);
+  const converting = overview.groups
+    .filter((group) => group.conversions != null && group.conversions > 0)
+    .slice(0, 3);
+  const apart = overview.resultTypes.map((bucket) => {
+    const count = overview.byResult?.[bucket] ?? 0;
+    const cost = costPerResult(overview.spend, overview.byResult, bucket);
+    return `${resultCountLabel(bucket, count)}${cost == null ? '' : ` at ${formatCurrency(cost, currency)} each`}`;
+  });
+  const ending = !overview.resultsDefined
+    ? apart.length > 0
+      ? `: ${apart.join(' and ')}, counted apart because no single result is defined for this account.`
+      : '. Conversions are not shown: no single result is defined for this account.'
+    : overview.spend > 0
+      ? ' and recorded no conversions.'
+      : '.';
   return (
     <p
       className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
@@ -83,7 +131,7 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
         {formatCurrency(overview.spend, currency)}
       </span>
       {change != null ? ` (${signedPct(change)} on the period before)` : ''}
-      {converting.length > 0 ? ': ' : overview.spend > 0 ? ' and recorded no conversions.' : '.'}
+      {converting.length > 0 ? ': ' : ending}
       {converting.map((group, index) => (
         <span key={group.key}>
           {index > 0 ? (index === converting.length - 1 ? ' and ' : ', ') : ''}
@@ -98,7 +146,7 @@ function Headline({ overview, currency }: { overview: GoogleOverview; currency: 
               'count',
             )}
           >
-            {formatConversions(group.conversions)}
+            {formatConversions(group.conversions ?? 0)}
           </span>{' '}
           {group.conversions === 1 ? 'conversion' : 'conversions'} at{' '}
           <span
@@ -150,12 +198,20 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
         )}
         label="Conversions"
         sub={
-          overview.costPerConversion != null
-            ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
-            : 'none recorded in the window'
+          overview.conversions == null
+            ? overview.resultTypes.length > 0
+              ? `${costsApart(overview, overview, currency)} · counted apart`
+              : NO_SINGLE_RESULT
+            : overview.costPerConversion != null
+              ? `${formatCurrency(overview.costPerConversion, currency)} each · as Google attributes them`
+              : 'none recorded in the window'
         }
         testId="google-tile-conversions"
-        value={formatConversions(overview.conversions)}
+        value={
+          overview.conversions == null
+            ? (resultsApartLabel(overview.byResult, overview.resultTypes) ?? '—')
+            : formatConversions(overview.conversions)
+        }
       />
       {groups.map((group) => (
         <KpiTile
@@ -170,7 +226,7 @@ function Tiles({ overview, currency }: { overview: GoogleOverview; currency: str
           label={groupLabel(group, overview.byType)}
           sub={costComparison(group, overview, currency)}
           testId="google-tile-group"
-          value={`${formatConversions(group.conversions)} conv.`}
+          value={groupValue(group, overview)}
         />
       ))}
       {showClicks ? (
@@ -337,7 +393,7 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
             label={groupLabel(group, overview.byType)}
             sub={costComparison(group, overview, account.currency)}
             testId="google-tile-group"
-            value={`${formatConversions(group.conversions)} conv.`}
+            value={groupValue(group, overview)}
           />
         ))}
       </div>
@@ -359,7 +415,8 @@ export function GoogleAdsTab({
    *  when it has none; 'pending' while it is still answering (nothing is read yet). */
   window?: GoogleReadWindow | null | 'pending';
   readingNote?: boolean;
-  /** What sits under the read; held until the read settles, so the read never pushes it. */
+  /** What sits under the read and Google's own views; held until the read settles, so the
+   *  read never pushes it. */
   children?: ReactNode;
 }) {
   const state = useGoogleAdsOverview(brandId, window);
@@ -370,6 +427,23 @@ export function GoogleAdsTab({
       ) : (
         <GoogleAdsTabView readingNote={readingNote} state={state} />
       )}
+      {state.status === 'ready' ? (
+        <>
+          <GoogleTabSections
+            brandId={brandId}
+            currency={state.account.currency}
+            customerId={state.account.account_id}
+            resultBucket={state.resultBucket}
+          />
+          <GoogleOwnViews
+            brandId={brandId}
+            currency={state.account.currency}
+            customerId={state.account.account_id}
+            resultBucket={state.resultBucket}
+            window={{ since: state.overview.since, until: state.overview.until }}
+          />
+        </>
+      ) : null}
       {state.status === 'loading' ? null : children}
     </>
   );

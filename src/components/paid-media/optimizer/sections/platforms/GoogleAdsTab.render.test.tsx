@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdAccount } from '@continuum/contracts';
 import { cleanup, render } from '@testing-library/react';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
+import {
+  ambiguousAccountOverview,
+  ambiguousTopCampaigns,
+  ambiguousTopCampaignsByResult,
+} from './__fixtures__/googleAmbiguousResultBasis';
 import { GoogleAdsTabView, GoogleCampaignTypeBreakdown } from './GoogleAdsTab';
 import {
   buildGoogleOverview,
@@ -210,5 +215,102 @@ describe('GoogleCampaignTypeBreakdown — currency', () => {
       getByTestId('google-breakdown').textContent?.match(/currency not reported by Google/g)
         ?.length,
     ).toBe(1);
+  });
+});
+
+describe('an account with no single business result', () => {
+  const ambiguous = buildGoogleOverview(
+    GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
+    GoogleTopCampaignsSchema.parse(ambiguousTopCampaigns),
+  );
+
+  it('shows a dash with the reason where conversions and their cost would sit', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView state={{ status: 'ready', account: VIVO_47, overview: ambiguous }} />,
+    );
+    expect(getByTestId('google-headline').textContent).toBe(
+      'Google spent $55,205 MXN. Conversions are not shown: no single result is defined for this account.',
+    );
+    expect([...getByTestId('google-tiles').children].map(tileText)).toEqual([
+      { label: 'Spend', value: '$55,205 MXN', sub: 'no prior period to compare' },
+      { label: 'Conversions', value: '—', sub: 'No single result defined' },
+      {
+        label: 'Search · 3 campaigns',
+        value: '—',
+        sub: '$44,713 MXN spent · 81% of spend · no single result defined',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '—',
+        sub: '$10,492 MXN spent · 19% of spend · no single result defined',
+      },
+    ]);
+    expect(
+      getByTestId('google-tiles')
+        .querySelector('[data-figure="google.tiles.conversions"]')
+        ?.getAttribute('data-figure-raw'),
+    ).toBe('');
+  });
+
+  it('renders the split by campaign type instead of the shape error', () => {
+    const { getByTestId, getAllByTestId, queryByTestId } = render(
+      <GoogleCampaignTypeBreakdown
+        state={{ status: 'ready', account: VIVO_47, overview: ambiguous }}
+      />,
+    );
+    expect(queryByTestId('google-breakdown-error')).toBeNull();
+    expect(getByTestId('google-breakdown').textContent).toContain('By campaign type');
+    expect(getAllByTestId('google-tile-group').map(tileText)).toEqual([
+      {
+        label: 'Search · 3 campaigns',
+        value: '—',
+        sub: '$44,713 MXN spent · 81% of spend · no single result defined',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '—',
+        sub: '$10,492 MXN spent · 19% of spend · no single result defined',
+      },
+    ]);
+  });
+});
+
+// Ramiro, 2026-10-28: with no portfolio goal and campaigns whose goals name several results,
+// each result type is counted with its own cost: never "—" across every campaign type.
+describe('no portfolio goal: each result type apart', () => {
+  const apart = buildGoogleOverview(
+    GoogleAccountOverviewSchema.parse(ambiguousAccountOverview),
+    GoogleTopCampaignsSchema.parse(ambiguousTopCampaignsByResult),
+  );
+  const state = { status: 'ready', account: VIVO_47, overview: apart, resultBucket: null } as const;
+
+  it('names each result and its cost in the sentence and on every tile', () => {
+    const { getByTestId } = render(<GoogleAdsTabView state={state} />);
+    expect(getByTestId('google-headline').textContent).toBe(
+      'Google spent $55,205 MXN: 122 leads at $453 MXN each and 2 sign-ups at $27,603 MXN each, counted apart because no single result is defined for this account.',
+    );
+    expect([...getByTestId('google-tiles').children].map(tileText).slice(1)).toEqual([
+      {
+        label: 'Conversions',
+        value: '122 leads · 2 sign-ups',
+        sub: '$453 MXN per lead · $27,603 MXN per sign-up · counted apart',
+      },
+      {
+        label: 'Search · 3 campaigns',
+        value: '34 leads · 2 sign-ups',
+        sub: '$1,315 MXN per lead · $22,356 MXN per sign-up · 81% of spend',
+      },
+      {
+        label: 'Display · 4 campaigns',
+        value: '88 leads · 0 sign-ups',
+        sub: '$119 MXN per lead · no sign-up yet · 19% of spend',
+      },
+    ]);
+  });
+
+  it('no campaign type tile reads "—" under the multi-platform frame either', () => {
+    const { getAllByTestId } = render(<GoogleCampaignTypeBreakdown state={state} />);
+    const values = getAllByTestId('google-tile-group').map((tile) => tileText(tile).value);
+    expect(values).toEqual(['34 leads · 2 sign-ups', '88 leads · 0 sign-ups']);
   });
 });

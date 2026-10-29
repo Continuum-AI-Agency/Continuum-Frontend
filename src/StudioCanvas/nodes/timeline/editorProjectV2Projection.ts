@@ -506,6 +506,23 @@ export function transitionKind(
       return { transitionType: 'zoom', transitionId: transition.type, parameters: {} };
     case 'spin':
       return { transitionType: 'custom', transitionId: transition.type, parameters: {} };
+    case 'blur':
+      return { transitionType: 'blur', parameters: {} };
+    case 'whipLeft':
+    case 'whipRight':
+    case 'whipUp':
+    case 'whipDown':
+      return {
+        transitionType: 'whip',
+        transitionId: transition.type,
+        parameters: { direction: transition.type.replace('whip', '').toLowerCase() },
+      };
+    case 'zoomBlur':
+      return { transitionType: 'zoom_blur', parameters: {} };
+    case 'flash':
+      return { transitionType: 'flash', parameters: {} };
+    case 'glitch':
+      return { transitionType: 'glitch', parameters: {} };
   }
 }
 

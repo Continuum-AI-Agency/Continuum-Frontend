@@ -7,6 +7,7 @@ import {
   type EditorVideoClip,
   editorClipAtSourceIn,
   editorClipAtSpeed,
+  editorClipIsRetimed,
   editorClipWithRetainedFades,
   type NumericKeyframe,
   resolveNestedSequence,
@@ -127,6 +128,12 @@ export function nestedAudioSources(project: EditorProjectV2) {
 /** Audible child slices keep their source identity while each instance owns its output clock. */
 export function nestedAudioClips(project: EditorProjectV2) {
   return nestedAudioSources(project).map(({ instance, child, start, end }) => {
+    // Constant speed no longer refuses a reversed clip, so say it here: nested audio is built
+    // from a forward source span and would play a reversed or ramped child the wrong way round.
+    if (editorClipIsRetimed(child))
+      throw new Error(
+        `Nested clip "${child.id}" is reversed or time-remapped; nested audio plays forward only.`,
+      );
     const sourceStartSec =
       child.sourceInSec + (start - child.timelineStartSec) * child.playbackRate;
     const sliced = editorClipAtSourceIn(editorClipWithRetainedFades(child), sourceStartSec);

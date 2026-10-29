@@ -1,7 +1,8 @@
 'use client';
 
-// "By platform": one text row per platform from optimizer_get_portfolio_metrics, no chart
-// (frontend.html §3). The source is named once, in this block's header; under GA4 or a
+// "By platform": one text row per platform from optimizer_get_portfolio_metrics (frontend.html
+// §3), then the mixed portfolio's story: the spend shares as one stacked bar, no blended cost
+// (MixedPortfolioStory). The source is named once, in this block's header; under GA4 or a
 // spreadsheet every cost says "· GA4" and the platform's own count sits beside it in grey.
 // A Meta-only portfolio renders nothing here and keeps today's screens — including while the
 // RPC is missing or failing: the "not available yet" note is owed only to a portfolio known to
@@ -24,6 +25,7 @@ import {
   type PlatformRow,
   type PlatformRowState,
 } from './byPlatformModel';
+import { MixedPortfolioStory } from './MixedPortfolioStory';
 import { type PortfolioMetricsState, usePortfolioMetrics } from './usePortfolioMetrics';
 
 const STATE_TONE: Record<PlatformRowState['kind'], string> = {
@@ -146,6 +148,13 @@ export function ByPlatformView({
           />
         ))}
       </ul>
+      <MixedPortfolioStory
+        currency={metrics.currency}
+        resultKind={resultKind}
+        rows={view.rows}
+        sourceIsNotPlatform={view.sourceIsNotPlatform}
+        totalSpend={view.totalSpend}
+      />
     </section>
   );
 }

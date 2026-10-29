@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganicInsights } from '@/hooks/useOrganicInsights';
 import { organicInsightToMentionSuggestion } from '@/lib/agent/kpi-mentions';
 import type { OrganicComputedInsight } from '@/lib/organic/organic-insights.types';
@@ -86,7 +87,7 @@ export function OrganicInsightsPanel({
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {CATEGORY_CONFIG.map((cat) => (
-              <div key={cat.key} className="h-[120px] animate-pulse rounded-lg bg-muted" />
+              <Skeleton key={cat.key} className="h-[120px] rounded-lg" />
             ))}
           </div>
         </div>

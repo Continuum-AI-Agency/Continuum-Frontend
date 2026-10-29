@@ -11,6 +11,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDownIcon, ChevronUpIcon, ImageOff, Play } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { cn } from '@/lib/utils';
@@ -117,7 +118,7 @@ function RailSkeleton() {
   return (
     <div className="flex items-center gap-2 px-3 py-2">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-14 w-14 shrink-0 animate-pulse rounded-md bg-muted/40" />
+        <Skeleton key={i} className="h-14 w-14 shrink-0 rounded-md" />
       ))}
     </div>
   );

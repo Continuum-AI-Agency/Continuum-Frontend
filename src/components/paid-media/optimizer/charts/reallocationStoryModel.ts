@@ -159,7 +159,12 @@ export function buildReallocationStory(args: {
 
   const gainers = rows.filter((row) => row.changeAbs > 0.5);
   const losers = rows.filter((row) => row.changeAbs < -0.5);
-  const moved = gainers.reduce((sum, row) => sum + row.changeAbs, 0);
+  // The money that changes hands is the larger side of the ledger. Summing only the raises
+  // printed "Moving $0.00/day from 6 ad sets back to the pool" on a cycle whose six cuts
+  // freed about $1,200/day: with no gainer, the raises sum to nothing.
+  const raised = gainers.reduce((sum, row) => sum + row.changeAbs, 0);
+  const cut = losers.reduce((sum, row) => sum - row.changeAbs, 0);
+  const moved = Math.max(raised, cut);
   const blendedBefore = blendedCost(rows.map((r) => ({ budget: r.current, cost: r.cost })));
   const blendedAfter = blendedCost(rows.map((r) => ({ budget: r.proposed, cost: r.cost })));
   const losersAboveTarget = losers.filter((row) => row.standing === 'above').length;

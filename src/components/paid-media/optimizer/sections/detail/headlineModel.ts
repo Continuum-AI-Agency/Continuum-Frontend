@@ -26,6 +26,7 @@ import { heroMinImpact, heroThresholdMet, rankCandidates } from '@continuum/cont
 import type { KpiTileState } from '../../components/KpiTile';
 import { type FigureUnit, type FigureWindow, formatCurrency } from '../../format';
 import { spendState, windowState } from '../account/overviewModel';
+import { figureAsOfText } from '../portfolioFigure';
 import type { BeforeAfter } from './beforeAfterModel';
 import type { HeroMismatch, HeroSetting } from './heroHeaderModel';
 import type { HeroView } from './heroModel';
@@ -257,14 +258,17 @@ const percent = (key: string, raw: number, window: FigureWindow): HeadlineFigure
 /**
  * How we are doing: "56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN and
  * 34% cheaper than the week before." With nothing bought the sentence says what was spent
- * for it; with no target it says there is none.
+ * for it; with no target it says there is none. With no read of the whole portfolio
+ * (HeroView.unread) it says that, and no figure: "no spend" is only ever a read zero.
  */
 export function statusSentence(
   growth: BriefGrowth,
   words: { one: string; many: string },
   currency: string | null,
   days: number,
+  unread: HeroView['unread'] = null,
 ): HeadlineSentence {
+  if (unread) return [unread.sentence];
   const window = growth.window;
   const period = `in ${dayWords(days)}`;
   const results = Math.round(growth.results);
@@ -402,7 +406,9 @@ export function opportunitySentence(args: {
 /**
  * The third sentence, only when something blocks a decision: ad sets bidding for a result
  * the portfolio does not measure (the engine holds them), nothing delivered in the window,
- * or spend with no result to read. One at a time, in that order.
+ * or spend with no result to read. One at a time, in that order. The last two read the growth,
+ * so they need it to BE a read of the whole portfolio: with `unread` set, its zeros mean "not
+ * read" and neither is claimed.
  */
 export function blockerSentence(args: {
   growth: BriefGrowth;
@@ -410,6 +416,7 @@ export function blockerSentence(args: {
   words: { one: string; many: string };
   currency: string | null;
   days: number;
+  unread?: HeroView['unread'];
 }): HeadlineBlocker | null {
   const { growth, mismatch, words, currency, days } = args;
   const window = growth.window;
@@ -433,6 +440,7 @@ export function blockerSentence(args: {
       actions: mismatch.actions,
     };
   }
+  if (args.unread) return null;
   const period = dayWords(days);
   if (growth.spend <= 0) {
     return {
@@ -616,7 +624,8 @@ export function buildPortfolioHeadline(args: {
   const growth = view.brief.growth;
   const words = resultNouns(metric.kpiField, metric.resultLabel);
   const days = coveredDays(growth, createdAtOf(report));
-  const status = statusSentence(growth, words, currency, days);
+  const unread = view.unread ?? null;
+  const status = statusSentence(growth, words, currency, days, unread);
   const items = report?.latest_items ?? [];
   const waiting = decisionsWaiting(report, args.portfolio.apply_mode);
   const atStakePerDay =
@@ -631,7 +640,9 @@ export function buildPortfolioHeadline(args: {
       currency,
       words,
     }),
-    blocker: blockerSentence({ growth, mismatch: args.mismatch, words, currency, days }),
+    blocker: blockerSentence({ growth, mismatch: args.mismatch, words, currency, days, unread }),
+    // Unread, the spend, result and cost tiles would print the placeholder zeros; the decisions
+    // waiting are the cycle's own and stay.
     tiles: tilesOf({
       growth,
       words,
@@ -640,7 +651,7 @@ export function buildPortfolioHeadline(args: {
       dailyTotal: args.portfolio.daily_total,
       waiting,
       atStakePerDay,
-    }),
+    }).filter((tile) => !unread || tile.key === 'decisions'),
     read: jainaRead({ view, name: args.portfolio.name, status, growth, currency, now }),
     decisions: { waiting, atStakePerDay },
     days,
@@ -699,6 +710,9 @@ export type PortfolioAnchor = {
   empty: string | null;
   /** The range the date picker selected and the one before it, newest first. */
   windows: AnchorWindow[];
+  /** Set when the figure is the last cycle's snapshot standing in for the live read:
+   *  "as of Oct 15", with its age once it is stale. Null for a live or a range figure. */
+  asOf: { text: string; stale: boolean } | null;
 };
 
 /**
@@ -726,8 +740,11 @@ export function anchorOf(args: {
   currency: string | null;
   days: number;
   beforeAfter: BeforeAfter | null;
+  /** Where the figure came from (HeroView.figure); absent for a range figure. */
+  figure?: HeroView['figure'];
 }): PortfolioAnchor {
   const { growth, words, currency, days } = args;
+  const asOfText = figureAsOfText(args.figure);
   const cost = growth.cost_per_result;
   const target = growth.target != null && growth.target > 0 ? growth.target : null;
   const pct = vsTargetPct(cost, target);
@@ -752,6 +769,7 @@ export function anchorOf(args: {
       pct == null ? null : pct === 0 ? 'on target' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,
     empty: cost == null ? `no ${words.many} in ${dayWords(days)}` : null,
     windows,
+    asOf: asOfText ? { text: asOfText, stale: Boolean(args.figure?.stale) } : null,
   };
 }
 

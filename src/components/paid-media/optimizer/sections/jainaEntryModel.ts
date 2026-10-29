@@ -180,7 +180,8 @@ export function jainaCrossPlatformEntryPrompts(account: JainaAccountContext): Ja
   ];
 }
 
-/** Google Ads: search terms, Search budget limits, Performance Max asset groups, delivery. */
+/** Google Ads: search terms, Search budget limits, Performance Max asset groups, delivery, bid
+ *  targets against the goal, and what changed. */
 export function jainaGoogleAdsEntryPrompts(account: JainaAccountContext): JainaEntry[] {
   const who = `the Google Ads account of the brand behind ${account.accountLabel ? `"${account.accountLabel}"` : 'the active account'}`;
   return [
@@ -203,6 +204,16 @@ export function jainaGoogleAdsEntryPrompts(account: JainaAccountContext): JainaE
       key: 'delivery',
       label: 'Is any campaign not serving?',
       prompt: `For ${who}: is any campaign not serving? Google's own reasons for every campaign that is limited or dark, disapproved ads with their policy topics, and what to fix in Google Ads.`,
+    },
+    {
+      key: 'bidding',
+      label: 'Are the bid targets serving the goal?',
+      prompt: `For ${who}: are the bid targets serving the goal? Each campaign's Google target CPA or ROAS (the bid setting) against what it actually paid over the last 14 days and against its portfolio's CPA goal, which campaigns are still learning, and which target to move by up to 10% once its 14-day cooldown has passed.`,
+    },
+    {
+      key: 'changes',
+      label: 'What changed this week, and did it help?',
+      prompt: `For ${who}: what changed this week, and did it help? Every change in Google's change history over the last 7 days (budgets, bid targets, keywords, ads, status) with who made it, and each changed campaign's cost per conversion in the days before against the days since.`,
     },
   ];
 }

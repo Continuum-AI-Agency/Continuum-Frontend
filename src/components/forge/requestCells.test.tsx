@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { ApiRenderTemplateContract, ApiRenderVariable } from '@continuum/contracts';
+import type {
+  ApiRenderFitVerdict,
+  ApiRenderTemplateContract,
+  ApiRenderVariable,
+} from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CellContext } from '@tanstack/react-table';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import { type RequestRow, seedRow } from '@/components/forge/renderRequestRows';
+import { type RequestRow, rowStatusOf, seedRow } from '@/components/forge/renderRequestRows';
 import {
   type RequestGridMeta,
   type RequestRowActions,
+  StatusCell,
   VariableCell,
 } from '@/components/forge/requestCells';
 
@@ -164,5 +169,99 @@ describe('defaults read apart from typed input', () => {
     expect(screen.getByText('Default').title).toBe(
       'The template’s saved default — switch to replace',
     );
+  });
+});
+
+// The status reads the Live kit's fit (`useLiveFit`), the row's own errors and any refusal the
+// render confirmation found; nothing is fetched.
+describe('the status column, with no preflight', () => {
+  const hero = variable({ key: 'hero', label: 'Hero', kind: 'image', required: false });
+  const renderStatus = (
+    verdicts: Array<Partial<ApiRenderFitVerdict>> | null,
+    {
+      errors = {},
+      refusal,
+      fitLoading = false,
+    }: { errors?: Record<string, string>; refusal?: string; fitLoading?: boolean } = {},
+  ) => {
+    const row = seedRow([], 'Base');
+    const fit = verdicts
+      ? new Map(
+          verdicts.map((verdict) => [
+            'hero',
+            { key: 'hero', subject: 'media', unknownReason: null, ...verdict } as ApiRenderFitVerdict,
+          ]),
+        )
+      : undefined;
+    const meta = {
+      brandId: '22222222-2222-4222-8222-222222222222',
+      contract: { variables: [hero], layout: null } as unknown as ApiRenderTemplateContract,
+      rows: [row],
+      clientErrors: new Map([[row.id, errors]]),
+      actions: recordActions().actions,
+      selectedIds: [],
+      hiddenColumns: 0,
+      generating: false,
+      liveFit: new Map(fit ? [[row.id, fit]] : []),
+      statuses: new Map([[row.id, rowStatusOf(errors, fit, refusal)]]),
+      fitLoading,
+    } satisfies RequestGridMeta;
+    const context = {
+      row: { original: row },
+      table: { options: { meta } },
+    } as unknown as CellContext<RequestRow, unknown>;
+    return render(<StatusCell {...context} />);
+  };
+  const hover = async (label: string) => {
+    const trigger = screen.getByText(label).closest('button')!;
+    fireEvent.mouseEnter(trigger);
+    fireEvent.focus(trigger);
+  };
+
+  test('a fit measured to land reads Ready', () => {
+    renderStatus([{ state: 'ok', why: 'lands inside the canvas' }]);
+    expect(screen.getByText('Ready')).toBeTruthy();
+  });
+
+  test('with no Live kit for the template a row wears no badge: the grid says it once', () => {
+    renderStatus(null);
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.queryByText('Checking')).toBeNull();
+  });
+
+  test('while the kits load, the row says it is checking, not that it is ready', () => {
+    renderStatus(null, { fitLoading: true });
+    expect(screen.getByText('Checking')).toBeTruthy();
+    expect(screen.queryByText('Ready')).toBeNull();
+  });
+
+  test('a refusal the confirmation found reads Rejected, with its reason', async () => {
+    renderStatus([{ state: 'ok', why: 'lands' }], { refusal: 'Use a permitted brand color.' });
+    expect(screen.getByText('Rejected')).toBeTruthy();
+    await hover('Rejected');
+    expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
+  });
+
+  test('a frame placement cannot settle reads "Ready · fit warning", and says why', async () => {
+    renderStatus([{ state: 'unknown', unknownReason: 'rigged', why: 'placed by a rig' }]);
+    expect(screen.queryAllByText('Needs judge')).toHaveLength(0);
+    await hover('Ready · fit warning');
+    expect(
+      await screen.findByText(
+        'An AI model checks the finished frame after it renders, because where an image lands couldn’t be measured.',
+      ),
+    ).toBeTruthy();
+  });
+
+  test('a slot with no measured placement reads "Needs review", and the hover says why', async () => {
+    renderStatus([
+      {
+        state: 'unknown',
+        unknownReason: 'unplaced',
+        why: 'this template has no measured placement for the slot',
+      },
+    ]);
+    await hover('Needs review');
+    expect(await screen.findByText(/Hero/)).toBeTruthy();
   });
 });
