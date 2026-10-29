@@ -252,6 +252,32 @@ describe('what the card tells a person before build', () => {
     expect(openingDailyBudgetOf(tree)).toEqual({ totalMinorUnits: 6199, placeholders: 1 });
   });
 
+  it('under CBO the campaign holds the one budget: no ad set is on the placeholder', () => {
+    const cbo = { ...campaign, budgetMode: 'cbo' as const, campaignDailyBudgetMinorUnits: 25_000 };
+    const held = { ...targeted, dailyBudgetMinorUnits: null };
+    const tree = buildScaffoldTree([cbo, held, untargeted, adWithout, adWith]);
+    expect(tree.campaign?.budget).toEqual({ mode: 'cbo', dailyBudgetMinorUnits: 25_000 });
+    expect(tree.adSets.map((adSet) => adSet.budgetHeldByCampaign)).toEqual([true, true]);
+    expect(openingDailyBudgetOf(tree)).toEqual({ totalMinorUnits: 25_000, placeholders: 0 });
+    const abo = buildScaffoldTree([campaign, targeted, untargeted]);
+    expect(abo.campaign?.budget).toBeNull();
+    expect(abo.adSets.map((adSet) => adSet.budgetHeldByCampaign)).toEqual([false, false]);
+  });
+
+  // Ramiro, 2026-10-29: the Optimizer counts each CBO ad set as an equal share of the
+  // campaign's budget. Every row carries the share, so no view can print a CBO ad set's
+  // figure without the fraction that says it is an estimate.
+  it('under CBO each ad set carries its equal share of the campaign budget; under ABO none', () => {
+    const cbo = { ...campaign, budgetMode: 'cbo' as const, campaignDailyBudgetMinorUnits: 25_000 };
+    const tree = buildScaffoldTree([cbo, { ...targeted, dailyBudgetMinorUnits: null }, untargeted]);
+    expect(tree.adSets.map((adSet) => adSet.campaignBudgetShare)).toEqual([
+      { adSetCount: 2, campaignDailyBudgetMinorUnits: 25_000 },
+      { adSetCount: 2, campaignDailyBudgetMinorUnits: 25_000 },
+    ]);
+    const abo = buildScaffoldTree([campaign, targeted, untargeted]);
+    expect(abo.adSets.map((adSet) => adSet.campaignBudgetShare)).toEqual([null, null]);
+  });
+
   it('flags the ad set build would stop at, and the ad populate cannot fill', () => {
     const tree = buildScaffoldTree([campaign, targeted, untargeted, adWithout, adWith]);
     expect(scaffoldBlockersOf(tree)).toEqual({

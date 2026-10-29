@@ -8,6 +8,7 @@
  * edit made here cannot be refused for them later.
  */
 
+import { paidScaffoldCopiedAudienceSaveIssue } from '@continuum/contracts';
 import { useEffect, useState } from 'react';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,7 +18,7 @@ import {
   type AudienceGroupRead,
   fetchPublishedAudienceGroups,
 } from '@/lib/paid-media/jaina-activity-client';
-import { useCampaignStore } from '../../stores/useCampaignStore';
+import { usePersonEdit } from '../../hooks/usePersonEdit';
 import type { AudienceData, AudienceMode, CampaignCanvasNodeMap } from '../../types';
 import {
   AUDIENCE_AGE_MAX,
@@ -124,7 +125,8 @@ function GroupSummary({ data }: { data: AudienceData }) {
 function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   const { data } = node;
   const { activeBrandId } = useActiveBrandContext();
-  const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const updateNodeData = usePersonEdit();
   const published = usePublishedGroups(activeBrandId, true);
   const pickerId = useFieldId('group');
 
@@ -185,7 +187,8 @@ function GroupPicker({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 
 function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   const { data } = node;
-  const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const updateNodeData = usePersonEdit();
   const update = (patch: Partial<AudienceData>) => updateNodeData(node.id, patch);
   const ids = { min: useFieldId('ageMin'), max: useFieldId('ageMax') };
 
@@ -282,7 +285,8 @@ function BroadTargeting({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
 
 export function AudienceSection({ node }: { node: CampaignCanvasNodeMap['audience'] }) {
   const { data } = node;
-  const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  // A person's edit: it relabels what it changes 'user_gave' (see usePersonEdit).
+  const updateNodeData = usePersonEdit();
   const mode: AudienceMode = data.mode ?? 'broad';
 
   const switchMode = (next: AudienceMode) => {
@@ -307,6 +311,21 @@ export function AudienceSection({ node }: { node: CampaignCanvasNodeMap['audienc
       ageMax: clampAge(data.ageMax ?? AUDIENCE_AGE_MAX),
     });
   };
+
+  // A campaign copy's targeting is a live ad set's, verbatim: the canvas has no field for it,
+  // so it is shown, not edited (a save refuses it by name).
+  if (mode === 'copied') {
+    return (
+      <InspectorSection title="Audience">
+        <p className="text-sm font-medium" data-testid="inspector-audience-copied">
+          {data.label}
+        </p>
+        <p className="text-2xs leading-snug text-muted-foreground">
+          {paidScaffoldCopiedAudienceSaveIssue(data.copiedFromAdSetName ?? data.label)}
+        </p>
+      </InspectorSection>
+    );
+  }
 
   return (
     <>

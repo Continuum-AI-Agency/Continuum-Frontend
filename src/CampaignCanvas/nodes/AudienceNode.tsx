@@ -29,6 +29,7 @@ import { Separator } from '@/components/ui/separator';
 import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
+import { usePersonEdit } from '../hooks/usePersonEdit';
 import type { AudienceData, CampaignNodeProps } from '../types';
 import { AGE_RANGES, LOCATIONS } from '../types/nodeOptions';
 
@@ -36,7 +37,9 @@ import { AGE_RANGES, LOCATIONS } from '../types/nodeOptions';
 const AUDIENCE_HANDLES = { target: false, source: { position: Position.Right } } as const;
 
 export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'audience'>) => {
-  const { duplicateNode, removeNode, updateNodeData } = useCampaignStore();
+  const { duplicateNode, removeNode } = useCampaignStore();
+  // Context-menu edits are a person's: they relabel what they change 'user_gave'.
+  const updateNodeData = usePersonEdit();
   const fedAdSetCount = useCampaignStore(
     (store) => store.edges.filter((edge) => edge.source === id).length,
   );

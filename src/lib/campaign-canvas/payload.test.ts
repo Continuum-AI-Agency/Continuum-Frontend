@@ -4,7 +4,11 @@ import {
   type CampaignCanvasEdge,
   type CampaignCanvasNode,
 } from '@/CampaignCanvas/types';
-import { buildCampaignCanvasPayload, buildCampaignCanvasProposalBlock } from './payload';
+import {
+  buildCampaignCanvasPayload,
+  buildCampaignCanvasProposalBlock,
+  campaignCanvasPayloadSchema,
+} from './payload';
 
 const nodes: CampaignCanvasNode[] = [
   {
@@ -171,5 +175,50 @@ describe('buildCampaignCanvasProposalBlock', () => {
     );
     expect(block).toContain('unattached:');
     expect(block).toContain('audience (unattached) "Local families"');
+  });
+});
+
+describe('P5 options: budget mode, bid, schedule, event, URL tags', () => {
+  it('parses a stored payload written before the options existed', () => {
+    const [campaign] = buildCampaignCanvasPayload([nodes[0]!], []).nodes;
+    const stored = structuredClone(campaign) as { options: Record<string, unknown> };
+    for (const key of ['budgetMode', 'campaignBudgetAmount', 'bidStrategy', 'bidAmount', 'roasFloor']) {
+      delete stored.options[key];
+    }
+    expect(campaignCanvasPayloadSchema.shape.nodes.element.safeParse(stored).success).toBe(true);
+  });
+
+  it('tells Jaina the campaign budget, the bid, the schedule, the event and the URL tags', () => {
+    const p5Nodes: CampaignCanvasNode[] = nodes.map((node) =>
+      node.type === 'campaign'
+        ? {
+            ...node,
+            data: {
+              ...node.data,
+              budgetMode: 'cbo',
+              campaignBudgetAmount: 120,
+              bidStrategy: 'COST_CAP',
+              bidAmount: 15,
+            },
+          }
+        : node.type === 'ad-set'
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                startTime: '2026-11-01T09:00:00-06:00',
+                customEventType: 'PURCHASE',
+                pixelId: '123456789012',
+              },
+            }
+          : node.type === 'ad'
+            ? { ...node, data: { ...node.data, urlTags: 'utm_source=meta' } }
+            : node,
+    );
+    const block = buildCampaignCanvasProposalBlock(buildCampaignCanvasPayload(p5Nodes, edges));
+    expect(block).toContain('budget_mode=cbo campaign_daily_budget=120 bid_strategy=COST_CAP bid_amount=15');
+    expect(block).toContain('start_time=2026-11-01T09:00:00-06:00');
+    expect(block).toContain('custom_event_type=PURCHASE pixel_id=123456789012');
+    expect(block).toContain('url_tags=utm_source=meta');
   });
 });

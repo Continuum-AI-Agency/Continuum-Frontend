@@ -8,7 +8,11 @@ import {
   fetchPaidScaffoldTreeRows,
   type PaidScaffoldHeader,
 } from '@/lib/paid-media/scaffold-tree-client';
-import { buildScaffoldTree, type ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
+import {
+  buildScaffoldTree,
+  type PaidScaffoldNodeRow,
+  type ScaffoldTree,
+} from '@/lib/paid-media/scaffoldTree';
 
 export const PAID_SCAFFOLD_TREE_QUERY_ROOT = 'paid-scaffold-tree';
 
@@ -31,6 +35,11 @@ export function usePaidScaffoldTree(params: {
   settledAt?: string | null;
 }): {
   tree: ScaffoldTree | null;
+  /**
+   * The rows themselves: the tree drops per-node detail (ad copy, URL tags, schedule, who
+   * supplied each field) that the card's field list reads.
+   */
+  rows: readonly PaidScaffoldNodeRow[] | null;
   header: PaidScaffoldHeader | null;
   isLoading: boolean;
   isError: boolean;
@@ -73,6 +82,7 @@ export function usePaidScaffoldTree(params: {
 
   return {
     tree,
+    rows: query.data?.rows ?? null,
     header: query.data?.header ?? null,
     isLoading: query.isLoading,
     isError: query.isError,

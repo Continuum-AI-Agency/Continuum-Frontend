@@ -39,16 +39,18 @@ import {
   ScaffoldAudiences,
   ScaffoldCreatives,
   ScaffoldEvidence,
+  ScaffoldFields,
   ScaffoldSummaryStrip,
 } from './ScaffoldPlanSections';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
 import { ScaffoldTreeCanvas } from './ScaffoldTreeCanvas';
-import { formatDailyBudget } from './scaffoldBudget';
+import { formatAdSetBudget, formatDailyBudget } from './scaffoldBudget';
 import {
   audienceLinesOf,
   creativeTilesOf,
   type DeployBlocker,
   deployBlockersOf,
+  scaffoldFieldGroupsOf,
   scaffoldSummaryOf,
 } from './scaffoldPlanView';
 import { scaffoldCanvasHref, useScaffoldThread } from './scaffoldThreadContext';
@@ -209,8 +211,16 @@ function ScaffoldOutline({ tree, currency }: { tree: ScaffoldTree; currency: str
       data-testid="scaffold-outline"
     >
       {tree.campaign ? (
-        <li className="truncate px-2.5 py-1.5 font-medium" title={tree.campaign.name}>
-          {tree.campaign.name}
+        <li className="flex items-center gap-2 px-2.5 py-1.5 font-medium">
+          <span className="min-w-0 flex-1 truncate" title={tree.campaign.name}>
+            {tree.campaign.name}
+          </span>
+          {/* Under CBO the campaign holds the one budget, so it is said once, here. */}
+          {tree.campaign.budget ? (
+            <span className="shrink-0 font-normal text-muted-foreground text-xs tabular-nums">
+              {formatDailyBudget(tree.campaign.budget.dailyBudgetMinorUnits, currency)}
+            </span>
+          ) : null}
         </li>
       ) : null}
       {tree.adSets.slice(0, OUTLINE_LIMIT).map((adSet) => (
@@ -219,7 +229,7 @@ function ScaffoldOutline({ tree, currency }: { tree: ScaffoldTree; currency: str
             {adSet.name}
           </span>
           <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-            {formatDailyBudget(adSet.dailyBudgetMinorUnits, currency)} · {adSet.ads.length} ad
+            {formatAdSetBudget(adSet, currency)} · {adSet.ads.length} ad
             {adSet.ads.length === 1 ? '' : 's'}
           </span>
           <ScaffoldStatusPill status={adSet.status} />
@@ -270,6 +280,7 @@ export function PaidScaffoldCard({
   onDecide,
   onDeploy,
   onRequestCreative,
+  supersededByVersion,
 }: {
   scaffold: JainaScaffoldState;
   approval: JainaToolApprovalRequiredPayload | null;
@@ -277,6 +288,8 @@ export function PaidScaffoldCard({
   denial: JainaToolOutputDeniedPayload | null;
   optimisticDecision: ScaffoldDecision | null;
   isStreaming: boolean;
+  /** The newer version of this scaffold the thread proposed after this one, if any. */
+  supersededByVersion?: number;
   onRequestCreative?: (query: string) => void;
   onDecide?: (
     approval: JainaToolApprovalRequiredPayload,
@@ -304,6 +317,7 @@ export function PaidScaffoldCard({
 
   const {
     tree: savedTree,
+    rows,
     header,
     isLoading,
     isError,
@@ -346,6 +360,12 @@ export function PaidScaffoldCard({
   );
   const audiences = React.useMemo(() => (plan ? audienceLinesOf(plan) : []), [plan]);
   const creatives = React.useMemo(() => creativeTilesOf(tree, plan), [tree, plan]);
+  // The saved rows, not the live canvas draft: the field list is what the version on screen —
+  // the one "Deploy paused" approves — will build, and who supplied each value of it.
+  const fieldGroups = React.useMemo(
+    () => scaffoldFieldGroupsOf({ plan, rows, currency }),
+    [plan, rows, currency],
+  );
   const blockers = React.useMemo(
     () =>
       deployBlockersOf({
@@ -399,14 +419,21 @@ export function PaidScaffoldCard({
   const expired = approval?.expiresAt ? Date.parse(approval.expiresAt) < Date.now() : false;
   const decided = optimisticDecision ?? (resolution ? resolution.decision : null);
   const approvedOrRunning = decided === 'approve' || decided === 'approved';
-  const liveApproval = Boolean(approval && gate && !decided && !expired);
+  // A version a newer one replaced (a correction in words, a canvas save) can no longer be
+  // deployed — the Backend refuses a version that is not current — so it offers nothing to
+  // approve. Once it has a receipt it is history either way, and the receipt says what happened.
+  const superseded =
+    !scaffold.receipt &&
+    (supersededByVersion !== undefined ||
+      Boolean(header?.currentVersionId && header.currentVersionId !== scaffold.scaffoldId));
+  const liveApproval = Boolean(approval && gate && !decided && !expired && !superseded);
 
   React.useEffect(() => {
     if (approval) setDeployRequested(false);
   }, [approval]);
 
   const deployMode: DeployMode =
-    scaffold.receipt || approvedOrRunning
+    scaffold.receipt || approvedOrRunning || superseded
       ? 'none'
       : liveApproval && onDecide
         ? 'approve'
@@ -456,6 +483,7 @@ export function PaidScaffoldCard({
             label="Paid campaign scaffold"
             right={
               <ScaffoldStatus
+                superseded={superseded ? (supersededByVersion ?? null) : undefined}
                 awaiting={Boolean(approval)}
                 decided={decided}
                 receipt={scaffold.receipt}
@@ -501,7 +529,18 @@ export function PaidScaffoldCard({
 
           <ScaffoldReceiptNotice scaffold={scaffold} />
 
-          {preview && !decided ? (
+          {superseded ? (
+            <p
+              className="rounded-lg bg-background/80 px-3 py-2 text-muted-foreground text-sm"
+              data-testid="scaffold-superseded"
+            >
+              {supersededByVersion !== undefined
+                ? `v${supersededByVersion} replaced this version, so it can no longer be deployed. Review and approve v${supersededByVersion} instead.`
+                : 'A newer version replaced this one, so it can no longer be deployed. Review and approve the newer version instead.'}
+            </p>
+          ) : null}
+
+          {preview && !decided && !superseded ? (
             <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
               <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
               <div className="rounded-lg bg-background/80 px-1 py-1.5">
@@ -513,6 +552,7 @@ export function PaidScaffoldCard({
           <ScaffoldEvidence plan={plan} />
           <ScaffoldAudiences audiences={audiences} />
           <ScaffoldCreatives tiles={creatives} brandId={scaffold.brandId ?? header?.brandId} />
+          <ScaffoldFields groups={fieldGroups} />
 
           {isError ? (
             <p className="text-destructive text-sm">
@@ -579,7 +619,8 @@ export function PaidScaffoldCard({
                 disabled={
                   isStreaming ||
                   !['proposed', 'built'].includes(header.lifecycle ?? 'proposed') ||
-                  Boolean(approval)
+                  Boolean(approval) ||
+                  superseded
                 }
               />
             </>
@@ -702,12 +743,15 @@ function firstCampaignNameOf(plan: unknown): string | null {
 }
 
 function ScaffoldStatus({
+  superseded,
   awaiting,
   decided,
   receipt,
   expired,
   tree,
 }: {
+  /** Set when a newer version replaced this one: its number, or null when only the row knows. */
+  superseded?: number | null;
   /** An approval is open on this card. Propose is ungated, so a bare proposal has none. */
   awaiting: boolean;
   decided: ScaffoldDecision | 'approved' | 'denied' | null;
@@ -728,6 +772,13 @@ function ScaffoldStatus({
     const tone =
       receipt.status === 'completed' ? 'done' : receipt.status === 'partial' ? 'running' : 'failed';
     return <StatusLabel tone={tone}>{receipt.status}</StatusLabel>;
+  }
+  if (superseded !== undefined) {
+    return (
+      <StatusLabel tone="neutral">
+        {superseded === null ? 'Superseded by a newer version' : `Superseded by v${superseded}`}
+      </StatusLabel>
+    );
   }
   if (decided === 'deny' || decided === 'denied') {
     return <StatusLabel tone="neutral">Declined — nothing created</StatusLabel>;

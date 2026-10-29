@@ -8,7 +8,7 @@ import {
 } from '@/lib/paid-media/scaffoldTree';
 import { DerivedEmpty, DerivedValue } from './DerivedValue';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
-import { formatDailyBudget } from './scaffoldBudget';
+import { formatAdSetBudget } from './scaffoldBudget';
 
 /**
  * The ad-set columns.
@@ -68,13 +68,15 @@ export const buildScaffoldAdSetColumns = (
     cell: (row) => (
       <DerivedValue
         reason={
-          typeof row.dailyBudgetMinorUnits !== 'number'
-            ? 'No measured CPA on this account, so build uses the placeholder budget.'
-            : "Sized at propose time from the account's measured CPA."
+          row.budgetHeldByCampaign
+            ? "Held by the campaign (CBO): Meta spends the campaign's daily budget across its ad sets. The figure is this ad set's equal share, an estimate the optimizer counts — not a budget of its own."
+            : typeof row.dailyBudgetMinorUnits !== 'number'
+              ? 'No measured CPA on this account, so build uses the placeholder budget.'
+              : "Sized at propose time from the account's measured CPA."
         }
         className="whitespace-nowrap tabular-nums"
       >
-        {formatDailyBudget(row.dailyBudgetMinorUnits, currency)}
+        {formatAdSetBudget(row, currency)}
       </DerivedValue>
     ),
   },

@@ -5,9 +5,9 @@ import * as React from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
 import { layoutScaffoldTree } from '@/lib/paid-media/scaffoldLayout';
-import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
+import type { CampaignBudgetShare, ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { SCAFFOLD_NODE_TYPES } from './ScaffoldFlowNodes';
-import { formatDailyBudget } from './scaffoldBudget';
+import { formatAdSetBudget, formatDailyBudget } from './scaffoldBudget';
 
 /**
  * The scaffold hierarchy as a graph. Read-only: nothing drags, nothing connects.
@@ -55,13 +55,30 @@ export function ScaffoldTreeCanvas({
               ...node,
               data: {
                 ...node.data,
-                budgetLabel: formatDailyBudget(
-                  node.data.dailyBudgetMinorUnits as number | null,
+                budgetLabel: formatAdSetBudget(
+                  {
+                    dailyBudgetMinorUnits: node.data.dailyBudgetMinorUnits as number | null,
+                    campaignBudgetShare:
+                      (node.data.campaignBudgetShare as CampaignBudgetShare | null | undefined) ??
+                      null,
+                  },
                   currency,
                 ),
               },
             }
-          : node,
+          : node.type === 'scaffoldCampaign' && node.data.budgetHeldByCampaign === true
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  // Under CBO the one budget is the campaign's, said once on its node.
+                  budgetLabel: formatDailyBudget(
+                    node.data.campaignDailyBudgetMinorUnits as number | null,
+                    currency,
+                  ),
+                },
+              }
+            : node,
       ),
     };
   }, [tree, currency]);

@@ -148,6 +148,10 @@ export type JainaForwardableType =
   // 'artifact.delta': that frame means "here is finished media", and a job id is
   // not media.
   | 'paid.creative_render'
+  | 'paid.campaign_structure'
+  // The scaffold planner's one question for the missing budget / objective / audience /
+  // creatives (P5), asked from inside the propose tool, so it travels as a tool event.
+  | 'response.clarification_request'
   | 'adk.event'
   | 'error';
 

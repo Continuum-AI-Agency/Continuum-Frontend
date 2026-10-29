@@ -1,18 +1,20 @@
 'use client';
 
 import type { PaidScaffoldPlan } from '@continuum/contracts';
-import { Film, GalleryHorizontal, ImageIcon, ImageOff } from 'lucide-react';
+import { Copy, Film, GalleryHorizontal, ImageIcon, ImageOff } from 'lucide-react';
 import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Button } from '@/components/ui/button';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
+import { FieldProvenancePill } from './FieldProvenancePill';
 import {
   type AudienceLine,
   type CreativeTile,
   DECISION_LABELS,
   formatMetricValue,
   PROVENANCE_LABELS,
+  type ScaffoldFieldGroup,
   type ScaffoldSummary,
   sourceLabel,
   windowLabel,
@@ -46,9 +48,11 @@ export function ScaffoldSummaryStrip({ summary }: { summary: ScaffoldSummary }) 
       label: 'Daily budget',
       value: budget,
       hint:
-        typeof summary.dailyBudgetMinorUnits === 'number'
-          ? 'Total across ad sets'
-          : 'No measured CPA yet',
+        typeof summary.dailyBudgetMinorUnits !== 'number'
+          ? 'No measured CPA yet'
+          : summary.budgetHeldByCampaign
+            ? 'Campaign budget (CBO)'
+            : 'Total across ad sets',
     },
     {
       key: 'expected',
@@ -202,7 +206,11 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
                 {audience.name}
               </span>
               <span className="shrink-0 text-muted-foreground text-xs">
-                {audience.kind === 'group' ? 'Published group' : 'Broad'}
+                {audience.kind === 'group'
+                  ? 'Published group'
+                  : audience.kind === 'copied'
+                    ? 'Copied'
+                    : 'Broad'}
               </span>
             </div>
             <p className="flex flex-wrap gap-x-1.5 text-muted-foreground text-xs">
@@ -243,19 +251,19 @@ const FORMAT_ICON = { image: ImageIcon, video: Film, carousel: GalleryHorizontal
 const TILE_LIMIT = 8;
 
 function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: string }) {
-  const Icon = tile.format ? FORMAT_ICON[tile.format] : ImageOff;
+  const Icon = tile.format ? FORMAT_ICON[tile.format] : tile.reusedCreativeId ? Copy : ImageOff;
   const [broken, setBroken] = React.useState(false);
   const src = broken ? null : (tile.thumbnails[0] ?? signedUrl ?? null);
   return (
     <li
       className="flex w-16 flex-col gap-1"
       data-testid="scaffold-creative"
-      data-format={tile.format ?? 'none'}
+      data-format={tile.format ?? (tile.reusedCreativeId ? 'reused' : 'none')}
     >
       <div
         className={cn(
           'relative flex size-16 items-center justify-center overflow-hidden rounded-md bg-muted',
-          !tile.format && 'border border-dashed',
+          !tile.format && !tile.reusedCreativeId && 'border border-dashed',
         )}
       >
         {src ? (
@@ -277,7 +285,7 @@ function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: st
         ) : null}
       </div>
       <span className="truncate text-muted-foreground text-xs" title={tile.adName}>
-        {tile.format ? tile.adName : 'No creative'}
+        {tile.format || tile.reusedCreativeId ? tile.adName : 'No creative'}
       </span>
     </li>
   );
@@ -315,6 +323,86 @@ export function ScaffoldCreatives({
           </li>
         ) : null}
       </ul>
+    </section>
+  );
+}
+
+const LEVEL_LABELS: Record<ScaffoldFieldGroup['level'], string> = {
+  campaign: 'Campaign',
+  adset: 'Ad set',
+  ad: 'Ad',
+};
+
+/** Campaign, its first ad set and that ad set's ads: enough to read the shape, not a wall. */
+const FIELD_GROUP_PREVIEW = 4;
+
+/**
+ * Every field the version will build, node by node, each with who supplied it — so a person
+ * approving "Deploy paused" can see what they said, what Jaina decided for them, and what is
+ * still an open question, before anything reaches Meta.
+ */
+export function ScaffoldFields({ groups }: { groups: ScaffoldFieldGroup[] }) {
+  const [expanded, setExpanded] = React.useState(false);
+  if (groups.length === 0) return null;
+  const shown = expanded ? groups : groups.slice(0, FIELD_GROUP_PREVIEW);
+  const hidden = groups.length - shown.length;
+  return (
+    <section className="flex flex-col gap-1.5" data-testid="scaffold-fields">
+      <SectionHeading>Every field</SectionHeading>
+      <ul className="flex flex-col gap-2">
+        {shown.map((group) => (
+          <li
+            key={group.pathKey}
+            className={cn(
+              'rounded-xl bg-background/80 px-3 py-2.5',
+              group.level === 'adset' && 'ml-2',
+              group.level === 'ad' && 'ml-4',
+            )}
+            data-testid="scaffold-field-group"
+            data-path={group.pathKey}
+          >
+            <p className="mb-1.5 flex items-baseline gap-1.5 text-xs">
+              <span className="text-muted-foreground">{LEVEL_LABELS[group.level]}</span>
+              <span className="min-w-0 truncate font-medium text-foreground" title={group.name}>
+                {group.name}
+              </span>
+            </p>
+            <dl className="flex flex-col divide-y divide-foreground/5">
+              {group.lines.map((line) => (
+                <div
+                  key={`${line.key}:${line.label}`}
+                  className="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-center gap-x-3 py-1.5"
+                  data-testid="scaffold-field"
+                  data-path={group.pathKey}
+                  data-key={line.key}
+                >
+                  <dt className="text-muted-foreground text-xs">{line.label}</dt>
+                  <dd
+                    className="min-w-0 truncate text-foreground text-sm tabular-nums"
+                    title={line.value}
+                  >
+                    {line.value}
+                  </dd>
+                  <dd>
+                    <FieldProvenancePill provenance={line.provenance} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 || expanded ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 self-start px-2 text-muted-foreground"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+        </Button>
+      ) : null}
     </section>
   );
 }

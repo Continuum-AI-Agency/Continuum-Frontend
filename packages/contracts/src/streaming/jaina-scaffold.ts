@@ -18,6 +18,7 @@
 
 import { z } from 'zod';
 import { paidScaffoldPlanSchema } from '../paid/scaffold-plan';
+import { jainaApprovalVariantSchema } from './jaina-approval';
 
 export const jainaPublicationModeSchema = z.enum(['publish_and_enroll', 'publish_only']);
 export type JainaPublicationMode = z.infer<typeof jainaPublicationModeSchema>;
@@ -35,6 +36,8 @@ export const jainaApprovalPreviewRowSchema = z.object({
   /** Percent change when both sides are numbers — 25 means +25%. */
   changePct: z.number().nullable().optional(),
   unit: z.string().optional(),
+  /** The signed money difference as a person reads it — "+$50.00 MXN". Absent off money rows. */
+  difference: z.string().optional(),
 });
 
 /**
@@ -48,6 +51,12 @@ export const jainaApprovalPreviewSchema = z.object({
   /** The thing being changed, for the header — e.g. "Ad set 1234 · Summer Sale". */
   subject: z.string().optional(),
   rows: z.array(jainaApprovalPreviewRowSchema),
+  /**
+   * Set when the tool would refuse this call after the click, in words a person reads
+   * ("this ad set optimizes for purchases made in a message conversation…"). The card
+   * states it and offers no approval, so nobody approves a write that cannot happen.
+   */
+  blocked: z.string().min(1).optional(),
 });
 export type JainaApprovalPreview = z.infer<typeof jainaApprovalPreviewSchema>;
 
@@ -306,5 +315,11 @@ export const jainaToolActionSchema = z.object({
   reason: z.string().max(500).optional(),
   /** Human-selected scope reduction for paid_scaffold_publish; never changes signed arguments. */
   publication_mode: jainaPublicationModeSchema.optional(),
+  /**
+   * Which of the tool's declared approvals the person chose (`JAINA_APPROVAL_VARIANTS_BY_TOOL`,
+   * ./jaina-approval). Like `publication_mode` it only narrows what runs inside the signed
+   * arguments; a variant the tool does not declare is refused server-side.
+   */
+  approval_variant: jainaApprovalVariantSchema.optional(),
 });
 export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;

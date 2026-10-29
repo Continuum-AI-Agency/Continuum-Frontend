@@ -26,6 +26,7 @@ import {
   type PlatformSignals,
 } from '@continuum/contracts';
 import { DARK_DAYS_THRESHOLD } from '../delivery';
+import { evaluateAccountDetectors } from './accountDetectors';
 import type { OptimizationObjective, WindowMetrics } from '../types';
 import {
   type CreativeSibling,
@@ -126,6 +127,22 @@ export const PLATFORM_SIGNAL_RULES = [
   'T7',
   'T11',
   'T12',
+  // P8 account detectors (accountDetectors.ts).
+  'acct_inflated_primary_conversion',
+  'acct_brand_vs_nonbrand',
+  'acct_capped_budget_locked',
+  'acct_pmax_rescue_or_pause',
+  'acct_quality_score_by_service',
+  'acct_continuity_calendar',
+  'acct_paused_beat_active',
+  'acct_conversion_value_map',
+  'acct_competitor_terms',
+  'acct_google_recommendations_filtered',
+  'acct_client_executes_checklist',
+  'acct_device_split',
+  'acct_intent_negatives',
+  'acct_course_line_split',
+  'acct_lead_to_sale_funnel',
 ] as const;
 
 export type PlatformSignalRule = (typeof PLATFORM_SIGNAL_RULES)[number];
@@ -256,6 +273,9 @@ class Run {
     this.recommendations.push({ ...r, needsApproval: true });
   }
 }
+
+/** The run's shape, for the P8 account detectors (accountDetectors.ts). */
+export type { Run };
 
 function results(m: WindowMetrics | undefined, kpiField: keyof WindowMetrics): number {
   return ((m?.[kpiField] as number | undefined) ?? 0) || 0;
@@ -1680,6 +1700,7 @@ export function evaluatePlatformSignals(
     g07BidTarget(run, google, context.kpiField);
     pmaxCoverage(run, google);
     g12Delivery(run, google);
+    evaluateAccountDetectors(run, google);
   }
   if (signals.tiktok) {
     const tiktok = signals.tiktok;

@@ -15,14 +15,20 @@
 
 import {
   PAID_SCAFFOLD_AUTOPILOT_SCOPES_OFF,
+  PAID_SCAFFOLD_BID_STRATEGIES,
+  PAID_SCAFFOLD_CAPPED_BID_STRATEGIES,
+  type PaidScaffoldBidStrategy,
   type PaidScaffoldBroadTargeting,
   type PaidScaffoldCreative,
   type PaidScaffoldDraftNode,
   type PaidScaffoldVersionSaveRequest,
   type PaidScaffoldVersionSaveResponse,
+  paidScaffoldCopiedAudienceSaveIssue,
+  paidScaffoldFullFieldIssues,
   paidScaffoldVersionSaveErrorSchema,
   paidScaffoldVersionSaveRequestSchema,
   paidScaffoldVersionSaveResponseSchema,
+  toMinorUnits,
 } from '@continuum/contracts';
 import type {
   AdData,
@@ -37,6 +43,7 @@ import { collectOrphanNodes } from '@/CampaignCanvas/validation/orphanRelationsh
 import { ApiError } from '@/lib/api/errors';
 import { http } from '@/lib/api/http';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
+import { AUDIENCE_MARK, CREATIVE_MARK, draftFieldProvenance } from './fieldProvenance';
 import type { CanvasHydration } from './hydrate';
 
 /** A save the canvas cannot even send, named per node so the person can fix it. */
@@ -179,6 +186,146 @@ const EMPTY_NODE: Omit<
   description: null,
   call_to_action_type: null,
   creative: null,
+  budget_mode: null,
+  campaign_daily_budget_minor_units: null,
+  bid_strategy: null,
+  bid_amount_minor_units: null,
+  roas_floor: null,
+  start_time: null,
+  end_time: null,
+  custom_event_type: null,
+  pixel_id: null,
+  url_tags: null,
+  field_provenance: null,
+};
+
+/**
+ * The canvas value when the node holds the key, else the row's. `undefined` is a node hydrated
+ * (or persisted) before the field was editable — the same fallback `placementOf` makes; `null`
+ * is a person clearing it, and is sent as null.
+ */
+const kept = <T>(edited: T | null | undefined, stored: T | null | undefined): T | null =>
+  edited === undefined ? (stored ?? null) : edited;
+
+/** A MAJOR-unit amount on the canvas as the minor units Meta takes; blank or <= 0 is unset. */
+const minorOf = (amount: number | null | undefined, currency: string | null | undefined) =>
+  typeof amount === 'number' && Number.isFinite(amount) && amount > 0
+    ? toMinorUnits(amount, currency)
+    : null;
+
+/** An amount the person edited, else the row's minor units as stored. */
+const keptMinor = (
+  edited: number | null | undefined,
+  stored: number | null | undefined,
+  currency: string | null | undefined,
+): number | null => (edited === undefined ? (stored ?? null) : minorOf(edited, currency));
+
+const asBidStrategy = (value: unknown): PaidScaffoldBidStrategy | null =>
+  PAID_SCAFFOLD_BID_STRATEGIES.includes(value as PaidScaffoldBidStrategy)
+    ? (value as PaidScaffoldBidStrategy)
+    : null;
+
+const isCapped = (strategy: PaidScaffoldBidStrategy | null): boolean =>
+  strategy !== null && PAID_SCAFFOLD_CAPPED_BID_STRATEGIES.includes(strategy);
+
+type BidKeys = Pick<
+  PaidScaffoldDraftNode,
+  'bid_strategy' | 'bid_amount_minor_units' | 'roas_floor'
+>;
+
+const NO_BID: BidKeys = { bid_strategy: null, bid_amount_minor_units: null, roas_floor: null };
+
+/** The bid a campaign (under CBO) or an ad set (under ABO) holds, as the canvas shows it. */
+const bidOf = (
+  data: CampaignData | AdSetData,
+  row: PaidScaffoldNodeRow | undefined,
+  currency: string | null | undefined,
+): BidKeys => ({
+  bid_strategy: asBidStrategy(kept(data.bidStrategy, row?.bidStrategy)),
+  bid_amount_minor_units: keptMinor(data.bidAmount, row?.bidAmountMinorUnits, currency),
+  roas_floor: kept(data.roasFloor, row?.roasFloor),
+});
+
+/** Free text a person may clear: blank is "not set". */
+const keptText = (edited: string | null | undefined, stored: string | null | undefined) => {
+  const value = kept(edited, stored);
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+};
+
+/**
+ * The campaign's P5 keys. Under ABO (the default) it holds no budget and no bid, whatever a
+ * hidden field still holds from before the switch — the inspector only shows those under CBO,
+ * so a value nobody can see must not be what refuses the save.
+ */
+export const campaignFieldsOf = (
+  data: CampaignData,
+  row: PaidScaffoldNodeRow | undefined,
+  currency: string | null | undefined,
+): Pick<PaidScaffoldDraftNode, 'budget_mode' | 'campaign_daily_budget_minor_units'> &
+  BidKeys => {
+  const budgetMode = kept(data.budgetMode, row?.budgetMode);
+  if (budgetMode !== 'cbo') {
+    return { budget_mode: budgetMode, campaign_daily_budget_minor_units: null, ...NO_BID };
+  }
+  return {
+    budget_mode: 'cbo',
+    campaign_daily_budget_minor_units: keptMinor(
+      data.campaignBudgetAmount,
+      row?.campaignDailyBudgetMinorUnits,
+      currency,
+    ),
+    ...bidOf(data, row, currency),
+  };
+};
+
+/**
+ * An ad set's P5 keys, given its campaign's. Under CBO it carries no strategy of its own and
+ * keeps its own cap only when the campaign's strategy is capped (Meta's per-ad-set cap);
+ * anything else is a value the inspector hides there.
+ */
+export const adSetFieldsOf = (
+  data: AdSetData,
+  row: PaidScaffoldNodeRow | undefined,
+  campaign: ReturnType<typeof campaignFieldsOf>,
+  currency: string | null | undefined,
+): BidKeys &
+  Pick<PaidScaffoldDraftNode, 'start_time' | 'end_time' | 'custom_event_type' | 'pixel_id'> => {
+  const bid = bidOf(data, row, currency);
+  const cbo = campaign.budget_mode === 'cbo';
+  return {
+    ...(cbo
+      ? {
+          ...NO_BID,
+          bid_amount_minor_units: isCapped(campaign.bid_strategy)
+            ? bid.bid_amount_minor_units
+            : null,
+        }
+      : bid),
+    start_time: keptText(data.startTime, row?.startTime),
+    end_time: keptText(data.endTime, row?.endTime),
+    custom_event_type: kept(data.customEventType, row?.customEventType),
+    pixel_id: keptText(data.pixelId, row?.pixelId),
+  };
+};
+
+/**
+ * The cross-node field rules (`paidScaffoldFullFieldIssues`), each said with the node's NAME:
+ * the contract names `adset c0/a1`, a path key the canvas never shows anyone.
+ */
+export const namedFieldIssues = (
+  nodes: readonly Pick<PaidScaffoldDraftNode, 'level' | 'path_key' | 'name'>[],
+  issues: readonly string[],
+): string[] => {
+  const wheres = nodes
+    .map((node) => ({ where: `${node.level} ${node.path_key}`, name: node.name }))
+    .sort((left, right) => right.where.length - left.where.length);
+  return issues.map((issue) => {
+    const match = wheres.find(
+      ({ where }) => issue.startsWith(where) && /^[\s:]/.test(issue.slice(where.length)),
+    );
+    if (!match) return issue;
+    return `${match.name}: ${issue.slice(match.where.length).replace(/^:?\s*/, '')}`;
+  });
 };
 
 const nonEmpty = (values: string[] | undefined): string[] | null =>
@@ -212,12 +359,96 @@ const placementOf = (adSet: AdSetData, row: PaidScaffoldNodeRow | undefined) => 
   };
 };
 
+/**
+ * The field rules for ONE node, as the inspector shows them beside the fields they are about —
+ * the same `paidScaffoldFullFieldIssues` the save refuses by, run on just this node (and, for an
+ * ad set, the campaign whose budget mode decides its rules), so a field the inspector calls fine
+ * is one the save keeps. Each issue comes back without the node prefix: the inspector is
+ * already the node.
+ */
+export function inlineFieldIssues(params: {
+  nodeId: string;
+  nodes: readonly CampaignCanvasNode[];
+  edges: readonly CampaignCanvasEdge[];
+  hydration: CanvasHydration | null;
+  now?: number;
+}): string[] {
+  const { nodeId, nodes, edges, hydration, now = Date.now() } = params;
+  const node = nodes.find((entry) => entry.id === nodeId);
+  if (!node) return [];
+  const rowOf = (entry: CampaignCanvasNode | undefined) =>
+    entry?.data.provenance ? hydration?.sourceRows[entry.data.provenance.sourceId] : undefined;
+  const campaignNode =
+    node.type === 'campaign'
+      ? node
+      : (nodes.find(
+          (entry) =>
+            entry.type === 'campaign' &&
+            edges.some((edge) => edge.source === entry.id && edge.target === nodeId),
+        ) ?? nodes.find((entry) => entry.type === 'campaign'));
+  const campaignData = (campaignNode?.data ?? {}) as CampaignData;
+  const currency =
+    hydration?.plan?.currency ??
+    campaignData.budgetCurrency ??
+    (node.data as AdSetData).budgetCurrency ??
+    null;
+  const campaign = campaignFieldsOf(campaignData, rowOf(campaignNode), currency);
+  const base = { ...EMPTY_NODE, ordinal: 0, name: 'node' };
+  const campaignInput: PaidScaffoldDraftNode = {
+    ...base,
+    ...campaign,
+    path_key: 'campaign',
+    parent_path_key: null,
+    level: 'campaign',
+  };
+
+  let inputs: PaidScaffoldDraftNode[];
+  let where: string;
+  if (node.type === 'campaign') {
+    inputs = [campaignInput];
+    where = 'campaign campaign';
+  } else if (node.type === 'ad-set') {
+    const data = node.data as AdSetData;
+    inputs = [
+      campaignInput,
+      {
+        ...base,
+        path_key: 'adset',
+        parent_path_key: 'campaign',
+        level: 'adset',
+        optimization_goal: data.optimizationGoal || null,
+        ...adSetFieldsOf(data, rowOf(node), campaign, currency),
+      },
+    ];
+    where = 'adset adset';
+  } else if (node.type === 'ad') {
+    const data = node.data as AdData;
+    inputs = [
+      {
+        ...base,
+        path_key: 'ad',
+        parent_path_key: null,
+        level: 'ad',
+        url_tags: keptText(data.urlTags, rowOf(node)?.urlTags),
+      },
+    ];
+    where = 'ad ad';
+  } else {
+    return [];
+  }
+  return paidScaffoldFullFieldIssues(inputs, now)
+    .filter((issue) => issue.startsWith(where) && /^[\s:]/.test(issue.slice(where.length)))
+    .map((issue) => issue.slice(where.length).replace(/^:?\s*/, ''));
+}
+
 export function buildScaffoldSaveRequest(params: {
   nodes: CampaignCanvasNode[];
   edges: CampaignCanvasEdge[];
   hydration: CanvasHydration;
+  /** The clock an end date is judged against. */
+  now?: number;
 }): PaidScaffoldVersionSaveRequest {
-  const { nodes, edges, hydration } = params;
+  const { nodes, edges, hydration, now = Date.now() } = params;
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const rowOf = (node: CampaignCanvasNode): PaidScaffoldNodeRow | undefined =>
     node.data.provenance ? hydration.sourceRows[node.data.provenance.sourceId] : undefined;
@@ -255,20 +486,46 @@ export function buildScaffoldSaveRequest(params: {
   const plannedBudget = new Map(
     (hydration.plan?.adsets ?? []).map((adSet) => [adSet.path_key, adSet]),
   );
+  const firstAdSet = nodes.find((node) => node.type === 'ad-set')?.data as AdSetData | undefined;
+  // The account's currency, which every amount on the canvas is in.
+  const currency =
+    hydration.plan?.currency ?? campaign.data.budgetCurrency ?? firstAdSet?.budgetCurrency ?? null;
+  const campaignFields = campaignFieldsOf(campaign.data, campaignRow, currency);
+  const cbo = campaignFields.budget_mode === 'cbo';
 
-  const draft: PaidScaffoldDraftNode[] = [
-    {
-      ...EMPTY_NODE,
-      path_key: 'c0',
-      parent_path_key: null,
-      level: 'campaign',
-      ordinal: 0,
-      name: campaign.data.label.trim() || hydration.scaffoldName,
-      objective: objective ?? asString(campaignRow?.payload.objective),
-      // The campaign carries the version's ONE list; [] declares none. Every other level omits it.
-      special_ad_categories: campaign.data.specialAdCategories ?? [],
-    },
-  ];
+  /** The provenance a node is saved with: its own, plus what a person gave elsewhere. */
+  const provenanceFor = (
+    node: CampaignCanvasNode,
+    entry: PaidScaffoldDraftNode,
+    userKeys: string[] = [],
+  ) => {
+    const row = rowOf(node);
+    return draftFieldProvenance({
+      level: entry.level,
+      draft: entry,
+      recorded: node.data.fieldProvenance ?? row?.fieldProvenance ?? null,
+      drawn: !row,
+      userKeys,
+    });
+  };
+  /** A feeding node (audience, creative) a person drew or edited gives its keys to its target. */
+  const gaveThrough = (feeder: CampaignCanvasNode | undefined, mark: string) =>
+    Boolean(feeder && (!feeder.data.provenance || feeder.data.fieldProvenance?.[mark] === 'user_gave'));
+
+  const campaignDraft: PaidScaffoldDraftNode = {
+    ...EMPTY_NODE,
+    ...campaignFields,
+    path_key: 'c0',
+    parent_path_key: null,
+    level: 'campaign',
+    ordinal: 0,
+    name: campaign.data.label.trim() || hydration.scaffoldName,
+    objective: objective ?? asString(campaignRow?.payload.objective),
+    // The campaign carries the version's ONE list; [] declares none. Every other level omits it.
+    special_ad_categories: campaign.data.specialAdCategories ?? [],
+  };
+  campaignDraft.field_provenance = provenanceFor(campaign, campaignDraft);
+  const draft: PaidScaffoldDraftNode[] = [campaignDraft];
 
   targetsOf(campaign.id, 'ad-set').forEach((adSetNode, adSetIndex) => {
     const adSet = adSetNode.data as AdSetData;
@@ -276,8 +533,16 @@ export function buildScaffoldSaveRequest(params: {
     const pathKey = `c0/a${adSetIndex}`;
     const productKey = row?.productKey ?? versionProductKey ?? slug(hydration.scaffoldName);
     const angleKey = row?.angleKey ?? slug(adSet.label);
-    const audience = sourcesOf(adSetNode.id, 'audience')[0]?.data as AudienceData | undefined;
+    const audienceNode = sourcesOf(adSetNode.id, 'audience')[0];
+    const audience = audienceNode?.data as AudienceData | undefined;
     const isGroup = audience?.mode === 'group';
+    // A copied audience is a live ad set's targeting verbatim; no draft field can hold it, so
+    // saving would quietly re-target the ad set. Refused by name, with where to edit it.
+    if (audience?.mode === 'copied') {
+      issues.push(
+        paidScaffoldCopiedAudienceSaveIssue(audience.copiedFromAdSetName ?? audience.label),
+      );
+    }
     // A group node with no group picked would otherwise fall through to broad targeting built
     // from whatever the hidden broad fields still held.
     if (audience && isGroup && !audience.audienceGroupVersionId) {
@@ -286,11 +551,8 @@ export function buildScaffoldSaveRequest(params: {
       );
     }
 
-    const budgetMinor =
-      typeof adSet.budgetAmount === 'number' && adSet.budgetAmount > 0
-        ? // ponytail: assumes a 2-decimal currency; zero-decimal accounts (JPY, CLP) need the ISO exponent.
-          Math.round(adSet.budgetAmount * 100)
-        : null;
+    // Under CBO the campaign holds the budget: an ad set sends none, whatever it still shows.
+    const budgetMinor = cbo ? null : minorOf(adSet.budgetAmount, adSet.budgetCurrency ?? currency);
     // An untouched derived budget is sent as null so the compiler re-derives it and keeps
     // calling it derived; a changed one is the person's, and says so in the evidence.
     const planned = row ? plannedBudget.get(row.pathKey) : undefined;
@@ -299,9 +561,10 @@ export function buildScaffoldSaveRequest(params: {
       row?.dailyBudgetMinorUnits === budgetMinor &&
       planned?.budget_source !== 'user';
 
-    draft.push({
+    const adSetDraft: PaidScaffoldDraftNode = {
       ...EMPTY_NODE,
       ...placementOf(adSet, row),
+      ...adSetFieldsOf(adSet, row, campaignFields, currency),
       path_key: pathKey,
       parent_path_key: 'c0',
       level: 'adset',
@@ -315,13 +578,22 @@ export function buildScaffoldSaveRequest(params: {
       audience_group_version_id: isGroup ? (audience?.audienceGroupVersionId ?? null) : null,
       broad_targeting: audience && !isGroup ? broadTargetingOf(audience) : null,
       daily_budget_minor_units: untouched ? null : budgetMinor,
-    });
+    };
+    adSetDraft.field_provenance = provenanceFor(
+      adSetNode,
+      adSetDraft,
+      gaveThrough(audienceNode, AUDIENCE_MARK)
+        ? [isGroup ? 'audience_group_version_id' : 'broad_targeting']
+        : [],
+    );
+    draft.push(adSetDraft);
 
     targetsOf(adSetNode.id, 'ad').forEach((adNode, adIndex) => {
       const ad = adNode.data as AdData;
       const adRow = rowOf(adNode);
-      const creative = targetsOf(adNode.id, 'creative')[0]?.data as CreativeData | undefined;
-      draft.push({
+      const creativeNode = targetsOf(adNode.id, 'creative')[0];
+      const creative = creativeNode?.data as CreativeData | undefined;
+      const adDraft: PaidScaffoldDraftNode = {
         ...EMPTY_NODE,
         path_key: `${pathKey}/ad${adIndex}`,
         parent_path_key: pathKey,
@@ -337,9 +609,18 @@ export function buildScaffoldSaveRequest(params: {
         description: text(ad.description, 255),
         call_to_action_type: ad.callToAction || null,
         creative: creativeOf(creative, issues),
-      });
+        url_tags: keptText(ad.urlTags, adRow?.urlTags),
+      };
+      adDraft.field_provenance = provenanceFor(
+        adNode,
+        adDraft,
+        adDraft.creative && gaveThrough(creativeNode, CREATIVE_MARK) ? ['creative'] : [],
+      );
+      draft.push(adDraft);
     });
   });
+
+  issues.push(...namedFieldIssues(draft, paidScaffoldFullFieldIssues(draft, now)));
 
   if (issues.length > 0) {
     throw new CanvasSaveError('This canvas cannot be saved yet.', issues);

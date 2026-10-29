@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
+import { usePersonEdit } from '../hooks/usePersonEdit';
 import type {
   AdData,
   AdFormat,
@@ -46,8 +47,9 @@ import {
 import { AD_FORMATS, CALL_TO_ACTIONS } from '../types/nodeOptions';
 
 export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => {
-  const { duplicateNode, removeNode, updateNodeData, addConnectedNode, nodes, edges } =
-    useCampaignStore();
+  const { duplicateNode, removeNode, addConnectedNode, nodes, edges } = useCampaignStore();
+  // Context-menu edits are a person's: they relabel what they change 'user_gave'.
+  const updateNodeData = usePersonEdit();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);

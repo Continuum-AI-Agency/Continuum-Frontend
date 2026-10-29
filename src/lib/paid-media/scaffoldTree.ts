@@ -9,6 +9,12 @@
  * walk one backwards.
  */
 
+import type {
+  FieldProvenance,
+  PaidScaffoldBidStrategy,
+  PaidScaffoldBudgetMode,
+  PaidScaffoldConversionEvent,
+} from '@continuum/contracts';
 import type { JainaScaffoldNodeProgress } from '@/lib/jaina/scaffoldTypes';
 
 export type ScaffoldNodeStatus =
@@ -41,6 +47,24 @@ export type PaidScaffoldNodeRow = {
   creativeMedia: Record<string, unknown> | null;
   /** Ad sets only. Jaina's opening budget; null builds on the placeholder. */
   dailyBudgetMinorUnits: number | null;
+  /*
+   * P5 columns, named after the draft-node keys they store. OPTIONAL and null-when-absent:
+   * the Frontend ships before the migration that adds them, and a row read before it (or a
+   * draft row the canvas builds) carries none — every reader treats undefined as null, "not
+   * set", which builds exactly what was built before.
+   */
+  budgetMode?: PaidScaffoldBudgetMode | null;
+  campaignDailyBudgetMinorUnits?: number | null;
+  bidStrategy?: PaidScaffoldBidStrategy | null;
+  bidAmountMinorUnits?: number | null;
+  roasFloor?: number | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  customEventType?: PaidScaffoldConversionEvent | null;
+  pixelId?: string | null;
+  urlTags?: string | null;
+  /** Who supplied each field, keyed by draft-node key. Presentation only, never hashed. */
+  fieldProvenance?: Record<string, FieldProvenance> | null;
 };
 
 /**
@@ -80,6 +104,19 @@ export type ScaffoldAdRow = {
   /** Set once a Library asset is attached through paid_scaffold_attach_creative. */
   creativeAssetId: string | null;
   creativeMedia: Record<string, unknown> | null;
+  /** A campaign copy's ad: the source ad's Meta creative it is created on. Nothing to attach. */
+  sourceCreativeId?: string | null;
+};
+
+/**
+ * What a CBO ad set's figure is made of. It has no budget of its own; when the Optimizer
+ * enrolls it, it counts an EQUAL share of the campaign's (Ramiro, 2026-10-29) so portfolio
+ * totals add back up to the campaign figure. Meta decides the real split, so the share is an
+ * estimate and is printed as one (`formatCampaignBudgetShare`).
+ */
+export type CampaignBudgetShare = {
+  adSetCount: number;
+  campaignDailyBudgetMinorUnits: number | null;
 };
 
 export type ScaffoldAdSetRow = {
@@ -95,6 +132,10 @@ export type ScaffoldAdSetRow = {
   attempt: number;
   /** Derived from the account's measured CPA at propose time; null = build placeholder. */
   dailyBudgetMinorUnits: number | null;
+  /** Under a CBO campaign: this ad set spends the campaign's budget, so its own is null. */
+  budgetHeldByCampaign: boolean;
+  /** Under CBO: the equal share of the campaign's budget the Optimizer counts for it. */
+  campaignBudgetShare: CampaignBudgetShare | null;
   choices: ScaffoldChoices;
   derived: ScaffoldDerived;
   ads: ScaffoldAdRow[];
@@ -106,6 +147,8 @@ export type ScaffoldCampaignRow = {
   name: string;
   status: ScaffoldNodeStatus;
   metaObjectId: string | null;
+  /** Set under CBO only: the one daily budget Meta spends, held here for every ad set. */
+  budget: { mode: 'cbo'; dailyBudgetMinorUnits: number | null } | null;
   choices: ScaffoldChoices;
   derived: ScaffoldDerived;
 };
@@ -249,6 +292,7 @@ export const buildScaffoldTree = (
     effectiveScaffoldStatus(row.status, overlay[row.pathKey]);
 
   const campaignRow = rows.find((row) => row.level === 'campaign') ?? null;
+  const cbo = campaignRow?.budgetMode === 'cbo';
   const adSetsById = new Map<string, ScaffoldAdSetRow>();
 
   for (const row of rows) {
@@ -265,6 +309,8 @@ export const buildScaffoldTree = (
       errorMessage: row.errorMessage,
       attempt: row.attempt,
       dailyBudgetMinorUnits: row.dailyBudgetMinorUnits,
+      budgetHeldByCampaign: cbo,
+      campaignBudgetShare: null,
       choices: choicesOf(row.payload),
       derived: derivedOf(row.payload),
       ads: [],
@@ -284,11 +330,19 @@ export const buildScaffoldTree = (
       errorMessage: row.errorMessage,
       creativeAssetId: row.creativeAssetId,
       creativeMedia: row.creativeMedia,
+      sourceCreativeId: readString(row.payload, 'source_creative_id') ?? null,
     });
   }
 
   const adSets = [...adSetsById.values()].sort((left, right) => left.ordinal - right.ordinal);
   for (const adSet of adSets) adSet.ads.sort((left, right) => left.ordinal - right.ordinal);
+  if (cbo) {
+    const share: CampaignBudgetShare = {
+      adSetCount: adSets.length,
+      campaignDailyBudgetMinorUnits: campaignRow?.campaignDailyBudgetMinorUnits ?? null,
+    };
+    for (const adSet of adSets) adSet.campaignBudgetShare = share;
+  }
 
   const everyNodeStatus = [
     ...adSets.map((adSet) => adSet.status),
@@ -304,6 +358,12 @@ export const buildScaffoldTree = (
           name: campaignRow.name,
           status: statusOf(campaignRow),
           metaObjectId: campaignRow.metaObjectId,
+          budget: cbo
+            ? {
+                mode: 'cbo',
+                dailyBudgetMinorUnits: campaignRow.campaignDailyBudgetMinorUnits ?? null,
+              }
+            : null,
           choices: choicesOf(campaignRow.payload),
           derived: derivedOf(campaignRow.payload),
         }
@@ -326,26 +386,36 @@ export const buildScaffoldTree = (
 };
 
 /**
- * The opening daily spend a build would commit, summed over ad sets (ABO: the campaign
- * carries none). `placeholders` counts ad sets Jaina had no measured CPA for — those
- * build on the Backend placeholder, which is a number nobody derived, so it is named
- * rather than folded into the total.
+ * The opening daily spend a build would commit: summed over ad sets under ABO, the campaign's
+ * one budget under CBO (its ad sets send none, so none of them is on the placeholder).
+ * `placeholders` counts ABO ad sets Jaina had no measured CPA for — those build on the
+ * Backend placeholder, which is a number nobody derived, so it is named rather than folded
+ * into the total.
  */
 export const openingDailyBudgetOf = (
   tree: ScaffoldTree,
-): { totalMinorUnits: number; placeholders: number } => ({
-  totalMinorUnits: tree.adSets.reduce(
-    (total, adSet) => total + (adSet.dailyBudgetMinorUnits ?? 0),
-    0,
-  ),
-  placeholders: tree.adSets.filter((adSet) => typeof adSet.dailyBudgetMinorUnits !== 'number')
-    .length,
-});
+): { totalMinorUnits: number; placeholders: number } => {
+  const campaignBudget = tree.campaign?.budget;
+  if (campaignBudget) {
+    return {
+      totalMinorUnits: campaignBudget.dailyBudgetMinorUnits ?? 0,
+      placeholders: campaignBudget.dailyBudgetMinorUnits === null ? 1 : 0,
+    };
+  }
+  return {
+    totalMinorUnits: tree.adSets.reduce(
+      (total, adSet) => total + (adSet.dailyBudgetMinorUnits ?? 0),
+      0,
+    ),
+    placeholders: tree.adSets.filter((adSet) => typeof adSet.dailyBudgetMinorUnits !== 'number')
+      .length,
+  };
+};
 
 /**
  * What stops this scaffold short on Meta, read from the rows rather than told by the
  * model. Build parses every ad set's `targeting` and throws on a missing one AFTER the
- * campaign exists; populate needs a Library creative on each ad. Only nodes not yet on
+ * campaign exists; populate needs a Library creative on each ad (a copied ad has its source's). Only nodes not yet on
  * Meta count — a created ad set has already cleared its gate.
  */
 export const scaffoldBlockersOf = (
@@ -358,6 +428,9 @@ export const scaffoldBlockersOf = (
       .map((adSet) => adSet.name),
     adsWithoutCreative: tree.adSets
       .flatMap((adSet) => adSet.ads)
-      .filter((ad) => pending(ad.status) && !ad.creativeAssetId && !ad.creativeMedia).length,
+      .filter(
+        (ad) =>
+          pending(ad.status) && !ad.creativeAssetId && !ad.creativeMedia && !ad.sourceCreativeId,
+      ).length,
   };
 };

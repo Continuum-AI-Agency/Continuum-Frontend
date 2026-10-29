@@ -1,5 +1,21 @@
+import type {
+  FieldProvenance,
+  PaidScaffoldBudgetMode,
+  PaidScaffoldConversionEvent,
+} from '@continuum/contracts';
 import type { Edge, Node, NodeProps } from '@xyflow/react';
 import type { CanvasGate } from '@/lib/paid-media/jaina-activity-client';
+
+/**
+ * Who supplied each field of a node, keyed by the draft-node key the save sends
+ * (`daily_budget_minor_units`, `url_tags`, …) — the row's `field_provenance`, carried on the
+ * node so a person's edit can relabel the field it changed. On an audience or creative node
+ * the only key is `audience` / `creative`: those nodes are not saved as nodes, so their mark
+ * is read off at save onto the ad set / ad they feed.
+ *
+ * Not `CanvasNodeProvenance` below (which record a node is, and the gate in front of it).
+ */
+export type CanvasFieldProvenance = Partial<Record<string, FieldProvenance>>;
 
 /**
  * The Meta-shaped nodes. Their vocabulary (OUTCOME_SALES, AUCTION, optimization goals) is
@@ -90,6 +106,7 @@ export interface BaseCampaignNodeData extends Record<string, unknown> {
   validationErrors?: string[];
   metaId?: string; // ID in Meta Ads Manager
   provenance?: CanvasNodeProvenance;
+  fieldProvenance?: CanvasFieldProvenance;
 }
 
 export interface CampaignData extends BaseCampaignNodeData {
@@ -102,18 +119,55 @@ export interface CampaignData extends BaseCampaignNodeData {
     | 'OUTCOME_APP_PROMOTION';
   buyingType: 'AUCTION' | 'RESERVATION';
   specialAdCategories: string[];
+  /*
+   * P5. Absent = the node predates the field (the save falls back to its row); `null` = a
+   * person cleared it. Amounts are MAJOR units, like an ad set's `budgetAmount`, and become
+   * minor units only at the save boundary.
+   */
+  /** Absent or 'abo' = each ad set holds its own budget. */
+  budgetMode?: PaidScaffoldBudgetMode | null;
+  /** CBO only: the campaign's daily budget. */
+  campaignBudgetAmount?: number | null;
+  /** The account currency the campaign's amounts are in. */
+  budgetCurrency?: string;
+  /**
+   * CBO only: the campaign's bid strategy (a `PAID_SCAFFOLD_BID_STRATEGIES` member; the save
+   * narrows it). Typed `string` like the ad set's, because the store merges patches across the
+   * node-data union and two `bidStrategy` types would refuse every merge.
+   */
+  bidStrategy?: string | null;
+  /** CBO + a capped strategy: the cap. */
+  bidAmount?: number | null;
+  /** CBO + LOWEST_COST_WITH_MIN_ROAS: the return floor, 2.5 = 2.5x. */
+  roasFloor?: number | null;
 }
 
 export interface AdSetData extends BaseCampaignNodeData {
   funnelStage?: 'prospecting' | 'retargeting' | 'retention';
   optimizationGoal: string;
   billingEvent: string;
-  bidStrategy?: string;
+  /** ABO only (under CBO the campaign holds it). Absent / null = uncapped. */
+  bidStrategy?: string | null;
+  /** A capped strategy's amount, MAJOR units. Under a capped CBO campaign, this ad set's own cap. */
+  bidAmount?: number | null;
+  /** LOWEST_COST_WITH_MIN_ROAS only: 2.5 = 2.5x. */
+  roasFloor?: number | null;
   budgetType?: 'DAILY' | 'LIFETIME';
   budgetAmount?: number;
   budgetCurrency?: string;
+  /*
+   * ISO-8601 with offset. Absent = the node predates the field; '' = a person cleared it.
+   * A string, not `string | null`: the store spreads patches across the whole node-data union,
+   * and an OpenAI campaign's `startTime?: string` would no longer accept the merge.
+   */
+  /** '' or absent = delivers as soon as it is activated. */
   startTime?: string;
+  /** '' or absent = runs until paused. */
   endTime?: string;
+  /** The pixel event it optimizes for. Absent / null = derived from the objective. */
+  customEventType?: PaidScaffoldConversionEvent | null;
+  /** The pixel it optimizes on. Absent / null = the account's only pixel. */
+  pixelId?: string | null;
   /** Display labels of the placement ('Advantage+', 'facebook', 'fb:feed'); derived. */
   pacingType?: string[];
   placementMode?: PlacementMode;
@@ -132,16 +186,22 @@ export interface AdData extends BaseCampaignNodeData {
   callToAction: string;
   /** The destination URL the ad's link and CTA open. */
   linkUrl?: string;
+  /** Meta's `url_tags`: the bare query string every click carries ("utm_source=meta&…"). */
+  urlTags?: string | null;
 }
 
 /**
  * How an audience node targets. `group` = a PUBLISHED audience group version (its own
  * approval gate already passed); `broad` = explicit countries / age / genders. An ad set
  * with neither is refused at propose time, so every audience node is exactly one of these.
+ * `copied` = a campaign copy's targeting, carried verbatim from a live ad set (cities,
+ * interests, custom audiences); read-only here, and a save refuses it by name.
  */
-export type AudienceMode = 'group' | 'broad';
+export type AudienceMode = 'group' | 'broad' | 'copied';
 
 export interface AudienceData extends BaseCampaignNodeData {
+  /** `copied` only: the live ad set the targeting was copied from, by name. */
+  copiedFromAdSetName?: string;
   /** Absent on a node drawn before modes existed; read as `broad`. */
   mode?: AudienceMode;
   /** `audience_groups.id`, when `mode === 'group'`. */

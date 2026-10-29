@@ -43,7 +43,9 @@ import type {
 } from '@continuum/contracts';
 import {
   AGENT_RUN_QUEUED,
+  isApprovalVariantOffered,
   JAINA_MAX_AD_ACCOUNTS,
+  type JainaApprovalVariant,
   updateAgentSessionTagsResponseSchema,
 } from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -80,6 +82,7 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import type { ToolApprovalDecision } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { supersedingVersionsOf } from '@/components/paid-media/jaina/scaffold/scaffoldSupersession';
 import {
   type ScaffoldThread,
   ScaffoldThreadContext,
@@ -2526,6 +2529,7 @@ export function JainaChatSurface({
       approval: JainaToolApprovalRequiredPayload,
       decision: ToolApprovalDecision,
       publicationMode?: JainaPublicationMode,
+      approvalVariant?: JainaApprovalVariant,
     ) => {
       const gate = SCAFFOLD_GATE_BY_TOOL_NAME[approval.toolName];
       const input = approval.input as { scaffold_version_id?: unknown } | null;
@@ -2553,6 +2557,10 @@ export function JainaChatSurface({
             tool_call_id: approval.toolCallId,
             ...(approval.toolName === 'paid_scaffold_publish' && publicationMode
               ? { publication_mode: publicationMode }
+              : {}),
+            // Only a choice the tool declares travels; the Backend refuses any other.
+            ...(approvalVariant && isApprovalVariantOffered(approval.toolName, approvalVariant)
+              ? { approval_variant: approvalVariant }
               : {}),
           },
         };
@@ -2688,6 +2696,14 @@ export function JainaChatSurface({
     }
     return null;
   }, [messages]);
+  // A correction in words saves a new version and a new card; the older cards say so.
+  const supersededScaffoldVersions = React.useMemo(
+    () =>
+      supersedingVersionsOf(
+        messages.flatMap((message) => (message.scaffold ? [message.scaffold] : [])),
+      ),
+    [messages],
+  );
   const focusedScaffoldRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!onScaffoldFocus || !latestScaffold) return;
@@ -3023,6 +3039,14 @@ export function JainaChatSurface({
                         onRegenerate={submitFromTranscript}
                         regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
                         onOpenAccountRead={onOpenAccountRead}
+                        {...(message.scaffold &&
+                        supersededScaffoldVersions.has(message.scaffold.scaffoldId)
+                          ? {
+                              scaffoldSupersededByVersion: supersededScaffoldVersions.get(
+                                message.scaffold.scaffoldId,
+                              ),
+                            }
+                          : {})}
                       />
                       {milestonesForJainaMessage(message).map((milestone) => (
                         <ChatMarker

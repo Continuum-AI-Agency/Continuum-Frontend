@@ -40,6 +40,8 @@ type CampaignData = {
   status: ScaffoldNodeStatus;
   adSetCount: number;
   adCount: number;
+  /** Under CBO only: the campaign's budget, formatted by the canvas. */
+  budgetLabel?: string;
   metaObjectId: string | null;
   choices?: ScaffoldChoices;
   derived?: ScaffoldDerived;
@@ -118,7 +120,8 @@ export const ScaffoldCampaignNode = memo(function ScaffoldCampaignNode({
           <NodeTitle className="truncate">{data.name}</NodeTitle>
         </NodeHeader>
         <NodeContent className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {data.budgetLabel ? `${data.budgetLabel} · ` : ''}
             {data.adSetCount} ad sets · {data.adCount} ads
           </span>
           <ScaffoldStatusPill status={data.status} />

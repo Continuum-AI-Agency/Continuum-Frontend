@@ -55,9 +55,10 @@ export function collectOrphanNodes(
   }
 
   // A published group is a record of its own: left unconnected it loses nothing, and the canvas
-  // shows every group the brand owns. Only drawn (broad) targeting is work a save could drop.
+  // shows every group the brand owns. Drawn (broad) or copied targeting is one ad set's own, so
+  // it is work a save could drop.
   const carriesWork = (node: CampaignCanvasNode) =>
-    node.type !== 'audience' || ((node.data as { mode?: string }).mode ?? 'broad') === 'broad';
+    node.type !== 'audience' || ((node.data as { mode?: string }).mode ?? 'broad') !== 'group';
 
   return meta
     .filter((node) => node.type !== 'campaign' && !reached.has(node.id) && carriesWork(node))

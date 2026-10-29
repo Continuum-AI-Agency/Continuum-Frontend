@@ -14,6 +14,7 @@ import { useMediaUpload } from '@/components/library/useMediaUpload';
 import { endAssetDrag, isAssetDrag, readAssetDrag } from '@/components/library/views/assetDrag';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { fetchAssetKinds } from '@/lib/paid-media/jaina-activity-client';
+import { withUserGave } from '@/lib/campaign-canvas/fieldProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import {
   CAROUSEL_MAX_CARDS,
@@ -92,7 +93,13 @@ export function useCreativeAssetPlacement(nodeId: string) {
       if (!current || assets.length === 0) return;
       const placement = placementFor(current, assets);
       if (placement.format) store.setCreativeFormat(nodeId, placement.format);
-      if (placement.patch) store.updateNodeData(nodeId, placement.patch);
+      // A person placed it (drop or Library pick): the ad's creative is now theirs.
+      if (placement.patch) {
+        store.updateNodeData(
+          nodeId,
+          withUserGave('creative', current as Record<string, unknown>, placement.patch),
+        );
+      }
       setNotice(placement.notice);
     },
     [nodeId],
