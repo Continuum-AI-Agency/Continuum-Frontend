@@ -159,6 +159,8 @@ mock.module('next/navigation', () => {
     notFound: () => {
       console.log('Not found');
     },
+    // Server actions rethrow Next's control-flow errors with it; nothing here throws one.
+    unstable_rethrow: () => {},
   };
 });
 
