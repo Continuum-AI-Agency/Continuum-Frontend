@@ -119,6 +119,8 @@ function ExperienceInner({
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state, updateState } = useOnboarding();
   const [sourceError, setSourceError] = useState<string | null>(null);
+  // Brand files dropped on the first screen, handed to the documents step's uploader.
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const sourceRef = useRef<{ url: string; value: OnboardingSourceResponse } | null>(null);
   const analysisGenerationRef = useRef(0);
   const lastStartedKeyRef = useRef<string | null>(null);
@@ -844,7 +846,10 @@ function ExperienceInner({
               defaultUrl={domain || defaultUrl}
               defaultIntake={state.intake}
               defaultBrandName={state.brand.name}
-              onSubmit={handleIntakeSubmit}
+              onSubmit={(intake, files) => {
+                setPendingFiles(files ?? []);
+                return handleIntakeSubmit(intake);
+              }}
               error={sourceError}
               onRetry={handleScrapeRetry}
               retrying={jobs.scrape.status === 'running'}
@@ -854,6 +859,8 @@ function ExperienceInner({
               totalSteps={totalSteps}
               brandId={brandId}
               onDesignSystemBusyChange={setDesignSystemBusy}
+              initialFiles={pendingFiles}
+              onInitialFilesTaken={() => setPendingFiles([])}
             />
           ) : screen === 2 ? (
             <CatalogScreen totalSteps={totalSteps} onBusyChange={setCatalogBusy} />
