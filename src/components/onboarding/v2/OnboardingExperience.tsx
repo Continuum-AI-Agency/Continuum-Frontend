@@ -826,7 +826,7 @@ function ExperienceInner({
       bottomActions={actions}
       onStartOver={handleStartOver}
       startOverDisabled={resetting || launching}
-      headerRight={<OnboardingBrandSwitcher />}
+      headerRight={<OnboardingBrandSwitcher currentBrandName={state.brand.name} />}
     >
       <AnimatePresence mode="wait" custom={directionRef.current}>
         <motion.div

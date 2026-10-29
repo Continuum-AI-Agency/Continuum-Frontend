@@ -15,16 +15,23 @@ import { useSwitchBrand } from '@/hooks/useSwitchBrand';
 import { getBrandMenuItemLabel } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 
-export function OnboardingBrandSwitcher() {
+/**
+ * `currentBrandName` labels the brand being onboarded when the brand list does not carry it yet:
+ * the list is read before onboarding state is ensured, so a just-created brand can be missing.
+ */
+export function OnboardingBrandSwitcher({ currentBrandName }: { currentBrandName?: string }) {
   const { activeBrandId, brandSummaries, isSwitching, switchingToBrandId } =
     useActiveBrandContext();
   const switchBrand = useSwitchBrand();
   const [menuOpen, setMenuOpen] = React.useState(false);
 
-  if (brandSummaries.length <= 1) return null;
+  // Shown whenever there is another brand to go to — the one being onboarded need not be listed.
+  if (!brandSummaries.some((b) => b.id !== activeBrandId)) return null;
 
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
-  const activeBrandLabel = activeBrand ? getBrandMenuItemLabel(activeBrand) : 'Switch brand';
+  const activeBrandLabel = activeBrand
+    ? getBrandMenuItemLabel(activeBrand)
+    : currentBrandName?.trim() || 'Switch brand';
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
