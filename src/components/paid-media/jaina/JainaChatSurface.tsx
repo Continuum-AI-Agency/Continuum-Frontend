@@ -38,6 +38,7 @@ import type {
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
+  LiveChangePreviewPayload,
   PaidScaffoldGate,
   PlatformId,
 } from '@continuum/contracts';
@@ -114,6 +115,7 @@ import {
   campaignCanvasActionsEnvelopeSchema,
   extractCampaignCanvasActionsEnvelope,
 } from '@/lib/campaign-canvas/agent-actions';
+import { type LiveChangeDecision, latestLiveChangeOf } from '@/lib/campaign-canvas/liveChange';
 import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
@@ -264,6 +266,17 @@ type JainaChatSurfaceProps = {
    * conversation is about.
    */
   onScaffoldFocus?: (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => void;
+  /**
+   * A host with a companion canvas (the Scale page). Called with the thread's newest live-edit
+   * preview (`paid.live_change_preview`) and the decision on its approval, every time either
+   * changes. `opened` is true the first time a preview arrives live, so the host opens its
+   * canvas then and only then: a loaded thread or a later decision never reopens it.
+   */
+  onLiveChangeFocus?: (focus: {
+    preview: LiveChangePreviewPayload;
+    decision: LiveChangeDecision;
+    opened: boolean;
+  }) => void;
   /**
    * A turn a button OUTSIDE the transcript sends as the person — the canvas's "Generate with
    * Jaina". Sent once per `id`, after any turn in flight ends. Spend inside it still stops at
@@ -762,6 +775,7 @@ export function JainaChatSurface({
   onOperatorActionSettled,
   onCanvasActionApplied,
   onScaffoldFocus,
+  onLiveChangeFocus,
   autoSendPrompt = null,
   onAutoSendConsumed,
   onOpenAccountRead,
@@ -2714,6 +2728,21 @@ export function JainaChatSurface({
       historyMessageIds.has(latestScaffold.messageId) ? 'thread' : 'proposed',
     );
   }, [historyMessageIds, latestScaffold, onScaffoldFocus]);
+
+  // The companion canvas follows the thread's newest live edit too: it opens on the campaign
+  // a pending pause, budget or copy touches, and tracks the approval's decision after.
+  const latestLiveChange = React.useMemo(() => latestLiveChangeOf(messages), [messages]);
+  const openedLiveChangeRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!onLiveChangeFocus || !latestLiveChange) return;
+    const { preview, decision, index } = latestLiveChange;
+    const message = messages[index];
+    const fresh =
+      openedLiveChangeRef.current !== preview.partId &&
+      Boolean(message && !historyMessageIds.has(message.id));
+    if (fresh) openedLiveChangeRef.current = preview.partId;
+    onLiveChangeFocus({ preview, decision, opened: fresh });
+  }, [historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
 
   const scaffoldThread = React.useMemo<ScaffoldThread>(
     () => ({

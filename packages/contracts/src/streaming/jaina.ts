@@ -149,6 +149,8 @@ export type JainaForwardableType =
   // not media.
   | 'paid.creative_render'
   | 'paid.campaign_structure'
+  // The live campaign a pending edit touches, for the companion canvas (read-only).
+  | 'paid.live_change_preview'
   // The scaffold planner's one question for the missing budget / objective / audience /
   // creatives (P5), asked from inside the propose tool, so it travels as a tool event.
   | 'response.clarification_request'

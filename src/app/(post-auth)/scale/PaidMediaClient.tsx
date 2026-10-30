@@ -1,5 +1,6 @@
 'use client';
 
+import type { LiveChangePreviewPayload } from '@continuum/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   Bot,
@@ -44,6 +45,7 @@ import {
   buildCampaignCreativeRequest,
   type CampaignCreativeRequest,
 } from '@/lib/campaign-canvas/creativeGeneration';
+import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
@@ -152,6 +154,11 @@ const JainaChatSurface = dynamic(
 // the Scale page's first load must not.
 const ScaleCompanionCanvas = dynamic(
   () => import('@/CampaignCanvas/ScaleCompanionCanvas').then((mod) => mod.ScaleCompanionCanvas),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
+);
+// The same pane, when the thread's newest proposal is an edit to a LIVE campaign: read-only.
+const LiveChangeCanvas = dynamic(
+  () => import('@/CampaignCanvas/LiveChangeCanvas').then((mod) => mod.LiveChangeCanvas),
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
@@ -423,6 +430,11 @@ export default function PaidMediaClientPage({
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   // The scaffold the Jaina thread is about, shown on its companion canvas.
   const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
+  // A pending edit to a live campaign, shown on the same pane until a scaffold takes it over.
+  const [companionLiveChange, setCompanionLiveChange] = React.useState<{
+    preview: LiveChangePreviewPayload;
+    decision: LiveChangeDecision;
+  } | null>(null);
   // A turn the companion canvas hands the chat ("Generate with Jaina"), and its Deploy paused.
   const [companionTurn, setCompanionTurn] = React.useState<{ id: string; text: string } | null>(
     null,
@@ -574,7 +586,30 @@ export default function PaidMediaClientPage({
   const handleScaffoldFocus = React.useCallback(
     (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
       setCompanionScaffoldId(parentScaffoldId);
-      if (reason !== 'thread') setIsCanvasOpen(true);
+      if (reason !== 'thread') {
+        setCompanionLiveChange(null);
+        setIsCanvasOpen(true);
+      }
+    },
+    [],
+  );
+  const handleLiveChangeFocus = React.useCallback(
+    (focus: {
+      preview: LiveChangePreviewPayload;
+      decision: LiveChangeDecision;
+      opened: boolean;
+    }) => {
+      if (focus.opened) {
+        setCompanionLiveChange({ preview: focus.preview, decision: focus.decision });
+        setIsCanvasOpen(true);
+        return;
+      }
+      // A decision arriving later updates the preview already on screen; nothing else does.
+      setCompanionLiveChange((current) =>
+        current && current.preview.partId === focus.preview.partId
+          ? { preview: focus.preview, decision: focus.decision }
+          : current,
+      );
     },
     [],
   );
@@ -981,6 +1016,7 @@ export default function PaidMediaClientPage({
                   startNewConversation={jainaNewConversation}
                   onCanvasActionApplied={handleCanvasActionApplied}
                   onScaffoldFocus={handleScaffoldFocus}
+                  onLiveChangeFocus={handleLiveChangeFocus}
                   autoSendPrompt={companionTurn}
                   onAutoSendConsumed={clearCompanionTurn}
                   operatorActionRequest={companionDeploy.request}
@@ -1029,14 +1065,21 @@ export default function PaidMediaClientPage({
                         transition={{ duration: 0.2 }}
                       >
                         <CampaignCreativeActionsProvider value={handleGenerateCreative}>
-                          <ScaleCompanionCanvas
-                            brandId={brandProfileId}
-                            scaffoldId={companionScaffoldId}
-                            onSend={sendCompanionTurn}
-                            onDeploy={companionDeploy.requestDeploy}
-                            deployInFlight={companionDeploy.inFlight}
-                            deployRefusal={companionDeploy.refusal}
-                          />
+                          {companionLiveChange ? (
+                            <LiveChangeCanvas
+                              preview={companionLiveChange.preview}
+                              decision={companionLiveChange.decision}
+                            />
+                          ) : (
+                            <ScaleCompanionCanvas
+                              brandId={brandProfileId}
+                              scaffoldId={companionScaffoldId}
+                              onSend={sendCompanionTurn}
+                              onDeploy={companionDeploy.requestDeploy}
+                              deployInFlight={companionDeploy.inFlight}
+                              deployRefusal={companionDeploy.refusal}
+                            />
+                          )}
                         </CampaignCreativeActionsProvider>
                       </motion.div>
                     </motion.aside>

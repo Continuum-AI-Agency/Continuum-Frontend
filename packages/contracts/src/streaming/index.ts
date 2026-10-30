@@ -15,6 +15,7 @@ export * from './jaina-answer-shape';
 export * from './jaina-approval';
 export * from './jaina-ask-shape';
 export * from './jaina-campaign-structure';
+export * from './jaina-live-change';
 export * from './jaina-clarification';
 export * from './jaina-dashboard';
 export * from './jaina-dashboard-spec';

@@ -112,6 +112,12 @@ export type JainaUIDataTypes = {
    * Canonical shape: `campaignStructurePayloadSchema` in ./jaina-campaign-structure.
    */
   'jaina-campaign-structure': Record<string, unknown>;
+  /**
+   * The live campaign a pending edit touches, with the change marked, for the companion
+   * canvas. One part per approval (`liveChangePreviewPartId`). Canonical shape:
+   * `liveChangePreviewPayloadSchema` in ./jaina-live-change.
+   */
+  'jaina-live-change': Record<string, unknown>;
 };
 
 /** Jaina's tools are discovered at run time, so they cross the wire as DYNAMIC tool parts. */
@@ -142,4 +148,5 @@ export const JAINA_UI_DATA_PART = {
   optimizerCard: 'data-jaina-optimizer-card',
   optimizerHyperframe: 'data-jaina-optimizer-hyperframe',
   campaignStructure: 'data-jaina-campaign-structure',
+  liveChange: 'data-jaina-live-change',
 } as const satisfies Record<string, JainaUIDataPartType>;
