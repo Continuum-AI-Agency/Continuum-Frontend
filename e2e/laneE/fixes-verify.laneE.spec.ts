@@ -206,14 +206,28 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
       try {
         await opened.page.goto('/scale?tab=performance', { waitUntil: 'domcontentloaded' });
         // The Optimizer opens either on its tabs or, with no portfolio yet, on its onboarding —
-        // both are Performance +; only the connect gate is not.
+        // both are Performance +; only the connect gate is not. Scale first renders, then moves
+        // to the platform the brand has accounts on, so the end state is polled for (a first
+        // match of any of the three raced that move on Tangassi: a probe showed skeleton at 5.5 s
+        // and the onboarding at 8.5 s, never the gate).
         await opened.page
-          .locator(
-            '[data-testid="platform-tabs"], section[aria-label="Paid setup diagnostics"], h1:has-text("Put ad sets under the Optimizer"), h2:has-text("Put ad sets under the Optimizer")',
+          .waitForFunction(
+            () => {
+              const text = document.querySelector('main')?.textContent ?? '';
+              const shown =
+                Boolean(document.querySelector('[data-testid="platform-tabs"]')) ||
+                /Put ad sets under the Optimizer/.test(text) ||
+                Boolean(document.querySelector('section[aria-label="Paid setup diagnostics"]'));
+              const busy = document.querySelectorAll(
+                '[aria-busy="true"], [data-slot="skeleton"], .animate-pulse, [data-dither-skeleton]',
+              ).length;
+              return shown && busy === 0;
+            },
+            undefined,
+            { timeout: 90_000, polling: 1000 },
           )
-          .first()
-          .waitFor({ timeout: 90_000 })
           .catch(() => undefined);
+        await opened.page.waitForTimeout(3000);
         await settle(opened.page, 45_000);
         const tabs = (await opened.page.locator('[data-testid="platform-tabs"]').count()) > 0;
         const onboarding = /Put ad sets under the Optimizer/.test(
