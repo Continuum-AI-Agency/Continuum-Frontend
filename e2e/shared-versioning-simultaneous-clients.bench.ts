@@ -263,7 +263,7 @@ async function race(a: Proposal, b: Proposal, label: string) {
     return results;
   } finally { clearTimeout(armTimeout); listeners.forEach((off) => off()); a.client.barrier = null; b.client.barrier = null; }
 }
-async function verifyBytes(revision: TemplateRevision, expected: { x: number; y: number }, label: string, principalId?: string) {
+async function verifyBytes(revision: TemplateRevision, expected: { x: number; y: number }, label: string, principalId?: string, positionKind: 'explicit' | 'native-composition-default' = 'explicit') {
   const immutable = await admin.schema('media').from('template_revisions').select('created_by,parent_revision_id,checksum,parse:source_snapshot->parse')
     .eq('brand_id', config.brandId).eq('template_id', config.templateId).eq('id', revision.id).single();
   assert.ifError(immutable.error); assert(immutable.data);
@@ -285,12 +285,12 @@ async function verifyBytes(revision: TemplateRevision, expected: { x: number; y:
   const aeps = Object.entries(unzipSync(bytes)).filter(([name]) => /\.aep$/i.test(name));
   assert.equal(aeps.length, 1); assert.equal(sha(aeps[0]![1]), parse.structure.sourceAepChecksum);
   const position = parse.structure.comps.find((comp) => comp.id === config.layer.compId)?.layers.find((layer) => layer.id === config.layer.layerId)?.positionSource;
-  assert.equal(position?.kind, 'explicit'); assert.deepEqual(position?.value.slice(0, 2), [expected.x, expected.y]);
+  assert.equal(position?.kind, positionKind); assert.deepEqual(position?.value.slice(0, 2), [expected.x, expected.y]);
   const packageFile = path.join(run, `${label}-${revision.id}.zip`);
   writeFileSync(packageFile, bytes, { flag: 'wx' });
   rows('byteProofs').push({ label, revisionId: revision.id, parentRevisionId: revision.parentRevisionId,
     createdBy: immutable.data.created_by, sourceAssetId: revision.sourceAssetId, sourceVersionId: revision.sourceVersionId,
-    packageFile, packageSha256: sha(bytes), innerAepSha256: sha(aeps[0]![1]), packageBytes: bytes.length, nativePosition: position?.value });
+    packageFile, packageSha256: sha(bytes), innerAepSha256: sha(aeps[0]![1]), packageBytes: bytes.length, nativePosition: position?.value, positionKind });
 }
 async function preview(client: Client, ours: TemplateRevision, theirs: TemplateRevision) {
   const body = { brandId: config.brandId, variantId: ours.variantId, sourceVariantId: theirs.variantId,
@@ -324,12 +324,13 @@ try {
     .eq('brand_id', config.brandId).eq('template_id', config.templateId).eq('id', base.id).single();
   assert.ifError(sourceRow.error);
   const sourceParse = z.object({ structure: z.object({ comps: z.array(z.object({ id: z.number(),
-    layers: z.array(z.object({ id: z.number(), positionSource: z.object({ value: z.array(z.number()) }).nullish() })) })) }) }).parse(sourceRow.data?.parse);
-  const originalPosition = sourceParse.structure.comps.find((comp) => comp.id === config.layer.compId)?.layers.find((layer) => layer.id === config.layer.layerId)?.positionSource?.value;
-  assert(originalPosition && originalPosition.length >= 2);
+    layers: z.array(z.object({ id: z.number(), positionSource: z.object({ kind: z.enum(['explicit', 'native-composition-default']), value: z.array(z.number()) }).nullish() })) })) }) }).parse(sourceRow.data?.parse);
+  const originalSource = sourceParse.structure.comps.find((comp) => comp.id === config.layer.compId)?.layers.find((layer) => layer.id === config.layer.layerId)?.positionSource;
+  const originalPosition = originalSource?.value;
+  assert(originalSource && originalPosition && originalPosition.length >= 2);
   const baseline = { x: originalPosition[0]!, y: originalPosition[1]! };
   assert.notEqual(baseline.x, 600); assert.notEqual(baseline.x, 620); assert.notEqual(baseline.y, 1100);
-  await verifyBytes(base, baseline, 'original-baseline');
+  await verifyBytes(base, baseline, 'original-baseline', undefined, originalSource.kind);
 
   const shared = await branch(a, base.id, 'independent-race');
   const independent = await Promise.all([prepareProposal(a, shared, { x: 600 }, 'independent-X'), prepareProposal(b, shared, { y: 1100 }, 'independent-Y')]);
