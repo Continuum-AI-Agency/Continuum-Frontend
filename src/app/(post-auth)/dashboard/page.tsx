@@ -6,6 +6,7 @@ import { AllDashboardDataWrapper } from '@/components/dashboard/server/AllDashbo
 import { HomeOverviewDataWrapper } from '@/components/dashboard/server/HomeOverviewDataWrapper';
 import { OrganicDashboardDataWrapper } from '@/components/dashboard/server/OrganicDashboardDataWrapper';
 import {
+  HomeOverviewSkeleton,
   PaidWidgetSkeleton,
   WidgetSkeleton,
 } from '@/components/dashboard/skeletons/DashboardSkeletons';
@@ -60,7 +61,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <OrganicDashboardDataWrapper brandId={activeBrandId} />
       </Suspense>
     ) : (
-      <Suspense fallback={<WidgetSkeleton />}>
+      <Suspense fallback={<HomeOverviewSkeleton />}>
         <HomeOverviewDataWrapper brandId={activeBrandId} />
       </Suspense>
     );
