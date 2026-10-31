@@ -2242,6 +2242,8 @@ export function TemplateLayerEditor({
       let committed: Awaited<ReturnType<typeof authoringLifecycle.reviewAndCommit>>;
       try {
         committed = await authoringLifecycle.reviewAndCommit({
+          origin: { tool: 'Forge editor', button: saveTo === 'this_variant'
+            ? 'Review and publish revision' : onVariant ? 'Review and publish new variant' : 'Review and publish variant' },
           saveTo,
           parentRevisionId: currentRevision.id,
           expectedHeadRevisionId:

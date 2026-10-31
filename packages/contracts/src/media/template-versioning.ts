@@ -127,6 +127,7 @@ export const templateReleaseRollbackRequestSchema = z.object({ ...releaseTarget,
 export const templateReleaseListQuerySchema = z.object({
   brandId: id, bindingId: id.optional(), templateKey: z.string().min(1).max(500).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  includeTargets: z.union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')]).optional(),
 }).strict();
 export const templateReleaseSchema = z.object({
   id, templateId: id, revisionId: id, variantId: id, bindingId: id,
@@ -173,6 +174,10 @@ export const templateVersionCommitsResponseSchema = z.object({
 export const templateReleaseListResponseSchema = z.object({
   items: z.array(templateReleaseSchema),
   heads: z.array(z.object({ bindingId: id, templateKey: z.string().min(1), releaseId: id.nullable() })),
+  targets: z.array(z.object({
+    family: z.enum(['blender', 'hyperframes']), bindingId: id,
+    templateKey: z.string().min(1), workspace: z.string().min(1),
+  })).optional(),
 }).passthrough();
 export const templateReleaseResultSchema = z.object({
   release: templateReleaseSchema, pointerEventId: id,

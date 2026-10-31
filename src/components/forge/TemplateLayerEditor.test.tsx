@@ -12,6 +12,7 @@ import type {
   TemplateAuthoringDraftPut,
   TemplateOperationInput,
   TemplateAuthoringArtifact,
+  TemplateAuthoringArtifactCommit,
   TemplateAuthoringPreparation,
   TemplateAuthoringCompileRequest,
   TemplateAuthoringPreparationRequest,
@@ -293,11 +294,7 @@ const nativeRenders = mock(async (_assetId: string, _artifactId: string, _scope:
 }));
 const authoringArtifactReads = mock(async () => authoringArtifact);
 const reviewAuthoring = mock(async () => ({ ...authoringArtifact, state: 'reviewed' as const, reviewedAt: '2026-10-11T00:00:00.000Z' }));
-const commitAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: unknown, request: {
-  parentRevisionId: string;
-  expectedHeadRevisionId: string;
-  variantId?: string;
-}) => ({ ...authoringArtifact, state: 'committed' as const, commit: {
+const commitAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: unknown, request: TemplateAuthoringArtifactCommit) => ({ ...authoringArtifact, state: 'committed' as const, commit: {
   assetId: '10000000-0000-4000-8000-000000000304',
   versionId: '10000000-0000-4000-8000-000000000305',
   packageChecksum,
@@ -1750,6 +1747,7 @@ describe('TemplateLayerEditor', () => {
     });
     await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'));
     expect(saves).not.toHaveBeenCalled();
+    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish variant' });
   });
 
   test('does not commit after the draft changes while exact-package review is in flight', async () => {
@@ -2954,6 +2952,7 @@ describe('TemplateLayerEditor', () => {
       type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, rotation: 15 },
     });
     expect(saves).not.toHaveBeenCalled();
+    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish revision' });
   });
 
   test('re-stacking a comp previews and saves the whole front-first order', async () => {

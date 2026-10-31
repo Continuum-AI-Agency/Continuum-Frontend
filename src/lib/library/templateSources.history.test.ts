@@ -5,7 +5,7 @@ const userId = '10000000-0000-4000-8000-000000000001';
 let session = { access_token: 'test-only-token', user: { id: userId } };
 mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }) }));
 const { appendTemplateAuthoringHistory, openTemplateAuthoringWorkingCopy, fetchTemplateAuthoringDraft,
-  prepareTemplateAuthoringArtifact, fetchTemplateLayerInventory, fetchTemplateVersionHistory } = await import('./templateSources');
+  prepareTemplateAuthoringArtifact, fetchTemplateLayerInventory, fetchTemplateVersionHistory, fetchTemplateReleases } = await import('./templateSources');
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; session = { access_token: 'test-only-token', user: { id: userId } }; });
 const operation: TemplateOperationInput = {
@@ -123,4 +123,28 @@ test('history reads reject changed authentication before dispatch and after a la
     return Response.json({ items: [], nextCursor: null });
   }) as typeof fetch;
   await expect(fetchTemplateVersionHistory(brandId, assetId, {}, originalUser)).rejects.toThrow('another signed-in account');
+});
+
+
+test('release discovery explicitly opts into authenticated native targets and accepts legacy-shaped responses', async () => {
+  const target = { family: 'blender', bindingId: workingCopy.id, templateKey: `blend:${assetId}`, workspace: 'Production' };
+  let payload: object = { items: [], heads: [], targets: [target] };
+  globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+    const request = new URL(String(url), 'http://localhost');
+    expect(request.pathname).toBe(`/api/ai-studio/templates/${assetId}/releases`);
+    expect(request.searchParams.get('brandId')).toBe(brandId);
+    expect(request.searchParams.get('includeTargets')).toBe('true');
+    expect(init?.headers).toMatchObject({ Authorization: 'Bearer test-only-token' });
+    return Response.json(payload);
+  }) as typeof fetch;
+  expect((await fetchTemplateReleases(brandId, assetId)).targets).toEqual([target]);
+  payload = { items: [], heads: [] };
+  expect((await fetchTemplateReleases(brandId, assetId)).targets).toBeUndefined();
+});
+
+test('release discovery rejects malformed native targets before a production action can be offered', async () => {
+  globalThis.fetch = mock(async () => Response.json({ items: [], heads: [], targets: [{
+    family: 'blender', bindingId: 'not-a-binding-uuid', templateKey: `blend:${assetId}`, workspace: 'Production',
+  }] })) as typeof fetch;
+  await expect(fetchTemplateReleases(brandId, assetId)).rejects.toThrow();
 });

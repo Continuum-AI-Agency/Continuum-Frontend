@@ -6,7 +6,7 @@ import {
   templateVersionMergePreviewRequestSchema, templateVersionMergePreviewSchema,
   templateVersionMergeCommitRequestSchema, templateVersionRevertRequestSchema,
   templateVersionCapabilitiesSchema, templateVersionCommitsResponseSchema,
-  templateVersionHistoryQuerySchema, templateVersionHistoryResponseSchema, templateReleaseListResponseSchema,
+  templateVersionHistoryQuerySchema, templateVersionHistoryResponseSchema, templateReleaseListQuerySchema, templateReleaseListResponseSchema,
   templateReleaseRequestSchema, templateReleaseRollbackRequestSchema, templateReleaseResultSchema,
   type TemplateVersionHistoryQuery, type TemplateVersionBranchRequest, type TemplateVersionDiffRequest,
   type TemplateVersionMergePreviewRequest, type TemplateVersionMergeCommitRequest,
@@ -299,7 +299,10 @@ export async function fetchTemplateVersionHistory(
   return page;
 }
 export async function fetchTemplateReleases(brandId: string, assetId: string) {
-  return templateReleaseListResponseSchema.parse(await versionGet(assetId, 'releases', brandId));
+  const input = templateReleaseListQuerySchema.parse({ brandId, includeTargets: true });
+  const query = new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)]));
+  return templateReleaseListResponseSchema.parse(await unwrap(
+    await authorizedFetch(`${versionPath(assetId, 'releases')}?${query}`), 'Template releases'));
 }
 export async function promoteTemplateRelease(
   assetId: string,

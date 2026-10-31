@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-import type { TemplateOperation, TemplateRevision, TemplateRevisionVariant } from '@continuum/contracts';
+import type { TemplateOperation, TemplateRevision, TemplateRevisionVariant, TemplateReleaseListResponse } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
@@ -149,6 +149,7 @@ const restore = mock(async (_asset: string, _body: unknown) => ({
   replayed: false,
   revision: tallHead,
 }));
+let projectedReleaseTargets: TemplateReleaseListResponse['targets'];
 const release = mock(async (_asset: string, _body: unknown) => ({}));
 const rollback = mock(async (_asset: string, _body: unknown) => ({}));
 mock.module('@/lib/library/templateSources', () => ({
@@ -175,6 +176,7 @@ mock.module('@/lib/library/templateSources', () => ({
   }),
   fetchTemplateVersionHistory: history,
   fetchTemplateReleases: async () => ({
+    ...(projectedReleaseTargets === undefined ? {} : { targets: projectedReleaseTargets }),
     items: [
       {
         id: id(60),
@@ -220,6 +222,7 @@ beforeEach(() => {
   rows.clear();
   currentUser = userId;
   failBranch = false;
+  projectedReleaseTargets = undefined;
   history.mockReset();
   history.mockImplementation(async () => ({ items: [], nextCursor: null }));
   for (const fn of [branch, diff, mergePreview, merge, restore, release, rollback]) fn.mockClear();
@@ -254,7 +257,8 @@ test('branch freezes the selected historical revision; failed response retries t
   await waitFor(() => expect(branch).toHaveBeenCalledTimes(1));
   await screen.findByText('Response lost');
   const request = branch.mock.calls[0]![1];
-  expect(request).toMatchObject({ parentRevisionId: tall.id, name: 'Tall alternative', brandId });
+  expect(request).toMatchObject({ parentRevisionId: tall.id, name: 'Tall alternative', brandId,
+    origin: { tool: 'Forge versions', button: 'Branch from revision' } });
   view.unmount();
   failBranch = false;
   mounted(copy.id);
@@ -293,6 +297,7 @@ test('merge resolves every conflict and pins both reviewed heads; a refreshed he
     expectedHeadRevisionId: tallHead.id,
     expectedSourceHeadRevisionId: copy.id,
     previewToken: 'a'.repeat(64),
+    origin: { tool: 'Forge versions', button: 'Commit reviewed merge' },
     resolutions: [{ path: '/layers/1:2/opacity', choice: 'theirs' }],
   });
 });
@@ -316,6 +321,7 @@ test('restoration compares against the destination head and appends only after e
   });
   expect(restore.mock.calls[0]![1]).toMatchObject({
     restoreRevisionId: tall.id,
+    origin: { tool: 'Forge versions', button: 'Append restored revision' },
     variantId: tall.variantId,
     expectedHeadRevisionId: tallHead.id,
   });
@@ -331,6 +337,7 @@ test('production changes require review and carry the exact expected release ind
   await waitFor(() => expect(rollback).toHaveBeenCalledTimes(1));
   expect(rollback.mock.calls[0]![1]).toMatchObject({
     releaseId: id(60),
+    origin: { tool: 'Forge versions', button: 'Confirm release rollback' },
     expectedReleaseId: id(61),
     bindingId: id(90),
     templateKey: 'campaign',
@@ -418,3 +425,75 @@ test('account, brand and family switches discard old pages and ignore late respo
   expect(screen.queryByText('No operations recorded for this family.')).toBeNull();
   await screen.findByText(/Edit A 3/);
 });
+
+test('shows recorded controls and gestures separately from the authenticated principal', async () => {
+  history.mockResolvedValueOnce({ items: [{
+    ...event(1),
+    origin: { tool: 'Reported Forge client', model: 'Reported model', button: 'Undo',
+      shortcut: 'Control+Z', control: 'Position X', gesture: 'Move layer' },
+  }], nextCursor: null });
+  mounted(tall.id);
+  fireEvent.click(screen.getByRole('button', { name: 'Operations', exact: true }));
+  const summary = await screen.findByText(/Control Position X · Gesture Move layer/);
+  expect(summary.tagName).toBe('P');
+  expect(summary.textContent).toContain(`Principal ${userId} · forge · Undo · Control+Z`);
+  expect(summary.textContent).not.toContain('Reported Forge client');
+  expect(summary.textContent).not.toContain('Reported model');
+  expect(screen.getByText(/Button, control, gesture and shortcut labels come from the client/)).toBeTruthy();
+});
+
+test('production promotion carries its real confirmation control in the frozen request', async () => {
+  mounted(tallHead.id);
+  fireEvent.click(screen.getByRole('button', { name: 'Releases', exact: true }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Review release' }));
+  expect(release).not.toHaveBeenCalled();
+  const confirm = screen.getByRole('button', { name: 'Confirm production release' });
+  await waitFor(() => expect(confirm.hasAttribute('disabled')).toBe(false));
+  fireEvent.click(confirm);
+  await waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+  expect(release.mock.calls[0]![1]).toMatchObject({
+    revisionId: tallHead.id, bindingId: id(90), templateKey: 'campaign', expectedReleaseId: id(61),
+    origin: { tool: 'Forge versions', button: 'Confirm production release' },
+  });
+});
+
+for (const family of ['blender', 'hyperframes'] as const) {
+  test(`native ${family} releases use only validated enabled targets for the selected family`, async () => {
+    const templateKey = `${family === 'blender' ? 'blend' : 'hyperframes'}:${assetId}`;
+    const native = variants.map((variant) => ({ ...variant, revisions: variant.revisions.map((revision) => ({
+      ...revision, source: { ...revision.source, family },
+    })) }));
+    const target = { family, bindingId: id(92), templateKey, workspace: 'Native production' };
+    projectedReleaseTargets = [target, target, { ...target, family: family === 'blender' ? 'hyperframes' : 'blender', templateKey: 'wrong-family-target' }];
+    mounted(tallHead.id, native);
+    fireEvent.click(screen.getByRole('button', { name: 'Releases', exact: true }));
+    const review = await screen.findByRole('button', { name: 'Review release' });
+    const bindings = screen.getByRole('list', { name: 'Production bindings' });
+    expect(bindings.textContent).toContain(templateKey);
+    expect(bindings.textContent).not.toContain('wrong-family-target');
+    expect(bindings.textContent).not.toContain('campaign');
+    expect(within(bindings).getAllByRole('button', { name: 'Review release' })).toHaveLength(1);
+    expect(release).not.toHaveBeenCalled();
+    fireEvent.click(review);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm production release' }));
+    await waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+    expect(release.mock.calls[0]![1]).toMatchObject({
+      revisionId: tallHead.id, bindingId: id(92), templateKey, expectedReleaseId: null,
+      origin: { tool: 'Forge versions', button: 'Confirm production release' },
+    });
+  });
+}
+
+for (const projection of ['missing', 'empty'] as const) {
+  test(`native release refuses historical AE publication fallback when enabled targets are ${projection}`, async () => {
+    projectedReleaseTargets = projection === 'empty' ? [] : undefined;
+    const native = variants.map((variant) => ({ ...variant, revisions: variant.revisions.map((revision) => ({
+      ...revision, source: { ...revision.source, family: 'blender' as const },
+    })) }));
+    mounted(tallHead.id, native);
+    fireEvent.click(screen.getByRole('button', { name: 'Releases', exact: true }));
+    await screen.findByText('No enabled production binding is available for this template.');
+    expect(screen.queryByRole('button', { name: 'Review release' })).toBeNull();
+    expect(release).not.toHaveBeenCalled();
+  });
+}

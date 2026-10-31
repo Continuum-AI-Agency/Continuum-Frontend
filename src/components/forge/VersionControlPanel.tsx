@@ -260,10 +260,12 @@ export function VersionControlPanel({
           expectedSourceHeadRevisionId: other.variant.draftHeadRevisionId,
         }
       : null;
+  const sourceFamily = selected?.revision.source.family;
   const releaseTargets = [
     ...new Map(
-      revisions
-        .flatMap(({ revision }) => revision.publications)
+      (sourceFamily === 'blender' || sourceFamily === 'hyperframes'
+        ? (releases.data?.targets ?? []).filter((target) => target.family === sourceFamily)
+        : revisions.flatMap(({ revision }) => revision.publications))
         .map((target) => [`${target.bindingId}:${target.templateKey}`, target]),
     ).values(),
   ];
@@ -636,6 +638,7 @@ export function VersionControlPanel({
                               void run(() =>
                                 mutate('merge', {
                                   ...mergeInput!,
+                                  origin: { tool: 'Forge versions', button: 'Commit reviewed merge' },
                                   previewToken: preview.previewToken,
                                   resolutions: preview.conflicts.map((conflict) => ({
                                     path: conflict.path,
@@ -672,7 +675,9 @@ export function VersionControlPanel({
                     <>
                       {releaseTargets.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Publish a verified package to establish a render binding before releasing.
+                          {sourceFamily === 'blender' || sourceFamily === 'hyperframes'
+                            ? 'No enabled production binding is available for this template.'
+                            : 'Publish a verified package to establish a render binding before releasing.'}
                         </p>
                       )}
                       <ul aria-label="Production bindings" className="divide-y divide-border">
@@ -793,11 +798,14 @@ export function VersionControlPanel({
                       void run(() =>
                         review.kind === 'restore'
                           ? mutate('restore', {
+                              origin: { tool: 'Forge versions', button: 'Append restored revision' },
                               variantId: selected.variant.variantId,
                               restoreRevisionId: review.revisionId,
                               expectedHeadRevisionId: review.headId,
                             })
                           : mutate(review.kind, {
+                              origin: { tool: 'Forge versions', button: review.kind === 'release'
+                                ? 'Confirm production release' : 'Confirm release rollback' },
                               bindingId: review.bindingId,
                               templateKey: review.templateKey,
                               expectedReleaseId: review.expectedReleaseId,
@@ -824,7 +832,8 @@ export function VersionControlPanel({
                 onSubmit={form.handleSubmit(
                   ({ name }) =>
                     void run(async () => {
-                      await mutate('branch', { parentRevisionId: selected.revision.id, name });
+                      await mutate('branch', { parentRevisionId: selected.revision.id, name,
+                        origin: { tool: 'Forge versions', button: 'Branch from revision' } });
                       form.reset();
                     }),
                 )}
@@ -980,6 +989,7 @@ function OperationHistory({
       <p className="text-xs text-muted-foreground">
         Order is recorded within each working copy. Timestamps do not establish order between
         clients. Refresh to include arrivals behind the current page cursor.
+        Button, control, gesture and shortcut labels come from the client.
       </p>
       <Button
         size="xs"
@@ -1028,6 +1038,8 @@ function OperationHistory({
                     Principal {event.principalId} · {event.channel}
                     {event.origin?.button ? ` · ${event.origin.button}` : ''}
                     {event.origin?.shortcut ? ` · ${event.origin.shortcut}` : ''}
+                    {event.origin?.control ? ` · Control ${event.origin.control}` : ''}
+                    {event.origin?.gesture ? ` · Gesture ${event.origin.gesture}` : ''}
                   </p>
                   <details>
                     <summary>Recorded input and causal links</summary>

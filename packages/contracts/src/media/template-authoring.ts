@@ -1288,6 +1288,7 @@ export const templateAuthoringArtifactCommitSchema = templateAuthoringArtifactRe
     expectedHeadRevisionId: uuid,
     variantId: uuid.optional(),
     name: z.string().trim().min(1).max(120).optional(),
+    origin: templateOperationOriginSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

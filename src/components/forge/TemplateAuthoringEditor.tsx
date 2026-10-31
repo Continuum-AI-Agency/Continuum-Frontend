@@ -1641,6 +1641,8 @@ export function TemplateAuthoringEditor({
           throw new Error('The exact source revision is not registered in the immutable Forge catalog.');
         }
         committed = await authoringLifecycle.reviewAndCommit({
+          origin: { tool: 'Forge editor', button: saveTo === 'this_variant'
+            ? 'Review and publish revision' : onVariant ? 'Review and publish new variant' : 'Review and publish variant' },
           saveTo,
           parentRevisionId,
           expectedHeadRevisionId: saveTo === 'this_variant'
