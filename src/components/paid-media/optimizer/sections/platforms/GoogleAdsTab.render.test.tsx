@@ -130,6 +130,23 @@ describe('GoogleAdsTabView — when it cannot read', () => {
     expect(empty.textContent).toContain('USER_PERMISSION_DENIED');
     expect(queryAllByTestId('figure')).toHaveLength(0);
   });
+
+  it('offers to reconnect Google when Google refused the login (PP-DT-B-google-error-states-conflated)', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView
+        state={{
+          status: 'error',
+          account: VIVO_47,
+          message:
+            'Google refused this connection’s login (revoked or expired). Reconnect Google in Settings → Integrations.',
+          reconnect: true,
+        }}
+      />,
+    );
+    const empty = getByTestId('google-empty-error');
+    expect(empty.textContent).toContain('Reconnect Google');
+    expect(empty.querySelector('a')?.textContent).toBe('Connect Google Ads');
+  });
 });
 
 describe('GoogleCampaignTypeBreakdown — under the multi-platform frame', () => {

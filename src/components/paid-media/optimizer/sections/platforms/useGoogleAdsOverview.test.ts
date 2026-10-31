@@ -69,6 +69,29 @@ describe('fetchGoogleAdsOverview', () => {
     );
   });
 
+  it('keeps the edge’s error code, so a refused login can offer to reconnect', async () => {
+    const { FunctionsHttpError } = await import('@supabase/supabase-js');
+    invoke = async () => ({
+      data: null,
+      error: new FunctionsHttpError(
+        new Response(
+          JSON.stringify({
+            error: 'Google refused this connection’s login (revoked or expired). Reconnect Google in Settings → Integrations.',
+            errorCode: 'TOKEN_EXPIRED',
+            platform: 'google',
+          }),
+          { status: 409 },
+        ),
+      ),
+    });
+    const failure = await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('Reconnect Google');
+    expect((failure as { code?: unknown }).code).toBe('TOKEN_EXPIRED');
+  });
+
   it('reads an account with no single result instead of calling its shape unknown', async () => {
     invoke = async (_name, { body }) => ({
       data: body.scope === 'account_overview' ? ambiguousAccountOverview : ambiguousTopCampaigns,
