@@ -39,6 +39,24 @@ export function platformTabLabel(tab: PlatformTab): string {
   return TAB_LABELS[tab];
 }
 
+/** Where each key takes a tab row from tab `index` of `last + 1`: the arrows wrap, Home and End
+ *  jump to the ends (WAI-ARIA tabs). */
+const TAB_KEY_STEPS: Record<string, (index: number, last: number) => number> = {
+  ArrowRight: (index, last) => (index === last ? 0 : index + 1),
+  ArrowLeft: (index, last) => (index === 0 ? last : index - 1),
+  Home: () => 0,
+  End: (_index, last) => last,
+};
+
+/** The platform tab a key moves to from the tab that has focus, or null when the key does not
+ *  move along the row (or focus is not on one of its tabs). */
+export function platformTabAfterKey(key: string, from: string | undefined): PlatformTab | null {
+  const step = TAB_KEY_STEPS[key];
+  const index = PLATFORM_TABS.findIndex((tab) => tab === from);
+  if (!step || index < 0) return null;
+  return PLATFORM_TABS[step(index, PLATFORM_TABS.length - 1)];
+}
+
 /** `?platform=` → the tab. Anything unknown or absent is "All": a bad link opens the account,
  *  never an error. */
 export function parsePlatformTab(raw: string | null): PlatformTab {

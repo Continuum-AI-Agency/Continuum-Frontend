@@ -40,6 +40,7 @@ import { PortfolioCreateView } from './sections/PortfolioCreateView';
 import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import { connectedFromMetrics } from './sections/platforms/accountPlatformMetricsModel';
 import { PlatformIcon } from './sections/platforms/PlatformChip';
+import { platformTabKeyHandler } from './sections/platforms/PlatformTabs';
 import {
   type AdPlatform,
   connectedPlatforms,
@@ -136,7 +137,9 @@ function useConnectedPlatforms(
 
 /** All · Meta · Google · TikTok as one segmented control, each platform led by its own logo. A
  *  platform without a connection stays and says "Connect" — a missing tab reads as "we don't do
- *  TikTok", not "not connected yet" — and its logo is muted, so the row still reads at a glance. */
+ *  TikTok", not "not connected yet" — and its logo is muted, so the row still reads at a glance.
+ *  It is a tablist, so the keyboard meets it as one: a single Tab stop on the picked platform,
+ *  and the arrows pick the next one. */
 function PlatformSwitch({
   value,
   onChange,
@@ -151,6 +154,7 @@ function PlatformSwitch({
       aria-label="Ad platform"
       className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-[3px]"
       data-testid="platform-tabs"
+      onKeyDown={platformTabKeyHandler(onChange)}
       role="tablist"
     >
       {PLATFORM_TABS.map((tab) => {
@@ -173,6 +177,7 @@ function PlatformSwitch({
             key={tab}
             onClick={() => onChange(tab)}
             role="tab"
+            tabIndex={active ? 0 : -1}
             type="button"
           >
             {platform ? (

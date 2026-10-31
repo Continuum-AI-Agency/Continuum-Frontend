@@ -286,6 +286,36 @@ describe('OptimizerTab second bar', () => {
     expect(screen.getByTestId('platform-tab-all').querySelector('svg')).toBeTruthy();
   });
 
+  // PP-DT-E-platform-tabs-no-arrow-keys: the switch is a role=tablist, so a keyboard user
+  // expects one Tab stop and the arrows between platforms; ArrowRight used to do nothing.
+  it('is one Tab stop, and the arrow keys, Home and End move between platforms', () => {
+    renderTab();
+
+    const tab = (name: string) => screen.getByTestId(`platform-tab-${name}`);
+    expect(['all', 'meta', 'google_ads', 'tiktok_ads'].map((name) => tab(name).tabIndex)).toEqual([
+      0, -1, -1, -1,
+    ]);
+
+    tab('all').focus();
+    fireEvent.keyDown(tab('all'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('meta');
+    expect(document.activeElement).toBe(tab('meta'));
+
+    fireEvent.keyDown(tab('meta'), { key: 'End' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+    expect(document.activeElement).toBe(tab('tiktok_ads'));
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+
+    fireEvent.keyDown(tab('all'), { key: 'ArrowLeft' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'Home' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+    expect(document.activeElement).toBe(tab('all'));
+  });
+
   it('keeps the Overview actions off a platform the Overview does not manage', () => {
     platformTab = 'google_ads';
     renderTab();
