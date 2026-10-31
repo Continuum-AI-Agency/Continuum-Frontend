@@ -65,6 +65,7 @@ import {
   assignedAccountsForPlatform,
   chooseDefaultAdAccount,
   isSameAdAccount,
+  openingPaidPlatform,
   rankPortfolioAccounts,
   readSavedAdAccount,
   saveAdAccount,
@@ -424,8 +425,10 @@ export default function PaidMediaClientPage({
   ]);
 
   // Switching ad platform clears the account so the selector auto-picks one for it.
+  const platformPickedByHand = React.useRef(false);
   const handlePlatformChange = React.useCallback(
     (next: PaidMediaPlatform) => {
+      platformPickedByHand.current = true;
       setPlatform(next);
       setSelectedAdAccount(null);
     },
@@ -529,7 +532,17 @@ export default function PaidMediaClientPage({
     });
     setSelectedCampaign(null);
     setPlatform('meta');
+    platformPickedByHand.current = false;
   }, [brandProfileId, initialAdAccountId]);
+
+  // Until the person picks a platform, Scale opens on the one the brand has an ad account on: a
+  // brand whose only accounts are Google's used to land on "Connect an ad account". Declared after
+  // the brand reset above, so on mount and on a brand switch it has the last word.
+  React.useEffect(() => {
+    if (platformPickedByHand.current || !optimizerAccounts.isSuccess) return;
+    const opening = openingPaidPlatform(optimizerAccounts.data);
+    if (opening !== platform) setPlatform(opening);
+  }, [optimizerAccounts.isSuccess, optimizerAccounts.data, platform]);
 
   React.useEffect(() => {
     if (normalizedTabParam) {
