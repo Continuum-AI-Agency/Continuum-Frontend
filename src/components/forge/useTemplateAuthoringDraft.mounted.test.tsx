@@ -156,6 +156,36 @@ describe('mounted authoring draft tab sync', () => {
     expect(restarted.result.current.dirty).toBe(true);
   });
 
+  test('restart automatically saves retained local edits and never labels them saved before acknowledgement', async () => {
+    const selectedScope = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
+    scopedDrafts.set(selectedScope.workingCopyId, draft(1, [edit], selectedScope));
+    const offlineEdit = { ...edit, edit: { compId: 7, layerId: 31, rotation: 45 } } as TemplateAuthoringCommand;
+    const useEditor = () => {
+      const [commands, setCommands] = useState<TemplateAuthoringCommand[]>([]);
+      const state = useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands,
+        onRestore: (snapshot) => setCommands(commandsFromLayerSnapshot(snapshot)) });
+      return { ...state, commands, setCommands };
+    };
+    const original = renderHook(useEditor);
+    await waitFor(() => expect(original.result.current.ready).toBe(true));
+    act(() => original.result.current.setCommands([offlineEdit]));
+    await act(async () => { expect(await original.result.current.park([offlineEdit])).toBe(true); });
+    original.unmount();
+    expect(scopedDrafts.get(selectedScope.workingCopyId)?.revision).toBe(1);
+    expect(putDraft).not.toHaveBeenCalled();
+    const restarted = renderHook(useEditor);
+    await waitFor(() => expect(restarted.result.current.ready).toBe(true));
+    expect(restarted.result.current.commands).toEqual([offlineEdit]);
+    expect(restarted.result.current.status).not.toBe('saved');
+    expect(restarted.result.current.dirty).toBe(true);
+    await waitFor(() => expect(scopedDrafts.get(selectedScope.workingCopyId)?.commands).toEqual([offlineEdit]), { timeout: 2500 });
+    await waitFor(() => expect(restarted.result.current.status).toBe('saved'));
+    expect(restarted.result.current.revision).toBe(2);
+    expect(restarted.result.current.dirty).toBe(false);
+    expect(putDraft).toHaveBeenCalledTimes(1);
+    expect(putDraft.mock.calls[0]?.[1]).toMatchObject({ workingCopyId: selectedScope.workingCopyId, expectedRevision: 1, commands: [offlineEdit] });
+  });
+
   test('same-working-copy tabs conflict while another variant stream stays independent', async () => {
     const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
     const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };

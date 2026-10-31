@@ -182,8 +182,9 @@ export class LayerDraftAutosaver {
     this.persisted = structuredClone(options.persistedCommands);
     this.delayMs = options.delayMs ?? 500;
     this.error = options.initialError ?? null;
-    this.status = options.initialConflict ? 'conflict' : options.initialError ? 'error' : 'saved';
+    this.status = options.initialConflict ? 'conflict' : options.initialError ? 'error' : this.isDirty() ? 'unsaved' : 'saved';
     this.publish();
+    if (this.status === 'unsaved') this.schedule(this.delayMs);
   }
 
   get view(): LayerDraftAutosaveView {
