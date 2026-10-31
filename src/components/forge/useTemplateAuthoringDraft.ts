@@ -20,6 +20,7 @@ import {
   listTemplateDraftRecoveries,
   removeTemplateDraftRecovery,
   saveTemplateDraftRecovery,
+  openTemplateDraftDb as openDraftDb,
   type TemplateDraftRecovery,
 } from '@/components/forge/templateDraftRecovery';
 import {
@@ -27,7 +28,9 @@ import {
   fetchTemplateAuthoringDraft,
   fetchTemplateAuthoringUserId,
   putTemplateAuthoringDraft,
+  appendTemplateAuthoringHistory,
 } from '@/lib/library/templateSources';
+import { TemplateOperationJournal, type ForgeDraftAction } from './templateOperationJournal';
 import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 
 export type LocalTemplateAuthoringDraft = {
@@ -55,6 +58,7 @@ type DraftState = LayerDraftAutosaveView & {
   workspaceIdentity: string | null;
   userId: string | null;
   update: (commands: TemplateAuthoringCommand[], immediate?: boolean) => void;
+  recordOperation: (action: ForgeDraftAction) => string | null;
   serverDraft: TemplateAuthoringDraft | null;
   persistedDraft: TemplateAuthoringDraft | null;
   sourceDocument: TemplateAuthoringDocument | null;
@@ -119,24 +123,6 @@ export const layerDraftStorageKey = (
   scope: TemplateAuthoringScope,
   workspaceIdentity = `pinned_source:${scope.baseVersionId}`,
 ) => `${userId}:${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:workspace:${workspaceIdentity}`;
-
-function openDraftDb(): Promise<IDBDatabase> {
-  if (typeof indexedDB === 'undefined')
-    return Promise.reject(new Error('Private recovery storage is unavailable in this browser.'));
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('continuum-forge-private-drafts', 3);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains('drafts')) request.result.createObjectStore('drafts');
-      if (!request.result.objectStoreNames.contains('recoveries'))
-        request.result.createObjectStore('recoveries', { keyPath: 'id' });
-      if (!request.result.objectStoreNames.contains('views'))
-        request.result.createObjectStore('views', { keyPath: 'id' });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error('Private recovery storage is unavailable.'));
-  });
-}
 
 async function readLocalDraft(key: string): Promise<LocalTemplateAuthoringDraft | null> {
   const db = await openDraftDb();
@@ -219,6 +205,9 @@ export function useTemplateAuthoringDraft({
   const [recoveries, setRecoveries] = useState<TemplateDraftRecovery[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationPending, setOperationPending] = useState(false);
+  const journalRef = useRef<TemplateOperationJournal | null>(null);
   const autosaverRef = useRef<LayerDraftAutosaver | null>(null);
   const scopeKey = scope ? `${scope.brandId}:${scope.assetId}:${scope.baseVersionId}` : '';
   const restoreRef = useRef(onRestore);
@@ -253,30 +242,44 @@ export function useTemplateAuthoringDraft({
       const key = `${layerDraftStorageKey(args.userId, args.scope, args.workspaceIdentity)}:tab:${tabId.current}`;
       const autosaverGeneration = generation.current;
       localKeyRef.current = key;
+      const isCurrent = () => key === localKeyRef.current && generation.current === autosaverGeneration;
+      const journal: TemplateOperationJournal = new TemplateOperationJournal({
+        userId: args.userId, scope: args.scope, workspaceIdentity: args.workspaceIdentity,
+        sourceChecksum: args.sourceChecksum,
+        append: (events) => appendTemplateAuthoringHistory(args.userId, args.scope.assetId, args.scope.brandId, events),
+        onError: (error) => { if (isCurrent()) setOperationError(error instanceof Error ? error.message : 'Forge operation history could not be preserved.'); },
+        onSaved: () => { if (isCurrent()) { setOperationError(null); setOperationPending(journal.busy); } },
+      });
+      journalRef.current = journal;
+      setOperationPending(true);
+      void journal.flush().then(() => { if (isCurrent()) { setOperationError(null); setOperationPending(journal.busy); } }, (error: unknown) => {
+        if (isCurrent()) setOperationError(error instanceof Error ? error.message : 'Forge operation history could not be synchronized.');
+      });
       const autosaver = new LayerDraftAutosaver({
         scope: args.scope,
         revision: args.revision,
         persistedCommands: args.persistedCommands,
         commands: args.commands,
         write: async (draftScope, expectedRevision, nextCommands) => {
-          const result = await putTemplateAuthoringDraft(args.scope.assetId, {
+          await journal.flush();
+          const { result, matched } = await journal.writeDraft({
             brandId: draftScope.brandId,
             baseVersionId: draftScope.baseVersionId,
             expectedRevision,
             commands: nextCommands,
+            origin: { tool: 'Forge web private draft' },
+          }, async (frozen) => {
+            const acknowledged = await putTemplateAuthoringDraft(args.scope.assetId, frozen, args.userId);
+            if (acknowledged.scope.brandId !== draftScope.brandId || acknowledged.scope.assetId !== draftScope.assetId ||
+                acknowledged.scope.baseVersionId !== draftScope.baseVersionId)
+              throw new Error('The server returned a draft for a different template.');
+            if (acknowledged.sourceChecksum !== args.sourceChecksum)
+              throw new TemplateAuthoringDraftError(409, 'source_mismatch',
+                'The source package changed. Your local edits are preserved for reconciliation.');
+            return acknowledged;
           });
-          if (
-            result.scope.brandId !== draftScope.brandId ||
-            result.scope.assetId !== draftScope.assetId ||
-            result.scope.baseVersionId !== draftScope.baseVersionId
-          )
-            throw new Error('The server returned a draft for a different template.');
-          if (result.sourceChecksum !== args.sourceChecksum)
-            throw new TemplateAuthoringDraftError(
-              409,
-              'source_mismatch',
-              'The source package changed. Your local edits are preserved for reconciliation.',
-            );
+          if (!matched) throw new TemplateAuthoringDraftError(409, 'revision_conflict',
+            'An earlier frozen save was acknowledged. Your newer edits are preserved; review both draft copies before saving.');
           tabChannel.current?.postMessage({ tabId: tabId.current, revision: result.revision });
           if (key === localKeyRef.current && generation.current === autosaverGeneration)
             setPersistedDraft(result);
@@ -405,6 +408,9 @@ export function useTemplateAuthoringDraft({
     conflictFetchRef.current = false;
     activeSourceChecksum.current = null;
     activeWorkspaceIdentity.current = null;
+    journalRef.current = null;
+    setOperationError(null);
+    setOperationPending(false);
     setWorkspaceIdentity(null);
     setDraftError(null);
     setServerDraft(null);
@@ -745,8 +751,19 @@ export function useTemplateAuthoringDraft({
   }, [commands, loaded]);
 
   const save = useCallback(async () => {
-    if (!loaded || !autosaverRef.current) return false;
-    return autosaverRef.current.flush();
+    const autosaver = autosaverRef.current;
+    const journal = journalRef.current;
+    const run = generation.current;
+    if (!loaded || !autosaver || !journal) return false;
+    try {
+      await journal.flush();
+      if (generation.current !== run || autosaverRef.current !== autosaver) return false;
+      setOperationError(null); setOperationPending(journal.busy);
+    } catch (error) {
+      if (generation.current === run) setOperationError(error instanceof Error ? error.message : 'Forge operation history is still pending.');
+      return false;
+    }
+    return autosaver.flush();
   }, [loaded]);
   const refresh = useCallback(() => {
     if (!scope || !enabled) return;
@@ -777,7 +794,18 @@ export function useTemplateAuthoringDraft({
   }, [scope, loaded]);
   const retry = useCallback(async () => {
     if (!loaded) return false;
+    const run = generation.current;
+    const journal = journalRef.current;
+    try {
+      await journal?.flush();
+      if (generation.current !== run) return false;
+      setOperationError(null); setOperationPending(journal?.busy ?? false);
+    } catch (error) {
+      if (generation.current === run) setOperationError(error instanceof Error ? error.message : 'Forge operation history is still pending.');
+      return false;
+    }
     await recoveryQueue.current;
+    if (generation.current !== run) return false;
     if (recoveryError) {
       const pending = pendingRecovery.current;
       if (pending) {
@@ -859,11 +887,12 @@ export function useTemplateAuthoringDraft({
 
   return {
     ...view,
-    error: [...new Set([draftError, view.error, recoveryError].filter((message): message is string => !!message))].join(' · ') || null,
+    dirty: view.dirty || operationPending || !!operationError,
+    error: [...new Set([draftError, view.error, recoveryError, operationError].filter((message): message is string => !!message))].join(' · ') || null,
     status: loaded
-      ? recoveryError && view.status !== 'conflict' && view.status !== 'source-mismatch'
+      ? (recoveryError || operationError) && view.status !== 'conflict' && view.status !== 'source-mismatch'
         ? 'error'
-        : view.status
+        : operationPending && view.status === 'saved' ? 'unsaved' : view.status
       : 'loading',
     ready: loaded,
     workspaceIdentity,
@@ -873,6 +902,12 @@ export function useTemplateAuthoringDraft({
     refresh,
     update: (nextCommands, immediate = false) =>
       autosaverRef.current?.update(nextCommands, immediate),
+    recordOperation: (action) => {
+      const journal = journalRef.current;
+      if (!journal) { setOperationError('Private operation history is not ready. Retry before editing.'); return null; }
+      setOperationPending(true);
+      return journal.capture(action, autosaverRef.current?.view.revision ?? 0);
+    },
     serverDraft,
     persistedDraft,
     sourceDocument,

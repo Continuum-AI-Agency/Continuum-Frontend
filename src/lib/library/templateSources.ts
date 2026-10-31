@@ -23,6 +23,7 @@ import type {
   TemplateSourceSummary,
   WorkspaceTemplateDiscoveryResponse,
   ForgeLineageView,
+  TemplateOperationInput,
 } from '@continuum/contracts';
 import type { MediaAssetVersion } from '@continuum/contracts';
 import {
@@ -86,8 +87,11 @@ import {
   templateSourceListResponseSchema,
   templateTextMoveResponseSchema,
   workspaceTemplateDiscoveryResponseSchema,
+  templateVersionHistoryAppendRequestSchema,
+  templateVersionHistoryAppendResponseSchema,
 } from '@continuum/contracts';
 import { TemplateAuthoringDraftError } from '@/components/forge/layerDraft';
+import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 import { verifyTemplateAuthoringPackageResponse } from '@/components/forge/templateAuthoringPackage';
 import { verifyTemplateAuthoringFontResponse } from '@/components/forge/templateAuthoringFont';
 import { resolvePinnedArtworkVersion, type PinnedArtworkAssetRef } from '@/components/forge/templateArtworkPreview';
@@ -145,11 +149,13 @@ export async function editableTemplateFonts(brandId: string): Promise<FontInvent
 // in a Next route handler because they reach Template Forge with a server-only token, and
 // because the font readiness check reads the private brand font store.
 
-async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
+async function authorizedFetch(path: string, init?: RequestInit, expectedUserId?: string): Promise<Response> {
   const supabase = createSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error('A signed-in session is required');
+  if (expectedUserId && data.session?.user.id !== expectedUserId)
+    throw new Error('This operation history belongs to another signed-in account. Its pending events are preserved.');
   return fetch(getApiUrl(path), {
     ...init,
     headers: {
@@ -158,6 +164,25 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
       ...(init?.headers ?? {}),
     },
   });
+}
+
+export async function appendTemplateAuthoringHistory(
+  userId: string,
+  assetId: string,
+  brandId: string,
+  operations: TemplateOperationInput[],
+): Promise<void> {
+  const request = templateVersionHistoryAppendRequestSchema.parse({ brandId, operations });
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/history`,
+    { method: 'POST', body: JSON.stringify(request) }, userId);
+  const { items } = templateVersionHistoryAppendResponseSchema.parse(await unwrap(response, 'Forge operation history'));
+  const received = new Map(items.filter((event) => event.principalId === userId).map((event) => [event.id, event]));
+  if (request.operations.some((event) => {
+    const accepted = received.get(event.id);
+    return !accepted || Object.entries(event).some(([key, value]) =>
+      !templateAuthoringEqual(accepted[key as keyof typeof accepted], value));
+  }))
+    throw new Error('The server did not acknowledge every operation for this account. The original batch is preserved.');
 }
 
 async function unwrap<T>(response: Response, what: string): Promise<T> {
@@ -793,10 +818,11 @@ export async function fetchTemplateAuthoringDraft(
 export async function putTemplateAuthoringDraft(
   assetId: string,
   request: TemplateAuthoringDraftPut,
+  expectedUserId?: string,
 ): Promise<TemplateAuthoringDraft> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-draft`,
-    { method: 'PUT', body: JSON.stringify(request) },
+    { method: 'PUT', body: JSON.stringify(request) }, expectedUserId,
   );
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;

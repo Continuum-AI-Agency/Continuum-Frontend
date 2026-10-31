@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { templateOperationOriginSchema } from './template-operation-events';
 import {
   templateAuthoringFreshArtboardReceiptSchema,
   templateAuthoringGroupIdentityMapEntrySchema,
@@ -654,6 +655,8 @@ export type TemplateAuthoringDraft = z.infer<typeof templateAuthoringDraftSchema
 
 export const templateAuthoringDraftPutSchema = z
   .object({
+    requestId: uuid.optional(),
+    origin: templateOperationOriginSchema.optional(),
     brandId: uuid,
     baseVersionId: uuid,
     expectedRevision: z.number().int().nonnegative(),
@@ -661,6 +664,38 @@ export const templateAuthoringDraftPutSchema = z
   })
   .strict();
 export type TemplateAuthoringDraftPut = z.infer<typeof templateAuthoringDraftPutSchema>;
+
+/** Immutable server response; replay precedes current source and draft validation. */
+export const templateAuthoringDraftAttemptResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('saved'), draft: templateAuthoringDraftSchema }).passthrough(),
+  z.object({ status: z.literal('conflict'), currentRevision: z.number().int().nonnegative() }).passthrough(),
+  z.object({ status: z.literal('source_mismatch'), currentSource: templateAuthoringCurrentSourceSchema }).passthrough(),
+  z.object({ status: z.literal('failed'), failure: z.object({
+    status: z.number().int().min(400).max(599), code: z.string().min(1),
+    details: z.record(z.string(), z.unknown()),
+  }).strict() }).passthrough(),
+]);
+export type TemplateAuthoringDraftAttemptResult = z.infer<typeof templateAuthoringDraftAttemptResultSchema>;
+
+/** Owner-private snapshot evidence, separate from the project-shared compact operation journal. */
+export const templateAuthoringDraftAttemptSchema = z.object({
+  requestId: uuid,
+  scope: templateAuthoringScopeSchema,
+  principalId: z.guid(),
+  expectedRevision: z.number().int().nonnegative(),
+  commands: z.array(templateAuthoringCommandSchema).max(2048),
+  clientReportedOrigin: templateOperationOriginSchema.nullable(),
+  snapshotSha256: sha256,
+  snapshotHashEncoding: z.literal('postgres-jsonb-text-utf8'),
+  representation: z.literal('submitted_command_snapshot'),
+  upstreamOperationOrder: z.literal('unknown'),
+  requestedEventId: uuid,
+  terminalEventId: uuid,
+  receivedAt: z.string(),
+  result: templateAuthoringDraftAttemptResultSchema.nullable(),
+}).strict();
+export type TemplateAuthoringDraftAttempt = z.infer<typeof templateAuthoringDraftAttemptSchema>;
+
 
 export const templateAuthoringWorkspacePreviewResponseSchema = templateLayerPreviewResponseSchema.extend({
   artifactId: uuid,

@@ -328,6 +328,19 @@ export function TemplateLayerEditor({
 }) {
   const [history, setHistory] = useState<LayerHistory>(() => createLayerHistory(EMPTY_DRAFT));
   const historyRef = useRef(history);
+  const recordOperationRef = useRef<(action: import('./templateOperationJournal').ForgeDraftAction) => string | null>(() => null);
+  const pendingOperationIds = useRef<string[]>([]);
+  const historyOperationIds = useRef(new WeakMap<LayerDraftSnapshot, string[]>());
+  const appendRecordedCommand = (snapshot: LayerDraftSnapshot, command: TemplateAuthoringCommand) => {
+    const id = recordOperationRef.current({
+      command: 'forge_authoring_command', changes: { command },
+      affectedObjects: 'nodeId' in command ? [command.nodeId] : [],
+      origin: { tool: 'Forge web editor' },
+    });
+    if (!id) return historyRef.current.present;
+    pendingOperationIds.current.push(id);
+    return appendLayerDraftCommand(snapshot, command);
+  };
   historyRef.current = history;
   const { edits, orders, exposures } = history.present;
   const [pinnedVersionId, setPinnedVersionId] = useState<string | null>(null);
@@ -431,7 +444,17 @@ export function TemplateLayerEditor({
   const savedRevisionKeyRef = useRef<string | null>(null);
   const pushSnapshot = (snapshot: LayerDraftSnapshot, group: string | null = null) => {
     const wasDirty = isLayerHistoryDirty(historyRef.current);
-    const next = updateLayerHistory(historyRef.current, snapshot, group);
+    const previous = historyRef.current;
+    const operationIds = pendingOperationIds.current.splice(0);
+    if (!operationIds.length && !same(previous.present, snapshot)) {
+      const id = recordOperationRef.current({ command: 'forge_snapshot_adopt', evidence: 'unknown',
+        changes: { commands: commandsFromLayerSnapshot(snapshot), qualification: 'snapshot-only' },
+        origin: { tool: 'Forge web editor' } });
+      if (id) operationIds.push(id);
+    }
+    const next = updateLayerHistory(previous, snapshot, group);
+    historyOperationIds.current.set(next.present, group && group === previous.group
+      ? [...(historyOperationIds.current.get(previous.present) ?? []), ...operationIds] : operationIds);
     historyRef.current = next;
     setHistory(next);
     if (!wasDirty && isLayerHistoryDirty(next)) setPinnedVersionId(versionId);
@@ -443,9 +466,19 @@ export function TemplateLayerEditor({
     setHistory(next);
     setTimeout(() => void flushDraftRef.current(), 0);
   };
-  const moveHistory = (move: (current: LayerHistory) => LayerHistory) => {
+  const moveHistory = (move: (current: LayerHistory) => LayerHistory, shortcut?: string) => {
     const wasDirty = isLayerHistoryDirty(historyRef.current);
-    const next = move(historyRef.current);
+    const previous = historyRef.current;
+    const next = move(previous);
+    if (next === previous) return;
+    const undo = move === undoLayerHistory;
+    const id = recordOperationRef.current({
+      command: undo ? 'forge_undo' : 'forge_redo',
+      changes: { before: commandsFromLayerSnapshot(previous.present), after: commandsFromLayerSnapshot(next.present) },
+      causedBy: (historyOperationIds.current.get(undo ? previous.present : next.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', ...(shortcut ? { shortcut } : { button: undo ? 'Undo' : 'Redo' }) },
+    });
+    if (!id) return;
     historyRef.current = next;
     setHistory(next);
     setLayerInputs({});
@@ -553,6 +586,7 @@ export function TemplateLayerEditor({
   });
   flushDraftRef.current = authoringDraft.save;
   updateDraftRef.current = authoringDraft.update;
+  recordOperationRef.current = authoringDraft.recordOperation;
   const agentDraftRef = useRef(authoringDraft);
   agentDraftRef.current = authoringDraft;
   const pushSnapshotRef = useRef(pushSnapshot);
@@ -1546,7 +1580,7 @@ export function TemplateLayerEditor({
         layerId: candidate.layerId,
         ...change,
       };
-      next = appendLayerDraftCommand(next, {
+      next = appendRecordedCommand(next, {
         type: 'layer.edit',
         nodeId: `aep:${candidate.compId}:${candidate.layerId}`,
         edit,
@@ -1653,7 +1687,7 @@ export function TemplateLayerEditor({
       if (same(nodeOrder, sourceOrder)) delete next[shownComp];
       else next[shownComp] = nodeOrder;
       snapshot = { ...snapshot, nodeOrders: next, orders: nextLegacyOrders };
-      snapshot = appendLayerDraftCommand(snapshot, {
+      snapshot = appendRecordedCommand(snapshot, {
         type: 'composition.order',
         compId: shownComp,
         nodeIds: nodeOrder,
@@ -1666,7 +1700,7 @@ export function TemplateLayerEditor({
       if (same(numericOrder, fileStack)) delete next[shownComp];
       else next[shownComp] = numericOrder;
       snapshot = { ...snapshot, orders: next };
-      snapshot = appendLayerDraftCommand(snapshot, {
+      snapshot = appendRecordedCommand(snapshot, {
         type: 'composition.order',
         compId: shownComp,
         layerIds: numericOrder,
@@ -1680,7 +1714,7 @@ export function TemplateLayerEditor({
     group: string | null = null,
     immediate = true,
   ) => {
-    const snapshot = appendLayerDraftCommand(historyRef.current.present, command);
+    const snapshot = appendRecordedCommand(historyRef.current.present, command);
     pushSnapshot(snapshot, group);
     if (immediate) setTimeout(() => void flushDraftRef.current(), 0);
   };
@@ -2130,6 +2164,12 @@ export function TemplateLayerEditor({
     setSelected(memberNodeIds[0] ?? null);
   };
   const reset = () => {
+    const id = recordOperationRef.current({ command: 'forge_clear',
+      changes: { before: commandsFromLayerSnapshot(historyRef.current.present), after: [] },
+      causedBy: (historyOperationIds.current.get(historyRef.current.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', button: 'Reset edits' } });
+    if (!id) return;
+    pendingOperationIds.current.push(id);
     pushSnapshot(EMPTY_DRAFT);
     setLayerInputs({});
     setLayerValidity({});
@@ -2253,10 +2293,10 @@ export function TemplateLayerEditor({
         return;
       if (event.key.toLowerCase() === 'z') {
         event.preventDefault();
-        moveHistory(event.shiftKey ? redoLayerHistory : undoLayerHistory);
+        moveHistory(event.shiftKey ? redoLayerHistory : undoLayerHistory, `${event.metaKey ? 'Meta' : 'Control'}+${event.shiftKey ? 'Shift+' : ''}Z`);
       } else if (event.key.toLowerCase() === 'y') {
         event.preventDefault();
-        moveHistory(redoLayerHistory);
+        moveHistory(redoLayerHistory, `${event.metaKey ? 'Meta' : 'Control'}+Y`);
       } else if (event.key.toLowerCase() === 'd' && selectedNode && !selectedNode.duplicateReason) {
         event.preventDefault();
         duplicateSelected();
@@ -3297,7 +3337,7 @@ export function TemplateLayerEditor({
                               target,
                               change,
                             );
-                            snapshot = appendLayerDraftCommand(
+                            snapshot = appendRecordedCommand(
                               { ...snapshot, edits: nextEdits },
                               {
                                 type: 'layer.edit',
@@ -3893,7 +3933,7 @@ export function TemplateLayerEditor({
                           if (exposed === (field.exposed ?? true)) delete next[field.key];
                           else next[field.key] = exposed;
                           let snapshot = { ...historyRef.current.present, exposures: next };
-                          snapshot = appendLayerDraftCommand(snapshot, {
+                          snapshot = appendRecordedCommand(snapshot, {
                             type: 'exposure.set',
                             slotKey: field.key,
                             exposed,

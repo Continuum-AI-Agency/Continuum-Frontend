@@ -40,7 +40,7 @@ export const templateAuthoringViewStateKey = (
   workspaceIdentity: string,
 ) => `${templateDraftScopeKey(userId, scope)}:workspace:${workspaceIdentity}:view`;
 
-function openDb(): Promise<IDBDatabase> {
+export function openTemplateDraftDb(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined')
     return Promise.reject(new Error('Private recovery storage is unavailable in this browser.'));
   return new Promise((resolve, reject) => {
@@ -56,6 +56,8 @@ function openDb(): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error ?? new Error('Private recovery storage is unavailable.'));
   });
 }
+
+const openDb = openTemplateDraftDb;
 
 export async function readTemplateAuthoringViewState(
   userId: string,

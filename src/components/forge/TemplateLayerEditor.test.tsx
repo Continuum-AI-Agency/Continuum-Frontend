@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type {
   SaveTemplateLayerVariantRequest,
   TemplateEditableLayer,
@@ -10,6 +10,7 @@ import type {
   TemplateAuthoringDocument,
   TemplateAuthoringDraft,
   TemplateAuthoringDraftPut,
+  TemplateOperationInput,
   TemplateAuthoringArtifact,
   TemplateAuthoringPreparation,
   TemplateAuthoringCompileRequest,
@@ -421,6 +422,7 @@ const fieldReads = mock(async (): Promise<TemplateVariablesResponse> => ({
   edits: [],
   parseState: 'parsed',
 }));
+const authoringHistoryWrites = mock(async (_userId: string, _assetId: string, _brandId: string, _events: TemplateOperationInput[]) => {});
 const sources = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
   ...sources,
@@ -435,6 +437,7 @@ mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateAuthoringWorkspacePreview: workspacePreviews,
   fetchTemplateAuthoringFontPreview: authoringFontPreviews,
   putTemplateAuthoringDraft: authoringDraftWrites,
+  appendTemplateAuthoringHistory: authoringHistoryWrites,
   compileTemplateAuthoring: compileAuthoring,
   prepareTemplateAuthoringArtifact: prepareAuthoring,
   requestTemplateAuthoringNativeRender: nativeRenders,
@@ -568,6 +571,7 @@ const privateDraftTestIndexedDb = {
 } as unknown as IDBFactory;
 const originalPrivateDraftIndexedDb = globalThis.indexedDB;
 const enablePrivateDraftTestStorage = () => Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: privateDraftTestIndexedDb });
+beforeEach(enablePrivateDraftTestStorage);
 const persistedDraftForTest = (
   revision: number,
   commands: TemplateAuthoringCommand[],
@@ -671,6 +675,7 @@ afterEach(() => {
     authoringDocumentReads,
     authoringDraftReads,
     authoringDraftWrites,
+    authoringHistoryWrites,
     compileAuthoring,
     prepareAuthoring,
     nativeRenders,
@@ -1007,6 +1012,8 @@ describe('TemplateLayerEditor', () => {
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
       type: 'artboard.resize', compId: 63, width: 640, height: 360,
     });
+    expect(authoringHistoryWrites.mock.calls.flatMap(call => call[3]).some(event =>
+      event.command === 'forge_authoring_command' && (event.changes.command as TemplateAuthoringCommand).type === 'artboard.resize')).toBe(true);
     await waitFor(() => expect(document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox')).toBe('0 0 640 360'));
     expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
@@ -2968,6 +2975,7 @@ describe('TemplateLayerEditor', () => {
   });
 
   test('a failed composition is a local estimate with a retry, not a successful preview', async () => {
+    Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: undefined });
     revisionPreviews.mockImplementation(async () => {
       throw new Error('Composition unavailable');
     });

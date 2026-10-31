@@ -34,14 +34,18 @@ const noopRestore = () => {};
 
 let currentDraft: TemplateAuthoringDraft | null = null;
 const fetchDraft = mock(async () => currentDraft);
+const appendedHistory: unknown[][] = [];
+const historyAppend = mock(async (_userId: string, _assetId: string, _brandId: string, events: unknown[]) => { appendedHistory.push(structuredClone(events)); });
+const putDraft = mock(async (_assetId: string, request: { expectedRevision: number; commands: TemplateAuthoringCommand[] }) => {
+  currentDraft = draft(request.expectedRevision + 1, request.commands);
+  return currentDraft;
+});
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateAuthoringDocument: mock(async () => document),
   fetchTemplateAuthoringDraft: fetchDraft,
   fetchTemplateAuthoringUserId: mock(async () => 'actor-a'),
-  putTemplateAuthoringDraft: mock(async (_assetId: string, request: { expectedRevision: number; commands: TemplateAuthoringCommand[] }) => {
-    currentDraft = draft(request.expectedRevision + 1, request.commands);
-    return currentDraft;
-  }),
+  appendTemplateAuthoringHistory: historyAppend,
+  putTemplateAuthoringDraft: putDraft,
 }));
 const { useTemplateAuthoringDraft } = await import('./useTemplateAuthoringDraft');
 
@@ -100,6 +104,9 @@ function installIndexedDb() {
 
 const originals = { indexedDB: globalThis.indexedDB, BroadcastChannel: globalThis.BroadcastChannel };
 beforeEach(() => {
+  appendedHistory.length = 0;
+  historyAppend.mockClear();
+  putDraft.mockClear();
   currentDraft = null;
   fetchDraft.mockClear();
   FakeBroadcastChannel.instances = [];
@@ -113,6 +120,83 @@ afterEach(() => {
 });
 
 describe('mounted authoring draft tab sync', () => {
+  test('a source transition during history upload cannot flush the replacement autosaver', async () => {
+    const { result, rerender } = renderHook(({ selectedScope }) => useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands: emptyCommands, onRestore: noopRestore }),
+      { initialProps: { selectedScope: scope } });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    let accept!: () => void;
+    const pending = new Promise<void>(resolve => { accept = resolve; });
+    historyAppend.mockImplementationOnce(async () => pending);
+    act(() => { result.current.recordOperation({ command: 'forge_authoring_command', changes: { command: edit } }); result.current.update([edit]); });
+    await waitFor(() => expect(historyAppend).toHaveBeenCalled());
+    const saving = result.current.save();
+    rerender({ selectedScope: { ...scope, baseVersionId: '00000000-0000-4000-8000-000000000088' } });
+    await act(async () => { accept(); expect(await saving).toBe(false); });
+    expect(putDraft).not.toHaveBeenCalled();
+  });
+
+  test('invalid draft acknowledgement retains the original frozen request identity for retry', async () => {
+    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    putDraft.mockImplementationOnce(async (_assetId, request) => ({
+      ...draft(request.expectedRevision + 1, request.commands),
+      scope: { ...scope, assetId: '00000000-0000-4000-8000-000000000099' },
+    }));
+    act(() => result.current.update([edit]));
+    await act(async () => { expect(await result.current.save()).toBe(false); });
+    const original = structuredClone(putDraft.mock.calls[0]![1]);
+    await act(async () => { expect(await result.current.retry()).toBe(true); });
+    expect(putDraft.mock.calls[1]![1]).toEqual(original);
+    expect(original).toMatchObject({ requestId: expect.any(String) });
+  });
+
+  test('optimistic capture remains unsaved until its durable history acknowledgement', async () => {
+    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    let accept!: () => void;
+    const pending = new Promise<void>(resolve => { accept = resolve; });
+    historyAppend.mockImplementationOnce(async () => pending);
+    act(() => { result.current.recordOperation({ command: 'forge_clear', changes: { after: [] } }); });
+    await waitFor(() => expect(historyAppend).toHaveBeenCalled());
+    expect(result.current.status).toBe('unsaved');
+    expect(result.current.dirty).toBe(true);
+    await act(async () => accept());
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    expect(result.current.dirty).toBe(false);
+  });
+
+  test('actual commands reach permanent history before a coalesced draft save', async () => {
+    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    act(() => {
+      result.current.recordOperation({ command: 'forge_authoring_command', changes: { command: edit } });
+      result.current.recordOperation({ command: 'forge_authoring_command', changes: { command: { ...edit, edit: { compId: 7, layerId: 31, rotation: 30 } } } });
+      result.current.update([edit]);
+    });
+    await act(async () => { expect(await result.current.save()).toBe(true); });
+    expect(appendedHistory.flat()).toHaveLength(2);
+    expect(putDraft).toHaveBeenCalledTimes(1);
+    expect(putDraft.mock.calls[0]![1]).toMatchObject({ requestId: expect.any(String), commands: [edit] });
+  });
+
+  test('unavailable durable history blocks draft acknowledgement and retries original events', async () => {
+    const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const db = globalThis.indexedDB;
+    Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: { open: () => { throw new Error('Storage unavailable'); } } });
+    let id: string | null = null;
+    act(() => {
+      id = result.current.recordOperation({ command: 'forge_authoring_command', changes: { command: edit } });
+      result.current.update([edit]);
+    });
+    await act(async () => { expect(await result.current.save()).toBe(false); });
+    expect(putDraft).not.toHaveBeenCalled();
+    Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: db });
+    await act(async () => { expect(await result.current.save()).toBe(true); });
+    expect(appendedHistory.flat()).toMatchObject([{ id }]);
+    expect(putDraft).toHaveBeenCalledTimes(1);
+  });
+
   test('a clean tab reloads the server draft after a peer save message', async () => {
     const { result } = renderHook(() => useTemplateAuthoringDraft({ scope, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
     await waitFor(() => expect(result.current.ready).toBe(true));
