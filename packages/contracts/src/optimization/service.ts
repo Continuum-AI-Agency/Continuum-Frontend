@@ -1307,8 +1307,36 @@ export const PortfolioListItemSchema = z.object({
    *  20261017090000). A platform with no row is absent: Meta then applies as it always has, and
    *  any other platform has no write path. `{}` from an older server. */
   platform_writes: z.record(z.string(), z.boolean()).default({}).catch({}),
+  /**
+   * The "use this goal as the cost cap on the ad platforms" checkbox (migration
+   * 20261031120000). On: the portfolio's one CPA goal is the cost cap wanted on the
+   * platforms, and the Optimizer proposes setting each Google campaign's target CPA (bid
+   * setting) to it. Off (the default): the goal is only measured, and no bid target is
+   * proposed. Written by optimizer_set_portfolio_goal_as_platform_cost_cap.
+   *
+   * `.catch(false)`: a row from the RPC before the migration, or an unreadable value, reads as
+   * off — the default, and the side that never proposes a platform bid change.
+   */
+  goal_as_platform_cost_cap: z.boolean().catch(false),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
+
+/** Where the "use this goal as the cost cap" checkbox acts today: the platforms whose bid
+ *  target the Optimizer can set (set_bid_target). Meta and TikTok cost caps are not written
+ *  yet, so the checkbox's help text names Google Ads only. */
+export const GOAL_AS_COST_CAP_PLATFORMS = ['google_ads'] as const satisfies readonly z.infer<
+  typeof PlatformIdSchema
+>[];
+
+/** optimizer_set_portfolio_goal_as_platform_cost_cap(portfolio, enabled): the flag as stored,
+ *  and allowed_actions of every platform of the portfolio after the write. On adds
+ *  set_bid_target on the GOAL_AS_COST_CAP_PLATFORMS; off removes it from every platform. A
+ *  platform whose accounts were written apart and disagree reads null: no one list to show. */
+export const PortfolioGoalAsCostCapResultSchema = z.object({
+  goal_as_platform_cost_cap: z.boolean(),
+  allowed_actions: z.record(z.string(), z.array(z.string()).nullable()),
+});
+export type PortfolioGoalAsCostCapResult = z.infer<typeof PortfolioGoalAsCostCapResultSchema>;
 
 /** A renewal work item, opened when a fatigue recommendation is approved. */
 export const RenewalTaskStatusSchema = z.enum(['open', 'done', 'dismissed']);

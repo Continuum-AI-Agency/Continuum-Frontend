@@ -124,6 +124,20 @@ mock.module('./CboCampaigns', () => ({ CboCampaigns: () => null }));
 mock.module('./ProjectedConversions', () => ({ ProjectedConversions: () => null }));
 mock.module('./SignalReadinessCard', () => ({ SignalReadinessCard: () => null }));
 
+type RpcAnswer = { data: unknown; error: unknown };
+const rpcAnswers: RpcAnswer[] = [];
+const rpcCalls: { fn: string; args?: Record<string, unknown> }[] = [];
+const order: string[] = [];
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({
+    rpc: async (fn: string, args?: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args });
+      order.push(fn);
+      return rpcAnswers.shift() ?? { data: null, error: { message: 'no answer queued' } };
+    },
+  }),
+}));
+
 const { PortfolioSetup } = await import('./PortfolioSetup');
 
 beforeEach(() => {
@@ -136,6 +150,9 @@ beforeEach(() => {
   enrollMutateAsync.mockClear();
   runMutate.mockClear();
   onCreated.mockClear();
+  rpcAnswers.length = 0;
+  rpcCalls.length = 0;
+  order.length = 0;
 });
 afterEach(cleanup);
 
@@ -206,6 +223,75 @@ describe('PortfolioSetup — the four-step wizard', () => {
       adset_names: { 'as-1': 'Set One', 'as-2': 'Set Two' },
     });
     expect(runMutate).toHaveBeenCalledWith('p-new');
+    expect(onCreated).toHaveBeenCalledWith('p-new');
+  });
+
+  it('the Goal step offers the cost-cap box, unticked; left so, create never calls its setter', async () => {
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
+    next();
+    const box = screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ });
+    expect(box.getAttribute('aria-checked')).toBe('false');
+    expect(document.body.textContent).toContain(
+      'The Optimizer measures the portfolio against this goal and never changes bid settings on the platforms.',
+    );
+    next();
+    fireEvent.click(screen.getByRole('button', { name: /Create & enroll 2 ad sets/ }));
+    await flush();
+    expect(onCreated).toHaveBeenCalledWith('p-new');
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('ticked, create saves the box after enrolling and before the first cycle', async () => {
+    rpcAnswers.push({
+      data: { goal_as_platform_cost_cap: true, allowed_actions: {} },
+      error: null,
+    });
+    enrollMutateAsync.mockImplementationOnce(async () => {
+      order.push('enroll');
+      return {};
+    });
+    runMutate.mockImplementationOnce(() => {
+      order.push('run');
+    });
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
+    next();
+    fireEvent.click(screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ }));
+    expect(document.body.textContent).toContain(
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 20% a day.',
+    );
+    next();
+    fireEvent.click(screen.getByRole('button', { name: /Create & enroll 2 ad sets/ }));
+    await flush();
+    await flush();
+    expect(rpcCalls).toEqual([
+      {
+        fn: 'optimizer_set_portfolio_goal_as_platform_cost_cap',
+        args: { p_portfolio_id: 'p-new', p_enabled: true },
+      },
+    ]);
+    expect(order).toEqual(['enroll', 'optimizer_set_portfolio_goal_as_platform_cost_cap', 'run']);
+    expect(onCreated).toHaveBeenCalledWith('p-new');
+  });
+
+  it('when the box fails to save, says the portfolio exists and lets the person open it', async () => {
+    rpcAnswers.push({ data: null, error: { code: '42501', message: 'permission denied' } });
+    renderSetup();
+    fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
+    next();
+    fireEvent.click(screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ }));
+    next();
+    fireEvent.click(screen.getByRole('button', { name: /Create & enroll 2 ad sets/ }));
+    await flush();
+    await flush();
+    expect(document.body.textContent).toContain(
+      "The portfolio was created, but its goal wasn't set as the cost cap on the ad platforms. You don't have access to change this portfolio.",
+    );
+    expect(document.body.textContent).not.toContain('permission denied');
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(runMutate).toHaveBeenCalledWith('p-new');
+    fireEvent.click(screen.getByRole('button', { name: 'Open the portfolio' }));
     expect(onCreated).toHaveBeenCalledWith('p-new');
   });
 

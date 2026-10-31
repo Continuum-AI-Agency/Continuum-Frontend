@@ -28,6 +28,7 @@ import {
   toMinorUnits,
 } from '@continuum/contracts';
 import { humanize } from '../../format';
+import { goalCostCapAvailability } from '../goalCostCap/goalCostCapModel';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
   buildConversionDescriptor,
@@ -91,6 +92,8 @@ export type WizardDraft = {
   scaleGrowthPct: string;
   scaleCadenceDays: string;
   scaleMaxDaily: string;
+  /** "Use this goal as the cost cap on the ad platforms", saved right after the create. */
+  goalAsPlatformCostCap: boolean;
 };
 
 export const MODE_COPY: Record<OptimizationModeDto, { title: string; body: string }> = {
@@ -138,6 +141,7 @@ export function emptyDraft(): WizardDraft {
     scaleGrowthPct: '',
     scaleCadenceDays: '',
     scaleMaxDaily: '',
+    goalAsPlatformCostCap: false,
   };
 }
 
@@ -440,6 +444,16 @@ export function suggestionPlatformCounts(
 }
 
 /** The objective's own metric unless a still-allowed alternative was chosen. */
+/** Whether the create should also tick the cost-cap checkbox: ticked, AND the goal still
+ *  qualifies (a box ticked before the objective changed to a CPM is not a request). */
+export function goalCostCapRequested(draft: WizardDraft): boolean {
+  return (
+    draft.goalAsPlatformCostCap &&
+    goalCostCapAvailability({ targetMetric: effectiveTargetMetric(draft), goal: num(draft.target) })
+      .available
+  );
+}
+
 export function effectiveTargetMetric(draft: Pick<WizardDraft, 'objective' | 'targetMetric'>) {
   const allowed = allowedTargetMetrics(draft.objective);
   return draft.targetMetric && allowed.includes(draft.targetMetric)

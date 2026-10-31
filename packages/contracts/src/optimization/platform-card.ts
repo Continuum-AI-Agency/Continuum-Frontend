@@ -226,11 +226,13 @@ export const GooglePromoteTermCardSchema = z.object({
   matched_keyword: z.string().min(1).nullable(),
 });
 
-/** Google Ads bid target adjustment (G07): Google's own target (a bid setting on the
- *  platform), the real cost over the window, the proposal, and the cooldown since the last bid
- *  change (Smart Bidding relearns). Two different numbers live here and are never the same
- *  thing: `current_target`/`proposed_target` are the Google Ads bid setting; `portfolio_goal` is
- *  the portfolio's CPA goal the move serves, never pushed to Google. */
+/** Setting the portfolio CPA goal as the Google Ads cost cap (G07), only on a portfolio whose
+ *  "use this goal as the cost cap on the ad platforms" checkbox is on: Google's own target (a
+ *  bid setting on the platform), the real cost over the window, the proposal, and the cooldown
+ *  since the last bid change (Smart Bidding relearns). `current_target`/`proposed_target` are
+ *  the Google Ads target CPA (bid setting); `portfolio_goal` is the portfolio's CPA goal.
+ *  `proposed_target` equals `portfolio_goal` when the gap fits the per-cycle limit, and is a
+ *  capped step toward it otherwise. */
 export const GoogleBidTargetCardSchema = z.object({
   variant: z.literal('google_bid_target'),
   campaign_name: z.string().min(1),
@@ -243,8 +245,8 @@ export const GoogleBidTargetCardSchema = z.object({
   proposed_target: z.number().positive(),
   window_days: z.number().int().positive(),
   days_since_last_change: z.number().int().nonnegative().nullable(),
-  /** The portfolio's CPA goal in `currency`: what the move serves. Optional for cards written
-   *  before the rule priced against it. */
+  /** The portfolio's CPA goal in `currency`: the cost cap the move sets, or steps toward.
+   *  Optional for cards written before the rule priced against it. */
   portfolio_goal: z.number().positive().nullable().optional(),
 });
 

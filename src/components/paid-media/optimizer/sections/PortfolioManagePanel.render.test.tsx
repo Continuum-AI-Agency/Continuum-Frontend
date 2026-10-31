@@ -128,6 +128,15 @@ mock.module('./platformActions/usePortfolioPlatformActions', () => ({
   useSetPortfolioPlatformActions: () => ({ mutateAsync: async () => [], isPending: false }),
 }));
 
+// The cost-cap checkbox writes optimizer_set_portfolio_goal_as_platform_cost_cap; its own
+// suite (goalCostCap/) covers the save, this one only where it sits and what it is told.
+const setGoalAsCostCapMutate = mock((_enabled: boolean) => {});
+const realGoalAsCostCap = await import('./goalCostCap/useGoalAsCostCap');
+mock.module('./goalCostCap/useGoalAsCostCap', () => ({
+  ...realGoalAsCostCap,
+  useSetGoalAsCostCap: () => ({ mutate: setGoalAsCostCapMutate, isPending: false }),
+}));
+
 // The picker's Google half reads paid-media-metrics; this suite is about the Meta form, so the
 // brand has no Google account here (the Google group has its own suite under picker/).
 const realGoogleInventory = await import('../picker/useGooglePickerInventory');
@@ -185,6 +194,7 @@ beforeEach(() => {
   portfolioMetricsState = { status: 'unavailable' };
   platformCapsState = { status: 'ready', caps: [] };
   setPlatformCapMutateAsync.mockClear();
+  setGoalAsCostCapMutate.mockClear();
 });
 afterEach(cleanup);
 
@@ -757,5 +767,38 @@ describe('allowed actions per platform', () => {
     cleanup();
     renderPanel();
     expect(screen.queryByText('Allowed actions per platform')).toBeNull();
+  });
+});
+
+describe('the cost-cap checkbox under the CPA goal', () => {
+  const box = () => screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ });
+
+  it('sits in the goal field, unchecked by default, and is disabled without a goal', () => {
+    renderPanel();
+    const goalRow = input(/Target CPA/).parentElement as HTMLElement;
+    expect(within(goalRow).getByTestId('goal-cost-cap')).toBeTruthy();
+    expect(box().getAttribute('aria-checked')).toBe('false');
+    expect(box().getAttribute('aria-disabled')).toBe('true');
+    expect(document.body.textContent).toContain(
+      'Set a portfolio CPA goal above to use it as the cost cap on the ad platforms.',
+    );
+  });
+
+  it('enables once a goal is typed and saves the tick through the setter', async () => {
+    renderPanel();
+    fireEvent.change(input(/Target CPA/), { target: { value: '40' } });
+    await waitFor(() => expect(box().getAttribute('aria-disabled')).toBeNull());
+    fireEvent.click(box());
+    expect(setGoalAsCostCapMutate).toHaveBeenCalledTimes(1);
+    expect(setGoalAsCostCapMutate.mock.calls[0]?.[0]).toBe(true);
+  });
+
+  it('shows the stored tick, with the step from the portfolio change cap', () => {
+    performanceData = null;
+    renderPanel({ goal_as_platform_cost_cap: true, max_change_pct_per_cycle: 0.15 });
+    expect(box().getAttribute('aria-checked')).toBe('true');
+    expect(document.body.textContent).toContain(
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 15% a day.',
+    );
   });
 });
