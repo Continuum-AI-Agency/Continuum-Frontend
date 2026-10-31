@@ -12,8 +12,13 @@ import { identityFor, Observations, openAs, revokeAll, settle, shot } from './su
 //     an unknown ?scaffold= says the proposal is not on this brand;
 //   · Home cards: every Health and Opportunities link takes a tap 11.5 px above and below its
 //     centre line (the 24 px floor); the platform switch moves with the arrow keys.
-// The last two checks were added after the base run of 2026-10-31; their unit anchors were red
-// on the base.
+//   · P8 (deployed 10-29): every stored account finding renders on Vivo 47's and Pink's Google
+//     tab, waited for as long as the tab reads (the first sweep's settle stopped at the
+//     skeletons while "Reading Google's campaign types…" still held the cards back);
+//   · Chrome's own accessible name of each platform tab (CDP), beside Playwright's.
+// The tap, arrow-key, P8 and Chrome-name checks were added after the base run of 2026-10-31;
+// their unit anchors were red on the base. LANE_E_CASES=home,scale,gate,canvas,unknown,p8 runs
+// a subset.
 
 const VIVO_OWNER = 'mercadotecniavivo@gmail.com';
 const RAMIRO_BENCH = 'ramibuisel@gmail.com';
@@ -23,7 +28,56 @@ const TANGASSI = '9f7e830f-6445-4bba-b199-a2db07fa184a';
 const BENCH_BRAND = 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
 const EASYFIT_2026 = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 const SCAFFOLD = 'deab38f1-577c-45bd-b3d9-448f0544ea32';
+const VIVO_47 = '61b80f51-709a-4408-9f11-04142a286baa';
 const LABEL = process.env.LANE_E_LABEL ?? 'run';
+const CASES = (process.env.LANE_E_CASES ?? '').split(',').filter(Boolean);
+const runs = (key: string) => CASES.length === 0 || CASES.includes(key);
+/** The account findings stored for each brand on 10-31 (paid_media.optimizer_* P8 rows). */
+const STORED_P8 = { vivo47: 6, pink: 6 } as const;
+const P8_WAIT_MS = 180_000;
+
+/** Chrome's own accessible name for each platform tab, read through CDP — what a screen reader
+ *  gets, which Playwright's ariaSnapshot (its own accname) may not match. */
+async function chromeTabNames(page: Page): Promise<string[]> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { nodes } = (await cdp.send('Accessibility.getFullAXTree')) as {
+      nodes: { role?: { value?: string }; name?: { value?: string }; ignored?: boolean }[];
+    };
+    return nodes
+      .filter((node) => !node.ignored && node.role?.value === 'tab')
+      .map((node) => String(node.name?.value ?? ''))
+      .filter((name) => /^(All|Meta|Google|TikTok)/.test(name));
+  } finally {
+    await cdp.detach().catch(() => undefined);
+  }
+}
+
+/** How the Google tab's account findings arrive: polled until every stored one is on screen and
+ *  nothing reads "Reading…", or the wait runs out. */
+async function waitForP8Cards(page: Page, expected: number) {
+  const t0 = Date.now();
+  let firstMs: number | null = null;
+  let count = 0;
+  let reading = true;
+  while (Date.now() - t0 < P8_WAIT_MS) {
+    count = await page.locator('[data-testid="account-finding"]').count();
+    if (count > 0 && firstMs === null) firstMs = Date.now() - t0;
+    reading = /Reading\b[^\n]*…/.test(
+      await page
+        .locator('main')
+        .first()
+        .innerText()
+        .catch(() => ''),
+    );
+    if (count >= expected && !reading) break;
+    await page.waitForTimeout(2000);
+  }
+  const recommendOnly = await page
+    .locator('[data-testid="account-finding-recommend-only"]')
+    .count();
+  return { count, recommendOnly, firstMs, doneMs: Date.now() - t0, reading };
+}
 
 type Box = { x: number; y: number; width: number; height: number };
 const intersects = (a: Box | null, b: Box | null) =>
@@ -61,10 +115,12 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
     const ramiro = await identityFor(RAMIRO_BENCH);
 
     // Home on Pink (Google only).
-    for (const cell of [
-      { viewport: { width: 1440, height: 900 }, theme: 'light' as const },
-      { viewport: { width: 390, height: 844 }, theme: 'dark' as const },
-    ]) {
+    for (const cell of !runs('home')
+      ? []
+      : [
+          { viewport: { width: 1440, height: 900 }, theme: 'light' as const },
+          { viewport: { width: 390, height: 844 }, theme: 'dark' as const },
+        ]) {
       const name = `home-pink@${cell.viewport.width}-${cell.theme}`;
       const opened = await openAs(browser, ramiro, PINK, cell.viewport, cell.theme);
       try {
@@ -117,10 +173,12 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
     }
 
     // Scale on the Google-only brands.
-    for (const brand of [
-      { key: 'pink', id: PINK },
-      { key: 'tangassi', id: TANGASSI },
-    ]) {
+    for (const brand of !runs('scale')
+      ? []
+      : [
+          { key: 'pink', id: PINK },
+          { key: 'tangassi', id: TANGASSI },
+        ]) {
       const name = `scale-${brand.key}@1440-light`;
       const opened = await openAs(browser, ramiro, brand.id, { width: 1440, height: 900 }, 'light');
       try {
@@ -151,6 +209,8 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         let metaConnected: string | null = null;
         let tablistAria = '';
         let landingTab: string | null = null;
+        let chromeNames: string[] = [];
+        let p8: Awaited<ReturnType<typeof waitForP8Cards>> | null = null;
         let arrow: { from: string | null; focused: string | null; selected: string | null } = {
           from: null,
           focused: null,
@@ -172,13 +232,15 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
             .first()
             .ariaSnapshot()
             .catch(() => '');
+          chromeNames = await chromeTabNames(opened.page).catch(() => []);
           const google = opened.page.locator('[data-testid="platform-tab-google_ads"]').first();
           if ((await google.getAttribute('aria-selected')) !== 'true') await google.click();
           await settle(opened.page, 60_000);
-          findings = await opened.page.locator('[data-testid="account-finding"]').count();
-          recommendOnly = await opened.page
-            .locator('[data-testid="account-finding-recommend-only"]')
-            .count();
+          if (brand.key === 'pink') {
+            p8 = await waitForP8Cards(opened.page, STORED_P8.pink);
+            findings = p8.count;
+            recommendOnly = p8.recommendOnly;
+          }
           const picked = opened.page
             .locator('[data-testid^="platform-tab-"][aria-selected="true"]')
             .first();
@@ -207,8 +269,11 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
           recommendOnly,
           metaConnected,
           tablistAria,
+          chromeNames,
           landingTab,
           arrow,
+          p8,
+          notFound: opened.events.notFound,
         });
         if (tabs) {
           recorder.record(
@@ -230,6 +295,16 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
             tablistAria.replace(/\n/g, ' ').slice(0, 200),
           );
           recorder.record(
+            `${name}: Chrome names each platform tab once`,
+            chromeNames.length === 4 &&
+              chromeNames.every(
+                (tabName) => !/^(Meta Meta|Google Ads Google|TikTok TikTok)/.test(tabName),
+              )
+              ? 'PASS'
+              : 'FAIL',
+            chromeNames.join(' | '),
+          );
+          recorder.record(
             `${name}: ArrowRight moves the switch to the next platform`,
             arrow.selected !== arrow.from && arrow.focused === arrow.selected ? 'PASS' : 'FAIL',
             JSON.stringify(arrow),
@@ -243,8 +318,11 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         if (brand.key === 'pink') {
           recorder.record(
             `${name}: the P8 findings show, recommend-only`,
-            findings >= 6 && recommendOnly === findings ? 'PASS' : 'FAIL',
-            `${findings} findings, ${recommendOnly} recommend-only`,
+            findings >= STORED_P8.pink && recommendOnly === findings ? 'PASS' : 'FAIL',
+            `${findings} findings, ${recommendOnly} recommend-only` +
+              (p8
+                ? `; first card at ${p8.firstMs} ms, done at ${p8.doneMs} ms, still reading=${p8.reading}`
+                : ''),
           );
         }
       } finally {
@@ -253,7 +331,7 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
     }
 
     // The gate on a brand with a Facebook Page and no ad account.
-    {
+    if (runs('gate')) {
       const name = 'gate-bench-brand@1440-light';
       const bench = await identityFor(BENCH);
       const opened = await openAs(
@@ -287,13 +365,65 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
       }
     }
 
-    // Canvas page.
+    // Canvas page and Vivo 47's Google tab.
     const vivo = await identityFor(VIVO_OWNER);
-    for (const cell of [
-      { viewport: { width: 390, height: 844 }, theme: 'light' as const },
-      { viewport: { width: 1024, height: 768 }, theme: 'dark' as const },
-      { viewport: { width: 1440, height: 900 }, theme: 'light' as const },
-    ]) {
+
+    // P8 on Vivo 47's Google tab: a brand with Meta and Google, so no gate on any branch.
+    if (runs('p8')) {
+      const name = 'p8-vivo47@1440-light';
+      const opened = await openAs(browser, vivo, VIVO_47, { width: 1440, height: 900 }, 'light');
+      try {
+        await opened.page.goto(
+          '/scale?tab=performance&optimizerView=overview&platform=google_ads',
+          {
+            waitUntil: 'domcontentloaded',
+          },
+        );
+        await opened.page
+          .locator('[data-testid="platform-tab-google_ads"][aria-selected="true"]')
+          .first()
+          .waitFor({ timeout: 90_000 })
+          .catch(() => undefined);
+        const chromeNames = await chromeTabNames(opened.page).catch(() => []);
+        const p8 = await waitForP8Cards(opened.page, STORED_P8.vivo47);
+        const ideas = await opened.page
+          .locator('[data-testid="account-finding"]')
+          .evaluateAll((els) => els.map((el) => el.getAttribute('data-idea')));
+        await shot(opened.page, `fix-${LABEL}-${name}`, false);
+        obs.add({ name, p8, ideas, chromeNames, notFound: opened.events.notFound });
+        recorder.record(
+          `${name}: every stored P8 account finding renders on the Google tab`,
+          p8.count >= STORED_P8.vivo47 ? 'PASS' : 'FAIL',
+          `${p8.count}/${STORED_P8.vivo47} cards [${ideas.join(', ')}]; first at ${p8.firstMs} ms, done at ${p8.doneMs} ms, still reading=${p8.reading}`,
+        );
+        recorder.record(
+          `${name}: every P8 card is recommend-only`,
+          p8.count > 0 && p8.recommendOnly === p8.count ? 'PASS' : 'FAIL',
+          `${p8.recommendOnly}/${p8.count}`,
+        );
+        recorder.record(
+          `${name}: Chrome names each platform tab once`,
+          chromeNames.length === 4 &&
+            chromeNames.every(
+              (tabName) => !/^(Meta Meta|Google Ads Google|TikTok TikTok)/.test(tabName),
+            )
+            ? 'PASS'
+            : 'FAIL',
+          chromeNames.join(' | '),
+        );
+      } finally {
+        await opened.close();
+      }
+    }
+
+    // Canvas page.
+    for (const cell of !runs('canvas')
+      ? []
+      : [
+          { viewport: { width: 390, height: 844 }, theme: 'light' as const },
+          { viewport: { width: 1024, height: 768 }, theme: 'dark' as const },
+          { viewport: { width: 1440, height: 900 }, theme: 'light' as const },
+        ]) {
       const name = `canvas@${cell.viewport.width}-${cell.theme}`;
       const opened = await openAs(browser, vivo, EASYFIT_2026, cell.viewport, cell.theme);
       try {
@@ -359,7 +489,7 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         await opened.close();
       }
     }
-    {
+    if (runs('unknown')) {
       const name = 'canvas-unknown@1440-light';
       const opened = await openAs(
         browser,

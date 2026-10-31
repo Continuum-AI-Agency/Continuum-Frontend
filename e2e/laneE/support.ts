@@ -200,6 +200,8 @@ export type PageEvents = {
   serverErrors: string[];
   failedRequests: string[];
   slow: string[];
+  /** Every 404 with its URL: the console's "Failed to load resource" line names none. */
+  notFound: string[];
 };
 
 const OWN = (url: string, origin: string) => {
@@ -222,6 +224,7 @@ export function watchPage(page: Page, origin: string): PageEvents {
     serverErrors: [],
     failedRequests: [],
     slow: [],
+    notFound: [],
   };
   const started = new Map<Request, number>();
   page.on('console', (message) => {
@@ -241,6 +244,9 @@ export function watchPage(page: Page, origin: string): PageEvents {
       events.serverErrors.push(
         `${response.status()} ${request.method()} ${response.url().slice(0, 200)}`,
       );
+    }
+    if (response.status() === 404) {
+      events.notFound.push(`${request.method()} ${response.url().slice(0, 200)}`);
     }
     if (ms > 8000 && OWN(response.url(), origin)) {
       events.slow.push(`${ms}ms ${request.method()} ${response.url().slice(0, 160)}`);
