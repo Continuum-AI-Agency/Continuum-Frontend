@@ -5,6 +5,7 @@ import { PencilLine } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import type { CanvasViewContext } from '@/lib/campaign-canvas/canvasView';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
+import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { CanvasJainaContext, canvasJainaSending } from './canvasJaina';
 import { CampaignCanvas } from './components/CampaignCanvas';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
@@ -13,6 +14,7 @@ import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/Canva
 import { PlatformChip } from './lectura/LecturaView';
 import { StoreLectura } from './lectura/StoreLectura';
 import { useCampaignStore } from './stores/useCampaignStore';
+import { CampaignModelBody, useVersionLine, VersionLineBar } from './versions/VersionLine';
 
 const ignoreAdAccount = () => {};
 
@@ -40,6 +42,7 @@ export function ScaleCompanionCanvas({
   viewContext = 'manual',
   viewTaskKey = 0,
   structureDiff = null,
+  versions = null,
 }: {
   brandId: string;
   scaffoldId: string | null;
@@ -54,6 +57,11 @@ export function ScaleCompanionCanvas({
   viewTaskKey?: number | string;
   /** The Backend's diff of a campaign copy, from the chat: exact marks on the copy's nodes. */
   structureDiff?: ScaffoldStructureDiff | null;
+  /**
+   * The scaffold's versions the thread drew (one structure part each), oldest first. An older
+   * one, or one compared with the version before, is drawn read-only in place of the graph.
+   */
+  versions?: VersionLine | null;
 }) {
   const canvasJaina = useMemo(() => canvasJainaSending(onSend), [onSend]);
   const { view, setView, isPhone, startEditing, openByHand, hint, dismissHint } = useCanvasView(
@@ -69,6 +77,19 @@ export function ScaleCompanionCanvas({
   }, [isDirty, startEditing]);
   const hasCampaign = useCampaignStore((store) => store.nodes.length > 0);
   const platform = useCampaignStore((store) => store.platform);
+  const storeVersionId = useCampaignStore((store) => store.hydration?.versionId ?? null);
+  // The line belongs to the scaffold on the canvas; another scaffold picked by hand has its own.
+  const storeScaffoldId = useCampaignStore((store) => store.hydration?.scaffoldId ?? null);
+  const versionLine = useVersionLine(
+    versions && versions.key === storeScaffoldId ? versions : null,
+    storeVersionId,
+  );
+  const shown = versionLine.active ? versionLine.view : null;
+  const edit = () => {
+    // Editing happens on the graph, which is the current version.
+    versionLine.reset();
+    startEditing();
+  };
   return (
     <ReactFlowProvider>
       <CanvasJainaContext.Provider value={canvasJaina}>
@@ -90,7 +111,7 @@ export function ScaleCompanionCanvas({
               {view === 'lectura' && hasCampaign && !isPhone ? (
                 <button
                   type="button"
-                  onClick={startEditing}
+                  onClick={edit}
                   className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[13px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
                   data-testid="canvas-edit"
                 >
@@ -105,9 +126,16 @@ export function ScaleCompanionCanvas({
                 <CanvasViewHint hint={hint} onDismiss={dismissHint} />
               </div>
             ) : null}
+            <VersionLineBar state={versionLine} />
           </div>
           <div className="relative min-h-0 flex-1">
-            {view === 'lectura' ? (
+            {shown ? (
+              <CampaignModelBody
+                model={shown.model}
+                view={view}
+                drawKey={`${shown.version.id}:${shown.comparison ? 'compare' : 'plain'}`}
+              />
+            ) : view === 'lectura' ? (
               <StoreLectura structureDiff={structureDiff} />
             ) : (
               <CampaignCanvas layout="columns" structureDiff={structureDiff} />

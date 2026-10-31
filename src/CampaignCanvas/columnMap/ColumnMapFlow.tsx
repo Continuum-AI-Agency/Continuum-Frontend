@@ -53,6 +53,7 @@ const MARK_CLASS: Record<LecturaMark, string> = {
   changed: 'border-[color:var(--warning)] ring-2 ring-[color:var(--warning)]/20',
   added: 'border-[color:var(--success)] bg-[color:var(--success)]/8',
   paused: 'border-[color:var(--destructive)] bg-[color:var(--destructive)]/8',
+  removed: 'border-dashed border-muted-foreground/40 bg-muted/40 opacity-75',
   unchanged: 'border-border',
 };
 
@@ -63,6 +64,7 @@ const MARK_TAG: Record<LecturaMark, { label: string; className: string } | null>
   },
   added: { label: 'New · paused', className: 'bg-[color:var(--success)] text-white' },
   paused: { label: 'Pauses', className: 'bg-[color:var(--destructive)] text-white' },
+  removed: { label: 'Removed', className: 'bg-muted text-muted-foreground' },
   unchanged: null,
 };
 
@@ -71,6 +73,7 @@ const MARK_MINIMAP_FILL: Record<LecturaMark | 'collapsed', string> = {
   changed: 'var(--warning)',
   added: 'var(--success)',
   paused: 'var(--destructive)',
+  removed: 'var(--muted-foreground)',
   unchanged: 'var(--border)',
   collapsed: 'var(--muted)',
 };
@@ -186,7 +189,12 @@ export function MapCardBox({
               </span>
             ) : null}
           </div>
-          <div className="line-clamp-2 break-words text-[12px] font-semibold leading-4">
+          <div
+            className={cn(
+              'line-clamp-2 break-words text-[12px] font-semibold leading-4',
+              card.mark === 'removed' && 'text-muted-foreground line-through',
+            )}
+          >
             {card.title}
           </div>
         </div>

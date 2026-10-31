@@ -3,8 +3,9 @@
 // produced → the chat projection (`toJainaChatMessage`) → the one campaign model. Nothing here
 // re-reads a payload of its own; it only calls the production functions in order.
 
-import { type JainaUIMessage, paidScaffoldPlanSchema } from '@continuum/contracts';
+import { formatMoney, type JainaUIMessage, paidScaffoldPlanSchema } from '@continuum/contracts';
 import { buildHydratedCanvasGraph, type HydratedCanvasGraph } from '@/lib/campaign-canvas/hydrate';
+import { minorFromWordedMoney } from '@/lib/campaign-canvas/lectura';
 import { toJainaChatMessage } from '@/lib/jaina/uiMessageProjection';
 import type { CanvasScaffoldRead } from '@/lib/paid-media/jaina-activity-client';
 import { toNodeRow } from '@/lib/paid-media/scaffold-tree-client';
@@ -81,3 +82,107 @@ export const canvasReadOf = (capture: DuplicateCapture): CanvasScaffoldRead => {
 
 export const hydratedCopyOf = (capture: DuplicateCapture): HydratedCanvasGraph =>
   buildHydratedCanvasGraph(canvasReadOf(capture));
+
+// ---------------------------------------------------------------------------
+// Portfolio and versions (phase 4b): threads COMPOSED from the real captures
+// ---------------------------------------------------------------------------
+
+/**
+ * COMPOSED: one turn carrying two real live approvals on ITESO (pause an ad set, raise a budget)
+ * and the real copy proposal of AV CAMACHO — the parts the Backend emitted, in one message, as a
+ * multi-campaign turn would stream them. No real multi-campaign capture exists yet.
+ */
+export const composedPortfolioTurn = (
+  live: Record<string, LiveChangeCapture>,
+  copy: DuplicateCapture,
+) =>
+  projectTurn('msg_portfolio', [
+    ...(live['pause-adset']?.parts ?? []),
+    ...(live['raise-budget']?.parts ?? []),
+    ...copy.parts,
+  ]);
+
+/**
+ * COMPOSED: a thread proposing three real changes to ITESO in turn — v1 pause, v2 raise, v3 new
+ * placements, each its own message. v2 carries a SYNTHETIC approval and an ok tool result (no
+ * write happened anywhere), so the line has an "applied" step to show.
+ */
+export const composedLiveVersionThread = (live: Record<string, LiveChangeCapture>) => {
+  const raise = live['raise-budget'];
+  const raisePart = raise?.parts.find((part) => part.type === 'data-jaina-live-change')?.data as
+    | { approvalId: string; toolCallId: string; toolName: string }
+    | undefined;
+  const v2 = projectTurn('msg_v2', raise?.parts ?? []);
+  return [
+    projectTurn('msg_v1', live['pause-adset']?.parts ?? []),
+    raisePart
+      ? {
+          ...v2,
+          resolvedApprovals: {
+            [raisePart.approvalId]: {
+              approvalId: raisePart.approvalId,
+              toolCallId: raisePart.toolCallId,
+              decision: 'approved' as const,
+            },
+          },
+          toolResults: [
+            { id: raisePart.toolCallId, name: raisePart.toolName, ok: true, cached: false },
+          ],
+        }
+      : v2,
+    projectTurn('msg_v3', live['new-placements']?.parts ?? []),
+  ];
+};
+
+/**
+ * DERIVED: the real copy's second version, as a correction in words would save it — its last
+ * test ad set dropped (with its ads) and its first test ad set's budget × 1.5. Returns the
+ * thread (real v1 message, derived v2 message) and what was derived, for the oracle.
+ */
+export const derivedCopyVersionThread = (copy: DuplicateCapture) => {
+  const v1Message = projectTurn('msg_copy', copy.parts);
+  const v1 = v1Message.campaignStructures?.find((entry) => entry.layout === 'diff');
+  if (!v1?.diff) throw new Error('the copy capture carries no diff structure');
+  const tests = v1.diff.entries
+    .filter((entry) => entry.change === 'added' && entry.level === 'adset')
+    .map((entry) => entry.path_key)
+    .sort();
+  const dropped = tests.at(-1) as string;
+  const raised = tests[0] as string;
+  let raisedTo = '';
+  let raisedFrom = '';
+  const nodes = v1.nodes
+    .filter((node) => node.path_key !== dropped && node.parent_path_key !== dropped)
+    .map((node) => {
+      if (node.path_key !== raised) return node;
+      return {
+        ...node,
+        fields: node.fields.map((field) => {
+          if (field.key !== 'daily_budget_minor_units') return field;
+          const money = minorFromWordedMoney(field.value);
+          if (!money) return field;
+          raisedFrom = String(field.value);
+          raisedTo = formatMoney((money.minor * 1.5) / 100, money.currency);
+          return { ...field, value: raisedTo };
+        }),
+      };
+    });
+  const v2 = {
+    ...v1,
+    scaffoldId: `${v1.scaffoldId}-v2-derived`,
+    version: v1.version + 1,
+    partId: `${v1.partId}:v2`,
+    nodes,
+  };
+  return {
+    thread: [v1Message, { id: 'msg_copy_v2', campaignStructures: [v2] }],
+    parentScaffoldId: v1.parentScaffoldId ?? v1.scaffoldId,
+    v1,
+    v2,
+    dropped,
+    droppedAds: v1.nodes.filter((node) => node.parent_path_key === dropped).map((n) => n.path_key),
+    raised,
+    raisedFrom,
+    raisedTo,
+  };
+};

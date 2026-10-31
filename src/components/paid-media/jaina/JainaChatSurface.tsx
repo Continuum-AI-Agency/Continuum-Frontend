@@ -125,9 +125,19 @@ import {
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
 import {
+  campaignIdsOfPreview,
+  type PortfolioViewModel,
+  portfolioOfMessage,
+} from '@/lib/campaign-canvas/portfolio';
+import {
   latestStructureDiffFor,
   type ScaffoldStructureDiff,
 } from '@/lib/campaign-canvas/scaffoldDiff';
+import {
+  liveChangeVersionsOf,
+  scaffoldVersionsOf,
+  type VersionLine,
+} from '@/lib/campaign-canvas/versions';
 import { clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
@@ -278,6 +288,8 @@ type JainaChatSurfaceProps = {
     parentScaffoldId: string,
     reason: 'proposed' | 'thread' | 'expand',
     diff: ScaffoldStructureDiff | null,
+    /** The scaffold's versions the thread drew, for the canvas's version line. */
+    versions?: VersionLine | null,
   ) => void;
   /**
    * A host with a companion canvas (the Scale page). Called with the thread's newest live-edit
@@ -288,6 +300,19 @@ type JainaChatSurfaceProps = {
   onLiveChangeFocus?: (focus: {
     preview: LiveChangePreviewPayload;
     decision: LiveChangeDecision;
+    opened: boolean;
+    /** Every proposal the thread made for this campaign, for the canvas's version line. */
+    versions?: VersionLine | null;
+  }) => void;
+  /**
+   * A host with a companion canvas. Called when a turn changes several campaigns at once (a
+   * portfolio): `opened` the first time such a turn arrives live, or when its card's "Open in
+   * canvas" asks. `versionsByRow` carries each row's version line across the thread.
+   */
+  onPortfolioFocus?: (focus: {
+    messageId: string;
+    portfolio: PortfolioViewModel;
+    versionsByRow: Record<string, VersionLine>;
     opened: boolean;
   }) => void;
   /**
@@ -789,6 +814,7 @@ export function JainaChatSurface({
   onCanvasActionApplied,
   onScaffoldFocus,
   onLiveChangeFocus,
+  onPortfolioFocus,
   autoSendPrompt = null,
   onAutoSendConsumed,
   onOpenAccountRead,
@@ -2751,8 +2777,9 @@ export function JainaChatSurface({
       latestScaffold.parentScaffoldId,
       historyMessageIds.has(latestScaffold.messageId) ? 'thread' : 'proposed',
       latestScaffold.diff,
+      scaffoldVersionsOf(messages, latestScaffold.parentScaffoldId),
     );
-  }, [historyMessageIds, latestScaffold, onScaffoldFocus]);
+  }, [historyMessageIds, latestScaffold, messages, onScaffoldFocus]);
 
   // The companion canvas follows the thread's newest live edit too: it opens on the campaign
   // a pending pause, budget or copy touches, and tracks the approval's decision after.
@@ -2762,12 +2789,58 @@ export function JainaChatSurface({
     if (!onLiveChangeFocus || !latestLiveChange) return;
     const { preview, decision, index } = latestLiveChange;
     const message = messages[index];
+    // A turn that changes several campaigns opens its portfolio instead (below).
+    const inPortfolio = Boolean(message && portfolioOfMessage(message));
     const fresh =
+      !inPortfolio &&
       openedLiveChangeRef.current !== preview.partId &&
       Boolean(message && !historyMessageIds.has(message.id));
     if (fresh) openedLiveChangeRef.current = preview.partId;
-    onLiveChangeFocus({ preview, decision, opened: fresh });
+    const campaignId = campaignIdsOfPreview(preview)[0];
+    onLiveChangeFocus({
+      preview,
+      decision,
+      opened: fresh,
+      versions: campaignId ? liveChangeVersionsOf(messages, campaignId) : null,
+    });
   }, [historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
+
+  // A turn that changes several campaigns opens the canvas on its portfolio, once, live.
+  const portfolioFocusOf = React.useCallback(
+    (messageId: string, opened: boolean) => {
+      const message = messages.find((entry) => entry.id === messageId);
+      const portfolio = message ? portfolioOfMessage(message) : null;
+      if (!portfolio) return null;
+      const versionsByRow: Record<string, VersionLine> = {};
+      for (const row of portfolio.rows) {
+        versionsByRow[row.id] =
+          row.source.kind === 'live'
+            ? liveChangeVersionsOf(messages, row.source.campaignId)
+            : scaffoldVersionsOf(messages, row.source.parentScaffoldId);
+      }
+      return { messageId, portfolio, versionsByRow, opened };
+    },
+    [messages],
+  );
+  const openedPortfolioRef = React.useRef<{ messageId: string; parts: string } | null>(null);
+  React.useEffect(() => {
+    if (!onPortfolioFocus) return;
+    const message = messages.at(-1);
+    if (!message || historyMessageIds.has(message.id)) return;
+    // Re-read only when the turn's proposals change, not on every streamed token.
+    const parts = [
+      ...(message.campaignStructures ?? []).map((structure) => structure.partId),
+      ...(message.liveChangePreviews ?? []).map((preview) => preview.partId),
+    ].join('|');
+    const opened = openedPortfolioRef.current;
+    if (opened?.messageId === message.id && opened.parts === parts) return;
+    const focus = portfolioFocusOf(message.id, opened?.messageId !== message.id);
+    if (!focus) return;
+    openedPortfolioRef.current = { messageId: message.id, parts };
+    onPortfolioFocus(focus);
+  }, [historyMessageIds, messages, onPortfolioFocus, portfolioFocusOf]);
+  const portfolioFocusRef = React.useRef(portfolioFocusOf);
+  portfolioFocusRef.current = portfolioFocusOf;
 
   // Read through a ref so the thread context (and every memoized message) does not change
   // on each streamed token just to keep "Open in canvas" pointed at the latest messages.
@@ -2783,6 +2856,7 @@ export function JainaChatSurface({
                 parentScaffoldId,
                 'expand',
                 latestStructureDiffFor(liveChangeMessagesRef.current, parentScaffoldId),
+                scaffoldVersionsOf(liveChangeMessagesRef.current, parentScaffoldId),
               ),
           }
         : {}),
@@ -2790,12 +2864,28 @@ export function JainaChatSurface({
         ? {
             onLiveChangeOpen: (partId: string) => {
               const found = liveChangeByPartIdOf(liveChangeMessagesRef.current, partId);
-              if (found) onLiveChangeFocus({ ...found, opened: true });
+              const campaignId = found ? campaignIdsOfPreview(found.preview)[0] : undefined;
+              if (found)
+                onLiveChangeFocus({
+                  ...found,
+                  opened: true,
+                  versions: campaignId
+                    ? liveChangeVersionsOf(liveChangeMessagesRef.current, campaignId)
+                    : null,
+                });
+            },
+          }
+        : {}),
+      ...(onPortfolioFocus
+        ? {
+            onPortfolioOpen: (messageId: string) => {
+              const focus = portfolioFocusRef.current(messageId, true);
+              if (focus) onPortfolioFocus(focus);
             },
           }
         : {}),
     }),
-    [onLiveChangeFocus, onScaffoldFocus, sessionId],
+    [onLiveChangeFocus, onPortfolioFocus, onScaffoldFocus, sessionId],
   );
 
   const consumedOperatorRequestRef = React.useRef<string | null>(null);

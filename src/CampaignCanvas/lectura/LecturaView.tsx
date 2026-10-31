@@ -42,6 +42,8 @@ const CARD_TONE: Record<LecturaMark, string> = {
   changed: 'border-[color:var(--warning)] ring-2 ring-[color:var(--warning)]/15',
   added: 'border-[color:var(--success)] bg-[color:var(--success)]/8',
   paused: 'border-[color:var(--destructive)] bg-[color:var(--destructive)]/8',
+  // Only when two versions are compared: what the earlier one had, struck and greyed.
+  removed: 'border-dashed border-muted-foreground/40 bg-muted/40 opacity-75',
   unchanged: 'border-border',
 };
 
@@ -52,6 +54,7 @@ const TAG: Record<LecturaMark, { label: string; className: string } | null> = {
   },
   added: { label: 'New · paused', className: 'bg-[color:var(--success)] text-white' },
   paused: { label: 'Pauses', className: 'bg-[color:var(--destructive)] text-white' },
+  removed: { label: 'Removed', className: 'bg-muted text-muted-foreground' },
   unchanged: null,
 };
 
@@ -265,7 +268,14 @@ export function LecturaAdSetCard({
       data-mark={adSet.mark}
     >
       <div className="flex min-w-0 items-start justify-between gap-2">
-        <h4 className="min-w-0 break-words text-sm font-semibold leading-snug">{adSet.name}</h4>
+        <h4
+          className={cn(
+            'min-w-0 break-words text-sm font-semibold leading-snug',
+            adSet.mark === 'removed' && 'text-muted-foreground line-through',
+          )}
+        >
+          {adSet.name}
+        </h4>
         <MarkTag mark={adSet.stopsWithParent ? 'paused' : adSet.mark} />
       </div>
       {adSet.basedOnName ? (
@@ -331,7 +341,12 @@ function ChangeCard({
         </span>
         <span className="flex min-w-0 items-start gap-1.5">
           {adSet ? <Chevron className="mt-0.5 size-4 shrink-0 text-muted-foreground" /> : null}
-          <span className="min-w-0 break-words text-sm font-semibold leading-snug">
+          <span
+            className={cn(
+              'min-w-0 break-words text-sm font-semibold leading-snug',
+              change.mark === 'removed' && 'text-muted-foreground line-through',
+            )}
+          >
             {change.title}
           </span>
         </span>

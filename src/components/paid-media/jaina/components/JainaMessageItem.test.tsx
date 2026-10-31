@@ -426,3 +426,40 @@ describe('a live change at chat size', () => {
     expect(opened).toEqual([LIVE_BATCH_PREVIEW.partId]);
   });
 });
+
+describe('a turn that changes several campaigns', () => {
+  it('draws one portfolio card instead of a card per campaign, and opens the portfolio', async () => {
+    const { LIVE_BATCH_PREVIEW } = await import('@/lib/campaign-canvas/lectura.fixtures');
+    const { ScaffoldThreadContext } = await import('../scaffold/scaffoldThreadContext');
+    const other = {
+      ...LIVE_BATCH_PREVIEW,
+      approvalId: 'appr_other',
+      partId: 'live-change:appr_other',
+      nodes: LIVE_BATCH_PREVIEW.nodes.map((node) => ({
+        ...node,
+        id: `o-${node.id}`,
+        parentId: node.parentId ? `o-${node.parentId}` : null,
+        name: node.level === 'campaign' ? 'OTRA // VENTAS' : node.name,
+      })),
+    };
+    const opened: string[] = [];
+    const message = {
+      ...persistedMessage(),
+      pendingClarification: undefined,
+      liveChangePreviews: [LIVE_BATCH_PREVIEW, other],
+    } as unknown as JainaChatMessage;
+    render(
+      <ScaffoldThreadContext.Provider
+        value={{ sessionId: 's1', onPortfolioOpen: (messageId) => opened.push(messageId) }}
+      >
+        <JainaMessageItem message={message} />
+      </ScaffoldThreadContext.Provider>,
+      { wrapper },
+    );
+    expect(screen.getByTestId('portfolio-chat-card')).toBeTruthy();
+    expect(screen.queryByTestId('lectura-chat-card')).toBeNull();
+    expect(screen.getByTestId('portfolio-headline').textContent).toBe('2 campaigns · 6 changes');
+    screen.getByTestId('portfolio-open-in-canvas').click();
+    expect(opened).toEqual([message.id]);
+  });
+});

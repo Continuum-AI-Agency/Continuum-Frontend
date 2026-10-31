@@ -53,9 +53,18 @@ import {
   campaignViewFromStructure,
   scaffoldMarksOf,
 } from '@/lib/campaign-canvas/lectura';
+import { portfolioOfMessage } from '@/lib/campaign-canvas/portfolio';
 import { diffForCanvas, latestStructureDiffFor } from '@/lib/campaign-canvas/scaffoldDiff';
 import {
+  compareVersions,
+  liveChangeVersionsOf,
+  scaffoldVersionsOf,
+} from '@/lib/campaign-canvas/versions';
+import {
+  composedLiveVersionThread,
+  composedPortfolioTurn,
   type DuplicateCapture,
+  derivedCopyVersionThread,
   hydratedCopyOf,
   type LiveChangeCapture,
   projectTurn,
@@ -258,6 +267,53 @@ const copyOracle = (diff: StructureDiff) => ({
       .map((entry) => entry.path_key),
   ),
 });
+
+/**
+ * Two versions of one live campaign, from the raw payloads: a node only the later one has is
+ * added, only the earlier one removed; in both, it differs when its own mark or the after value
+ * of any proposed field differs — paused when it starts to stop, else changed. Status rows are
+ * the mark itself. Ads under an added or removed ad set go with it (not a change of their own).
+ */
+const liveVersionOracle = (
+  before: LiveChangePreviewPayload,
+  after: LiveChangePreviewPayload,
+): { changes: Map<string, string>; marked: Map<string, string> } => {
+  const was = new Map(before.nodes.map((node) => [node.id, node]));
+  const now = new Map(after.nodes.map((node) => [node.id, node]));
+  const proposed = (node: LiveChangeNode) =>
+    JSON.stringify(
+      node.changes
+        .filter((row) => row.field !== 'status')
+        .map((row) => [row.field, row.after])
+        .sort(),
+    );
+  const marked = new Map<string, string>();
+  for (const node of after.nodes) {
+    const old = was.get(node.id);
+    if (!old) marked.set(node.id, 'added');
+    else if (node.mark === 'paused' && old.mark !== 'paused') marked.set(node.id, 'paused');
+    else if (
+      (node.mark === 'paused') !== (old.mark === 'paused') ||
+      proposed(node) !== proposed(old)
+    )
+      marked.set(node.id, 'changed');
+  }
+  for (const node of before.nodes) if (!now.has(node.id)) marked.set(node.id, 'removed');
+  const parentOf = (id: string) => (now.get(id) ?? was.get(id))?.parentId ?? '';
+  const changes = new Map(
+    [...marked].filter(([id]) => {
+      const level = (now.get(id) ?? was.get(id))?.level;
+      const parentMark = marked.get(parentOf(id));
+      if (level === 'ad') return parentMark !== 'added' && parentMark !== 'removed';
+      if (level === 'adset') {
+        const campaignMark = marked.get(parentOf(id));
+        return campaignMark !== 'added' && campaignMark !== 'removed';
+      }
+      return true;
+    }),
+  );
+  return { changes, marked };
+};
 
 // ---------------------------------------------------------------------------
 // Synthetic Google previews (labels only)
@@ -643,6 +699,109 @@ const main = async () => {
     ),
   );
 
+  // -- 2b. portfolio and versions, on threads COMPOSED / DERIVED from the real captures ---------
+  note(
+    'COMPOSED: the multi-campaign turn is the real pause + raise approvals on ITESO and the real AV CAMACHO copy proposal, put in one message (no real multi-campaign capture exists).',
+  );
+  const portfolioTurn = composedPortfolioTurn(live, copy);
+  const portfolio = portfolioOfMessage(portfolioTurn);
+  const pausePreview = previews['pause-adset'];
+  const raisePreview = previews['raise-budget'];
+  // ITESO with both approvals, from the raw payloads: the raise's nodes with the pause's marks
+  // laid over (a pause outranks a change on the same node — both captures touch one ad set).
+  const mergedRaw: LiveChangePreviewPayload | null =
+    pausePreview && raisePreview
+      ? {
+          ...raisePreview,
+          nodes: raisePreview.nodes.map((node) => {
+            const paused = pausePreview.nodes.find((entry) => entry.id === node.id);
+            return paused && paused.mark === 'paused' ? { ...node, mark: 'paused' } : node;
+          }),
+        }
+      : null;
+  const itesoMarks = mergedRaw ? liveChangedOracle(mergedRaw) : new Map<string, string>();
+  const itesoChanges = new Set(itesoMarks.keys());
+  const itesoCount = (mark: string) => [...itesoMarks.values()].filter((m) => m === mark).length;
+  const copyChanges =
+    oracle.changed.size + [...oracle.added].filter((k) => k.split('/').length === 2).length;
+  const expectedHeadline = `2 campaigns · ${itesoChanges.size + copyChanges} changes`;
+  check(
+    'portfolio: the composed turn groups into one row per campaign — ITESO (live, 2 approvals) and the copy',
+    Boolean(portfolio) &&
+      portfolio?.rows.length === 2 &&
+      portfolio.rows[0]?.source.kind === 'live' &&
+      portfolio.rows[0].source.partIds.length === 2 &&
+      portfolio.rows[1]?.source.kind === 'scaffold',
+    portfolio?.rows.map((row) => `${row.id}:${row.changeCount}`).join(', ') ?? 'no portfolio',
+  );
+  const itesoTotals = mergedRaw ? totalsOracle(mergedRaw) : null;
+  const itesoRow = portfolio?.rows[0];
+  check(
+    `portfolio: ${expectedHeadline}, ITESO's counts and daily total from the raw payloads`,
+    portfolio !== null &&
+      portfolio.changeCount === itesoChanges.size + copyChanges &&
+      itesoRow?.counts.paused === itesoCount('paused') &&
+      itesoRow?.counts.changed === itesoCount('changed') &&
+      (itesoTotals === null ||
+        (itesoRow?.before === itesoTotals.before && itesoRow?.after === itesoTotals.after)),
+    itesoTotals
+      ? `ITESO ${itesoTotals.before} → ${itesoTotals.after} minor; row ${itesoRow?.before} → ${itesoRow?.after}`
+      : 'no ITESO total',
+  );
+
+  note(
+    'COMPOSED: the ITESO version thread is the three real live captures as v1 pause → v2 raise → v3 placements; the approval and ok result on v2 are SYNTHETIC (nothing was written), so the line shows an applied step.',
+  );
+  const liveThread = composedLiveVersionThread(live);
+  const itesoId = pausePreview?.nodes.find((node) => node.level === 'campaign')?.id ?? '';
+  const liveLine = liveChangeVersionsOf(liveThread, itesoId);
+  check(
+    'versions (live): each preview of ITESO is its next version; v2 applied',
+    liveLine.versions.map((version) => `${version.label}:${version.status}`).join(',') ===
+      'v1:proposed,v2:applied,v3:proposed' && liveLine.appliedId === raisePreview?.partId,
+    liveLine.versions.map((version) => `${version.label}:${version.status}`).join(', '),
+  );
+  const liveOracle =
+    pausePreview && raisePreview ? liveVersionOracle(pausePreview, raisePreview) : null;
+  const liveCompare =
+    liveLine.versions[0] && liveLine.versions[1]
+      ? compareVersions(liveLine.versions[0].model, liveLine.versions[1].model)
+      : null;
+  check(
+    'versions (live): v2 against v1 marks exactly what the raw payloads differ in',
+    Boolean(liveOracle && liveCompare) &&
+      sameSet(
+        liveCompare?.model.changes.map((change) => `${change.id}:${change.mark}`) ?? [],
+        [...(liveOracle?.changes ?? [])].map(([id, mark]) => `${id}:${mark}`),
+      ),
+    listed([...(liveOracle?.changes ?? [])].map(([id, mark]) => `${id}:${mark}`)),
+  );
+
+  const derived = derivedCopyVersionThread(copy);
+  note(
+    `DERIVED: copy v2 = the real v1 with test ad set ${derived.dropped} dropped and ${derived.raised}'s budget ${derived.raisedFrom} → ${derived.raisedTo}.`,
+  );
+  const copyLine = scaffoldVersionsOf(derived.thread, derived.parentScaffoldId);
+  const copyCompare =
+    copyLine.versions[0] && copyLine.versions[1]
+      ? compareVersions(copyLine.versions[0].model, copyLine.versions[1].model)
+      : null;
+  const copyRaised = copyCompare?.model.changes.find((change) => change.id === derived.raised);
+  check(
+    'versions (copy): v1 → v2 by version number; v2 against v1 is the dropped ad set removed and the raised budget changed, nothing else',
+    copyLine.versions.map((version) => version.label).join(',') === 'v1,v2' &&
+      sameSet(copyCompare?.model.changes.map((change) => `${change.id}:${change.mark}`) ?? [], [
+        `${derived.dropped}:removed`,
+        `${derived.raised}:changed`,
+      ]) &&
+      Boolean(
+        copyRaised?.rows.some(
+          (row) => row.before === derived.raisedFrom && row.after === derived.raisedTo,
+        ),
+      ),
+    copyCompare?.model.changes.map((change) => `${change.id}:${change.mark}`).join(', '),
+  );
+
   // -- 3. the browser ---------------------------------------------------------------------------
   const dist = mkdtempSync(path.join(tmpdir(), 'canvas-e2e-dist-'));
   const synthetic = { pmax: googlePreview('PERFORMANCE_MAX'), search: googlePreview('SEARCH') };
@@ -963,6 +1122,242 @@ const main = async () => {
       await shoot(read.page, `google-${key}-map-640`);
       await read.close();
     }
+
+    // -- Portfolio band (COMPOSED turn) --------------------------------------------------------
+    if (portfolio) {
+      for (const [width, theme] of [
+        [640, 'light'],
+        [640, 'dark'],
+        [375, 'light'],
+      ] as const) {
+        const scene = await openScene(
+          browser,
+          base,
+          'portfolio:x:band',
+          width,
+          '[data-testid="portfolio-band"]',
+          theme,
+        );
+        const headline = await scene.page.textContent('[data-testid="portfolio-headline"]');
+        const rows = await scene.page.$$eval('[data-testid^="portfolio-row-"]', (nodes) =>
+          nodes.map((node) => ({
+            id: node.getAttribute('data-testid'),
+            text: node.textContent ?? '',
+          })),
+        );
+        const info = await scene.info();
+        const itesoText = rows[0]?.text ?? '';
+        const totalsOk =
+          !itesoTotals ||
+          (itesoText.includes(
+            `${formatMoney(itesoTotals.after / 100, raisePreview?.currency ?? null)}/day`,
+          ) &&
+            (itesoTotals.before === itesoTotals.after ||
+              itesoText.includes(
+                formatMoney(itesoTotals.before / 100, raisePreview?.currency ?? null),
+              )));
+        check(
+          `portfolio band @${width} ${theme}: "${expectedHeadline}", one row per campaign with its total and counts, no sideways scroll`,
+          headline === expectedHeadline &&
+            rows.length === 2 &&
+            totalsOk &&
+            itesoText.includes('1 pause') &&
+            (rows[1]?.text ?? '').includes(
+              `${oracle.added.size > 0 ? [...oracle.added].filter((k) => k.split('/').length === 2).length : 0} new`,
+            ) &&
+            info.overflowX <= 0 &&
+            info.errors.length === 0,
+          `${headline}; ${rows.map((row) => row.text.replace(/\s+/g, ' ').slice(0, 90)).join(' | ')}; overflowX ${info.overflowX}`,
+        );
+        await shoot(scene.page, `portfolio-band-${width}-${theme}`);
+        if (width === 640 && theme === 'light') {
+          // Tap ITESO: its Read, its changes; back to the band; tap the copy: its Read.
+          await scene.page.click(`[data-testid="portfolio-row-live:${itesoId}"]`);
+          await scene.page.waitForSelector('[data-testid="lectura-view"]', { timeout: 10_000 });
+          const itesoRows = await marksIn(scene.page, 'lectura-change-');
+          const crumb = await scene.page.textContent('[data-testid="portfolio-breadcrumb"]');
+          check(
+            'portfolio @640: a tap opens ITESO in Read with both approvals’ changes, breadcrumb back',
+            sameSet(
+              itesoRows.map((row) => row.id),
+              itesoChanges,
+            ) && (crumb ?? '').includes('2 campaigns'),
+            `${itesoRows.map((row) => `${row.id}:${row.mark}`).join(', ')}; crumb ${crumb}`,
+          );
+          await shoot(scene.page, 'portfolio-iteso-read-640');
+          await scene.page.click('[data-testid="portfolio-back"]');
+          await scene.page.waitForSelector('[data-testid="portfolio-band"]', { timeout: 5_000 });
+          await scene.page.click(
+            `[data-testid="portfolio-row-scaffold:${derived.parentScaffoldId}"]`,
+          );
+          await scene.page.click('[data-testid="canvas-view-toggle"] [data-view="mapa"]');
+          await scene.page.waitForSelector('.react-flow__node', { timeout: 10_000 });
+          await scene.page.waitForTimeout(400);
+          const mapCards = await marksIn(scene.page, 'portfolio-node-');
+          const addedPaths = [...oracle.added];
+          check(
+            'portfolio @640: the copy row opens its Map, the Backend’s added nodes marked new',
+            sameSet(
+              mapCards.filter((card) => card.mark === 'added').map((card) => card.id),
+              addedPaths,
+            ),
+            `${mapCards.filter((card) => card.mark === 'added').length} new of ${mapCards.length}`,
+          );
+          await shoot(scene.page, 'portfolio-copy-map-640');
+        }
+        await scene.close();
+      }
+      for (const width of [640, 375]) {
+        const scene = await openScene(
+          browser,
+          base,
+          'portfolio:x:chat',
+          width,
+          '[data-testid="portfolio-chat-card"]',
+        );
+        const headline = await scene.page.textContent('[data-testid="portfolio-headline"]');
+        const fits = await scene.page.evaluate(() => {
+          const card = document.querySelector('[data-testid="portfolio-chat-card"]') as HTMLElement;
+          return card.scrollWidth <= card.clientWidth + 1;
+        });
+        const info = await scene.info();
+        check(
+          `portfolio chat card @${width}: "${expectedHeadline}", the rows, Open in canvas, fits`,
+          headline === expectedHeadline &&
+            (await scene.page.$$('[data-testid^="portfolio-row-"]')).length === 2 &&
+            (await scene.page.$('[data-testid="portfolio-open-in-canvas"]')) !== null &&
+            fits &&
+            info.overflowX <= 0,
+          `overflowX ${info.overflowX}`,
+        );
+        await shoot(scene.page, `portfolio-chat-${width}`);
+        await scene.close();
+      }
+    }
+
+    // -- Version line: live (COMPOSED thread) ------------------------------------------------------
+    {
+      const scene = await openScene(
+        browser,
+        base,
+        'versions:live:read',
+        640,
+        '[data-testid="version-line"]',
+      );
+      const pills = await scene.page.$$eval('[data-testid^="version-v"]', (nodes) =>
+        nodes.map((node) => `${node.textContent}|${node.getAttribute('aria-pressed')}`),
+      );
+      const applied = await scene.page.getAttribute(
+        '[data-testid="version-applied"]',
+        'data-applied',
+      );
+      check(
+        'version line (live) @640: v1 → v2 · applied → v3, v3 on screen, "Applied in Meta" on',
+        pills.length === 3 &&
+          (pills[2] ?? '').endsWith('|true') &&
+          (pills[1] ?? '').includes('applied') &&
+          applied === 'true',
+        pills.join(', '),
+      );
+      await scene.page.click('[data-testid="version-v2"]');
+      await scene.page.click('[data-testid="version-compare"]');
+      await scene.page.waitForSelector('[data-testid="version-compare-summary"]', {
+        timeout: 5_000,
+      });
+      const rows = await marksIn(scene.page, 'lectura-change-');
+      check(
+        'version line (live) Read @640: v2 compared with v1 lists exactly the raw differences',
+        sameSet(
+          rows.map((row) => `${row.id}:${row.mark}`),
+          [...(liveOracle?.changes ?? [])].map(([id, mark]) => `${id}:${mark}`),
+        ),
+        `${rows.map((row) => `${row.id}:${row.mark}`).join(', ')}; ${await scene.page.textContent('[data-testid="version-compare-summary"]')}`,
+      );
+      await shoot(scene.page, 'versions-live-read-compare-640');
+      await scene.page.click('[data-testid="canvas-view-toggle"] [data-view="mapa"]');
+      await scene.page.waitForSelector('.react-flow__node', { timeout: 10_000 });
+      await scene.page.waitForTimeout(400);
+      const cards = await marksIn(scene.page, 'live-change-node-');
+      const info = await scene.info();
+      check(
+        'version line (live) Map @640: the compared cards carry the same marks, no sideways scroll',
+        sameSet(
+          cards
+            .filter((card) => card.mark !== 'unchanged')
+            .map((card) => `${card.id}:${card.mark}`),
+          [...(liveOracle?.marked ?? [])].map(([id, mark]) => `${id}:${mark}`),
+        ) &&
+          info.overflowX <= 0 &&
+          info.errors.length === 0,
+        `${cards.filter((card) => card.mark !== 'unchanged').length} marked of ${cards.length}`,
+      );
+      await shoot(scene.page, 'versions-live-map-compare-640');
+      await scene.close();
+    }
+
+    // -- Version line: the real copy and its DERIVED v2 --------------------------------------------
+    for (const width of [640, 375]) {
+      const scene = await openScene(
+        browser,
+        base,
+        'versions:copy:read',
+        width,
+        '[data-testid="version-line"]',
+      );
+      await scene.page.click('[data-testid="version-compare"]');
+      await scene.page.waitForSelector('[data-testid="version-compare-summary"]', {
+        timeout: 5_000,
+      });
+      const rows = await marksIn(scene.page, 'lectura-change-');
+      const cards = await marksIn(scene.page, 'lectura-adset-');
+      const struck = await scene.page.evaluate(
+        (id) =>
+          getComputedStyle(
+            document.querySelector(`[data-testid="lectura-adset-${id}"] h4`) as HTMLElement,
+          ).textDecorationLine,
+        derived.dropped,
+      );
+      const info = await scene.info();
+      check(
+        `version line (copy) Read @${width}: v2 against v1 — ${derived.dropped} removed and struck, ${derived.raised} changed ${derived.raisedFrom} → ${derived.raisedTo}`,
+        sameSet(
+          rows.map((row) => `${row.id}:${row.mark}`),
+          [`${derived.dropped}:removed`, `${derived.raised}:changed`],
+        ) &&
+          (rows.find((row) => row.id === derived.raised)?.text ?? '').includes(derived.raisedTo) &&
+          cards.find((card) => card.id === derived.dropped)?.mark === 'removed' &&
+          struck.includes('line-through') &&
+          info.overflowX <= 0 &&
+          info.errors.length === 0,
+        `${rows.map((row) => `${row.id}:${row.mark}`).join(', ')}; struck ${struck}; overflowX ${info.overflowX}`,
+      );
+      await shoot(scene.page, `versions-copy-read-compare-${width}`);
+      if (width === 640) {
+        await scene.page.click('[data-testid="canvas-view-toggle"] [data-view="mapa"]');
+        await scene.page.waitForSelector('.react-flow__node', { timeout: 10_000 });
+        await scene.page.waitForTimeout(400);
+        const mapCards = await marksIn(scene.page, 'map-card-');
+        check(
+          'version line (copy) Map @640: the dropped ad set and its ads drawn removed, the raised one changed',
+          sameSet(
+            mapCards
+              .filter((card) => card.mark !== 'unchanged')
+              .map((card) => `${card.id}:${card.mark}`),
+            [
+              `${derived.dropped}:removed`,
+              ...derived.droppedAds.map((id) => `${id}:removed`),
+              `${derived.raised}:changed`,
+            ],
+          ),
+          mapCards
+            .filter((card) => card.mark !== 'unchanged')
+            .map((card) => `${card.id}:${card.mark}`)
+            .join(', '),
+        );
+        await shoot(scene.page, 'versions-copy-map-compare-640');
+      }
+      await scene.close();
+    }
   } finally {
     await browser.close();
     server.stop(true);
@@ -975,6 +1370,9 @@ const main = async () => {
   );
   note(
     'SYNTHETIC: the Google Search / PMax previews (labels only); every Meta hop above is a real capture.',
+  );
+  note(
+    'NOT EXERCISED: the Scale page wiring of the portfolio and version line (JainaChatSurface → PaidMediaClient) and the scaffold companion’s own shell (its record bar reads Supabase) — the version line is drawn by the same pieces in a harness.',
   );
   if (SHOTS) note(`screenshots: ${SHOTS}`);
 };

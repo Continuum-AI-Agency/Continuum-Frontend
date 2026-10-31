@@ -48,7 +48,9 @@ import {
 } from '@/lib/campaign-canvas/creativeGeneration';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import type { PortfolioViewModel } from '@/lib/campaign-canvas/portfolio';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
+import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
 import {
@@ -161,6 +163,12 @@ const ScaleCompanionCanvas = dynamic(
 // The same pane, when the thread's newest proposal is an edit to a LIVE campaign: read-only.
 const LiveChangeCompanion = dynamic(
   () => import('@/CampaignCanvas/LiveChangeCompanion').then((mod) => mod.LiveChangeCompanion),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
+);
+// The same pane when one turn changes several campaigns: the portfolio band first.
+const PortfolioCompanion = dynamic(
+  () =>
+    import('@/CampaignCanvas/portfolio/PortfolioCompanion').then((mod) => mod.PortfolioCompanion),
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
@@ -443,6 +451,17 @@ export default function PaidMediaClientPage({
   const [companionLiveChange, setCompanionLiveChange] = React.useState<{
     preview: LiveChangePreviewPayload;
     decision: LiveChangeDecision;
+    versions: VersionLine | null;
+  } | null>(null);
+  // The scaffold's versions the thread drew, for the companion's version line.
+  const [companionScaffoldVersions, setCompanionScaffoldVersions] =
+    React.useState<VersionLine | null>(null);
+  // A turn that changes several campaigns: the companion shows its portfolio until another
+  // proposal takes the pane over.
+  const [companionPortfolio, setCompanionPortfolio] = React.useState<{
+    messageId: string;
+    portfolio: PortfolioViewModel;
+    versionsByRow: Record<string, VersionLine>;
   } | null>(null);
   // A turn the companion canvas hands the chat ("Generate with Jaina"), and its Deploy paused.
   const [companionTurn, setCompanionTurn] = React.useState<{ id: string; text: string } | null>(
@@ -599,14 +618,17 @@ export default function PaidMediaClientPage({
       parentScaffoldId: string,
       reason: 'proposed' | 'thread' | 'expand',
       diff: ScaffoldStructureDiff | null,
+      versions?: VersionLine | null,
     ) => {
       setCompanionScaffoldId(parentScaffoldId);
       setCompanionViewContext(canvasViewContextOf(reason));
       setCompanionStructureDiff(diff);
+      setCompanionScaffoldVersions(versions ?? null);
       // Each focus is a task of its own: a second proposal re-opens in Read even mid-edit.
       setCompanionViewTask((task) => task + 1);
       if (reason !== 'thread') {
         setCompanionLiveChange(null);
+        setCompanionPortfolio(null);
         setIsCanvasOpen(true);
       }
     },
@@ -617,17 +639,46 @@ export default function PaidMediaClientPage({
       preview: LiveChangePreviewPayload;
       decision: LiveChangeDecision;
       opened: boolean;
+      versions?: VersionLine | null;
     }) => {
+      const next = {
+        preview: focus.preview,
+        decision: focus.decision,
+        versions: focus.versions ?? null,
+      };
       if (focus.opened) {
-        setCompanionLiveChange({ preview: focus.preview, decision: focus.decision });
+        setCompanionLiveChange(next);
+        setCompanionPortfolio(null);
         setIsCanvasOpen(true);
         return;
       }
       // A decision arriving later updates the preview already on screen; nothing else does.
       setCompanionLiveChange((current) =>
-        current && current.preview.partId === focus.preview.partId
-          ? { preview: focus.preview, decision: focus.decision }
-          : current,
+        current && current.preview.partId === focus.preview.partId ? next : current,
+      );
+    },
+    [],
+  );
+  const handlePortfolioFocus = React.useCallback(
+    (focus: {
+      messageId: string;
+      portfolio: PortfolioViewModel;
+      versionsByRow: Record<string, VersionLine>;
+      opened: boolean;
+    }) => {
+      const next = {
+        messageId: focus.messageId,
+        portfolio: focus.portfolio,
+        versionsByRow: focus.versionsByRow,
+      };
+      if (focus.opened) {
+        setCompanionPortfolio(next);
+        setIsCanvasOpen(true);
+        return;
+      }
+      // More of the same turn streamed in: the band on screen grows; nothing else does.
+      setCompanionPortfolio((current) =>
+        current && current.messageId === focus.messageId ? next : current,
       );
     },
     [],
@@ -1036,6 +1087,7 @@ export default function PaidMediaClientPage({
                   onCanvasActionApplied={handleCanvasActionApplied}
                   onScaffoldFocus={handleScaffoldFocus}
                   onLiveChangeFocus={handleLiveChangeFocus}
+                  onPortfolioFocus={handlePortfolioFocus}
                   autoSendPrompt={companionTurn}
                   onAutoSendConsumed={clearCompanionTurn}
                   operatorActionRequest={companionDeploy.request}
@@ -1084,10 +1136,17 @@ export default function PaidMediaClientPage({
                         transition={{ duration: 0.2 }}
                       >
                         <CampaignCreativeActionsProvider value={handleGenerateCreative}>
-                          {companionLiveChange ? (
+                          {companionPortfolio ? (
+                            <PortfolioCompanion
+                              key={companionPortfolio.messageId}
+                              portfolio={companionPortfolio.portfolio}
+                              versionsByRow={companionPortfolio.versionsByRow}
+                            />
+                          ) : companionLiveChange ? (
                             <LiveChangeCompanion
                               preview={companionLiveChange.preview}
                               decision={companionLiveChange.decision}
+                              versions={companionLiveChange.versions}
                             />
                           ) : (
                             <ScaleCompanionCanvas
@@ -1096,6 +1155,7 @@ export default function PaidMediaClientPage({
                               viewContext={companionViewContext}
                               viewTaskKey={companionViewTask}
                               structureDiff={companionStructureDiff}
+                              versions={companionScaffoldVersions}
                               onSend={sendCompanionTurn}
                               onDeploy={companionDeploy.requestDeploy}
                               deployInFlight={companionDeploy.inFlight}

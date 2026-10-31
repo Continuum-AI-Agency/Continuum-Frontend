@@ -35,7 +35,11 @@ import {
   platformOfSource,
 } from './platformLabels';
 
-export type LecturaMark = 'changed' | 'added' | 'paused' | 'unchanged';
+/**
+ * What a node is in the view. `removed` exists only when two versions are compared: a node the
+ * earlier version had and this one dropped, drawn struck through so the drop reads.
+ */
+export type LecturaMark = 'changed' | 'added' | 'paused' | 'removed' | 'unchanged';
 
 /** A before → after line, already worded. */
 export type LecturaRow = { field: string; label: string; before: string; after: string };
@@ -598,7 +602,7 @@ type PlainScaffold = {
   truncated: boolean;
 };
 
-const changeTitle = (
+export const changeTitle = (
   labels: PlatformLabels,
   level: keyof PlatformLabels['singular'],
   mark: Exclude<LecturaMark, 'unchanged'>,
@@ -606,6 +610,7 @@ const changeTitle = (
 ): string => {
   if (mark === 'added') return `New ${labels.singular[level]}`;
   if (mark === 'paused') return `Pause the ${labels.singular[level]}`;
+  if (mark === 'removed') return `Removed ${labels.singular[level]}`;
   // The row already says the old and the new name; the title says what happened.
   return rows.length > 0
     ? rows.map((row) => (row.field === 'name' ? 'Renamed' : row.label)).join(' · ')

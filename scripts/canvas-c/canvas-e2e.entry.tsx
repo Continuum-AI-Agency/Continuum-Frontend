@@ -10,15 +10,29 @@ import { createRoot } from 'react-dom/client';
 import { CampaignCanvas } from '@/CampaignCanvas/components/CampaignCanvas';
 import { LiveChangeCanvas } from '@/CampaignCanvas/LiveChangeCanvas';
 import { LiveChangeCompanion } from '@/CampaignCanvas/LiveChangeCompanion';
+import { CanvasViewToggle, useCanvasView } from '@/CampaignCanvas/lectura/CanvasViewToggle';
 import { LiveChangeChatCard } from '@/CampaignCanvas/lectura/LiveChangeChatCard';
 import { StoreLectura } from '@/CampaignCanvas/lectura/StoreLectura';
+import { PortfolioChatCard } from '@/CampaignCanvas/portfolio/PortfolioBand';
+import { PortfolioCompanion } from '@/CampaignCanvas/portfolio/PortfolioCompanion';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import {
+  CampaignModelBody,
+  useVersionLine,
+  VersionLineBar,
+} from '@/CampaignCanvas/versions/VersionLine';
 import { JainaCampaignStructure } from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { latestLiveChangeOf } from '@/lib/campaign-canvas/liveChange';
+import { portfolioOfMessage } from '@/lib/campaign-canvas/portfolio';
 import { latestStructureDiffFor } from '@/lib/campaign-canvas/scaffoldDiff';
+import { liveChangeVersionsOf, scaffoldVersionsOf } from '@/lib/campaign-canvas/versions';
 import {
+  composedLiveVersionThread,
+  composedPortfolioTurn,
   type DuplicateCapture,
+  derivedCopyVersionThread,
   hydratedCopyOf,
   type LiveChangeCapture,
   projectTurn,
@@ -139,7 +153,75 @@ function CopyChat() {
   );
 }
 
+/** COMPOSED: two real ITESO approvals and the real AV CAMACHO copy, in one turn. */
+function PortfolioScene() {
+  const portfolio = React.useMemo(
+    () => portfolioOfMessage(composedPortfolioTurn(data.live, data.copy)),
+    [],
+  );
+  if (!portfolio) throw new Error('the composed turn is not a portfolio');
+  if (view === 'chat') {
+    return (
+      <ChatColumn>
+        <PortfolioChatCard portfolio={portfolio} onOpen={noop} />
+      </ChatColumn>
+    );
+  }
+  return <PortfolioCompanion portfolio={portfolio} />;
+}
+
+/** The ITESO thread (v1 pause, v2 raise — applied, SYNTHETIC — v3 placements), on its companion. */
+function LiveVersionsScene() {
+  const thread = React.useMemo(() => composedLiveVersionThread(data.live), []);
+  const latest = latestLiveChangeOf(thread);
+  if (!latest) throw new Error('the composed thread has no live change');
+  const campaignId = latest.preview.nodes.find((node) => node.level === 'campaign')?.id ?? '';
+  const versions = React.useMemo(
+    () => liveChangeVersionsOf(thread, campaignId),
+    [thread, campaignId],
+  );
+  return (
+    <LiveChangeCompanion preview={latest.preview} decision={latest.decision} versions={versions} />
+  );
+}
+
+/**
+ * The real copy (v1) and its DERIVED v2, drawn the way the scaffold companion draws a version:
+ * the line, Map / Read, and the version's model. The companion's record bar reads Supabase and
+ * is not mounted here.
+ */
+function CopyVersionsScene() {
+  const derived = React.useMemo(() => derivedCopyVersionThread(data.copy), []);
+  const versions = React.useMemo(
+    () => scaffoldVersionsOf(derived.thread, derived.parentScaffoldId),
+    [derived],
+  );
+  const { view, setView } = useCanvasView('proposed');
+  // The store would hold v1 (the canvas's current version) until v2 is loaded: v2 is drawn here.
+  const state = useVersionLine(versions, derived.v2.scaffoldId);
+  const shown = state.view;
+  if (!shown) throw new Error('no version to show');
+  return (
+    <div className="flex h-full min-h-0 flex-col" data-testid="copy-versions">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border bg-card px-3 py-2">
+        <CanvasViewToggle view={view} onChange={setView} />
+        <VersionLineBar state={state} />
+      </div>
+      <div className="min-h-0 flex-1">
+        <CampaignModelBody
+          model={shown.model}
+          view={view}
+          drawKey={`${shown.version.id}:${shown.comparison ? 'c' : 'p'}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Scene() {
+  if (group === 'portfolio') return <PortfolioScene />;
+  if (group === 'versions' && key === 'live') return <LiveVersionsScene />;
+  if (group === 'versions' && key === 'copy') return <CopyVersionsScene />;
   if (group === 'live') {
     const capture = data.live[key];
     if (!capture) throw new Error(`no live capture ${key}`);
