@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from 'bun:test';
-import type { TemplateOperationInput, TemplateAuthoringWorkingCopy } from '@continuum/contracts';
+import { templateLayerViewQuerySchema, type TemplateOperationInput, type TemplateAuthoringWorkingCopy } from '@continuum/contracts';
 
 const userId = '10000000-0000-4000-8000-000000000001';
 let session = { access_token: 'test-only-token', user: { id: userId } };
@@ -80,4 +80,14 @@ test('draft queries, materialization requests and source reads carry the selecte
     { brandId, baseVersionId: workingCopy.sourceVersionId, workingCopyId: workingCopy.id },
     { ...request, workingCopyId: '40000000-0000-4000-8000-000000000099' })).rejects.toThrow('another private working copy');
   expect(observed).toHaveLength(calls);
+});
+
+
+test('layer source queries retain exact revision and working-copy pins together and reject malformed pins', () => {
+  const query = { brandId, versionId: workingCopy.sourceVersionId, revisionId: workingCopy.baseRevisionId,
+    workingCopyId: workingCopy.id, compId: '63' };
+  expect(templateLayerViewQuerySchema.parse(query)).toEqual({ ...query, compId: 63 });
+  expect(templateLayerViewQuerySchema.parse({ brandId, versionId: workingCopy.sourceVersionId })).toEqual({ brandId, versionId: workingCopy.sourceVersionId });
+  for (const pin of ['revisionId', 'workingCopyId'])
+    expect(templateLayerViewQuerySchema.safeParse({ ...query, [pin]: 'not-a-uuid' }).success).toBe(false);
 });

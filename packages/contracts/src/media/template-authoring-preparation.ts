@@ -17,7 +17,9 @@ export const templateAuthoringPreparationArtifactSchema = z
     packageChecksum: sha256,
   })
   .strict();
-export type TemplateAuthoringPreparationArtifact = z.infer<typeof templateAuthoringPreparationArtifactSchema>;
+export type TemplateAuthoringPreparationArtifact = z.infer<
+  typeof templateAuthoringPreparationArtifactSchema
+>;
 
 export const templateAuthoringPreparationRequestSchema = z
   .object({
@@ -29,10 +31,19 @@ export const templateAuthoringPreparationRequestSchema = z
     packageChecksum: sha256,
   })
   .strict();
-export type TemplateAuthoringPreparationRequest = z.infer<typeof templateAuthoringPreparationRequestSchema>;
+export type TemplateAuthoringPreparationRequest = z.infer<
+  typeof templateAuthoringPreparationRequestSchema
+>;
 
 export const templateAuthoringPreparationStateSchema = z.enum([
-  'pending', 'submitted', 'running', 'needs_input', 'draft_ready', 'review_ready', 'failed', 'stale',
+  'pending',
+  'submitted',
+  'running',
+  'needs_input',
+  'draft_ready',
+  'review_ready',
+  'failed',
+  'stale',
 ]);
 
 export const templateAuthoringPreparationSchema = z

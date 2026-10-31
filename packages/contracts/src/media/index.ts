@@ -81,6 +81,7 @@ export * from './template-authoring-mask';
 export * from './template-authoring-preparation';
 export * from './template-authoring-shape';
 export * from './template-authoring-timing';
+export * from './template-authoring-working-copy';
 export * from './template-authoring-writer';
 export * from './template-brand-alignment';
 export * from './template-forge-lineage';
@@ -105,4 +106,3 @@ export * from './workspace-template';
 export * from './zip-directory';
 
 export * from './template-versioning';
-export * from './template-authoring-working-copy';
