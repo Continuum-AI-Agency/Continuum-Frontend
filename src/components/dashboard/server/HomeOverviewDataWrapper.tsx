@@ -1,5 +1,6 @@
 import { HomeOverview } from '@/components/dashboard/overview/HomeOverview';
 import type { HomeAdAccount } from '@/components/dashboard/overview/useHomeOverviewData';
+import { loadBrandReading } from '@/lib/home/brandReading.server';
 import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import type { SnapshotAccountRef } from '@/lib/organic/brandOrganicSnapshot';
@@ -35,15 +36,19 @@ export async function HomeOverviewDataWrapper({ brandId }: { brandId: string }) 
     fetchBrandIntegrationSummary(brandId),
     loadHomeProfileRows(brandId),
   ]);
+  const readingPromise = loadBrandReading({ brandId, summary, profileRows });
 
   const metaAdAccounts = summary.facebook.accounts.filter(
     (account) => account.type === 'meta_ad_account',
   );
-  const currencies = await loadAdAccountCurrencies(
-    metaAdAccounts.flatMap((account) =>
-      account.externalAccountId ? [account.externalAccountId] : [],
+  const [currencies, reading] = await Promise.all([
+    loadAdAccountCurrencies(
+      metaAdAccounts.flatMap((account) =>
+        account.externalAccountId ? [account.externalAccountId] : [],
+      ),
     ),
-  );
+    readingPromise,
+  ]);
   // A brand can carry the same ad account twice (two assignments, two connections); summing both
   // would double every figure, so each account is counted once.
   const adAccounts: HomeAdAccount[] = [];
@@ -52,7 +57,11 @@ export async function HomeOverviewDataWrapper({ brandId }: { brandId: string }) 
     const id = account.externalAccountId ?? account.integrationAccountId;
     if (seen.has(id)) continue;
     seen.add(id);
-    adAccounts.push({ id, name: account.alias ?? account.name, currency: currencies.get(id) ?? null });
+    adAccounts.push({
+      id,
+      name: account.alias ?? account.name,
+      currency: currencies.get(id) ?? null,
+    });
   }
 
   const organicCandidates: SnapshotAccountRef[] = [
@@ -85,6 +94,7 @@ export async function HomeOverviewDataWrapper({ brandId }: { brandId: string }) 
       adAccounts={adAccounts}
       organicAccounts={organicAccounts}
       profileRows={profileRows}
+      reading={reading}
     />
   );
 }

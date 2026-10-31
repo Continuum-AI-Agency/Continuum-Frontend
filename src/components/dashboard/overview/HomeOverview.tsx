@@ -9,7 +9,11 @@
 import {
   HOME_OBJECTIVE_METRICS,
   HOME_PROFILE_BRAND_SCOPE,
+  type HomeBrandReading,
+  type HomeIssue,
+  type HomeModuleId,
   type HomeObjective,
+  type HomeOpportunity,
   type HomeProfileRow,
   resolveHomeObjectives,
 } from '@continuum/contracts';
@@ -27,6 +31,7 @@ import { toast } from '@/components/ui/toast-imperative';
 import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrganicSnapshot';
 import { cn } from '@/lib/utils';
 import { formatCount, formatFigure, formatMoney, formatRatio } from './format';
+import { HomeReadingStrip } from './HomeReadingStrip';
 import { objectiveFigure, resultTotalsOf } from './homeOverviewModel';
 import { costLabelFor, ObjectiveStrip } from './ObjectiveStrip';
 import {
@@ -43,6 +48,7 @@ type Props = {
   adAccounts: HomeAdAccount[];
   organicAccounts: SnapshotAccountRef[];
   profileRows: HomeProfileRow[];
+  reading: HomeBrandReading;
 };
 
 export function ModuleCard({
@@ -52,7 +58,7 @@ export function ModuleCard({
   children,
 }: {
   title: string;
-  accent: 'perf' | 'org' | 'cre';
+  accent: 'perf' | 'org' | 'cre' | 'health' | 'opp';
   href: string;
   children: React.ReactNode;
 }) {
@@ -64,6 +70,8 @@ export function ModuleCard({
         accent === 'perf' && 'border-t-amber-500',
         accent === 'org' && 'border-t-emerald-500',
         accent === 'cre' && 'border-t-violet-500',
+        accent === 'health' && 'border-t-destructive',
+        accent === 'opp' && 'border-t-primary',
       )}
     >
       <header className="flex items-center justify-between gap-2">
@@ -171,7 +179,82 @@ export function CreativeSlot({
   );
 }
 
-export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows }: Props) {
+const RESULT_MODULES = new Set<HomeModuleId>(['performance', 'organic', 'creative']);
+
+const portfolioHref = (portfolioId: string) =>
+  `/scale?tab=performance&optimizerView=portfolios&portfolio=${encodeURIComponent(portfolioId)}`;
+
+/** What blocks results, each line opening the portfolio it is about. */
+export function HealthCard({ issues }: { issues: HomeIssue[] }) {
+  return (
+    <ModuleCard
+      title="Account health"
+      accent="health"
+      href="/scale?tab=performance&optimizerView=portfolios"
+    >
+      <ul className="flex flex-col gap-2">
+        {issues.map((issue) => (
+          <li key={`${issue.portfolioId}-${issue.title}`} className="text-xs">
+            <Link
+              href={portfolioHref(issue.portfolioId)}
+              className="text-destructive-ink underline-offset-2 hover:underline"
+            >
+              {issue.title}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </ModuleCard>
+  );
+}
+
+/** What waits for a decision, most first; a suggestion without a portfolio opens the creator. */
+export function OpportunitiesCard({ opportunities }: { opportunities: HomeOpportunity[] }) {
+  return (
+    <ModuleCard
+      title="Opportunities"
+      accent="opp"
+      href="/scale?tab=performance&optimizerView=actions"
+    >
+      {opportunities.length === 0 ? (
+        <Unavailable>Nothing is waiting for a decision.</Unavailable>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {opportunities.slice(0, 4).map((opportunity) => (
+            <li
+              key={opportunity.title}
+              className="flex items-baseline justify-between gap-2 text-xs"
+            >
+              <Link
+                href={
+                  opportunity.portfolioId
+                    ? portfolioHref(opportunity.portfolioId)
+                    : '/scale?tab=performance&optimizerView=create'
+                }
+                className="min-w-0 underline-offset-2 hover:underline"
+              >
+                {opportunity.title}
+              </Link>
+              {opportunity.count > 0 ? (
+                <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+                  {opportunity.count}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </ModuleCard>
+  );
+}
+
+export function HomeOverview({
+  brandId,
+  adAccounts,
+  organicAccounts,
+  profileRows,
+  reading,
+}: Props) {
   const [scope, setScope] = useState<string>(HOME_PROFILE_BRAND_SCOPE);
   const [rows, setRows] = useState<HomeProfileRow[]>(profileRows);
   const [, startSaving] = useTransition();
@@ -194,6 +277,9 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
     scope,
     rows,
     totals: totals ? resultTotalsOf(totals) : {},
+    // Only once the totals are in: while they load, the goals stay what they always were, so the
+    // campaign and creative reads never start on a suggestion and restart on the real result.
+    suggested: totals ? reading.goal.suggested : undefined,
   });
   const objectives = resolved.objectives;
   const primary =
@@ -238,8 +324,9 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
   };
 
   const scopeHasOwnRow = rows.some((row) => row.scope === scope);
-  const sourceNote =
-    resolved.source === 'inferred'
+  const sourceNote = resolved.fromSuggestion
+    ? 'Goals suggested from your Brand Book until results come in'
+    : resolved.source === 'inferred'
       ? 'Goals suggested from your results'
       : resolved.fromScope === scope
         ? 'Goals set by your team'
@@ -290,8 +377,156 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
         ? formatRatio(row.kpi_value)
         : formatCount(row.kpi_value);
 
+  const cards: Partial<Record<HomeModuleId, React.ReactNode>> = {
+    health: <HealthCard issues={reading.issues} />,
+    opportunities: <OpportunitiesCard opportunities={reading.opportunities} />,
+    performance: (
+      <ModuleCard title="Performance +" accent="perf" href="/scale">
+        {primaryFigure?.available && primaryFigure.value !== null ? (
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums">
+              {formatFigure(primaryFigure.value, primaryFigure.unit, currency)}
+            </span>
+            <span className="text-xs text-muted-foreground">{primary?.label.toLowerCase()}</span>
+            {primaryFigure.deltaPct !== null ? <DeltaBadge value={primaryFigure.deltaPct} /> : null}
+          </div>
+        ) : null}
+        <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+          Campaigns that brought the most {primary?.label.toLowerCase() ?? 'results'}
+        </span>
+        {campaigns.status === 'loading' ? (
+          <Skeleton className="h-24 bg-muted/70" />
+        ) : campaigns.status === 'error' ? (
+          <Unavailable onRetry={retry}>Couldn't load campaigns right now.</Unavailable>
+        ) : campaigns.data.length === 0 ? (
+          <Unavailable>
+            No campaign brought {primary?.label.toLowerCase() ?? 'results'} this week.
+          </Unavailable>
+        ) : (
+          <Bars
+            rows={campaigns.data.map((row) => ({
+              name: row.name,
+              value: row.kpi_value,
+              label:
+                row.kpi_unit === 'currency'
+                  ? formatMoney(row.kpi_value, currency)
+                  : formatCount(row.kpi_value),
+            }))}
+          />
+        )}
+      </ModuleCard>
+    ),
+    organic: (
+      <ModuleCard title="Organic +" accent="org" href="/organic?tab=metrics">
+        {organicAccounts.length === 0 ? (
+          <Unavailable>Connect Instagram or Facebook to see organic reach here.</Unavailable>
+        ) : organic.status === 'loading' ? (
+          <Skeleton className="h-32 bg-muted/70" />
+        ) : organic.status === 'error' || reach.every((item) => item.value === null) ? (
+          <Unavailable onRetry={retry}>Couldn't load organic results right now.</Unavailable>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {reach.map((item) =>
+                item.value === null ? null : (
+                  <div key={item.metricId} className="flex flex-col">
+                    <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+                      {item.label}
+                    </span>
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-semibold tabular-nums">
+                        {formatCount(item.value)}
+                      </span>
+                      {item.metricId === 'reach' && reachDelta !== null ? (
+                        <DeltaBadge value={reachDelta} />
+                      ) : null}
+                    </span>
+                  </div>
+                ),
+              )}
+            </div>
+            {organicAccounts.every((account) => account.platform !== 'instagram') ? (
+              <p className="text-2xs text-muted-foreground">
+                Only a Facebook Page is connected. Connect Instagram to see its reach and new
+                followers here.
+              </p>
+            ) : null}
+            {reachByPlatform.length > 0 ? (
+              <>
+                <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+                  Reach by account
+                </span>
+                <ul className="flex flex-col gap-1.5">
+                  {reachByPlatform.map((row) => {
+                    const max = reachByPlatform[0]?.value ?? 1;
+                    return (
+                      <li
+                        key={`${row.platform}-${row.name}`}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-xs"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {row.name} <span className="capitalize">· {row.platform}</span>
+                        </span>
+                        <span className="font-mono tabular-nums">{formatCount(row.value)}</span>
+                        <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <span
+                            className="block h-full rounded-full bg-emerald-500/80"
+                            style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
+                          />
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : null}
+          </>
+        )}
+      </ModuleCard>
+    ),
+    creative: (
+      <ModuleCard title="Creative +" accent="cre" href="/library">
+        <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+          Ads ranked by {creativeRankLabel}
+        </span>
+        {creatives.status === 'loading' ? (
+          <Skeleton className="h-40 bg-muted/70" />
+        ) : creatives.status === 'error' ? (
+          <Unavailable onRetry={retry}>Couldn't load ads right now.</Unavailable>
+        ) : !creatives.data.best ? (
+          <Unavailable>
+            No ad brought {primary?.label.toLowerCase() ?? 'results'} this week.
+          </Unavailable>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <CreativeSlot
+              tone="best"
+              row={creatives.data.best}
+              image={creatives.data.images[creatives.data.best.id]}
+              valueLabel={creativeValueLabel(creatives.data.best)}
+            />
+            <CreativeSlot
+              tone="worst"
+              row={creatives.data.worst}
+              image={creatives.data.worst ? creatives.data.images[creatives.data.worst.id] : null}
+              valueLabel={creatives.data.worst ? creativeValueLabel(creatives.data.worst) : ''}
+            />
+          </div>
+        )}
+      </ModuleCard>
+    ),
+  };
+
+  // Health and Opportunities lead in a compact row of their own when the reading puts them ahead
+  // of the result modules, so a short list never stretches to the height of a chart card.
+  const ordered = reading.modules.map((module) => module.id).filter((id) => cards[id]);
+  const firstResult = ordered.findIndex((id) => RESULT_MODULES.has(id));
+  const leading = firstResult === -1 ? ordered : ordered.slice(0, firstResult);
+  const following = firstResult === -1 ? [] : ordered.slice(firstResult);
+
   return (
     <div data-home-overview className="flex min-w-0 flex-col gap-4 px-[var(--card-pad)] py-4">
+      <HomeReadingStrip reading={reading} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col">
           <span className="text-xs font-medium text-foreground">
@@ -358,140 +593,22 @@ export function HomeOverview({ brandId, adAccounts, organicAccounts, profileRows
         />
       )}
 
+      {leading.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {leading.map((id) => (
+            <div key={id} data-home-slot={id} className="flex min-w-0 flex-col">
+              {cards[id]}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <ModuleCard title="Performance +" accent="perf" href="/scale">
-          {primaryFigure?.available && primaryFigure.value !== null ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums">
-                {formatFigure(primaryFigure.value, primaryFigure.unit, currency)}
-              </span>
-              <span className="text-xs text-muted-foreground">{primary?.label.toLowerCase()}</span>
-              {primaryFigure.deltaPct !== null ? (
-                <DeltaBadge value={primaryFigure.deltaPct} />
-              ) : null}
-            </div>
-          ) : null}
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-            Campaigns that brought the most {primary?.label.toLowerCase() ?? 'results'}
-          </span>
-          {campaigns.status === 'loading' ? (
-            <Skeleton className="h-24 bg-muted/70" />
-          ) : campaigns.status === 'error' ? (
-            <Unavailable onRetry={retry}>Couldn't load campaigns right now.</Unavailable>
-          ) : campaigns.data.length === 0 ? (
-            <Unavailable>
-              No campaign brought {primary?.label.toLowerCase() ?? 'results'} this week.
-            </Unavailable>
-          ) : (
-            <Bars
-              rows={campaigns.data.map((row) => ({
-                name: row.name,
-                value: row.kpi_value,
-                label:
-                  row.kpi_unit === 'currency'
-                    ? formatMoney(row.kpi_value, currency)
-                    : formatCount(row.kpi_value),
-              }))}
-            />
-          )}
-        </ModuleCard>
-
-        <ModuleCard title="Organic +" accent="org" href="/organic?tab=metrics">
-          {organicAccounts.length === 0 ? (
-            <Unavailable>Connect Instagram or Facebook to see organic reach here.</Unavailable>
-          ) : organic.status === 'loading' ? (
-            <Skeleton className="h-32 bg-muted/70" />
-          ) : organic.status === 'error' || reach.every((item) => item.value === null) ? (
-            <Unavailable onRetry={retry}>Couldn't load organic results right now.</Unavailable>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-x-5 gap-y-2">
-                {reach.map((item) =>
-                  item.value === null ? null : (
-                    <div key={item.metricId} className="flex flex-col">
-                      <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                        {item.label}
-                      </span>
-                      <span className="flex items-baseline gap-1.5">
-                        <span className="text-xl font-semibold tabular-nums">
-                          {formatCount(item.value)}
-                        </span>
-                        {item.metricId === 'reach' && reachDelta !== null ? (
-                          <DeltaBadge value={reachDelta} />
-                        ) : null}
-                      </span>
-                    </div>
-                  ),
-                )}
-              </div>
-              {organicAccounts.every((account) => account.platform !== 'instagram') ? (
-                <p className="text-2xs text-muted-foreground">
-                  Only a Facebook Page is connected. Connect Instagram to see its reach and new
-                  followers here.
-                </p>
-              ) : null}
-              {reachByPlatform.length > 0 ? (
-                <>
-                  <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                    Reach by account
-                  </span>
-                  <ul className="flex flex-col gap-1.5">
-                    {reachByPlatform.map((row) => {
-                      const max = reachByPlatform[0]?.value ?? 1;
-                      return (
-                        <li
-                          key={`${row.platform}-${row.name}`}
-                          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-xs"
-                        >
-                          <span className="truncate text-muted-foreground">
-                            {row.name} <span className="capitalize">· {row.platform}</span>
-                          </span>
-                          <span className="font-mono tabular-nums">{formatCount(row.value)}</span>
-                          <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                            <span
-                              className="block h-full rounded-full bg-emerald-500/80"
-                              style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
-                            />
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              ) : null}
-            </>
-          )}
-        </ModuleCard>
-
-        <ModuleCard title="Creative +" accent="cre" href="/library">
-          <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-            Ads ranked by {creativeRankLabel}
-          </span>
-          {creatives.status === 'loading' ? (
-            <Skeleton className="h-40 bg-muted/70" />
-          ) : creatives.status === 'error' ? (
-            <Unavailable onRetry={retry}>Couldn't load ads right now.</Unavailable>
-          ) : !creatives.data.best ? (
-            <Unavailable>
-              No ad brought {primary?.label.toLowerCase() ?? 'results'} this week.
-            </Unavailable>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <CreativeSlot
-                tone="best"
-                row={creatives.data.best}
-                image={creatives.data.images[creatives.data.best.id]}
-                valueLabel={creativeValueLabel(creatives.data.best)}
-              />
-              <CreativeSlot
-                tone="worst"
-                row={creatives.data.worst}
-                image={creatives.data.worst ? creatives.data.images[creatives.data.worst.id] : null}
-                valueLabel={creatives.data.worst ? creativeValueLabel(creatives.data.worst) : ''}
-              />
-            </div>
-          )}
-        </ModuleCard>
+        {following.map((id) => (
+          <div key={id} data-home-slot={id} className="flex min-w-0 flex-col [&>section]:flex-1">
+            {cards[id]}
+          </div>
+        ))}
       </div>
     </div>
   );

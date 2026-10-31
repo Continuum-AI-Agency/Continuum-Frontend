@@ -1,12 +1,25 @@
 import { expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
+  HOME_MODULE_LABELS,
+  type HomeBrandReading,
+  readBrand,
+} from '../packages/contracts/src/home/brandReading';
+import {
   HOME_OBJECTIVE_METRICS,
   type HomeObjective,
   homeProfileRowSchema,
   inferHomeObjectives,
 } from '../packages/contracts/src/home/objectives';
 import { formatCount } from '../src/components/dashboard/overview/format';
+import {
+  type AccountBuckets,
+  accountCountsFrom,
+  businessFrom,
+  portfolioSignalsFrom,
+  savedGoalFrom,
+} from '../src/lib/home/brandSignals';
+import { lastCompleteDays } from '../src/lib/paid-media/reportingWindow';
 import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
@@ -24,9 +37,13 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //   2. The goal tiles are the ones the profile names (Easy Fit asked for "Tours booked" and
 //      "Conversations started") or, before brand_profiles.home_profiles exists in production,
 //      the ones inferred from the account's results — and each prints the same count the edge
-//      returns for the last 7 days.
+//      returns for the seven complete days ending yesterday, the window the Home asks for.
 //   3. Performance +, Organic + and Creative + all render without an error state.
 //   4. The edit control opens on a goal tile.
+//   5. The reading strip says how the Home reads Easy Fit — the mode, the goal, the module it
+//      opens with — and the modules follow the reading's order. The expected reading is built
+//      from this bench's own member-scoped reads (portfolios, accounts, Brand Book), so the
+//      rendered strip is checked against the data, not against the page's own state.
 //
 // It reads only. The single write is the bench user's active-brand preference, restored at the
 // end. It never saves a goal, so Easy Fit's real profile row is never touched; the save path is
@@ -90,7 +107,9 @@ async function readEdgeTotals(): Promise<EdgeTotals> {
       brandId: EASYFIT_BRAND_ID,
       adAccountId: EASYFIT_AD_ACCOUNT,
       scope: 'account_overview',
-      range: { preset: 'last_7d' },
+      // The window the Home asks for (useHomeOverviewData's homeRange): the seven complete days
+      // ending yesterday. The edge's own last_7d also counts today's half-written day.
+      range: lastCompleteDays(7),
     },
   });
   if (error) throw new Error(`[home-bench] edge account_overview failed: ${error.message}`);
@@ -111,6 +130,73 @@ async function readSavedObjectives(): Promise<{
   if (error) return { tableLive: false, objectives: null };
   const parsed = data ? homeProfileRowSchema.safeParse(data) : null;
   return { tableLive: true, objectives: parsed?.success ? parsed.data.objectives : null };
+}
+
+/** Easy Fit's reading, from reads this bench makes itself as the member. */
+async function readExpectedReading(): Promise<HomeBrandReading> {
+  const client = memberClient();
+  const [summary, portfolios, book, brand, profiles] = await Promise.all([
+    client
+      .schema('brand_profiles')
+      .rpc('get_brand_integration_summary', { p_brand_profile_id: EASYFIT_BRAND_ID }),
+    client.rpc('optimizer_list_portfolios', { p_brand_id: EASYFIT_BRAND_ID }),
+    client
+      .schema('brand_profiles')
+      .from('brand_book')
+      .select(
+        'business:assembled->report->composite->structured->business, headline:assembled->report->composite->first_impression->headline',
+      )
+      .eq('brand_id', EASYFIT_BRAND_ID)
+      .maybeSingle(),
+    client
+      .schema('brand_profiles')
+      .from('brand_profiles')
+      .select('description, approval_chain_required')
+      .eq('id', EASYFIT_BRAND_ID)
+      .maybeSingle(),
+    readSavedObjectives(),
+  ]);
+  for (const read of [summary, portfolios, book, brand]) {
+    if (read.error) throw new Error(`[home-bench] reading input failed: ${read.error.message}`);
+  }
+  const buckets: AccountBuckets = {};
+  for (const row of (summary.data ?? []) as Record<string, unknown>[]) {
+    const key = row.platform_key as keyof AccountBuckets | null;
+    if (!key) continue;
+    const bucket = buckets[key] ?? { accounts: [] };
+    buckets[key] = bucket;
+    bucket.accounts.push({
+      type: (row.account_type as string | null) ?? null,
+      status: (row.account_status as string | null) ?? null,
+    });
+  }
+  const bookRow = (book.data ?? {}) as { business?: unknown; headline?: unknown };
+  const brandRow = (brand.data ?? {}) as {
+    description?: unknown;
+    approval_chain_required?: unknown;
+  };
+  return readBrand({
+    accounts: accountCountsFrom(buckets),
+    savedGoal: savedGoalFrom(
+      profiles.objectives
+        ? [
+            {
+              brand_id: EASYFIT_BRAND_ID,
+              scope: 'brand',
+              objectives: profiles.objectives,
+              source: 'user',
+            },
+          ]
+        : [],
+    ),
+    business: businessFrom({
+      structuredBusiness: bookRow.business ?? null,
+      headline: bookRow.headline ?? null,
+      brandDescription: brandRow.description ?? null,
+    }),
+    portfolios: portfolioSignalsFrom(portfolios.data),
+    approvalRequired: brandRow.approval_chain_required === true,
+  });
 }
 
 async function openHome(page: Page): Promise<void> {
@@ -179,6 +265,37 @@ test.describe('Home overview — Easy Fit, live', () => {
         'aria-pressed',
         'true',
       );
+    });
+
+    const reading = await recorder.step(
+      'reading built from the bench’s own reads',
+      readExpectedReading,
+    );
+    notes.push(
+      `Easy Fit reads as ${reading.mode}; opens with ${reading.modules[0]?.id}; ${reading.issues.length} issue(s), ${reading.opportunities.length} opportunity(ies)`,
+    );
+
+    await recorder.step('the reading strip says how the Home reads Easy Fit', async () => {
+      const strip = page.locator('[data-home-reading]');
+      await expect(strip).toHaveAttribute('data-home-reading', reading.mode);
+      await expect(strip.locator('[data-home-mode]')).toHaveText(reading.modeLabel);
+      await expect(strip).toContainText(reading.goal.label);
+      const first = reading.modules[0];
+      if (first) await expect(strip).toContainText(HOME_MODULE_LABELS[first.id]);
+      const top = reading.opportunities[0];
+      if (top) await expect(strip).toContainText(top.title);
+    });
+
+    await recorder.step('the modules follow the reading’s order', async () => {
+      const rendered = await page
+        .locator('[data-home-slot]')
+        .evaluateAll((slots) => slots.map((slot) => slot.getAttribute('data-home-slot')));
+      expect(rendered).toEqual(
+        reading.modules.map((module) => module.id).filter((id) => id !== 'setup'),
+      );
+      for (const issue of reading.issues) {
+        await expect(page.locator('[data-home-slot="health"]')).toContainText(issue.title);
+      }
     });
 
     await recorder.step('each goal tile shows the edge figure', async () => {
