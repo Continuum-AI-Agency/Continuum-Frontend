@@ -281,13 +281,22 @@ export function ownResultsLabel(byResult: GoogleResultCounts | null): string | n
 }
 
 /** Spend per result of one type; null when there is none to price. */
+/** Fewer results than this buy no cost per result: Google's data-driven attribution splits
+ *  conversions into fractions, and 7,155 MXN over 0.05 of one printed "$68,187 per conversion"
+ *  (PP-DT-B-pmax-cpa-from-fractional-conversions). Under it the screen says so instead. */
+export const MIN_PRICED_RESULTS = 1;
+
+/** Spend per result, or null when fewer than MIN_PRICED_RESULTS were counted. */
+export function pricedPerResult(spend: number, results: number | null | undefined): number | null {
+  return results != null && results >= MIN_PRICED_RESULTS ? spend / results : null;
+}
+
 export function costPerResult(
   spend: number,
   byResult: GoogleResultCounts | null,
   bucket: GoogleResultBucket,
 ): number | null {
-  const count = byResult?.[bucket] ?? 0;
-  return count > 0 ? spend / count : null;
+  return pricedPerResult(spend, byResult?.[bucket] ?? 0);
 }
 
 /** Room for six tiles: spend, conversions, and up to four campaign groups. */
@@ -296,9 +305,7 @@ export const MAX_GROUP_TILES = 4;
 export const MIN_TILES = 4;
 
 export function costPerConversion(group: CampaignGroup): number | null {
-  return group.conversions != null && group.conversions > 0
-    ? group.spend / group.conversions
-    : null;
+  return pricedPerResult(group.spend, group.conversions);
 }
 
 /** Signed % of `value` against `base`, rounded; null when there is no base to compare with. */

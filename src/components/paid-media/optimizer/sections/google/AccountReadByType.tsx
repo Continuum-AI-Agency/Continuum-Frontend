@@ -84,14 +84,19 @@ function summaryOf(
             ? apart
                 .map((bucket) => {
                   const each = costPerResult(row.spend, row.byResult, bucket);
+                  const counted = row.byResult?.[bucket] ?? 0;
                   return each == null
-                    ? `no ${RESULT_WORDS[bucket].one} yet`
+                    ? counted > 0
+                      ? `under 1 ${RESULT_WORDS[bucket].one}`
+                      : `no ${RESULT_WORDS[bucket].one} yet`
                     : `${formatCurrency(each, currency)} per ${RESULT_WORDS[bucket].one}`;
                 })
                 .join(', ')
             : 'conversions not counted'
           : row.cost == null
-            ? 'no conversion yet'
+            ? row.conversions > 0
+              ? 'under 1 conversion'
+              : 'no conversion yet'
             : `${formatCurrency(row.cost, currency)} per conversion`;
       const band = row.band.label === '—' ? '' : ` · ${row.band.label}`;
       return `${row.label}: ${cost}${band}`;
