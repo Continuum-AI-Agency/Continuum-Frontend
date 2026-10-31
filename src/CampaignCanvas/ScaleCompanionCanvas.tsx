@@ -66,7 +66,7 @@ export function ScaleCompanionCanvas({
             <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
           </div>
           <div className="relative min-h-0 flex-1">
-            {view === 'lectura' ? <StoreLectura /> : <CampaignCanvas />}
+            {view === 'lectura' ? <StoreLectura /> : <CampaignCanvas layout="columns" />}
           </div>
         </div>
       </CanvasJainaContext.Provider>

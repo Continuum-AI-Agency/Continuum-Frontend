@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { LiveChangeNode, LiveChangePreviewPayload } from '@continuum/contracts';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { cardHeight, cardsById, columnMapFromLiveChange } from '@/lib/campaign-canvas/columnMap';
+import { MapCardBox } from './columnMap/ColumnMapFlow';
 import { LiveChangeCanvas } from './LiveChangeCanvas';
 
 const node = (
@@ -57,15 +59,39 @@ const PREVIEW: LiveChangePreviewPayload = {
   readAt: '2026-10-30T12:00:00Z',
 };
 
+const cardHtml = (id: string) => {
+  const card = cardsById(columnMapFromLiveChange(PREVIEW)).get(id);
+  if (!card) throw new Error(`no card ${id}`);
+  return renderToStaticMarkup(
+    <MapCardBox
+      card={card}
+      height={cardHeight(card)}
+      dimmed={card.mark === 'unchanged'}
+      focused={false}
+      foldSelected={false}
+      testIdPrefix="live-change-node-"
+      onSelectFolded={null}
+      selected={false}
+    />,
+  );
+};
+
 describe('LiveChangeCanvas', () => {
-  it('draws every node with its mark, the copy beside its source, and the change before → after', () => {
+  it('draws each node with its mark, the copy beside its source, and the change before → after', () => {
+    expect(cardHtml('200')).toContain('data-testid="live-change-node-200" data-mark="unchanged"');
+    const copy = cardHtml('new:1');
+    expect(copy).toContain('data-testid="live-change-node-new:1" data-mark="added"');
+    expect(copy).toContain('copy of CONJUNTO GEO');
+    expect(copy).toContain('Automatic');
+    expect(copy).toContain('instagram reels');
+  });
+
+  it('draws the map in columns with the summary, the next-change control and the minimap', () => {
     const html = renderToStaticMarkup(<LiveChangeCanvas preview={PREVIEW} decision="pending" />);
-    expect(html).toContain('data-testid="live-change-node-200" data-mark="unchanged"');
-    expect(html).toContain('data-testid="live-change-node-new:1" data-mark="added"');
-    expect(html).toContain('copy of CONJUNTO GEO');
-    expect(html).toContain('Automatic');
-    expect(html).toContain('instagram reels');
+    expect(html).toContain('data-testid="column-map"');
     expect(html).toContain('2 new, paused');
+    expect(html).toContain('data-testid="map-next-change"');
+    expect(html).toContain('data-testid="rf__minimap"');
     expect(html).toContain('Preview · approve in chat');
   });
 

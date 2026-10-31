@@ -62,7 +62,9 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
+import { columnMapFromCanvasGraph, columnsShowEveryNode } from '@/lib/campaign-canvas/columnMap';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import { ColumnMapFlow } from '../columnMap/ColumnMapFlow';
 import { AdNode } from '../nodes/AdNode';
 import { AdSetNode } from '../nodes/AdSetNode';
 import { AudienceNode } from '../nodes/AudienceNode';
@@ -113,7 +115,15 @@ function getClientPositionFromPointerEvent(
   return null;
 }
 
-export const CampaignCanvas = () => {
+/**
+ * `free`: the full Canvas page — nodes where they were placed, dragged and connected by hand.
+ * `columns`: the companion pane (design C) — campaign → ad sets → ads in three fixed columns at
+ * 100% width, compact cards, the inspector for edits. A graph with a node that hangs off nothing
+ * stays free, so nothing is ever hidden.
+ */
+export type CampaignCanvasLayout = 'free' | 'columns';
+
+export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLayout }) => {
   const {
     nodes,
     edges,
@@ -338,6 +348,25 @@ export const CampaignCanvas = () => {
 
   const selectedCount = useMemo(() => nodes.filter((n) => n.selected).length, [nodes]);
 
+  const columnModel = useMemo(
+    () =>
+      layout === 'columns' && platform !== 'openai' ? columnMapFromCanvasGraph(nodes, edges) : null,
+    [edges, layout, nodes, platform],
+  );
+  const inColumns = columnModel !== null && columnsShowEveryNode(columnModel, nodes);
+  const selectedIds = useMemo(
+    () => new Set(nodes.filter((node) => node.selected).map((node) => node.id)),
+    [nodes],
+  );
+  // A folded audience or creative is opened by selecting it alone: the inspector follows.
+  const selectFolded = useCallback(
+    (id: string) =>
+      onNodesChange(
+        nodes.map((node) => ({ type: 'select' as const, id: node.id, selected: node.id === id })),
+      ),
+    [nodes, onNodesChange],
+  );
+
   const defaultEdgeOptions = useMemo(
     () => ({
       type: 'animated',
@@ -388,6 +417,50 @@ export const CampaignCanvas = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [nodes, undo, redo, duplicateNode, toast, fitView]);
 
+  const panels = (
+    <>
+      <CanvasInspector />
+
+      <Panel position="top-left" className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" onClick={undo} className="h-8 w-8">
+          <Undo className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={redo} className="h-8 w-8">
+          <Redo className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={handleExport} className="h-8 w-8 ml-2">
+          <Download className="h-4 w-4" />
+        </Button>
+      </Panel>
+
+      {selectedCount > 1 && (
+        <Panel position="top-right">
+          <Badge
+            variant="secondary"
+            className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2"
+          >
+            <MousePointer2 className="h-3 w-3" />
+            <span className="tabular-nums">{selectedCount}</span> nodes selected
+          </Badge>
+        </Panel>
+      )}
+
+      <Panel
+        position="bottom-right"
+        className="flex flex-col gap-2 bg-transparent border-none shadow-none!"
+      >
+        <Button
+          variant="outline"
+          className="gap-2 bg-background shadow-lg"
+          onClick={handleValidateStructure}
+        >
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          Validate
+        </Button>
+      </Panel>
+    </>
+  );
+
   return (
     <div ref={surfaceRef} className="relative h-full w-full">
       <ContextMenu>
@@ -397,74 +470,47 @@ export const CampaignCanvas = () => {
           why dragging a handle never completed an edge.
         */}
         <ContextMenuTrigger className="contents">
-          <Canvas
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={handleConnect}
-            onConnectStart={handleConnectStart}
-            onConnectEnd={handleConnectEnd}
-            isValidConnection={isValidConnection}
-            nodesConnectable={!editLocked}
-            nodesDraggable={!editLocked}
-            deleteKeyCode={editLocked ? null : undefined}
-            panOnDrag
-            selectionOnDrag={false}
-            nodeTypes={nodeTypes as unknown as NodeTypes}
-            edgeTypes={edgeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
-            connectionLineComponent={Connection}
-            fitView
-          >
-            <Controls />
-            {/* Bottom-left beside Controls, as on the Studio canvas: the right edge is the inspector's. */}
-            <MiniMap
-              position="bottom-left"
-              zoomable
-              pannable
-              className="!ml-14 !bg-background border shadow-sm"
-            />
-            <CanvasInspector />
-
-            <Panel position="top-left" className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={undo} className="h-8 w-8">
-                <Undo className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={redo} className="h-8 w-8">
-                <Redo className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleExport} className="h-8 w-8 ml-2">
-                <Download className="h-4 w-4" />
-              </Button>
-            </Panel>
-
-            {selectedCount > 1 && (
-              <Panel position="top-right">
-                <Badge
-                  variant="secondary"
-                  className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2"
-                >
-                  <MousePointer2 className="h-3 w-3" />
-                  <span className="tabular-nums">{selectedCount}</span> nodes selected
-                </Badge>
-              </Panel>
-            )}
-
-            <Panel
-              position="bottom-right"
-              className="flex flex-col gap-2 bg-transparent border-none shadow-none!"
+          {inColumns && columnModel ? (
+            <ColumnMapFlow
+              model={columnModel}
+              selectedIds={selectedIds}
+              onNodesChange={onNodesChange}
+              onSelectFolded={selectFolded}
             >
-              <Button
-                variant="outline"
-                className="gap-2 bg-background shadow-lg"
-                onClick={handleValidateStructure}
-              >
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                Validate
-              </Button>
-            </Panel>
-          </Canvas>
+              {panels}
+            </ColumnMapFlow>
+          ) : (
+            <Canvas
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={handleConnect}
+              onConnectStart={handleConnectStart}
+              onConnectEnd={handleConnectEnd}
+              isValidConnection={isValidConnection}
+              nodesConnectable={!editLocked}
+              nodesDraggable={!editLocked}
+              deleteKeyCode={editLocked ? null : undefined}
+              panOnDrag
+              selectionOnDrag={false}
+              nodeTypes={nodeTypes as unknown as NodeTypes}
+              edgeTypes={edgeTypes}
+              defaultEdgeOptions={defaultEdgeOptions}
+              connectionLineComponent={Connection}
+              fitView
+            >
+              <Controls />
+              {/* Bottom-left beside Controls, as on the Studio canvas: the right edge is the inspector's. */}
+              <MiniMap
+                position="bottom-left"
+                zoomable
+                pannable
+                className="!ml-14 !bg-background border shadow-sm"
+              />
+              {panels}
+            </Canvas>
+          )}
         </ContextMenuTrigger>
 
         <ContextMenuContent className="w-[clamp(13rem,17vw,17rem)]">
