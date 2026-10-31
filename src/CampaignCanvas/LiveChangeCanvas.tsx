@@ -110,12 +110,32 @@ function NodeBox({
   );
 }
 
+/** Where the approval stands; the companion's header shows it in both views. */
+export function LiveChangeDecisionPill({ decision }: { decision: LiveChangeDecision }) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px]',
+        decision === 'pending' && 'border-primary text-primary-ink',
+        decision === 'approved' && 'border-[color:var(--success)] text-[color:var(--success)]',
+        decision === 'denied' && 'border-border text-muted-foreground',
+      )}
+      data-testid="live-change-decision"
+    >
+      {DECISION_LABEL[decision]}
+    </span>
+  );
+}
+
 export function LiveChangeCanvas({
   preview,
   decision,
+  showHeader = true,
 }: {
   preview: LiveChangePreviewPayload;
   decision: LiveChangeDecision;
+  /** False when a host draws the subject and the decision above it. */
+  showHeader?: boolean;
 }) {
   const tree = liveChangeTreeOf(preview);
   const nameOf = new Map(preview.nodes.map((node) => [node.id, node.name]));
@@ -124,22 +144,14 @@ export function LiveChangeCanvas({
       className="flex h-full min-h-0 flex-col bg-background [background-image:radial-gradient(color-mix(in_srgb,var(--primary)_12%,transparent)_1px,transparent_1px)] [background-size:16px_16px]"
       data-testid="live-change-canvas"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 text-xs">
-        <span className="min-w-0 break-words text-muted-foreground">
-          {preview.subject ?? 'Pending change'}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px]',
-            decision === 'pending' && 'border-primary text-primary',
-            decision === 'approved' && 'border-[color:var(--success)] text-[color:var(--success)]',
-            decision === 'denied' && 'border-border text-muted-foreground',
-          )}
-          data-testid="live-change-decision"
-        >
-          {DECISION_LABEL[decision]}
-        </span>
-      </div>
+      {showHeader ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 text-xs">
+          <span className="min-w-0 break-words text-muted-foreground">
+            {preview.subject ?? 'Pending change'}
+          </span>
+          <LiveChangeDecisionPill decision={decision} />
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-border bg-card/70 px-3 py-2 text-xs tabular-nums">
         <span className="font-semibold">{liveChangeSummaryOf(preview)}</span>
         {preview.truncated ? (

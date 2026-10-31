@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSession } from '@/hooks/useSession';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import { type CanvasViewContext, canvasViewContextOf } from '@/lib/campaign-canvas/canvasView';
 import {
   buildCampaignCreativeRequest,
   type CampaignCreativeRequest,
@@ -157,8 +158,8 @@ const ScaleCompanionCanvas = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 // The same pane, when the thread's newest proposal is an edit to a LIVE campaign: read-only.
-const LiveChangeCanvas = dynamic(
-  () => import('@/CampaignCanvas/LiveChangeCanvas').then((mod) => mod.LiveChangeCanvas),
+const LiveChangeCompanion = dynamic(
+  () => import('@/CampaignCanvas/LiveChangeCompanion').then((mod) => mod.LiveChangeCompanion),
   { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
@@ -430,6 +431,9 @@ export default function PaidMediaClientPage({
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   // The scaffold the Jaina thread is about, shown on its companion canvas.
   const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
+  // Why the companion shows its scaffold: a proposal opens in Read, anything else in Map.
+  const [companionViewContext, setCompanionViewContext] =
+    React.useState<CanvasViewContext>('manual');
   // A pending edit to a live campaign, shown on the same pane until a scaffold takes it over.
   const [companionLiveChange, setCompanionLiveChange] = React.useState<{
     preview: LiveChangePreviewPayload;
@@ -570,6 +574,8 @@ export default function PaidMediaClientPage({
   }, []);
 
   const handleToggleCanvas = React.useCallback(() => {
+    // Opened by hand: the person came to work on the graph, so it opens in Map.
+    setCompanionViewContext('manual');
     setIsCanvasOpen((previous) => !previous);
   }, []);
 
@@ -586,6 +592,7 @@ export default function PaidMediaClientPage({
   const handleScaffoldFocus = React.useCallback(
     (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
       setCompanionScaffoldId(parentScaffoldId);
+      setCompanionViewContext(canvasViewContextOf(reason));
       if (reason !== 'thread') {
         setCompanionLiveChange(null);
         setIsCanvasOpen(true);
@@ -1066,7 +1073,7 @@ export default function PaidMediaClientPage({
                       >
                         <CampaignCreativeActionsProvider value={handleGenerateCreative}>
                           {companionLiveChange ? (
-                            <LiveChangeCanvas
+                            <LiveChangeCompanion
                               preview={companionLiveChange.preview}
                               decision={companionLiveChange.decision}
                             />
@@ -1074,6 +1081,7 @@ export default function PaidMediaClientPage({
                             <ScaleCompanionCanvas
                               brandId={brandProfileId}
                               scaffoldId={companionScaffoldId}
+                              viewContext={companionViewContext}
                               onSend={sendCompanionTurn}
                               onDeploy={companionDeploy.requestDeploy}
                               deployInFlight={companionDeploy.inFlight}
