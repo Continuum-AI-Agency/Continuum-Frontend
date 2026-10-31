@@ -443,3 +443,21 @@ describe('OptimizerTab on a brand whose selected account is a Google one', () =>
     expect(screen.getByTestId('platform-tab-meta').getAttribute('data-connected')).toBe('true');
   });
 });
+
+// PP-DT-E-google-only-lands-on-blank-all (deep test 2026-10-31, lane E): opened on Pink Elephant's
+// Google account, the Optimizer landed on "All", whose managed rows are Meta's: a greyed headline
+// over an empty page until the person found the Google tab.
+describe('OptimizerTab opened on a Google account', () => {
+  it('lands on the Google tab instead of an empty All', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    expect(setPlatform).toHaveBeenCalledWith('google_ads');
+  });
+
+  it('leaves a Meta account on the tab the URL names', () => {
+    renderTab();
+    expect(setPlatform).not.toHaveBeenCalledWith('google_ads');
+  });
+});

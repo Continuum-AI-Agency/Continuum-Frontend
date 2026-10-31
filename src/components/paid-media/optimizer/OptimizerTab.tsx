@@ -330,6 +330,15 @@ export function OptimizerTab({
     if (rendersManagedOverview(platformTab)) setPlatform(landingPlatform);
   }, [accountIsEmpty, landingPlatform, platformTab, setPlatform]);
 
+  // Scale opened on a Google account (a brand whose ad accounts are all Google's): its Overview is
+  // the Google tab. "All" lists the managed Meta rows and showed a greyed headline over nothing.
+  const landedOnGoogle = useRef(false);
+  useEffect(() => {
+    if (landedOnGoogle.current || platform !== 'google-ads') return;
+    landedOnGoogle.current = true;
+    if (platformTab === 'all') setPlatform('google_ads');
+  }, [platform, platformTab, setPlatform]);
+
   // Only reachable when the selected account has NO portfolios — the tabbed view (and its
   // own scope toggle) never renders in that state, so the notice hands off to here instead.
   const [browsingAllAccounts, setBrowsingAllAccounts] = useState(false);
