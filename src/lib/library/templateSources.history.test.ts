@@ -5,7 +5,7 @@ const userId = '10000000-0000-4000-8000-000000000001';
 let session = { access_token: 'test-only-token', user: { id: userId } };
 mock.module('@/lib/supabase/client', () => ({ createSupabaseBrowserClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }) }));
 const { appendTemplateAuthoringHistory, openTemplateAuthoringWorkingCopy, fetchTemplateAuthoringDraft,
-  prepareTemplateAuthoringArtifact, fetchTemplateLayerInventory } = await import('./templateSources');
+  prepareTemplateAuthoringArtifact, fetchTemplateLayerInventory, fetchTemplateVersionHistory } = await import('./templateSources');
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; session = { access_token: 'test-only-token', user: { id: userId } }; });
 const operation: TemplateOperationInput = {
@@ -90,4 +90,37 @@ test('layer source queries retain exact revision and working-copy pins together 
   expect(templateLayerViewQuerySchema.parse({ brandId, versionId: workingCopy.sourceVersionId })).toEqual({ brandId, versionId: workingCopy.sourceVersionId });
   for (const pin of ['revisionId', 'workingCopyId'])
     expect(templateLayerViewQuerySchema.safeParse({ ...query, [pin]: 'not-a-uuid' }).success).toBe(false);
+});
+
+
+test('history paging carries opaque cursors and legacy stream queries through the canonical contract', async () => {
+  const queries: URLSearchParams[] = [];
+  globalThis.fetch = mock(async (url: string | URL | Request) => {
+    queries.push(new URL(String(url)).searchParams);
+    return Response.json({ items: [], nextCursor: queries.length === 1 ? 'next-page' : null });
+  }) as typeof fetch;
+  expect((await fetchTemplateVersionHistory(brandId, assetId, {}, userId)).nextCursor).toBe('next-page');
+  await fetchTemplateVersionHistory(brandId, assetId, { cursor: 'next-page', limit: 200 }, userId);
+  expect(Object.fromEntries(queries[1]!)).toEqual({ brandId, limit: '200', cursor: 'next-page' });
+  await fetchTemplateVersionHistory(brandId, assetId, { workingCopyId: operation.workingCopyId, afterSequence: 25 }, userId);
+  expect(queries[2]!.get('afterSequence')).toBe('25');
+  const calls = queries.length;
+  await expect(fetchTemplateVersionHistory(brandId, assetId, { cursor: 'not a cursor' }, userId)).rejects.toThrow();
+  await expect(fetchTemplateVersionHistory(brandId, assetId, { cursor: 'next-page', workingCopyId: operation.workingCopyId }, userId)).rejects.toThrow();
+  expect(queries).toHaveLength(calls);
+});
+
+test('history reads reject changed authentication before dispatch and after a late response', async () => {
+  const request = mock(async () => Response.json({ items: [], nextCursor: null }));
+  globalThis.fetch = request as typeof fetch;
+  const originalUser = userId;
+  session = { access_token: 'test-only-token', user: { id: '40000000-0000-4000-8000-000000000099' } };
+  await expect(fetchTemplateVersionHistory(brandId, assetId, {}, originalUser)).rejects.toThrow('another signed-in account');
+  expect(request).not.toHaveBeenCalled();
+  session = { access_token: 'test-only-token', user: { id: originalUser } };
+  globalThis.fetch = mock(async () => {
+    session = { access_token: 'test-only-token', user: { id: '40000000-0000-4000-8000-000000000099' } };
+    return Response.json({ items: [], nextCursor: null });
+  }) as typeof fetch;
+  await expect(fetchTemplateVersionHistory(brandId, assetId, {}, originalUser)).rejects.toThrow('another signed-in account');
 });

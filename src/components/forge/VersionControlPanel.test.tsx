@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-import type { TemplateRevision, TemplateRevisionVariant } from '@continuum/contracts';
+import type { TemplateOperation, TemplateRevision, TemplateRevisionVariant } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   chooseOption,
   installPickerDomGlobals,
@@ -119,6 +119,8 @@ const variants: TemplateRevisionVariant[] = [
   },
 ];
 let currentUser = userId;
+mock.module('@/hooks/useSession', () => ({ useSession: () => ({ user: { id: currentUser }, isLoading: false }) }));
+const history = mock(async (_brand: string, _asset: string, _query?: { cursor?: string }, _user?: string, _signal?: AbortSignal): Promise<{ items: TemplateOperation[]; nextCursor: string | null }> => ({ items: [], nextCursor: null }));
 let failBranch = false;
 const branch = mock(async (_asset: string, _body: unknown, _user?: string) => {
   if (failBranch) throw new Error('Response lost');
@@ -171,7 +173,7 @@ mock.module('@/lib/library/templateSources', () => ({
       },
     ],
   }),
-  fetchTemplateVersionHistory: async () => ({ items: [] }),
+  fetchTemplateVersionHistory: history,
   fetchTemplateReleases: async () => ({
     items: [
       {
@@ -200,10 +202,10 @@ const { VersionControlPanel } = await import('./VersionControlPanel');
 const mounted = (selectedId?: string, items = variants) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const onOpenRevision = mock(() => undefined);
-  const node = (data = items) => (
+  const node = (data = items, selectedBrand = brandId) => (
     <QueryClientProvider client={client}>
       <VersionControlPanel
-        brandId={brandId}
+        brandId={selectedBrand}
         assetId={assetId}
         versionId={versionId}
         variants={data}
@@ -218,6 +220,8 @@ beforeEach(() => {
   rows.clear();
   currentUser = userId;
   failBranch = false;
+  history.mockReset();
+  history.mockImplementation(async () => ({ items: [], nextCursor: null }));
   for (const fn of [branch, diff, mergePreview, merge, restore, release, rollback]) fn.mockClear();
 });
 afterEach(cleanup);
@@ -332,4 +336,85 @@ test('production changes require review and carry the exact expected release ind
     templateKey: 'campaign',
   });
   expect(release).not.toHaveBeenCalled();
+});
+
+
+const event = (sequence: number, stream = id(101)): TemplateOperation => ({
+  id: id(1000 + (stream === id(101) ? sequence : 1000 + sequence)), workingCopyId: stream, sequence,
+  command: `Edit ${stream === id(101) ? 'A' : 'B'} ${sequence}`, baseRevisionId: tall.id,
+  principalId: userId, channel: 'forge', outcome: 'succeeded', affectedObjects: ['aep:1:2'], changes: { sequence },
+  evidence: 'recorded', causedBy: sequence > 1 ? [id(1000 + sequence - 1)] : [], revisionId: null, revisionIds: [], receivedAt: '2026-10-31T00:00:00Z',
+});
+
+test('history reads beyond100 events, retains pages through retry, and separates ordered streams at a page boundary', async () => {
+  const first = Array.from({ length: 100 }, (_, i) => event(i + 1));
+  const second = [event(100), event(101), { ...event(1, id(102)), causedBy: [event(101).id] }, event(2, id(102))];
+  history.mockImplementation(async (_brand, _asset, query) => {
+    if (!query?.cursor) return { items: first, nextCursor: 'opaque-page-2' };
+    if (history.mock.calls.filter((args) => args[2]?.cursor).length === 1) throw new Error('Connection interrupted');
+    return { items: second, nextCursor: null };
+  });
+  mounted(tallHead.id);
+  fireEvent.click(screen.getByRole('button', { name: 'Operations' }));
+  expect(await screen.findByText(/Edit A100|Edit A 100/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Load more operations' }));
+  await screen.findByText('Connection interrupted');
+  expect(screen.getByText(/Edit A100|Edit A 100/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry operation history' }));
+  await screen.findByText(/Edit B2|Edit B 2/);
+  const a = within(screen.getByRole('list', { name: `Operations for working copy ${id(101)}` }));
+  const b = within(screen.getByRole('list', { name: `Operations for working copy ${id(102)}` }));
+  expect(a.getAllByRole('listitem')).toHaveLength(101);
+  expect(b.getAllByRole('listitem')).toHaveLength(2);
+  expect(a.getAllByRole('listitem').at(-1)?.textContent).toContain('#101');
+  expect(b.getAllByRole('listitem')[0]?.textContent).toContain(event(101).id);
+  expect(history.mock.calls[2]?.[2]).toMatchObject({ cursor: 'opaque-page-2' });
+  expect(screen.getByText('End of loaded history; refresh for new arrivals.')).toBeTruthy();
+});
+
+test('explicit history refresh starts without a cursor, reconciles new arrivals and preserves previously read events', async () => {
+  history.mockResolvedValueOnce({ items: [event(2)], nextCursor: 'old-continuation' });
+  const view = mounted(tallHead.id);
+  fireEvent.click(screen.getByRole('button', { name: 'Operations' }));
+  await screen.findByText(/Edit A 2/);
+  history.mockResolvedValueOnce({ items: [event(1)], nextCursor: 'new-continuation' });
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh operations' }));
+  await screen.findByText(/Edit A 1/);
+  expect(history.mock.calls[1]?.[2]?.cursor).toBeUndefined();
+  expect(screen.getAllByText(/Edit A 2/)).toHaveLength(1);
+  history.mockRejectedValueOnce(new Error('Refresh offline'));
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh operations' }));
+  await screen.findByText('Refresh offline');
+  expect(screen.getByText(/Edit A 1/)).toBeTruthy();
+  expect(screen.getByText(/Edit A 2/)).toBeTruthy();
+  view.unmount();
+});
+
+test('account, brand and family switches discard old pages and ignore late responses', async () => {
+  let finish!: (page: { items: TemplateOperation[]; nextCursor: string | null }) => void;
+  history.mockResolvedValueOnce({ items: [event(1)], nextCursor: 'old-account-cursor' });
+  const view = mounted(tallHead.id);
+  fireEvent.click(screen.getByRole('button', { name: 'Operations' }));
+  await screen.findByText(/Edit A 1/);
+  history.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  fireEvent.click(screen.getByRole('button', { name: 'Load more operations' }));
+  currentUser = id(404);
+  history.mockResolvedValueOnce({ items: [event(1, id(102))], nextCursor: null });
+  view.rerender(view.node());
+  expect(screen.queryByText(/Edit A 1/)).toBeNull();
+  expect(history.mock.calls[1]?.[4]?.aborted).toBe(true);
+  await screen.findByText(/Edit B 1/);
+  await act(async () => finish({ items: [event(99)], nextCursor: 'late-old-account-cursor' }));
+  expect(screen.queryByText(/Edit A 99/)).toBeNull();
+  expect(history.mock.calls[2]?.[2]?.cursor).toBeUndefined();
+  expect(history.mock.calls[2]?.[3]).toBe(currentUser);
+  history.mockResolvedValueOnce({ items: [], nextCursor: null });
+  view.rerender(view.node(variants, id(405)));
+  expect(screen.queryByText(/Edit B 1/)).toBeNull();
+  await screen.findByText('No operations recorded for this family.');
+  const family = variants.map((variant) => ({ ...variant, templateId: id(406) }));
+  history.mockResolvedValueOnce({ items: [event(3)], nextCursor: null });
+  view.rerender(view.node(family, id(405)));
+  expect(screen.queryByText('No operations recorded for this family.')).toBeNull();
+  await screen.findByText(/Edit A 3/);
 });

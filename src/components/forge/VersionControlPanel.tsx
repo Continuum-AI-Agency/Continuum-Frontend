@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type TemplateOperation,
   type TemplateRevision,
   type TemplateRevisionVariant,
   type TemplateVersionDiffResponse,
@@ -14,10 +15,11 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { GitBranch, GitMerge, History, RotateCcw } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Pill } from '@/components/kibo-ui/pill';
+import { useSession } from '@/hooks/useSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -111,12 +113,6 @@ export function VersionControlPanel({
   const commits = useQuery({
     queryKey: ['forge', brandId, 'version-commits', assetId],
     queryFn: () => fetchTemplateVersionCommits(brandId, assetId),
-    retry: false,
-  });
-  const history = useQuery({
-    queryKey: ['forge', brandId, 'version-history', assetId],
-    queryFn: () => fetchTemplateVersionHistory(brandId, assetId),
-    enabled: mode === 'history',
     retry: false,
   });
   const releases = useQuery({
@@ -658,59 +654,7 @@ export function VersionControlPanel({
                 </>
               )}
               {mode === 'history' && (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Order is recorded within each working copy. Timestamps do not establish order
-                    between clients. First 100 events, grouped by working copy.
-                  </p>
-                  {history.isError ? (
-                    <Button size="xs" variant="outline" onClick={() => void history.refetch()}>
-                      Retry operation history
-                    </Button>
-                  ) : history.isPending ? (
-                    <p role="status">Reading operations…</p>
-                  ) : (
-                    <ol
-                      aria-label="Permanent operation history"
-                      className="max-h-80 overflow-auto divide-y divide-border"
-                    >
-                      {history.data?.items.map((event) => (
-                        <li key={event.id} className="space-y-1 py-2 text-xs">
-                          <p>
-                            <History className="me-1 inline size-3" aria-hidden />
-                            <span className="font-mono">
-                              {short(event.workingCopyId)} #{event.sequence} · {event.command}
-                            </span>{' '}
-                            · {event.outcome} · {event.evidence}
-                          </p>
-                          <p className="break-words text-muted-foreground">
-                            Principal {event.principalId} · {event.channel}
-                            {event.origin?.button ? ` · ${event.origin.button}` : ''}
-                            {event.origin?.shortcut ? ` · ${event.origin.shortcut}` : ''}
-                          </p>
-                          <details>
-                            <summary>Recorded input and causal links</summary>
-                            <pre className="overflow-auto text-2xs">
-                              {JSON.stringify(
-                                {
-                                  changes: event.changes,
-                                  causedBy: event.causedBy,
-                                  origin: event.origin,
-                                  revisionIds: event.revisionIds,
-                                },
-                                null,
-                                2,
-                              )}
-                            </pre>
-                          </details>
-                        </li>
-                      ))}
-                      {!history.data?.items.length && (
-                        <li>No operations recorded for this family.</li>
-                      )}
-                    </ol>
-                  )}
-                </>
+                <OperationHistory brandId={brandId} assetId={assetId} templateId={templateId} />
               )}
               {mode === 'releases' && (
                 <>
@@ -921,6 +865,207 @@ export function VersionControlPanel({
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+type HistoryState = {
+  scope: string;
+  items: TemplateOperation[];
+  nextCursor: string | null;
+  requestedCursor?: string;
+  loaded: boolean;
+  loading: boolean;
+  error: string | null;
+};
+const emptyHistory = (scope: string): HistoryState => ({
+  scope,
+  items: [],
+  nextCursor: null,
+  loaded: false,
+  loading: false,
+  error: null,
+});
+
+function OperationHistory({
+  brandId,
+  assetId,
+  templateId,
+}: {
+  brandId: string;
+  assetId: string;
+  templateId: string | undefined;
+}) {
+  const { user, isLoading } = useSession();
+  const userId = user?.id;
+  const scope = `${userId ?? 'signed-out'}:${brandId}:${templateId ?? ''}:${assetId}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const active = useRef<{ scope: string; controller: AbortController } | null>(null);
+  const [state, setState] = useState(() => emptyHistory(scope));
+  const history = state.scope === scope ? state : emptyHistory(scope);
+  const read = useCallback(
+    async (cursor?: string) => {
+      if (!userId || active.current?.scope === scope) return;
+      const request = { scope, controller: new AbortController() };
+      active.current = request;
+      setState((previous) => ({
+        ...(previous.scope === scope ? previous : emptyHistory(scope)),
+        loading: true,
+        error: null,
+        requestedCursor: cursor,
+      }));
+      try {
+        const page = await fetchTemplateVersionHistory(
+          brandId,
+          assetId,
+          cursor ? { cursor } : {},
+          userId,
+          request.controller.signal,
+        );
+        if (currentScope.current !== scope || active.current !== request) return;
+        setState((previous) => {
+          const retained = previous.scope === scope ? previous.items : [];
+          const items = [
+            ...new Map([...retained, ...page.items].map((event) => [event.id, event])).values(),
+          ];
+          return {
+            scope,
+            items,
+            nextCursor: page.nextCursor ?? null,
+            loaded: true,
+            loading: false,
+            error: null,
+          };
+        });
+      } catch (cause) {
+        if (currentScope.current === scope && active.current === request)
+          setState((previous) => ({
+            ...(previous.scope === scope ? previous : emptyHistory(scope)),
+            loading: false,
+            error: problem(cause),
+            requestedCursor: cursor,
+          }));
+      } finally {
+        if (active.current === request) active.current = null;
+      }
+    },
+    [scope, userId, brandId, assetId],
+  );
+  useEffect(() => {
+    active.current = null;
+    setState(emptyHistory(scope));
+    void read();
+    return () => {
+      active.current?.controller.abort();
+      active.current = null;
+    };
+  }, [scope, read]);
+  const streams = useMemo(() => {
+    const grouped = new Map<string, TemplateOperation[]>();
+    for (const event of history.items) {
+      const events = grouped.get(event.workingCopyId) ?? [];
+      events.push(event);
+      grouped.set(event.workingCopyId, events);
+    }
+    return [...grouped]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([id, events]) =>
+          [id, events.sort((left, right) => left.sequence - right.sequence)] as const,
+      );
+  }, [history.items]);
+  return (
+    <section aria-label="Operation history" className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Order is recorded within each working copy. Timestamps do not establish order between
+        clients. Refresh to include arrivals behind the current page cursor.
+      </p>
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={!userId || history.loading}
+        onClick={() => void read()}
+      >
+        Refresh operations
+      </Button>
+      {isLoading || history.loading ? (
+        <p role="status">Reading operations…</p>
+      ) : !userId ? (
+        <p role="status">Sign in to read operation history.</p>
+      ) : null}
+      {history.error && (
+        <div role="alert" className="space-y-1 text-xs">
+          <p>{history.error}</p>
+          <Button size="xs" variant="outline" onClick={() => void read(history.requestedCursor)}>
+            Retry operation history
+          </Button>
+        </div>
+      )}
+      <ol
+        aria-label="Permanent operation history"
+        className="max-h-80 overflow-auto divide-y divide-border"
+      >
+        {streams.map(([id, events]) => (
+          <li key={id} className="py-2">
+            <h4 className="text-xs">
+              Working copy{' '}
+              <span className="font-mono" title={id}>
+                {short(id)}
+              </span>
+            </h4>
+            <ol aria-label={`Operations for working copy ${id}`}>
+              {events.map((event) => (
+                <li key={event.id} className="space-y-1 py-2 text-xs">
+                  <p>
+                    <History className="me-1 inline size-3" aria-hidden />
+                    <span className="font-mono">
+                      #{event.sequence} · {event.command}
+                    </span>{' '}
+                    · {event.outcome} · {event.evidence}
+                  </p>
+                  <p className="break-words text-muted-foreground">
+                    Principal {event.principalId} · {event.channel}
+                    {event.origin?.button ? ` · ${event.origin.button}` : ''}
+                    {event.origin?.shortcut ? ` · ${event.origin.shortcut}` : ''}
+                  </p>
+                  <details>
+                    <summary>Recorded input and causal links</summary>
+                    <pre className="overflow-auto text-2xs">
+                      {JSON.stringify(
+                        {
+                          changes: event.changes,
+                          causedBy: event.causedBy,
+                          origin: event.origin,
+                          revisionIds: event.revisionIds,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </li>
+        ))}
+      </ol>
+      {history.loaded && !history.items.length && <p>No operations recorded for this family.</p>}
+      {history.nextCursor && !history.error && (
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={history.loading}
+          onClick={() => void read(history.nextCursor ?? undefined)}
+        >
+          Load more operations
+        </Button>
+      )}
+      {history.loaded && !history.nextCursor && !history.loading && !history.error && (
+        <p className="text-xs text-muted-foreground">
+          End of loaded history; refresh for new arrivals.
+        </p>
+      )}
     </section>
   );
 }

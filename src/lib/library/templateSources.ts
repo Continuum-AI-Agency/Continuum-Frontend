@@ -6,9 +6,9 @@ import {
   templateVersionMergePreviewRequestSchema, templateVersionMergePreviewSchema,
   templateVersionMergeCommitRequestSchema, templateVersionRevertRequestSchema,
   templateVersionCapabilitiesSchema, templateVersionCommitsResponseSchema,
-  templateVersionHistoryResponseSchema, templateReleaseListResponseSchema,
+  templateVersionHistoryQuerySchema, templateVersionHistoryResponseSchema, templateReleaseListResponseSchema,
   templateReleaseRequestSchema, templateReleaseRollbackRequestSchema, templateReleaseResultSchema,
-  type TemplateVersionBranchRequest, type TemplateVersionDiffRequest,
+  type TemplateVersionHistoryQuery, type TemplateVersionBranchRequest, type TemplateVersionDiffRequest,
   type TemplateVersionMergePreviewRequest, type TemplateVersionMergeCommitRequest,
   type TemplateVersionRevertRequest, type TemplateReleaseRequest, type TemplateReleaseRollbackRequest,
 } from '@continuum/contracts';
@@ -283,8 +283,20 @@ export async function fetchTemplateVersionCapabilities(brandId: string, assetId:
 export async function fetchTemplateVersionCommits(brandId: string, assetId: string) {
   return templateVersionCommitsResponseSchema.parse(await versionGet(assetId, 'commits', brandId));
 }
-export async function fetchTemplateVersionHistory(brandId: string, assetId: string) {
-  return templateVersionHistoryResponseSchema.parse(await versionGet(assetId, 'history', brandId));
+export async function fetchTemplateVersionHistory(
+  brandId: string,
+  assetId: string,
+  options: Partial<Omit<TemplateVersionHistoryQuery, 'brandId'>> = {},
+  expectedUserId?: string,
+  signal?: AbortSignal,
+) {
+  const input = templateVersionHistoryQuerySchema.parse({ ...options, brandId });
+  const query = new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)]));
+  const page = templateVersionHistoryResponseSchema.parse(await unwrap(
+    await authorizedFetch(`${versionPath(assetId, 'history')}?${query}`, { signal }, expectedUserId), 'Operation history'));
+  if (expectedUserId && (await fetchTemplateAuthoringUserId()) !== expectedUserId)
+    throw new Error('This operation history belongs to another signed-in account.');
+  return page;
 }
 export async function fetchTemplateReleases(brandId: string, assetId: string) {
   return templateReleaseListResponseSchema.parse(await versionGet(assetId, 'releases', brandId));

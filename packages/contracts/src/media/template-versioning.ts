@@ -17,12 +17,31 @@ export const templateVersionBranchRequestSchema = z.object({
 export const templateVersionDiffRequestSchema = z.object({
   brandId: id, fromRevisionId: id, toRevisionId: id,
 }).strict();
-export const templateVersionHistoryQuerySchema = z.object({
-  brandId: id, workingCopyId: id.optional(),
-  afterSequence: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
-}).strict().refine((value) => value.afterSequence === undefined || value.workingCopyId !== undefined,
-  'A sequence cursor requires its working copy');
+/** Live stream traversal, not a global execution order or snapshot. Refresh without a cursor for new arrivals. */
+export const templateVersionHistoryQuerySchema = z
+  .object({
+    brandId: id,
+    workingCopyId: id.optional(),
+    afterSequence: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    cursor: z
+      .string()
+      .min(1)
+      .max(2048)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  })
+  .strict()
+  .refine(
+    (value) => value.afterSequence === undefined || value.workingCopyId !== undefined,
+    'A sequence cursor requires its working copy',
+  )
+  .refine(
+    (value) =>
+      value.cursor === undefined ||
+      (value.workingCopyId === undefined && value.afterSequence === undefined),
+    'An opaque cursor already includes its working-copy scope',
+  );
 export const templateVersionMergePreviewRequestSchema = z.object({
   brandId: id, variantId: id, sourceVariantId: id,
   expectedHeadRevisionId: id, expectedSourceHeadRevisionId: id,
@@ -128,9 +147,19 @@ export const templateVersionDiffResponseSchema = z.object({
   fromRevisionId: id, toRevisionId: id, changes: z.array(templateVersionFieldChangeSchema),
   sourceChanged: z.boolean(), nativeChanged: z.boolean().optional(),
 }).passthrough();
-export const templateVersionHistoryResponseSchema = z.object({
-  items: z.array(templateOperationSchema),
-}).passthrough();
+export const templateVersionHistoryResponseSchema = z
+  .object({
+    items: z.array(templateOperationSchema),
+    /** Use verbatim on the next request. Events arriving behind it require a cursorless refresh. */
+    nextCursor: z
+      .string()
+      .min(1)
+      .max(2048)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
 export const templateVersionCommitsResponseSchema = z.object({
   items: z.array(z.object({
     revisionId: id, kind: z.enum(['save', 'branch', 'merge', 'revert']),
@@ -146,6 +175,7 @@ export const templateReleaseResultSchema = z.object({
 }).passthrough();
 export type TemplateVersionMergePreview = z.infer<typeof templateVersionMergePreviewSchema>;
 export type TemplateVersionDiffResponse = z.infer<typeof templateVersionDiffResponseSchema>;
+export type TemplateVersionHistoryResponse = z.infer<typeof templateVersionHistoryResponseSchema>;
 export type TemplateVersionCommitsResponse = z.infer<typeof templateVersionCommitsResponseSchema>;
 export type TemplateReleaseListResponse = z.infer<typeof templateReleaseListResponseSchema>;
 
