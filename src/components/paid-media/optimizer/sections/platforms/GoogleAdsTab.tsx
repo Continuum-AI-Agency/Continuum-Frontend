@@ -433,6 +433,7 @@ export function GoogleAdsTab({
             brandId={brandId}
             currency={state.account.currency}
             customerId={state.account.account_id}
+            lastCompleteDay={window && window !== 'pending' ? window.until : null}
             resultBucket={state.resultBucket}
           />
           <GoogleOwnViews

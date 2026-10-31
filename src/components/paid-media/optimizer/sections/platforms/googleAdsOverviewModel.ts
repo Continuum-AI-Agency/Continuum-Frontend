@@ -110,21 +110,28 @@ export function googleCurrencyOf(
 }
 
 /**
- * The `days` complete UTC days ending yesterday — the window the multi-platform producer
- * (optimizer_get_account_platform_metrics) reads. The edge's own `last_7d` runs to TODAY and
- * covers eight days, so a header and a breakdown read that way could never agree.
+ * The `days` complete days ending on the account's last complete day — `lastCompleteDay`, the
+ * producer's window end (optimizer_get_account_platform_metrics dates it in the account's own
+ * calendar) — so every read on the page ends on the same finished day. With no account-dated day,
+ * the UTC days ending yesterday stand in: from 18:00 to 24:00 in Mexico City those include the
+ * account's unfinished today (PP-DT-B-utc-complete-days-window). The edge's own `last_7d` runs to
+ * TODAY and covers eight days, so a header and a breakdown read that way could never agree.
  */
 export function completeDaysWindow(
   days: number,
   now: Date = new Date(),
+  lastCompleteDay: string | null = null,
 ): {
   since: string;
   until: string;
 } {
   const DAY = 86_400_000;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  return { since: iso(today - days * DAY), until: iso(today - DAY) };
+  const anchored = lastCompleteDay ? Date.parse(`${lastCompleteDay}T00:00:00Z`) : Number.NaN;
+  const until = Number.isFinite(anchored)
+    ? anchored
+    : Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - DAY;
+  return { since: iso(until - (days - 1) * DAY), until: iso(until) };
 }
 
 function daysBetween(since: string, until: string): number {

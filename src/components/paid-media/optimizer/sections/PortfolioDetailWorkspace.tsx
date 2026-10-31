@@ -783,7 +783,13 @@ export function PortfolioDetailWorkspace({
         <ByPlatform portfolioId={portfolio.id} />
 
         {/* Its Google campaigns against the goal, with G03/G07's proposals (P6 idea 8). */}
-        <GooglePortfolioCampaigns brandId={brandId} portfolio={portfolio} />
+        <GooglePortfolioCampaigns
+          brandId={brandId}
+          lastCompleteDay={
+            metricsState.status === 'ready' ? metricsState.metrics.window.until : null
+          }
+          portfolio={portfolio}
+        />
 
         {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
             distance to the target is read off the bottom half of this table. A portfolio with
