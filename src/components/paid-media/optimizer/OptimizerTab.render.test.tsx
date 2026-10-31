@@ -270,6 +270,19 @@ describe('OptimizerTab second bar', () => {
     expect(screen.getByRole('button', { name: 'New portfolio' })).toBeTruthy();
   });
 
+  it('leads each platform in the switch with its own logo, muted while it is not connected', () => {
+    renderTab();
+
+    const logo = (platform: string) =>
+      screen.getByTestId(`platform-tab-${platform}`).querySelector('span[title]');
+    expect(logo('meta')?.getAttribute('title')).toBe('Meta');
+    expect(logo('google_ads')?.getAttribute('title')).toBe('Google Ads');
+    expect(logo('tiktok_ads')?.getAttribute('title')).toBe('TikTok');
+    expect(logo('tiktok_ads')?.className).toContain('grayscale');
+    expect(logo('meta')?.className).not.toContain('grayscale');
+    expect(screen.getByTestId('platform-tab-all').querySelector('svg')).toBeTruthy();
+  });
+
   it('keeps the Overview actions off a platform the Overview does not manage', () => {
     platformTab = 'google_ads';
     renderTab();

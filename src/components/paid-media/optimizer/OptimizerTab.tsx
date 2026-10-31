@@ -39,6 +39,7 @@ import { OptimizerPortfolios } from './sections/OptimizerPortfolios';
 import { PortfolioCreateView } from './sections/PortfolioCreateView';
 import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import { connectedFromMetrics } from './sections/platforms/accountPlatformMetricsModel';
+import { PlatformIcon } from './sections/platforms/PlatformChip';
 import {
   type AdPlatform,
   connectedPlatforms,
@@ -126,8 +127,9 @@ function useConnectedPlatforms(brandId: string, adAccountId: string): Record<AdP
   }, [accounts.data, adAccountId, metrics]);
 }
 
-/** All · Meta · Google · TikTok as one segmented control. A platform without a connection stays
- *  and says "Connect" — a missing tab reads as "we don't do TikTok", not "not connected yet". */
+/** All · Meta · Google · TikTok as one segmented control, each platform led by its own logo. A
+ *  platform without a connection stays and says "Connect" — a missing tab reads as "we don't do
+ *  TikTok", not "not connected yet" — and its logo is muted, so the row still reads at a glance. */
 function PlatformSwitch({
   value,
   onChange,
@@ -152,7 +154,7 @@ function PlatformSwitch({
           <button
             aria-selected={active}
             className={cn(
-              'hit-area inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors',
+              'hit-area inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active
                 ? 'bg-background text-foreground shadow-sm'
@@ -166,6 +168,14 @@ function PlatformSwitch({
             role="tab"
             type="button"
           >
+            {platform ? (
+              <PlatformIcon
+                className={cn('size-4', disconnected && 'opacity-50 grayscale')}
+                platform={platform}
+              />
+            ) : (
+              <LayersIcon aria-hidden="true" className="size-4 shrink-0" />
+            )}
             {platformTabLabel(tab)}
             {disconnected ? (
               <span className="font-normal text-muted-foreground">· Connect</span>
