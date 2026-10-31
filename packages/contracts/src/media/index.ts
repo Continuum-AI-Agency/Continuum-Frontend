@@ -104,4 +104,4 @@ export * from './versions';
 export * from './workspace-template';
 export * from './zip-directory';
 
-export * from './template-operation-events';
+export * from './template-versioning';

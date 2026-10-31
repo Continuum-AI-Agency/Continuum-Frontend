@@ -1,11 +1,23 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 import { type TemplateRevisionVariant, templateVariantSchema } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderView, screen, within } from '@testing-library/react';
 import { forgeQueryKeys } from './queryKeys';
 import { VariantsPanel } from './VariantsPanel';
 
 afterEach(cleanup);
+const render = (ui: React.ReactNode) => {
+  const view = renderView(ui);
+  const summary = screen.getByText('Published packages and uploads');
+  summary.parentElement!.setAttribute('open', '');
+  return view;
+};
+const packageNode = (name: string) =>
+  screen
+    .getAllByText(name)
+    .map((node) => node.closest('div[data-variant]'))
+    .find(Boolean) as HTMLElement;
+
 const seed = (
   client: QueryClient,
   items: TemplateRevisionVariant[],
@@ -112,9 +124,9 @@ test('named variants retain draft and published revisions and render the exact p
       />
     </QueryClientProvider>,
   );
-  expect(screen.getByText('Original')).toBeTruthy();
-  expect(screen.getByText('Blue')).toBeTruthy();
-  expect(screen.getByText('Blue copy')).toBeTruthy();
+  expect(packageNode('Original')).toBeTruthy();
+  expect(packageNode('Blue')).toBeTruthy();
+  expect(packageNode('Blue copy')).toBeTruthy();
   expect(screen.getAllByRole('button', { name: 'Archive' })).toHaveLength(2);
   fireEvent.click(screen.getAllByRole('button', { name: 'Archive' })[0]!);
   expect(screen.getByRole('alertdialog', { name: 'Archive template variant' })).toBeTruthy();
@@ -248,14 +260,14 @@ test('a variant of a variant hangs under its parent and says where it came from'
 
 test('Branch from here opens the variant head for Edit layers', () => {
   const onBranch = renderFamily(family());
-  const blue = screen.getByText('Blue').closest('[data-variant]') as HTMLElement;
+  const blue = packageNode('Blue');
   fireEvent.click(within(blue).getByRole('button', { name: 'Branch from here' }));
   expect(onBranch).toHaveBeenCalledWith(child);
 });
 
 test('the Original is the default until a published variant is made the default', () => {
   renderFamily(family());
-  const node = (name: string) => screen.getByText(name).closest('[data-variant]') as HTMLElement;
+  const node = (name: string) => packageNode(name);
   expect(within(node('Original')).getByText('Default')).toBeTruthy();
   expect(within(node('Blue')).getByRole('button', { name: 'Make default' })).toBeTruthy();
   // A draft cannot be what a family opens on.
@@ -270,7 +282,7 @@ test('an archived variant stays in the family, dimmed, and can be restored', () 
   const items = family();
   items[1] = { ...items[1]!, archivedAt: '2026-10-10T00:00:00Z' };
   renderFamily(items);
-  const blue = screen.getByText('Blue').closest('[data-variant]') as HTMLElement;
+  const blue = packageNode('Blue');
   expect(within(blue).getByText('Archived')).toBeTruthy();
   expect(within(blue).getByRole('button', { name: 'Restore' })).toBeTruthy();
   expect(within(blue).queryByRole('button', { name: /^Render / })).toBeNull();

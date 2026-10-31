@@ -340,7 +340,7 @@ const revisionVariants = mock(async () => {
     ? '00000000-0000-4000-8000-000000000202'
     : '00000000-0000-4000-8000-000000000212';
   const sourceRevisions = [
-    [VERSION, '00000000-0000-4000-8000-000000000203', null],
+    [VERSION, inventory.lineage.role === 'golden' ? '00000000-0000-4000-8000-000000000203' : '00000000-0000-4000-8000-000000000223', null],
     [nextRevision.versionId, '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000203'],
     ['00000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000204'],
   ].map(([sourceVersionId, id, parentRevisionId], index) => ({
@@ -409,6 +409,7 @@ const revisionVariants = mock(async () => {
     revisions: [
       ...sourceRevisions.slice(0, 1).map((revision) => ({
         ...revision,
+        id: '00000000-0000-4000-8000-000000000203',
         variantId: '00000000-0000-4000-8000-000000000202',
       })),
     ],
@@ -775,6 +776,8 @@ const editor = (
         brandId={BRAND}
         assetId="a"
         versionId={versionId}
+        revisionId={versionId === VERSION ? (inventory.lineage.role === 'golden'
+          ? '00000000-0000-4000-8000-000000000203' : '00000000-0000-4000-8000-000000000223') : undefined}
         name="Card B"
         parse={parse ?? AUTHORING_PARSE}
         active

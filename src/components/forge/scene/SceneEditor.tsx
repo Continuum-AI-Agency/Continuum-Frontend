@@ -79,11 +79,22 @@ function SceneMediaTypePicker({
   );
 }
 
-export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: string }) {
+export function SceneEditor({
+  brandId,
+  assetId,
+  revisionId,
+}: {
+  brandId: string;
+  assetId: string;
+  revisionId?: string;
+}) {
   const queryClient = useQueryClient();
   const view = useQuery({
-    queryKey: forgeQueryKeys.sceneTemplate(brandId, assetId),
-    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal),
+    queryKey: [
+      ...forgeQueryKeys.sceneTemplate(brandId, assetId),
+      ...(revisionId ? [revisionId] : []),
+    ],
+    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal, revisionId),
     staleTime: FORGE_STALE_MS.active,
   });
   // The name lives on the template source row, which the Forge gallery has usually cached already.
@@ -123,7 +134,7 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
   return (
     // A newer version is a different set of fields: its edits start from its own defaults.
     <SceneEditorBody
-      key={view.data.versionId}
+      key={`${view.data.versionId}:${view.data.revisionId ?? 'source'}`}
       brandId={brandId}
       assetId={assetId}
       name={name}
@@ -160,6 +171,7 @@ function SceneEditorBody({
     brandId,
     assetId,
     versionId: view.versionId,
+    revisionId: view.revisionId,
     outputId: output?.id ?? null,
     values: state.changes,
   });
@@ -182,7 +194,11 @@ function SceneEditorBody({
           </Link>
           <h1 className="min-w-0 truncate text-base font-semibold">{name}</h1>
           <Badge variant={changed ? 'violet' : 'muted'} className="text-2xs">
-            {changed ? `${changed} changed` : 'As in the file'}
+            {changed
+              ? `${changed} changed`
+              : view.revisionId
+                ? 'As saved in revision'
+                : 'As in the file'}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -230,6 +246,7 @@ function SceneEditorBody({
               mediaType &&
               render.start({
                 versionId: view.versionId,
+                ...(view.revisionId ? { revisionId: view.revisionId } : {}),
                 outputId: output.id,
                 values: state.changes,
                 overrides: { mediaType },
@@ -271,6 +288,7 @@ function SceneEditorBody({
             camera={output?.camera ?? null}
             cameras={cameras}
             changes={state.changes}
+            baseline={view.values}
             selectedKey={state.selectedKey}
             onSelect={(key) => dispatch({ type: 'select', key })}
             onChange={(key, value) => dispatch({ type: 'set', key, value })}

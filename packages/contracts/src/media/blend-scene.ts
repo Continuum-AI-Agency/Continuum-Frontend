@@ -188,6 +188,11 @@ export const sceneRenderRequestSchema = z
     brandId: z.string().uuid(),
     /** The template version the caller read; a newer head answers 409 instead of guessing. */
     versionId: z.string().uuid(),
+    /** Proofs select an immutable revision; production additionally resolves an explicit release. */
+    revisionId: z.string().uuid().optional(),
+    releaseId: z.string().uuid().optional(),
+    bindingId: z.string().uuid().optional(),
+    templateKey: z.string().min(1).max(500).optional(),
     outputId: z.string().min(1),
     /** Field key → value. Colours are `#RRGGBB`; images are Library pins; vectors `[x, y, z]`. */
     values: z
@@ -225,6 +230,8 @@ export const sceneTemplateViewSchema = z
   .object({
     assetId: z.string().uuid(),
     versionId: z.string().uuid(),
+    revisionId: z.string().uuid().optional(),
+    values: sceneRenderRequestSchema.shape.values.optional(),
     /** `blend:<assetId>` — never a number, so no AE-fleet path can mistake it for a NocoBase id. */
     templateKey: z.string().regex(/^blend:/),
     parseState: z.string(),
@@ -265,7 +272,7 @@ export type SceneRenderHistory = z.infer<typeof sceneRenderHistorySchema>;
  * draft size and samples unless `quality` is `full`. Nothing is written to the Library.
  */
 export const scenePreviewRequestSchema = sceneRenderRequestSchema
-  .pick({ brandId: true, versionId: true, outputId: true, values: true, scope: true })
+  .pick({ brandId: true, versionId: true, revisionId: true, outputId: true, values: true, scope: true })
   .extend({
     quality: z.enum(['draft', 'full']).optional(),
     /** The frame to draw; kept within the output's range. The first frame when left out. */
@@ -314,6 +321,9 @@ export const sceneRenderValueSchema = z.discriminatedUnion('kind', [
       /** Signed GET; the service downloads it beside the template. */
       assetUrl: z.string().url(),
       fileName: safeFileNameSchema,
+      sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+      byteLength: z.number().int().positive().max(50 << 20).optional(),
+      generation: z.string().regex(/^[0-9]+$/).optional(),
     })
     .strict(),
 ]);
@@ -322,7 +332,11 @@ export type SceneRenderValue = z.infer<typeof sceneRenderValueSchema>;
 export const sceneRenderJobSchema = z
   .object({
     template: z
-      .object({ url: z.string().url(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })
+      .object({
+        url: z.string().url(), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        /** Service provenance; legacy worker dispatch strips these fields after retaining the frozen job. */
+        revisionId: z.string().uuid().optional(), releaseId: z.string().uuid().optional(),
+      })
       .strict(),
     values: z.array(sceneRenderValueSchema).max(200),
     output: z

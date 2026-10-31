@@ -44,6 +44,7 @@ import {
 } from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
+import type { LayerDraftChange } from '@/components/forge/layerDraft';
 import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
@@ -53,7 +54,6 @@ import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
-import type { LayerDraftChange } from '@/components/forge/layerDraft';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -113,6 +113,7 @@ import {
 import { uploadNewAssetVersion } from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
+import { revisionIsReadOnly, selectTemplateRevision } from './revisionSelection';
 import {
   InlineRename,
   sourceDisplayName,
@@ -231,6 +232,8 @@ export function TemplateDetail({
   initialComp,
   onDraftChange,
   hyperframesRevisionId,
+  revisionId,
+  onOpenRevision,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
@@ -250,6 +253,10 @@ export function TemplateDetail({
   onDraftChange?: LayerDraftChange;
   /** Private HyperFrames composition revision carried in from AI Studio. */
   hyperframesRevisionId?: string;
+  revisionId?: string;
+  onOpenRevision?: (
+    revision: import('@continuum/contracts').TemplateRevision,
+  ) => void | Promise<void>;
 }) {
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
@@ -288,12 +295,16 @@ export function TemplateDetail({
     queryFn: () => fetchTemplateRevisionVariants(brandId, assetId),
     staleTime: FORGE_STALE_MS.active,
   });
-  const selectedRevisionVariant = revisionCatalog?.find((variant) =>
-    variant.revisions.some((revision) => revision.sourceAssetId === assetId),
+  const revisionSelection = selectTemplateRevision(
+    revisionCatalog ?? [],
+    assetId,
+    source.versionId,
+    revisionId,
   );
-  const inspectedRevision = selectedRevisionVariant?.revisions.find(
-    (revision) => revision.sourceAssetId === assetId,
-  );
+  const selectedRevisionVariant = revisionSelection?.variant;
+  const inspectedRevision = revisionSelection?.revision;
+  const revisionReadOnly =
+    !!revisionId && (!revisionSelection || revisionIsReadOnly(revisionSelection));
   const variantRoot =
     variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
   const familyVariants =
@@ -392,7 +403,7 @@ export function TemplateDetail({
     });
   };
   const saveTextMoves = async () => {
-    if (selectedRevisionVariant) {
+    if (revisionCatalog?.length) {
       setTab('layers');
       toast.info('Use Edit layers to save text changes in a new revision.');
       return;
@@ -611,11 +622,13 @@ export function TemplateDetail({
   }, [refreshEvents, run?.state]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
+    if (revisionCatalog?.length && !revisionSelection) {
+      setTab('variants');
+      toast.info('Choose an exact variant and revision before saving.');
+      return false;
+    }
     if (selectedRevisionVariant) {
-      const selected = selectedRevisionVariant.revisions.find(
-        (revision) =>
-          revision.sourceAssetId === assetId && revision.sourceVersionId === source.versionId,
-      );
+      const selected = inspectedRevision;
       if (
         !selected ||
         selectedRevisionVariant.original ||
@@ -858,7 +871,7 @@ export function TemplateDetail({
       if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
       // The file is read again with the faces just added, so its text is measured now rather
       // than after someone finds a Fix button that nothing else is asking them to press.
-      if (stored.length && !selectedRevisionVariant) {
+      if (stored.length && !revisionCatalog?.length) {
         await healTemplateFonts(brandId, assetId).catch((error: unknown) =>
           toast.error(
             `Fonts are stored, but the file was not read again: ${error instanceof Error ? error.message : 'unknown error'}. Press Fix to retry.`,
@@ -876,7 +889,7 @@ export function TemplateDetail({
   };
 
   const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
-    if (selectedRevisionVariant) {
+    if (revisionCatalog?.length) {
       setTab('layers');
       toast.info('Choose a font face in Edit layers, then save a revision.');
       return;
@@ -916,7 +929,7 @@ export function TemplateDetail({
   // The problems every new upload hits, fixed without asking: faces from the package or Google
   // Fonts, and a build re-planned against the columns it made for itself.
   const onFix = async () => {
-    if (selectedRevisionVariant) {
+    if (revisionCatalog?.length) {
       setTab('layers');
       toast.info('This revision is preserved. Save repairs as a new revision or variant.');
       return;
@@ -993,8 +1006,8 @@ export function TemplateDetail({
         ) : null}
         <p className="text-muted-foreground">
           We look for missing fonts in your upload first, then on Google Fonts. For any still
-          missing, add the font file or swap in one you already have. Installed means it&apos;s linked
-          to this template after you confirm.
+          missing, add the font file or swap in one you already have. Installed means it&apos;s
+          linked to this template after you confirm.
         </p>
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
@@ -1365,9 +1378,20 @@ export function TemplateDetail({
                   const head = variant?.revisions.find(
                     (item) => item.id === variant.draftHeadRevisionId,
                   );
-                  if (head) void onOpenVariant(head.sourceAssetId, tab);
+                  if (head && onOpenRevision) void onOpenRevision(head);
+                  else if (
+                    head &&
+                    selectTemplateRevision(
+                      revisionCatalog,
+                      head.sourceAssetId,
+                      head.sourceVersionId,
+                    )
+                  )
+                    void onOpenVariant(head.sourceAssetId, tab);
+                  else toast.info('Select the exact revision in the Variants tab.');
                 }}
               >
+                <option value="" disabled>Choose a variant</option>
                 {revisionCatalog.map((variant) => (
                   <option key={variant.variantId} value={variant.variantId}>
                     {variant.original ? 'Original' : variant.name} ·{' '}
@@ -1550,7 +1574,7 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
-          {missingFootage.length > 0 ? (
+          {missingFootage.length > 0 && !revisionCatalog?.length ? (
             <section
               className="rounded-md border border-destructive/50 p-3 text-xs"
               aria-label="Missing media repair"
@@ -1837,32 +1861,41 @@ export function TemplateDetail({
             </Panel>
           </TabsContent>
           <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
-            <TemplateLayerEditor
-              brandId={brandId}
-              assetId={assetId}
-              active={tab === 'layers'}
-              versionId={source.versionId}
-              name={source.displayName ?? source.parse?.filename ?? 'Template'}
-              parse={source.parse}
-              onSaved={async () => {
-                await invalidateForgeBrand(queryClient, brandId);
-                await Promise.all([onChanged(), loadVariables()]);
-              }}
-              onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
-              onDraftChange={onDraftChange}
-              hyperframesRevisionId={hyperframesRevisionId}
-              onOpenFontRepair={() => setFontCheckFocusRequestId((requestId) => requestId + 1)}
-              initialComp={initialComp}
-              templateKey={templateKey}
-            />
+            {revisionReadOnly ? (
+              <p className="text-xs text-muted-foreground">
+                This revision is read-only. Branch it in Variants before editing.
+              </p>
+            ) : (
+              <TemplateLayerEditor
+                brandId={brandId}
+                assetId={assetId}
+                active={tab === 'layers'}
+                versionId={source.versionId}
+                revisionId={revisionId}
+                name={source.displayName ?? source.parse?.filename ?? 'Template'}
+                parse={source.parse}
+                onSaved={async () => {
+                  await invalidateForgeBrand(queryClient, brandId);
+                  await Promise.all([onChanged(), loadVariables()]);
+                }}
+                onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
+                onDraftChange={onDraftChange}
+                hyperframesRevisionId={hyperframesRevisionId}
+                onOpenFontRepair={() => setFontCheckFocusRequestId((requestId) => requestId + 1)}
+                initialComp={initialComp}
+                templateKey={templateKey}
+              />
+            )}
           </TabsContent>
           <TabsContent value="author" keepMounted className="p-[var(--card-pad)]">
-            {mountedAuthorIdentity === authorIdentity ? (
+            {revisionReadOnly && <p className="text-xs text-muted-foreground">This revision is read-only. Branch it in Variants before editing.</p>}
+            {!revisionReadOnly && mountedAuthorIdentity === authorIdentity ? (
               <TemplateAuthoringEditor
                 key={`${assetId}:${source.versionId}:author`}
                 brandId={brandId}
                 assetId={assetId}
                 versionId={source.versionId}
+                revisionId={revisionId}
                 name={source.displayName ?? 'Template'}
                 parse={source.parse}
                 active={tab === 'author'}
@@ -1897,14 +1930,14 @@ export function TemplateDetail({
             </TabsContent>
           ) : null}
           <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
-            {selectedRevisionVariant ? (
+            {revisionCatalog?.length ? (
               <div className="space-y-2 text-xs">
                 <p>
-                  {DESIGN_SOURCE[selectedRevisionVariant.sourceKind]
-                    ? `This template is built from ${DESIGN_SOURCE[selectedRevisionVariant.sourceKind]} file, kept as an immutable revision. To change the design, edit its layers and save them as a new variant.`
+                  {DESIGN_SOURCE[selectedRevisionVariant?.sourceKind ?? 'after_effects']
+                    ? `This template is built from ${DESIGN_SOURCE[selectedRevisionVariant?.sourceKind ?? 'after_effects']} file, kept as an immutable revision. To change the design, edit its layers and save them as a new variant.`
                     : 'This source belongs to an immutable template revision. To replace an After Effects project, upload an authored variant.'}
                 </p>
-                {DESIGN_SOURCE[selectedRevisionVariant.sourceKind] ? (
+                {DESIGN_SOURCE[selectedRevisionVariant?.sourceKind ?? 'after_effects'] ? (
                   <Button size="xs" variant="outline" onClick={() => setTab('layers')}>
                     Edit layers
                   </Button>
@@ -1918,11 +1951,11 @@ export function TemplateDetail({
               <SourceRebindPanel
                 brandId={brandId}
                 assetId={assetId}
-              expectedVersionId={source.versionId}
-              suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
-              aepName={source.parse?.filename}
-              sourceFamily={source.family === 'presentation' ? 'presentation' : undefined}
-              missingFootage={missingFootage}
+                expectedVersionId={source.versionId}
+                suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+                aepName={source.parse?.filename}
+                sourceFamily={source.family === 'presentation' ? 'presentation' : undefined}
+                missingFootage={missingFootage}
                 initialFile={revisionFile}
                 onInitialFileTaken={onRevisionTaken}
                 onConfirmed={async () => {
@@ -1938,6 +1971,8 @@ export function TemplateDetail({
               brandId={brandId}
               assetId={assetId}
               expectedVersionId={source.versionId}
+              revisionId={revisionId}
+              onOpenRevision={onOpenRevision}
               onInspect={(assetId) => onOpenVariant?.(assetId, 'variants')}
               onBranch={(assetId) => onOpenVariant?.(assetId, 'layers')}
               onRender={onOpenRender}

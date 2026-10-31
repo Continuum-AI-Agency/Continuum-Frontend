@@ -325,7 +325,7 @@ test('native editor loads full copy, keeps refused edits, retries the exact save
     edits: { operations: [{ op: 'text', fieldId: 'copy:text', value: 'A longer headline' }] },
   });
   expect(posts[0]!.body.variantId).toBeUndefined();
-  await screen.findByText('Native copy');
+  await screen.findByRole('button', { name: 'Native copy Variant' });
   expect(draft?.dirty).toBe(false);
 });
 

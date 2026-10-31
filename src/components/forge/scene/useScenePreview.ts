@@ -17,7 +17,7 @@ const BUSY_RETRIES = 3;
 /** Re-read a cached draft a minute before its signed URL stops working. */
 const URL_MARGIN_MS = 60_000;
 
-type Draft = Pick<ScenePreviewRequest, 'versionId' | 'outputId' | 'values'>;
+type Draft = Pick<ScenePreviewRequest, 'versionId' | 'outputId' | 'values' | 'revisionId'>;
 
 export function useScenePreview({
   brandId,
@@ -25,6 +25,7 @@ export function useScenePreview({
   versionId,
   outputId,
   values,
+  revisionId,
 }: {
   brandId: string;
   assetId: string;
@@ -32,9 +33,17 @@ export function useScenePreview({
   versionId: string | null;
   outputId: string | null;
   values: SceneChanges;
+  revisionId?: string;
 }) {
   const live =
-    versionId && outputId ? JSON.stringify({ versionId, outputId, values } satisfies Draft) : null;
+    versionId && outputId
+      ? JSON.stringify({
+          versionId,
+          outputId,
+          values,
+          ...(revisionId ? { revisionId } : {}),
+        } satisfies Draft)
+      : null;
   const debounced = useDebounce(live, PREVIEW_DEBOUNCE_MS);
   // The first draw has nothing to wait for: only an EDIT settles before it is drawn.
   const settled = debounced ?? live;

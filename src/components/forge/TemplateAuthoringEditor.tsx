@@ -1,5 +1,7 @@
 'use client';
 
+import { selectTemplateRevision } from './revisionSelection';
+
 // The Layers tab editor: a template's layer stack, a live layout preview and the selected layer's
 // inspector, in one bounded workspace whose panes scroll on their own. Edits autosave to a private
 // draft, and a version save never rewrites the golden source: on the original upload it forks a new
@@ -243,6 +245,7 @@ export function TemplateAuthoringEditor({
   onDraftChange,
   hyperframesRevisionId,
   onOpenFontRepair,
+  revisionId,
 }: {
   brandId: string;
   assetId: string;
@@ -260,6 +263,7 @@ export function TemplateAuthoringEditor({
   hyperframesRevisionId?: string;
   /** Move from an exact preparation font diagnostic to Forge's existing Fonts check. */
   onOpenFontRepair?: () => void;
+  revisionId?: string;
 }) {
   const [history, setHistory] = useState<LayerHistory>(() => createLayerHistory(EMPTY_DRAFT));
   const historyRef = useRef(history);
@@ -1011,14 +1015,9 @@ export function TemplateAuthoringEditor({
       (channel.channel === 'position' || channel.channel === 'scale' || channel.channel === 'rotation'));
 
   // Publication stays tied to the immutable registry row for this exact source version.
-  const sourceVariant = variants.data?.find((variant) =>
-    variant.revisions.some(
-      (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
-    ),
-  );
-  const exactSourceRevision = sourceVariant?.revisions.find(
-    (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
-  );
+  const revisionSelection = selectTemplateRevision(variants.data ?? [], assetId, effectiveVersionId, revisionId);
+  const sourceVariant = revisionSelection?.variant;
+  const exactSourceRevision = revisionSelection?.revision;
   const lineage = sourceVariant
     ? { role: sourceVariant.original ? 'golden' as const : 'variant' as const }
     : undefined;

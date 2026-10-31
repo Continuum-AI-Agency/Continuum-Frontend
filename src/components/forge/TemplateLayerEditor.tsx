@@ -1,5 +1,7 @@
 'use client';
 
+import { selectTemplateRevision } from './revisionSelection';
+
 // The Layers tab editor: a template's layer stack, a live layout preview and the selected layer's
 // inspector, in one bounded workspace whose panes scroll on their own. Edits autosave to a private
 // draft, and a version save never rewrites the golden source: on the original upload it forks a new
@@ -19,7 +21,6 @@ import type {
   TemplateEditableLayer,
   TemplateLayerEdit,
   TemplatePreview,
-  TemplateRevision,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -282,13 +283,6 @@ export function applyLayerChange(
   return result;
 }
 
-/** The revision that pins this exact file, alone or as one of several packages. */
-const pins = (revision: TemplateRevision, assetId: string, versionId: string | null) =>
-  (revision.sourceAssetId === assetId && revision.sourceVersionId === versionId) ||
-  !!revision.sources?.some(
-    (source) => source.assetId === assetId && source.versionId === versionId,
-  );
-
 const nameSchema = z.object({ name: z.string().trim().min(1, 'Name your variant').max(120) });
 const Skeleton = ({ className }: { className: string }) => (
   <span aria-hidden className={`block animate-pulse rounded-md bg-muted/70 ${className}`} />
@@ -308,6 +302,7 @@ export function TemplateLayerEditor({
   onOpenFontRepair,
   initialComp,
   templateKey,
+  revisionId,
 }: {
   brandId: string;
   assetId: string;
@@ -320,6 +315,7 @@ export function TemplateLayerEditor({
   onOpenVariant?: (assetId: string) => void | Promise<void>;
   initialComp?: string;
   templateKey?: string | null;
+  revisionId?: string;
   onDraftChange?: LayerDraftChange;
   /** Private composition revision carried in from AI Studio, awaiting a seed-aware editor route. */
   hyperframesRevisionId?: string;
@@ -351,12 +347,9 @@ export function TemplateLayerEditor({
     queryFn: () => fetchTemplateRevisionVariants(brandId, assetId),
     enabled: active && !!effectiveVersionId,
   });
-  const currentVariant = revisionCatalog.data?.find((item) =>
-    item.revisions.some((revision) => pins(revision, assetId, effectiveVersionId)),
-  );
-  const currentRevision = currentVariant?.revisions.find((revision) =>
-    pins(revision, assetId, effectiveVersionId),
-  );
+  const revisionSelection = selectTemplateRevision(revisionCatalog.data ?? [], assetId, effectiveVersionId, revisionId);
+  const currentVariant = revisionSelection?.variant;
+  const currentRevision = revisionSelection?.revision;
   const originalVariant = revisionCatalog.data?.find((item) => item.original);
   const originalRevision = originalVariant?.revisions.find(
     (revision) => revision.id === originalVariant.draftHeadRevisionId,

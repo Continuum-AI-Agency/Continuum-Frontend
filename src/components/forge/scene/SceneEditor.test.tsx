@@ -13,6 +13,7 @@ import {
   type ScenePreviewRequest,
   type SceneRenderRequest,
   type SceneRenderStatus,
+  type SceneTemplateView,
 } from '@continuum/contracts';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 
@@ -24,15 +25,7 @@ const OUT_ASSET = '88888888-8888-4888-8888-888888888888';
 const OUT_VERSION = '99999999-9999-4999-8999-999999999999';
 
 const parse = blendParseSchema.parse(parseExample);
-type View = {
-  assetId: string;
-  versionId: string;
-  templateKey: string;
-  parseState: string;
-  fields: typeof parse.fields;
-  outputs: typeof parse.outputs;
-  externals: never[];
-};
+type View = SceneTemplateView;
 const VIEW: View = {
   assetId: ASSET,
   versionId: VERSION,
@@ -131,6 +124,26 @@ function mount() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, PREVIEW_DEBOUNCE_MS + 150));
 
 describe('SceneEditor', () => {
+  test('a saved scene shows its committed values and pins preview and proof renders to the exact revision', async () => {
+    const revisionId = '11111111-1111-4111-8111-111111111111';
+    view = { ...VIEW, revisionId, values: { headline: 'Committed copy' } };
+    mount();
+    const field = await screen.findByRole('textbox', { name: 'Title text default' });
+    expect((field as HTMLInputElement).value).toBe('Committed copy');
+    expect(screen.getByText('As saved in revision')).toBeTruthy();
+    await waitFor(() => expect(requestScenePreview.mock.calls[0]?.[1].revisionId).toBe(revisionId));
+    fireEvent.change(field, { target: { value: 'Changed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Title text' }));
+    expect((field as HTMLInputElement).value).toBe('Committed copy');
+    fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
+    await waitFor(() =>
+      expect(requestSceneRender.mock.calls[0]?.[1]).toMatchObject({
+        revisionId,
+        versionId: VERSION,
+        values: {},
+      }),
+    );
+  });
   test('loads the fields, names the template and draws the file as it is', async () => {
     mount();
     await screen.findByRole('heading', { level: 1, name: 'Summer Scene' });

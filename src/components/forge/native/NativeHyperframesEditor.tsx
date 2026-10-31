@@ -35,6 +35,8 @@ import {
   fetchNativeHyperframesVariants,
   saveNativeHyperframesRevision,
 } from '@/lib/library/hyperframesNative';
+import { confirmForgeExit } from '../useForgeExitGuard';
+import { VersionControlPanel } from '../VersionControlPanel';
 import { HyperframesFilmPanel } from './HyperframesFilmPanel';
 import { NativeHyperframesJobs } from './NativeHyperframesJobs';
 import { NativeHyperframesOrder } from './NativeHyperframesOrder';
@@ -295,6 +297,23 @@ function NativeEditorBody({
           </>
         }
       />
+      <details className="border-b border-border p-[var(--card-pad)]">
+        <summary className="cursor-pointer text-sm font-medium">
+          Variant control and releases
+        </summary>
+        <div className="pt-3">
+          <VersionControlPanel
+            brandId={view.brandId}
+            assetId={view.assetId}
+            versionId={view.sourceVersionId}
+            variants={variants}
+            revisionId={view.revision.revisionId}
+            onOpenRevision={(revision) => {
+              void confirmForgeExit().then((allowed) => { if (allowed) onSelectRevision(revision.id); });
+            }}
+          />
+        </div>
+      </details>
       <div className="grid min-h-0 flex-1 divide-y divide-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
         <Panel title="Edit saved source" bodyClassName="flex flex-col gap-3 overflow-y-auto">
           {!canEdit ? (

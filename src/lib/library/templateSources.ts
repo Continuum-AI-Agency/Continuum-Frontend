@@ -1,5 +1,18 @@
 'use client';
 
+import {
+  templateVersionBranchRequestSchema, templateVersionDiffRequestSchema,
+  templateVersionDiffResponseSchema, templateVersionResultSchema,
+  templateVersionMergePreviewRequestSchema, templateVersionMergePreviewSchema,
+  templateVersionMergeCommitRequestSchema, templateVersionRevertRequestSchema,
+  templateVersionCapabilitiesSchema, templateVersionCommitsResponseSchema,
+  templateVersionHistoryResponseSchema, templateReleaseListResponseSchema,
+  templateReleaseRequestSchema, templateReleaseRollbackRequestSchema, templateReleaseResultSchema,
+  type TemplateVersionBranchRequest, type TemplateVersionDiffRequest,
+  type TemplateVersionMergePreviewRequest, type TemplateVersionMergeCommitRequest,
+  type TemplateVersionRevertRequest, type TemplateReleaseRequest, type TemplateReleaseRollbackRequest,
+} from '@continuum/contracts';
+
 import type {
   RenderWorkspace,
   TemplateFontPushResponse,
@@ -192,6 +205,107 @@ async function unwrap<T>(response: Response, what: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+const versionPath = (assetId: string, action: string) =>
+  `/api/ai-studio/templates/${encodeURIComponent(assetId)}/${action}`;
+const versionPost = (assetId: string, action: string, body: object, userId?: string) =>
+  authorizedFetch(
+    versionPath(assetId, action),
+    { method: 'POST', body: JSON.stringify(body) },
+    userId,
+  ).then((response) => unwrap(response, action));
+const versionGet = (assetId: string, action: string, brandId: string) =>
+  authorizedFetch(`${versionPath(assetId, action)}?${new URLSearchParams({ brandId })}`).then(
+    (response) => unwrap(response, action),
+  );
+
+export async function branchTemplateVersion(
+  assetId: string,
+  body: TemplateVersionBranchRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(assetId, 'branches', templateVersionBranchRequestSchema.parse(body), userId),
+  );
+}
+export async function diffTemplateVersions(assetId: string, body: TemplateVersionDiffRequest) {
+  return templateVersionDiffResponseSchema.parse(
+    await versionPost(assetId, 'diff', templateVersionDiffRequestSchema.parse(body)),
+  );
+}
+export async function previewTemplateMerge(
+  assetId: string,
+  body: TemplateVersionMergePreviewRequest,
+) {
+  return templateVersionMergePreviewSchema.parse(
+    await versionPost(
+      assetId,
+      'merges/preview',
+      templateVersionMergePreviewRequestSchema.parse(body),
+    ),
+  );
+}
+export async function commitTemplateMerge(
+  assetId: string,
+  body: TemplateVersionMergeCommitRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(
+      assetId,
+      'merges',
+      templateVersionMergeCommitRequestSchema.parse(body),
+      userId,
+    ),
+  );
+}
+export async function revertTemplateVersion(
+  assetId: string,
+  body: TemplateVersionRevertRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(assetId, 'reverts', templateVersionRevertRequestSchema.parse(body), userId),
+  );
+}
+export async function fetchTemplateVersionCapabilities(brandId: string, assetId: string) {
+  return templateVersionCapabilitiesSchema.parse(
+    await versionGet(assetId, 'capabilities', brandId),
+  );
+}
+export async function fetchTemplateVersionCommits(brandId: string, assetId: string) {
+  return templateVersionCommitsResponseSchema.parse(await versionGet(assetId, 'commits', brandId));
+}
+export async function fetchTemplateVersionHistory(brandId: string, assetId: string) {
+  return templateVersionHistoryResponseSchema.parse(await versionGet(assetId, 'history', brandId));
+}
+export async function fetchTemplateReleases(brandId: string, assetId: string) {
+  return templateReleaseListResponseSchema.parse(await versionGet(assetId, 'releases', brandId));
+}
+export async function promoteTemplateRelease(
+  assetId: string,
+  body: TemplateReleaseRequest,
+  userId?: string,
+) {
+  return templateReleaseResultSchema.parse(
+    await versionPost(assetId, 'releases', templateReleaseRequestSchema.parse(body), userId),
+  );
+}
+export async function rollbackTemplateRelease(
+  assetId: string,
+  body: TemplateReleaseRollbackRequest,
+  userId?: string,
+) {
+  return templateReleaseResultSchema.parse(
+    await versionPost(
+      assetId,
+      'releases/rollback',
+      templateReleaseRollbackRequestSchema.parse(body),
+      userId,
+    ),
+  );
+}
+
 
 /** The brand's templates a page at a time, newest first, until the list runs out. */
 export async function* streamTemplateSources(

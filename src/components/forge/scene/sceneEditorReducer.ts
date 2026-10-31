@@ -17,7 +17,7 @@ export type SceneChanges = Readonly<Record<string, SceneValue>>;
 export const HISTORY_LIMIT = 50;
 
 export type SceneEditorState = {
-  defaults: Readonly<Record<string, BlendField['default']>>;
+  defaults: Readonly<Record<string, SceneValue | null>>;
   changes: SceneChanges;
   past: SceneChanges[];
   future: SceneChanges[];
@@ -37,10 +37,13 @@ export type SceneEditorAction =
   | { type: 'redo' };
 
 export function initialSceneEditor(
-  view: Pick<SceneTemplateView, 'fields' | 'outputs'>,
+  view: Pick<SceneTemplateView, 'fields' | 'outputs' | 'values'>,
 ): SceneEditorState {
   return {
-    defaults: Object.fromEntries(view.fields.map((field) => [field.key, field.default])),
+    defaults: {
+      ...Object.fromEntries(view.fields.map((field) => [field.key, field.default])),
+      ...view.values,
+    },
     changes: {},
     past: [],
     future: [],
