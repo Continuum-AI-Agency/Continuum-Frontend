@@ -110,21 +110,28 @@ function OptimizerSkeleton() {
 }
 
 /** Whether each platform reads as connected for the platform switch. Either source saying so is
- *  enough: the brand's granted accounts, or the multi-platform producer having read it. The
- *  selected account is a Meta account the brand already reads, so Meta is connected even while
- *  the account list is still loading or failed. */
-function useConnectedPlatforms(brandId: string, adAccountId: string): Record<AdPlatform, boolean> {
+ *  enough: the brand's granted accounts, or the multi-platform producer having read it. A selected
+ *  account on Scale's Meta platform is a Meta account the brand already reads, so Meta is connected
+ *  even while the account list is still loading or failed — but only on Meta: a Google-only brand
+ *  opens Scale on its Google account, and that account says nothing about Meta. */
+function useConnectedPlatforms(
+  brandId: string,
+  adAccountId: string,
+  scalePlatform: PaidMediaPlatform,
+): Record<AdPlatform, boolean> {
   const accounts = useOptimizerAdAccounts(brandId);
   const metrics = useAccountPlatformMetrics(brandId);
   return useMemo(() => {
     const granted = connectedPlatforms(accounts.data);
     const read = metrics.status === 'ready' ? connectedFromMetrics(metrics.metrics) : null;
+    const selectedMeta = scalePlatform === 'meta' && Boolean(adAccountId);
+    const selectedGoogle = scalePlatform === 'google-ads' && Boolean(adAccountId);
     return {
-      meta: granted.meta || Boolean(adAccountId) || Boolean(read?.meta),
-      google_ads: granted.google_ads || Boolean(read?.google_ads),
+      meta: granted.meta || selectedMeta || Boolean(read?.meta),
+      google_ads: granted.google_ads || selectedGoogle || Boolean(read?.google_ads),
       tiktok_ads: granted.tiktok_ads || Boolean(read?.tiktok_ads),
     };
-  }, [accounts.data, adAccountId, metrics]);
+  }, [accounts.data, adAccountId, metrics, scalePlatform]);
 }
 
 /** All · Meta · Google · TikTok as one segmented control, each platform led by its own logo. A
@@ -294,7 +301,7 @@ export function OptimizerTab({
   const currency = useAdAccountCurrency(brandId, adAccountId);
   const prefetchPortfolioDetail = usePrefetchPortfolioDetail(brandId);
   const warmActionsQueue = useWarmActionsQueue(brandId);
-  const connected = useConnectedPlatforms(brandId, adAccountId);
+  const connected = useConnectedPlatforms(brandId, adAccountId, platform);
 
   const googlePortfolios = useOptimizerPlatformPortfolios(brandId, 'google_ads').data;
   const tiktokPortfolios = useOptimizerPlatformPortfolios(brandId, 'tiktok_ads').data;

@@ -33,6 +33,8 @@ let onPlatform: Record<'google_ads' | 'tiktok_ads', PortfolioListItem[]> = {
   tiktok_ads: [],
 };
 let actionsProps: Record<string, unknown> | null = null;
+/** The brand's assigned ad accounts (plugin_mcp.list_brand_ad_accounts rows). */
+let assignedAccounts: { platform: string; account_id: string; name: string | null }[] = [];
 
 mock.module('./useOptimizerData', () => ({
   ...realOptimizerData,
@@ -46,7 +48,7 @@ mock.module('./useOptimizerData', () => ({
   }),
   // Secondary reads: a pending one must never hold the surface.
   useOptimizerRenewals: () => ({ data: [], isLoading: pendingSecondaryRead }),
-  useOptimizerAdAccounts: () => ({ data: [], isLoading: pendingSecondaryRead }),
+  useOptimizerAdAccounts: () => ({ data: assignedAccounts, isLoading: pendingSecondaryRead }),
   useOptimizerPlatformPortfolios: (_brandId: string, platform: 'google_ads' | 'tiktok_ads') => ({
     data: onPlatform[platform],
   }),
@@ -151,6 +153,7 @@ beforeEach(() => {
   actionsProps = null;
   onPlatform = { google_ads: [], tiktok_ads: [] };
   elsewhere = [];
+  assignedAccounts = [];
   setView.mockClear();
   setPlatform.mockClear();
   openCreate.mockClear();
@@ -415,5 +418,28 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
     expect(queued).toEqual([mixed.id, EASY_FIT_G1.id]);
     // 1 on the account's portfolio + 2 on the Google one: what the Actions tab renders.
     expect(screen.getByRole('tab', { name: /Actions/ }).textContent).toBe('Actions3');
+  });
+});
+
+// PP-DT-E-meta-tab-connected-on-google-account (deep test 2026-10-31, lane E): Pink Elephant has a
+// Google Ads account and no Meta ad account. Opened on its Google account, the switch read "Meta"
+// as connected — the selected account was taken for a Meta one — while TikTok said Connect.
+describe('OptimizerTab on a brand whose selected account is a Google one', () => {
+  it('reads Meta as not connected, Google as connected', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    const meta = screen.getByTestId('platform-tab-meta');
+    expect(meta.getAttribute('data-connected')).toBe('false');
+    expect(meta.textContent).toContain('Connect');
+    expect(screen.getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe(
+      'true',
+    );
+  });
+
+  it('still reads Meta as connected on a selected Meta account while the list loads', () => {
+    renderTab();
+    expect(screen.getByTestId('platform-tab-meta').getAttribute('data-connected')).toBe('true');
   });
 });
