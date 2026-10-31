@@ -181,6 +181,10 @@ export function CreativeSlot({
 
 const RESULT_MODULES = new Set<HomeModuleId>(['performance', 'organic', 'creative']);
 
+/** A column of one-line text links. Each link's `hit-area` pad reaches the 24 px floor, and the
+ *  column caps that growth at the gap the rows share (gap-2), so two rows' pads never meet. */
+const ROW_LINK_LIST = 'hit-area-column flex flex-col gap-2 [--hit-area-gap:calc(var(--spacing)*2)]';
+
 const portfolioHref = (portfolioId: string) =>
   `/scale?tab=performance&optimizerView=portfolios&portfolio=${encodeURIComponent(portfolioId)}`;
 
@@ -192,12 +196,12 @@ export function HealthCard({ issues }: { issues: HomeIssue[] }) {
       accent="health"
       href="/scale?tab=performance&optimizerView=portfolios"
     >
-      <ul className="flex flex-col gap-2">
+      <ul className={ROW_LINK_LIST}>
         {issues.map((issue) => (
           <li key={`${issue.portfolioId}-${issue.title}`} className="text-xs">
             <Link
               href={portfolioHref(issue.portfolioId)}
-              className="text-destructive-ink underline-offset-2 hover:underline"
+              className="hit-area text-destructive-ink underline-offset-2 hover:underline"
             >
               {issue.title}
             </Link>
@@ -219,7 +223,7 @@ export function OpportunitiesCard({ opportunities }: { opportunities: HomeOpport
       {opportunities.length === 0 ? (
         <Unavailable>Nothing is waiting for a decision.</Unavailable>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={ROW_LINK_LIST}>
           {opportunities.slice(0, 4).map((opportunity) => (
             <li
               key={opportunity.title}
@@ -231,7 +235,7 @@ export function OpportunitiesCard({ opportunities }: { opportunities: HomeOpport
                     ? portfolioHref(opportunity.portfolioId)
                     : '/scale?tab=performance&optimizerView=create'
                 }
-                className="min-w-0 underline-offset-2 hover:underline"
+                className="hit-area min-w-0 underline-offset-2 hover:underline"
               >
                 {opportunity.title}
               </Link>

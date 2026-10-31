@@ -78,4 +78,33 @@ describe('Home cards the reading adds', () => {
     );
     expect(queryByText('0')).toBeNull();
   });
+
+  // PP-DT-E-home-cards-tap-targets (deep test 2026-10-31, lane E): these one-line links painted
+  // 14–16 px tall with no hit pad, under the 24 px AA floor (WCAG 2.2 2.5.8) at every width. The
+  // pad is the shared `hit-area` utility; the list caps it at the gap the rows share, so two
+  // rows' pads never meet.
+  it("gives every issue and opportunity link the 24 px hit pad, kept inside the rows' gap", () => {
+    const { getAllByRole } = render(
+      <>
+        <HealthCard
+          issues={[
+            { portfolioId: 'p-1', title: 'Leads lost the campaigns it manages' },
+            { portfolioId: 'p-2', title: 'Sales is over its daily budget' },
+          ]}
+        />
+        <OpportunitiesCard
+          opportunities={[
+            { portfolioId: 'p-1', title: 'Review 3 budget moves', count: 3 },
+            { portfolioId: null, title: 'Group your campaigns', count: 0 },
+          ]}
+        />
+      </>,
+    );
+    const rowLinks = getAllByRole('link').filter((link) => link.closest('li'));
+    expect(rowLinks).toHaveLength(4);
+    for (const link of rowLinks) {
+      expect(link.className.split(/\s+/)).toContain('hit-area');
+      expect(link.closest('ul')?.className).toContain('hit-area-column');
+    }
+  });
 });
