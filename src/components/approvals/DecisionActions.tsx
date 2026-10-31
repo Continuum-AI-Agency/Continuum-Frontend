@@ -12,6 +12,36 @@ import { cn } from '@/lib/utils';
 import { actionTypeLabel } from './formatters';
 import { RejectDialog } from './RejectDialog';
 
+/** Elements that own their keys: text entry, and every control whose Enter or Space activates
+ *  itself. The page shortcuts (Enter / A approve, R reject) fire only when focus rests on none
+ *  of these — on the page itself. */
+const KEY_OWNING_TARGET = [
+  'input',
+  'textarea',
+  'select',
+  'button',
+  'a[href]',
+  'summary',
+  '[contenteditable="true"]',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="tab"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="switch"]',
+  '[role="combobox"]',
+  '[role="slider"]',
+  '[role="textbox"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+].join(', ');
+
 type DecisionActionsHandle = {
   approve: () => Promise<void>;
   openReject: () => void;
@@ -89,12 +119,14 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
     React.useEffect(() => {
       if (!bindGlobalKeys) return;
       function handler(event: KeyboardEvent) {
+        // A held key auto-repeats, and each approve advances the queue: a repeat must never
+        // decide the next item.
+        if (event.repeat) return;
         const target = event.target as HTMLElement | null;
-        if (
-          target &&
-          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-        )
-          return;
+        if (target?.isContentEditable) return;
+        // Enter on a focused control means "activate THIS control" (the item menu, a link, the
+        // shortcuts help), never "approve the focused action", which executes on the platform.
+        if (target instanceof Element && target.closest(KEY_OWNING_TARGET)) return;
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         const key = event.key.toLowerCase();
         if (event.key === 'Enter' || key === 'a') {
