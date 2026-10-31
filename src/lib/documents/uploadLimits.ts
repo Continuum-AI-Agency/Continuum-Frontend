@@ -20,6 +20,18 @@ const ACCEPTED_MIME_EXACT = new Set<string>([
   '', // some browsers report no MIME for known document types; tolerated like the legacy route
 ]);
 
+// Excel claims a .csv on Windows as a spreadsheet type (`application/vnd.ms-excel`, sometimes
+// `application/csv`). Neither is accepted above, so a perfectly good CSV was refused as
+// "Unsupported file type" before it left the browser. The extension is the better witness.
+const CSV_MIME_ALIASES = new Set<string>(['application/vnd.ms-excel', 'application/csv']);
+
+/** The MIME to record for an upload: a CSV a browser mislabels is `text/csv`, anything else as reported. */
+export function documentMimeType(fileName: string, reportedMime: string): string {
+  return CSV_MIME_ALIASES.has(reportedMime) && fileName.toLowerCase().endsWith('.csv')
+    ? 'text/csv'
+    : reportedMime;
+}
+
 export function isAcceptedDocumentMime(mime: string): boolean {
   if (ACCEPTED_MIME_EXACT.has(mime)) return true;
   return ACCEPTED_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));

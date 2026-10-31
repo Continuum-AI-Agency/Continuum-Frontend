@@ -303,7 +303,9 @@ export function AiDraftDialog({
     });
     const unsupported = entries.find(({ pending }) => !pending.kind);
     if (unsupported) {
-      setProblem(`Unsupported file: ${unsupported.pending.name}`);
+      setProblem(
+        `Unsupported file: ${unsupported.pending.name}. Attach a PDF, Word, PowerPoint, Excel, CSV, text or JSON file, or an image or video.`,
+      );
       return;
     }
     const active = attached.filter((file) => file.status !== 'error');
@@ -518,9 +520,13 @@ export function AiDraftDialog({
           ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
           : message.startsWith('A source file') || message.startsWith('Files are still processing')
             ? message
-            : message.includes('render_draft_file_') || message.includes('render_draft_media_')
-              ? 'A source file is unavailable. Remove it and try again.'
-              : describeRenderDiscoveryFailure(message),
+            : message.includes('render_draft_extracting')
+              ? 'Files are still processing. Try Draft again shortly.'
+              : message.includes('render_draft_file_unreadable')
+                ? 'No text could be read from a file (a scanned PDF?). Remove it, or attach a copy with selectable text.'
+                : message.includes('render_draft_file_') || message.includes('render_draft_media_')
+                  ? 'A source file is unavailable. Remove it and try again.'
+                  : describeRenderDiscoveryFailure(message),
       );
     } finally {
       setBusy(false);
