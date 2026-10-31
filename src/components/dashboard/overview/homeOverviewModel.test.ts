@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { PaidAccountOverview } from '@/lib/paid-media/paid-overview.client';
-import { deltaPercent, objectiveFigure, rankingKpisFor, sumOverviews } from './homeOverviewModel';
+import {
+  deltaPercent,
+  objectiveFigure,
+  paidModuleState,
+  rankingKpisFor,
+  sumOverviews,
+} from './homeOverviewModel';
 
 const tours = { id: 'tours', label: 'Tours booked', metric: 'purchases', role: 'primary' } as const;
 const chats = {
@@ -99,5 +105,23 @@ describe('helpers', () => {
       efficiency: 'cost_per_conversation',
     });
     expect(rankingKpisFor('spend').efficiency).toBeNull();
+  });
+});
+
+// PP-DT-E-home-no-meta-account-error: the paid modules read Meta accounts only. A brand with none
+// (Pink Elephant, Tangassi — Google-only) is told to connect one; it never reads as a failed
+// load or as a week in which its campaigns brought nothing.
+describe('paidModuleState', () => {
+  it('a brand with no Meta ad account gets the connect line, whatever the load says', () => {
+    expect(paidModuleState(0, { status: 'error' }, true)).toBe('no-meta-account');
+    expect(paidModuleState(0, { status: 'ready' }, true)).toBe('no-meta-account');
+    expect(paidModuleState(0, { status: 'loading' }, true)).toBe('no-meta-account');
+  });
+
+  it('with an account: loading, error, an empty week and results stay apart', () => {
+    expect(paidModuleState(2, { status: 'loading' }, true)).toBe('loading');
+    expect(paidModuleState(2, { status: 'error' }, true)).toBe('error');
+    expect(paidModuleState(2, { status: 'ready' }, true)).toBe('empty');
+    expect(paidModuleState(2, { status: 'ready' }, false)).toBe('ready');
   });
 });

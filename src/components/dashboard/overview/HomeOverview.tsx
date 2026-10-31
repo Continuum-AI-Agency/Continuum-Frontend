@@ -32,7 +32,7 @@ import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrg
 import { cn } from '@/lib/utils';
 import { formatCount, formatFigure, formatMoney, formatRatio } from './format';
 import { HomeReadingStrip } from './HomeReadingStrip';
-import { objectiveFigure, resultTotalsOf } from './homeOverviewModel';
+import { objectiveFigure, paidModuleState, resultTotalsOf } from './homeOverviewModel';
 import { costLabelFor, ObjectiveStrip } from './ObjectiveStrip';
 import {
   type HomeAdAccount,
@@ -292,6 +292,16 @@ export function HomeOverview({
   const campaigns = useTopCampaigns(brandId, scopedAccounts, primary?.metric ?? null, attempt);
   const creatives = useCreativeExtremes(brandId, scopedAccounts, primary?.metric ?? null, attempt);
   const organic = useOrganicSnapshot(brandId, organicAccounts, attempt);
+  const campaignsShown = paidModuleState(
+    scopedAccounts.length,
+    campaigns,
+    campaigns.status === 'ready' && campaigns.data.length === 0,
+  );
+  const creativesShown = paidModuleState(
+    scopedAccounts.length,
+    creatives,
+    creatives.status === 'ready' && !creatives.data.best,
+  );
 
   const saveObjectives = (next: HomeObjective[]) => {
     const previous = rows;
@@ -394,11 +404,13 @@ export function HomeOverview({
         <span className="text-2xs uppercase tracking-wide text-muted-foreground">
           Campaigns that brought the most {primary?.label.toLowerCase() ?? 'results'}
         </span>
-        {campaigns.status === 'loading' ? (
+        {campaignsShown === 'no-meta-account' ? (
+          <Unavailable>Connect a Meta ad account to rank campaigns here.</Unavailable>
+        ) : campaignsShown === 'loading' ? (
           <Skeleton className="h-24 bg-muted/70" />
-        ) : campaigns.status === 'error' ? (
+        ) : campaignsShown === 'error' ? (
           <Unavailable onRetry={retry}>Couldn't load campaigns right now.</Unavailable>
-        ) : campaigns.data.length === 0 ? (
+        ) : campaignsShown === 'empty' || campaigns.status !== 'ready' ? (
           <Unavailable>
             No campaign brought {primary?.label.toLowerCase() ?? 'results'} this week.
           </Unavailable>
@@ -489,11 +501,13 @@ export function HomeOverview({
         <span className="text-2xs uppercase tracking-wide text-muted-foreground">
           Ads ranked by {creativeRankLabel}
         </span>
-        {creatives.status === 'loading' ? (
+        {creativesShown === 'no-meta-account' ? (
+          <Unavailable>Connect a Meta ad account to rank ads here.</Unavailable>
+        ) : creativesShown === 'loading' ? (
           <Skeleton className="h-40 bg-muted/70" />
-        ) : creatives.status === 'error' ? (
+        ) : creativesShown === 'error' ? (
           <Unavailable onRetry={retry}>Couldn't load ads right now.</Unavailable>
-        ) : !creatives.data.best ? (
+        ) : creativesShown === 'empty' || creatives.status !== 'ready' || !creatives.data.best ? (
           <Unavailable>
             No ad brought {primary?.label.toLowerCase() ?? 'results'} this week.
           </Unavailable>

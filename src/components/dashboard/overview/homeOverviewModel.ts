@@ -204,3 +204,18 @@ export function rankingKpisFor(metric: HomeObjectiveMetric): {
       return { volume: 'spend', efficiency: null };
   }
 }
+
+/** What a paid module (Performance +, Creative +) shows. The Home ranks Meta accounts only, so a
+ *  brand with none — a Google-only brand — is told to connect one: never a failed load with a
+ *  Retry that cannot succeed, never a week in which its campaigns "brought nothing". */
+export type PaidModuleState = 'no-meta-account' | 'loading' | 'error' | 'empty' | 'ready';
+
+export function paidModuleState(
+  metaAccounts: number,
+  load: { status: 'loading' | 'error' | 'ready' },
+  isEmpty: boolean,
+): PaidModuleState {
+  if (metaAccounts === 0) return 'no-meta-account';
+  if (load.status !== 'ready') return load.status;
+  return isEmpty ? 'empty' : 'ready';
+}

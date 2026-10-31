@@ -82,6 +82,9 @@ async function rankAcross(
   direction: 'top' | 'bottom',
   limit: number,
 ): Promise<RankedWithAccount[]> {
+  // No Meta ad account (a Google-only brand) is nothing to rank, not a failure: `every` over an
+  // empty list is true, which used to turn this case into "Couldn't load … right now".
+  if (accountIds.length === 0) return [];
   const settled = await Promise.allSettled(
     accountIds.map((adAccountId) =>
       fetchPaidRanking({
