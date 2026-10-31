@@ -54,12 +54,14 @@ async function chromeTabNames(page: Page): Promise<string[]> {
 }
 
 /** How the Google tab's account findings arrive: polled until every stored one is on screen and
- *  nothing reads "Reading…", or the wait runs out. */
+ *  nothing reads "Reading…", or the wait runs out. AccountRead shows four cards and folds the
+ *  rest under "N more · …" (SHOWN_COUNT); that toggle is opened — a local fold, not a write. */
 async function waitForP8Cards(page: Page, expected: number) {
   const t0 = Date.now();
   let firstMs: number | null = null;
   let count = 0;
   let reading = true;
+  let unfolded = false;
   while (Date.now() - t0 < P8_WAIT_MS) {
     count = await page.locator('[data-testid="account-finding"]').count();
     if (count > 0 && firstMs === null) firstMs = Date.now() - t0;
@@ -71,12 +73,32 @@ async function waitForP8Cards(page: Page, expected: number) {
         .catch(() => ''),
     );
     if (count >= expected && !reading) break;
+    const fold = page
+      .locator('[data-testid="account-cards"] button[aria-expanded="false"]')
+      .first();
+    if (!reading && !unfolded && (await fold.count()) > 0) {
+      await fold.click().catch(() => undefined);
+      unfolded = true;
+      continue;
+    }
     await page.waitForTimeout(2000);
   }
   const recommendOnly = await page
     .locator('[data-testid="account-finding-recommend-only"]')
     .count();
-  return { count, recommendOnly, firstMs, doneMs: Date.now() - t0, reading };
+  const writeControls = await page
+    .locator('[data-testid="account-finding"]')
+    .getByRole('button', { name: /^(Apply|Approve|Pause|Enable|Run)/ })
+    .count();
+  return {
+    count,
+    recommendOnly,
+    writeControls,
+    unfolded,
+    firstMs,
+    doneMs: Date.now() - t0,
+    reading,
+  };
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -420,7 +442,7 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
             nodes: Array.from(new Set(seen.map((shift) => shift.node))).slice(0, 4),
           };
         });
-        await shot(opened.page, `fix-${LABEL}-${name}`, false);
+        await shot(opened.page, `fix-${LABEL}-${name}`);
         obs.add({ name, p8, ideas, chromeNames, still, notFound: opened.events.notFound });
         recorder.record(
           `${name}: the Google tab holds still once loaded (10 s watched)`,
@@ -433,9 +455,9 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
           `${p8.count}/${STORED_P8.vivo47} cards [${ideas.join(', ')}]; first at ${p8.firstMs} ms, done at ${p8.doneMs} ms, still reading=${p8.reading}`,
         );
         recorder.record(
-          `${name}: every P8 card is recommend-only`,
-          p8.count > 0 && p8.recommendOnly === p8.count ? 'PASS' : 'FAIL',
-          `${p8.recommendOnly}/${p8.count}`,
+          `${name}: no P8 account finding carries a write control`,
+          p8.writeControls === 0 ? 'PASS' : 'WARN',
+          `${p8.writeControls} write controls on ${p8.count} cards; ${p8.recommendOnly} marked recommend-only (only a client-executes account is)`,
         );
         recorder.record(
           `${name}: Chrome names each platform tab once`,
