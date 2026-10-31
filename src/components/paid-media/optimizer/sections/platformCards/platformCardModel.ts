@@ -127,6 +127,11 @@ export function isReadOnly(card: PlatformCard): boolean {
   return READ_ONLY_VARIANTS.has(card.variant);
 }
 
+/** Google shows no ad anywhere in the account: one cause that outranks every other card. */
+export function blocksTheAccount(card: PlatformCard | null): boolean {
+  return card?.variant === 'google_delivery_issue' && card.account_wide;
+}
+
 /** The negatives card holds its own buttons, because which terms it adds is chosen inside it. */
 export function ownsItsActions(card: PlatformCard): boolean {
   return card.variant === 'google_negative_terms';
@@ -258,6 +263,12 @@ const GOOGLE_REASON_WORDS: Readonly<Record<string, string>> = {
   MISSING_LEAD_FORM_EXTENSION: 'the lead form is missing',
   LEAD_FORM_EXTENSION_DISAPPROVED: 'the lead form was disapproved',
   LEAD_FORM_EXTENSION_UNDER_REVIEW: 'the lead form is under review',
+  // campaign.serving_status when it is not SERVING (G12 quotes it as SERVING_STATUS_<status>):
+  // Easy Fit 2026 read ELIGIBLE with no reason while serving said SUSPENDED (billing).
+  SERVING_STATUS_SUSPENDED: 'suspended',
+  SERVING_STATUS_ENDED: 'its end date has passed',
+  SERVING_STATUS_PENDING: 'not started yet',
+  SERVING_STATUS_NONE: 'not serving',
 };
 
 function codeInWords(code: string): string {

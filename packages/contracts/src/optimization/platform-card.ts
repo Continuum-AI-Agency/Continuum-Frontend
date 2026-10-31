@@ -324,6 +324,13 @@ export const GoogleDeliveryIssueCardSchema = z.object({
   /** Google's own reason codes, e.g. HAS_ADS_DISAPPROVED, BUDGET_CONSTRAINED. */
   reasons: z.array(z.string().min(1)).min(1),
   dark_days: z.number().int().nonnegative(),
+  /** The first day of the dark run (YYYY-MM-DD, the account's calendar): the day the campaign —
+   *  or, on an account card, the last campaign — stopped showing ads. Absent on a card written
+   *  before it was stamped, and when nothing is dark (disapproved ads only). */
+  dark_since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   currency: CurrencyCodeSchema.nullable(),
   budget_per_day: money.nullable(),
   disapproved_ads: z.number().int().nonnegative(),
@@ -472,9 +479,7 @@ export const GoogleAccountFindingCardSchema = z.object({
   /** The client executes the account: recommend and verify, never a write control. */
   recommend_only: z.boolean(),
   /** The figures, already worded by the producer ("Real cost per lead", "$1,151 MXN"). */
-  facts: z
-    .array(z.object({ label: z.string().min(1), value: z.string().min(1) }))
-    .min(1),
+  facts: z.array(z.object({ label: z.string().min(1), value: z.string().min(1) })).min(1),
   /** Bars the card draws: one value per row in `unit`, and the agreed share when there is one. */
   bars: z
     .array(

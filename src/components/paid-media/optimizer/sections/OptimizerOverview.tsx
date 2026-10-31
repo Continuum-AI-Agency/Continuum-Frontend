@@ -106,6 +106,7 @@ import {
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
 import { readComparisonHidden } from './platforms/comparisonPreference';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { GoogleDeliveryStatus } from './platforms/GoogleDeliveryStatus';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
 import { PlatformTabs } from './platforms/PlatformTabs';
@@ -988,6 +989,20 @@ function PlatformTab({
    *  read landing above it never pushes it down. */
   children?: ReactNode;
 }) {
+  // When Google shows no ad anywhere in the account, that leads the tab — before any figure,
+  // every one of which assumes the account serves. The same cards read the sections below hold
+  // (one query); nothing renders while they load or when the account serves.
+  const cards = useOptimizerPlatformCards(brandId, platform);
+  const status =
+    platform === 'google_ads' && cards.status === 'ready' ? (
+      <GoogleDeliveryStatus cards={cards.cards} />
+    ) : null;
+  const withStatus = (body: ReactNode) => (
+    <>
+      {status}
+      {body}
+    </>
+  );
   // One window on the tab: the producer's when it answered, nothing while it is answering, else
   // the same 7 complete days ending yesterday the producer would read.
   const window =
@@ -1005,7 +1020,7 @@ function PlatformTab({
       <TikTokAdsTab advertiserId={null} brandId={brandId} />
     );
   if (metrics.status === 'unavailable') {
-    return (
+    return withStatus(
       <>
         <MultiPlatformUnavailable
           detail={
@@ -1013,7 +1028,7 @@ function PlatformTab({
           }
         />
         {fallback}
-      </>
+      </>,
     );
   }
   const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
@@ -1021,7 +1036,7 @@ function PlatformTab({
     // Google connected but not yet read by the Optimizer: Google's own read leads in full,
     // under a note that says what it is.
     const googleUnread = platform === 'google_ads' && row.spend == null;
-    return (
+    return withStatus(
       <>
         <PlatformMetricsSection
           liveBelow={googleUnread}
@@ -1040,11 +1055,11 @@ function PlatformTab({
         ) : (
           <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
         )}
-      </>
+      </>,
     );
   }
   if (metrics.status === 'error') {
-    return (
+    return withStatus(
       <>
         <p
           className="px-1 text-muted-foreground text-xs"
@@ -1054,8 +1069,8 @@ function PlatformTab({
           {metrics.message}
         </p>
         {fallback}
-      </>
+      </>,
     );
   }
-  return fallback;
+  return withStatus(fallback);
 }
