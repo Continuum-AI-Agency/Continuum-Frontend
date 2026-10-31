@@ -163,6 +163,7 @@
     "forge:shared-versioning:working-copies:bench": "bun --no-env-file e2e/shared-versioning-working-copies.bench.ts",
     "forge:shared-versioning:faults:bench": "bun --no-env-file e2e/shared-versioning-faults.bench.ts",
     "forge:shared-versioning:merges:bench": "bun --no-env-file e2e/shared-versioning-faults.merges.ts",
+    "forge:shared-versioning:concurrency:bench": "bun --no-env-file e2e/shared-versioning-simultaneous-clients.bench.ts",
     "organic:agent:chat:live:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4424 NEXT_PUBLIC_API_URL=http://127.0.0.1:4424 PORT=3134 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3134 NEXT_DIST_DIR=.next/organic-agent-chat-live-e2e playwright test e2e/organic-agent-chat-live.spec.ts --workers=1",
     "typecheck:hyperframes-native": "bunx tsc -p tsconfig.hyperframes-native.json --noEmit"
   },
