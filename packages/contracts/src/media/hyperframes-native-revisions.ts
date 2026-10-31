@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { templateOperationCoverageSchema, templateOperationInputSchema, templateOperationOriginSchema } from './template-operation-events';
 import { hyperframesNativeEditsSchema } from './hyperframes-native';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -32,6 +33,9 @@ export const saveHyperframesRevisionRequestSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     idempotencyKey: z.string().min(1).max(200),
     edits: hyperframesNativeEditsSchema,
+    operations: z.array(templateOperationInputSchema).max(500).optional(),
+    operationCoverage: templateOperationCoverageSchema.optional(),
+    origin: templateOperationOriginSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

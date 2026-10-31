@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sceneRenderRequestSchema } from './blend-scene';
-import { templateOperationCoverageSchema, templateOperationInputSchema } from './template-operation-events';
+import { templateOperationCoverageSchema, templateOperationInputSchema, templateOperationOriginSchema } from './template-operation-events';
 import { hyperframesRevisionSchema } from './hyperframes-native-revisions';
 import { templateRevisionRefSchema } from './template-revision-pin';
 
@@ -405,6 +405,7 @@ export const saveTemplateRevisionRequestSchema = templateRevisionPreviewRequestS
     uploadAssetId: z.string().uuid().optional(),
     operations: z.array(templateOperationInputSchema).max(500).optional(),
     operationCoverage: templateOperationCoverageSchema.optional(),
+    origin: templateOperationOriginSchema.optional(),
     /** Only a new variant is tagged: a tag says what the variant was made for. */
     tags: z.array(templateVariantTagSchema).max(4).optional(),
   })

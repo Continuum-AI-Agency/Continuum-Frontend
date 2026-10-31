@@ -890,6 +890,8 @@ describe('TemplateLayerEditor', () => {
       { brandId: BRAND, assetId: 'a', baseVersionId: VERSION, expectedDraftRevision: 1 },
     ));
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_workspace_seed_import_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Create private draft and import' } });
   });
 
   test('reconciles a lost empty-draft bootstrap response only from exact empty scope', async () => {
@@ -937,6 +939,8 @@ describe('TemplateLayerEditor', () => {
     expect(scenes).toHaveBeenCalledTimes(baseSceneCallsBeforeImport);
     expect(saves).not.toHaveBeenCalled();
     expect(commitAuthoring).not.toHaveBeenCalled();
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_workspace_seed_import_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Import into this Forge workspace' } });
   });
 
   test('reconciles a seed attach when the private export completes but its response is lost', async () => {
@@ -2450,6 +2454,49 @@ describe('TemplateLayerEditor', () => {
     );
   });
 
+  test('records exact controls, buttons and shortcuts in action order through coalescing, save and discard', async () => {
+    let draft: LayerDraftState | null = null;
+    editor(undefined, undefined, (next) => { draft = next; });
+    const x = await screen.findByLabelText('Position X');
+    fireEvent.change(x, { target: { value: '110' } });
+    fireEvent.change(x, { target: { value: '120' } });
+    fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    fireEvent.keyDown(document, { key: 'z', ctrlKey: true, shiftKey: true });
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    let saved = false;
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(true);
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    fireEvent.change(x, { target: { value: '130' } });
+    fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    await act(async () => { draft!.discard(); });
+    const events = () => authoringHistoryWrites.mock.calls.flatMap((call) => call[3]);
+    await waitFor(() => expect(events().some((event) => event.command === 'forge_discard')).toBe(true));
+    const recorded = events();
+    expect(recorded.map((event) => event.command)).toEqual([
+      'forge_authoring_command', 'forge_authoring_command', 'forge_undo', 'forge_redo',
+      'forge_private_draft_save_requested', 'forge_authoring_command', 'forge_discard',
+    ]);
+    expect(recorded.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(new Set(recorded.map((event) => event.id)).size).toBe(7);
+    expect(new Set(recorded.map((event) => event.workingCopyId)).size).toBe(1);
+    expect(recorded[0]?.origin).toEqual({ tool: 'Forge inspector', control: 'Position X' });
+    expect(recorded[1]?.origin).toEqual(recorded[0]?.origin);
+    expect(recorded[2]?.origin).toMatchObject({ button: 'Undo' });
+    expect(recorded[3]?.origin).toMatchObject({ shortcut: 'Control+Shift+Z' });
+    expect(recorded[4]?.outcome).toBe('requested');
+    expect(recorded[4]?.origin).toEqual({ tool: 'Forge exit guard', button: 'Save private draft' });
+    expect(recorded[6]?.origin).toEqual({ tool: 'Forge exit guard', button: 'Discard' });
+    expect(recorded[2]?.causedBy).toEqual(expect.arrayContaining([recorded[0]!.id, recorded[1]!.id]));
+    expect(recorded.every((event) => event.evidence === 'recorded')).toBe(true);
+    await waitFor(() => expect((screen.getByLabelText('Position X') as HTMLInputElement).value).toBe('100'));
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+  });
+
   test('several numeric scrub updates commit as one undo step', async () => {
     let draft: LayerDraftState | null = null;
     editor(undefined, undefined, (next) => {
@@ -2562,6 +2609,8 @@ describe('TemplateLayerEditor', () => {
       brandId: BRAND,
       baseVersionId: VERSION,
     });
+    expect(authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_private_draft_save_requested')?.origin).toEqual({ tool: 'Forge exit guard', button: 'Save private draft' });
+    expect(authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).some((event) => event.command === 'forge_discard')).toBe(false);
     expect(saves).not.toHaveBeenCalled();
     expect(onOpenVariant).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
@@ -2860,6 +2909,8 @@ describe('TemplateLayerEditor', () => {
     }));
     expect(await draft!.retry?.()).toBe(true);
     await waitFor(() => expect(draft?.dirty).toBe(false));
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_private_draft_retry_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Retry draft save' } });
   });
 
   test('a golden source only forks: Save as variant sends the move and a name', async () => {
@@ -2977,8 +3028,24 @@ describe('TemplateLayerEditor', () => {
     ).toBeTruthy();
   });
 
-  test('a failed composition is a local estimate with a retry, not a successful preview', async () => {
+  test('unavailable critical storage refuses edits without recording a command or changing the preview', async () => {
     Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: undefined });
+    editor();
+    const x = await screen.findByLabelText('Position X');
+    expect((x as HTMLInputElement).value).toBe('100');
+    fireEvent.change(x, { target: { value: '140' } });
+    fireEvent.blur(x);
+    await screen.findByText('Private operation history is not ready. Retry before editing.');
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Private recovery storage is unavailable in this browser.');
+    expect((x as HTMLInputElement).value).toBe('100');
+    expect(screen.getByText('Source preview')).toBeTruthy();
+    expect(screen.queryByText(/Local estimate/)).toBeNull();
+    expect(authoringHistoryWrites).not.toHaveBeenCalled();
+    expect(authoringDraftWrites).not.toHaveBeenCalled();
+    expect(previews).not.toHaveBeenCalled();
+  });
+
+  test('a failed composition is a local estimate with a retry, not a successful preview', async () => {
     revisionPreviews.mockImplementation(async () => {
       throw new Error('Composition unavailable');
     });
@@ -2990,7 +3057,6 @@ describe('TemplateLayerEditor', () => {
     );
     expect(screen.queryByText('Composed preview')).toBeNull();
     expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Composition unavailable');
-    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Private recovery storage is unavailable in this browser.');
     fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
     expect(screen.getByText('Local estimate · updating')).toBeTruthy();
     expect(screen.queryAllByRole('alert').some((alert) => alert.textContent === 'Composition unavailable')).toBe(false);

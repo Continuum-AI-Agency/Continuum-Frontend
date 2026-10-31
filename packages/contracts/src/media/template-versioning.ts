@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { hyperframesNativeEditsSchema } from './hyperframes-native';
 export * from './template-operation-events';
 import { templateRevisionEditsSchema, templateRevisionSchema } from './template-revisions';
-import { templateOperationSchema } from './template-operation-events';
+import { templateOperationOriginSchema, templateOperationSchema } from './template-operation-events';
 
 const id = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -13,6 +13,7 @@ const key = z.string().trim().min(1).max(200);
 export const templateVersionBranchRequestSchema = z.object({
   brandId: id, parentRevisionId: id, name: z.string().trim().min(1).max(120),
   idempotencyKey: key, message: message.optional(),
+  origin: templateOperationOriginSchema.optional(),
 }).strict();
 export const templateVersionDiffRequestSchema = z.object({
   brandId: id, fromRevisionId: id, toRevisionId: id,
@@ -49,6 +50,7 @@ export const templateVersionMergePreviewRequestSchema = z.object({
 }).strict();
 export const templateVersionMergeCommitRequestSchema = templateVersionMergePreviewRequestSchema.extend({
   idempotencyKey: key, previewToken: hash,
+  origin: templateOperationOriginSchema.optional(),
   resolutions: z.array(z.object({ path: z.string().min(1).max(2000), choice: z.enum(['ours', 'theirs']) }).strict()).max(2000),
   message: message.optional(),
 }).strict().superRefine((value, ctx) => {
@@ -58,6 +60,7 @@ export const templateVersionMergeCommitRequestSchema = templateVersionMergePrevi
 export const templateVersionRevertRequestSchema = z.object({
   brandId: id, variantId: id, restoreRevisionId: id, expectedHeadRevisionId: id,
   idempotencyKey: key, message: message.optional(),
+  origin: templateOperationOriginSchema.optional(),
 }).strict();
 export const templateVersionCommitResponseSchema = z.object({
   revisionId: id, variantId: id, revisionNumber: z.number().int().positive(),
@@ -116,6 +119,7 @@ export type TemplateVersioningAccepted = z.infer<typeof templateVersioningAccept
 const releaseTarget = {
   brandId: id, bindingId: id, templateKey: z.string().trim().min(1).max(500),
   expectedReleaseId: id.nullable(), idempotencyKey: key,
+  origin: templateOperationOriginSchema.optional(),
 };
 /** Manifests are not accepted from clients: the server derives them from stored revision/receipt pins. */
 export const templateReleaseRequestSchema = z.object({ ...releaseTarget, revisionId: id }).strict();

@@ -39,6 +39,18 @@ async function until(predicate: () => boolean) {
   throw new Error('Expected operation boundary was not reached');
 }
 
+test('an empty successful history flush notifies settled state without requiring another captured action', async () => {
+  const storage = new MemoryStorage();
+  const busy: boolean[] = [];
+  let history!: TemplateOperationJournal;
+  history = new TemplateOperationJournal({ userId: 'actor', scope, storage,
+    workspaceIdentity: 'pinned-source', sourceChecksum: 'a'.repeat(64),
+    append: async () => undefined, onSaved: () => { busy.push(history.busy); } });
+  await history.flush();
+  expect(busy).toEqual([false]);
+  expect(storage.state.events).toEqual([]);
+});
+
 test('two actual commands remain ordered even when the existing draft projection coalesces them', async () => {
   const storage = new MemoryStorage();
   const accepted = new Map<string, TemplateOperationInput>();
@@ -127,6 +139,22 @@ test('undo, redo and clear preserve references to their raw actions after acknow
   expect(storage.state.events[2]!.causedBy).toContain(undo);
   expect(storage.state.events[1]!.origin?.shortcut).toBe('Control+Z');
   expect(storage.state.events.every(event => !('occurredAt' in event))).toBe(true);
+});
+
+test('retains exact control and gesture origins while distinguishing requests from known results', async () => {
+  const storage = new MemoryStorage();
+  const history = journal(storage, async () => undefined);
+  const origin = { tool: 'Forge inspector', control: 'Position X' };
+  history.capture({ command: 'forge_authoring_command', changes: { command: command(10) }, origin }, 1);
+  origin.control = 'Changed after capture';
+  history.capture({ command: 'forge_authoring_command', changes: { command: command(20) }, origin: { tool: 'Forge canvas', gesture: 'Move layer' } }, 1);
+  history.capture({ command: 'forge_private_draft_save_requested', outcome: 'requested', changes: {}, origin: { button: 'Save private draft' } }, 1);
+  await history.flush();
+  expect(storage.state.events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+  expect(storage.state.events[0]?.origin).toEqual({ tool: 'Forge inspector', control: 'Position X' });
+  expect(storage.state.events[1]?.origin).toEqual({ tool: 'Forge canvas', gesture: 'Move layer' });
+  expect(storage.state.events.map((event) => event.outcome)).toEqual(['succeeded', 'succeeded', 'requested']);
+  expect(storage.state.acknowledged).toEqual(storage.state.events.map((event) => event.id));
 });
 
 test('ambiguous draft writes retain their exact request ID and body before newer snapshots can land', async () => {

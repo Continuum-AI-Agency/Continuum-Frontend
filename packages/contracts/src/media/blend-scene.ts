@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { templateParseSchema } from './template-source';
+import { templateOperationOriginSchema } from './template-operation-events';
 
 /** A Blender ID name is at most 255 bytes in 5.x (63 before); the two-letter code is separate. */
 const idNameSchema = z.string().min(1).max(256);
@@ -193,6 +194,7 @@ export const sceneRenderRequestSchema = z
     releaseId: z.string().uuid().optional(),
     bindingId: z.string().uuid().optional(),
     templateKey: z.string().min(1).max(500).optional(),
+    origin: templateOperationOriginSchema.optional(),
     outputId: z.string().min(1),
     /** Field key → value. Colours are `#RRGGBB`; images are Library pins; vectors `[x, y, z]`. */
     values: z
@@ -272,7 +274,7 @@ export type SceneRenderHistory = z.infer<typeof sceneRenderHistorySchema>;
  * draft size and samples unless `quality` is `full`. Nothing is written to the Library.
  */
 export const scenePreviewRequestSchema = sceneRenderRequestSchema
-  .pick({ brandId: true, versionId: true, revisionId: true, outputId: true, values: true, scope: true })
+  .pick({ brandId: true, versionId: true, revisionId: true, outputId: true, values: true, scope: true, origin: true })
   .extend({
     quality: z.enum(['draft', 'full']).optional(),
     /** The frame to draw; kept within the output's range. The first frame when left out. */

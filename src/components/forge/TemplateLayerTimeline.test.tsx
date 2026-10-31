@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { TemplateAuthoringCommand, TemplateAuthoringNode } from '@continuum/contracts';
+import type { TemplateAuthoringCommand, TemplateAuthoringNode, TemplateOperationOrigin } from '@continuum/contracts';
 import { TemplateLayerTimeline } from './TemplateLayerTimeline';
 
 const node = (channelOverrides: Record<string, unknown> = {}) => ({
@@ -30,7 +30,7 @@ describe('TemplateLayerTimeline', () => {
   afterEach(() => cleanup());
 
   test('scrubs on the composition frame clock and adds an evaluated key using the private command', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     const onPlayheadChange = mock((_seconds: number) => {});
     const view = render(
       <TemplateLayerTimeline
@@ -72,10 +72,11 @@ describe('TemplateLayerTimeline', () => {
     expect(command.keyframes[0]?.keyframeId).toBe('source:abc:position:0');
     expect(command.keyframes[1]?.keyframeId).toMatch(/^draft:/);
     expect(command.keyframes[2]?.keyframeId).toBe('source:abc:position:24');
+    expect(onCommand.mock.calls[0]?.[1]).toEqual({ tool: 'Forge timeline', button: 'Add at playhead' });
   });
 
   test('keeps an empty XYZ channel unavailable until the exact native starting vector is present', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     render(
       <TemplateLayerTimeline
         node={node({ keyframes: [] })}
@@ -119,7 +120,7 @@ describe('TemplateLayerTimeline', () => {
   });
 
   test('moves the selected key one native frame and selects adjacent keys for scrubbing', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     const onPlayheadChange = mock((_seconds: number) => {});
     render(
       <TemplateLayerTimeline node={node()} durationSec={4} compositionFrameRate={24} playheadSec={0}
@@ -133,10 +134,11 @@ describe('TemplateLayerTimeline', () => {
     expect(command.keyframes[1]).toMatchObject({ keyframeId: 'source:abc:position:24', timeSec: 1 });
     fireEvent.click(screen.getByRole('button', { name: 'Next keyframe' }));
     expect(onPlayheadChange).toHaveBeenCalledWith(1);
+    expect(onCommand.mock.calls.at(-1)?.[1]).toEqual({ tool: 'Forge timeline', button: 'Move keyframe one frame later' });
   });
 
   test('does not move a key onto another keyframe', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     const crowdedNode = node({ keyframes: [
       { keyframeId: 'source:abc:position:0', timeSec: 0, value: [10, 20, 7], inInterpolation: 'LINEAR', outInterpolation: 'LINEAR', inEase: [], outEase: [] },
       { keyframeId: 'source:abc:position:1', timeSec: 1 / 24, value: [11, 21, 7], inInterpolation: 'LINEAR', outInterpolation: 'LINEAR', inEase: [], outEase: [] },
@@ -151,7 +153,7 @@ describe('TemplateLayerTimeline', () => {
   });
 
   test('keeps typed keyframe time local until Enter commits and Escape restores without a command', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     render(
       <TemplateLayerTimeline node={node()} durationSec={4} compositionFrameRate={24} playheadSec={0}
         onPlayheadChange={() => {}} disabled={false} onCommand={onCommand} />,
@@ -178,6 +180,7 @@ describe('TemplateLayerTimeline', () => {
     if (command?.type !== 'layer.keyframes.replace') throw new Error('Expected a keyframe replacement command');
     expect(command.keyframes[0]).toMatchObject({ keyframeId: 'source:abc:position:0', timeSec: 0.5 });
     expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(onCommand.mock.calls[0]?.[1]).toEqual({ tool: 'Forge timeline', control: 'Keyframe time', shortcut: 'Enter' });
   });
 
   test('keeps the selected key editor in one compact, accessible control group', () => {
@@ -226,7 +229,7 @@ describe('TemplateLayerTimeline', () => {
   });
 
   test('previews a dragged key locally, restores on pointer cancel, and commits once on pointer up', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     render(
       <TemplateLayerTimeline node={node()} durationSec={4} compositionFrameRate={24} playheadSec={0}
         onPlayheadChange={() => {}} disabled={false} onCommand={onCommand} />,
@@ -250,10 +253,11 @@ describe('TemplateLayerTimeline', () => {
     expect(command.keyframes[0]?.keyframeId).toBe('source:abc:position:0');
     expect(command.keyframes[0]?.timeSec).toBeCloseTo(5 / 24, 8);
     expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(onCommand.mock.calls[0]?.[1]).toEqual({ tool: 'Forge timeline', gesture: 'Move keyframe' });
   });
 
   test('creates the first vector key from the exact native base value, preserving Z', () => {
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     render(
       <TemplateLayerTimeline
         node={node({ keyframes: [], baseValue: [12, 34, 56] })}
@@ -276,7 +280,7 @@ describe('TemplateLayerTimeline', () => {
       { keyframeId: 'source:abc:position:0', timeSec: 0, value: [10, 20, 7], inInterpolation: 'LINEAR', outInterpolation: 'BEZIER', inEase: [], outEase: [] },
       { keyframeId: 'source:abc:position:24', timeSec: 1, value: [34, 44, 7], inInterpolation: 'LINEAR', outInterpolation: 'LINEAR', inEase: [], outEase: [] },
     ] });
-    const onCommand = mock((_command: TemplateAuthoringCommand) => {});
+    const onCommand = mock((_command: TemplateAuthoringCommand, _origin?: TemplateOperationOrigin) => {});
     render(
       <TemplateLayerTimeline
         node={bezierNode}
@@ -296,6 +300,7 @@ describe('TemplateLayerTimeline', () => {
     if (command?.type !== 'layer.keyframes.replace') throw new Error('Expected a keyframe replacement command');
     expect(command.keyframes[0]?.outInterpolation).toBe('BEZIER');
     expect(command.keyframes[0]?.outEase).toEqual([{ speed: 12, influence: 33.333 }]);
+    expect(onCommand.mock.calls[0]?.[1]).toEqual({ tool: 'Forge timeline', control: 'out Path ease speed' });
   });
 
   test('keeps incoming and outgoing Bezier controls side by side without hiding precision fields', () => {

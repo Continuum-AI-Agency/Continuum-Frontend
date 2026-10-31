@@ -6,6 +6,10 @@ const object = z.record(z.string(), z.unknown());
 export const templateOperationOriginSchema = z.object({
   button: z.string().max(200).optional(),
   shortcut: z.string().max(200).optional(),
+  /** Actual input label or control identity reported by the client; omit unknown labels. */
+  control: z.string().min(1).max(200).optional(),
+  /** The actual gesture, such as a canvas drag; this is not an authenticated identity. */
+  gesture: z.string().min(1).max(200).optional(),
   tool: z.string().max(200).optional(),
   model: z.string().max(200).optional(),
 }).strict();

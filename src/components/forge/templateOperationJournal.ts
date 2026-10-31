@@ -7,6 +7,7 @@ export type ForgeDraftAction = {
   affectedObjects?: string[];
   causedBy?: string[];
   origin?: TemplateOperationInput['origin'];
+  outcome?: TemplateOperationInput['outcome'];
   evidence?: TemplateOperationInput['evidence'];
 };
 
@@ -99,7 +100,7 @@ export class TemplateOperationJournal {
           const causedBy = [...new Set([...(action.causedBy ?? []), ...(prior ? [prior] : [])])].slice(-100);
           state.events.push({
             id: captured.id, workingCopyId: state.workingCopyId, sequence: ++state.sequence,
-            command: action.command, baseRevisionId: this.options.baseRevisionId ?? null, channel: 'forge', outcome: 'succeeded',
+            command: action.command, baseRevisionId: this.options.baseRevisionId ?? null, channel: 'forge', outcome: action.outcome ?? 'succeeded',
             affectedObjects: action.affectedObjects ?? [], causedBy, evidence: action.evidence ?? 'recorded',
             changes: { ...action.changes, baseVersionId: this.options.scope.baseVersionId,
               ...(this.options.scope.workingCopyId ? { authoringWorkingCopyId: this.options.scope.workingCopyId } : {}),
@@ -142,7 +143,7 @@ export class TemplateOperationJournal {
           state.outbox = null;
         });
       }
-    })().finally(() => { this.sending = null; });
+    })().finally(() => { this.sending = null; }).then(() => { this.options.onSaved?.(); });
     return this.sending;
   }
 
