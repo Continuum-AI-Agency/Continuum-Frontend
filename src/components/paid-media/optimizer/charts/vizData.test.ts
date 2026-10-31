@@ -455,6 +455,38 @@ describe('pacingSnapshot — source', () => {
     });
     expect(placeholder.estimated).toBe(true);
   });
+
+  // B1-vizdata-pacing-status: with no declared flight the engine still writes a row —
+  // `source: 'observed'`, `pacingRatio: 1`, `status: 'on_track'` — and that row means there was
+  // no plan to be on or off (heroModel.pacingVerdict reads it the same way). `estimated` already
+  // says so; the status must not contradict it with a verdict.
+  it('gives no verdict for a placeholder-source row, whatever ratio the fallback carried', () => {
+    const fallback = pacingSnapshot({
+      source: 'observed',
+      pacingRatio: 1,
+      idealCumulative: 0,
+      periodBudget: 1000,
+      actualSpendToDate: 300,
+    });
+    expect(fallback.estimated).toBe(true);
+    expect(fallback.status).toBe('unknown');
+    expect(fallback.ratio).toBeNull();
+    // The gauge share is arithmetic on the budget, not a verdict: it stays.
+    expect(fallback.pctSpent).toBeCloseTo(30);
+  });
+
+  it('keeps the verdict of a row measured against a real flight', () => {
+    const measured = pacingSnapshot({
+      source: 'pacing',
+      pacingRatio: 1.3,
+      idealCumulative: 500,
+      periodBudget: 1000,
+      actualSpendToDate: 650,
+    });
+    expect(measured.estimated).toBe(false);
+    expect(measured.status).toBe('overpacing');
+    expect(measured.ratio).toBeCloseTo(1.3);
+  });
 });
 
 describe('summarizeTimelineEvents', () => {
