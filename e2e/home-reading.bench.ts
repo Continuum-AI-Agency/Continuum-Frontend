@@ -60,14 +60,18 @@ type AssetRow = {
 };
 type BookRow = { brand_id: string; business: unknown; headline: unknown };
 
-async function all<T>(schema: string, table: string, columns: string): Promise<T[]> {
+/** Every row of a table, 1,000 at a time. `activeOnly` keeps the rows whose `active` is true. */
+async function all<T>(
+  schema: string,
+  table: string,
+  columns: string,
+  activeOnly = false,
+): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await admin
-      .schema(schema)
-      .from(table)
-      .select(columns)
-      .range(from, from + 999);
+    let query = admin.schema(schema).from(table).select(columns);
+    if (activeOnly) query = query.eq('active', true);
+    const { data, error } = await query.range(from, from + 999);
     if (error) throw new Error(`${schema}.${table}: ${error.message}`);
     rows.push(...((data ?? []) as T[]));
     if ((data ?? []).length < 1000) return rows;
@@ -122,10 +126,12 @@ type Read = {
 async function main() {
   const [brands, assets, books, profiles] = await recorder.step('read every brand', () =>
     Promise.all([
+      // Only the brands a member can open: a soft-deleted brand (active=false) has no Home.
       all<BrandRow>(
         'brand_profiles',
         'brand_profiles',
         'id, brand_name, description, approval_chain_required',
+        true,
       ),
       all<AssetRow>(
         'brand_profiles',
@@ -188,6 +194,21 @@ async function main() {
       reading,
     };
   });
+  // PP-DT-E-home-reading-bench-counts-deleted (deep test 2026-10-31): the bench read every
+  // brand_profiles row, soft-deleted ones included, so its "setup" brands could be brands no
+  // member can open. It reads exactly the active ones.
+  const { count: openable, error: countError } = await admin
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('active', true);
+  if (countError) throw new Error(`brand_profiles active count: ${countError.message}`);
+  recorder.record(
+    'reads exactly the brands a member can open (active)',
+    reads.length === openable ? 'PASS' : 'FAIL',
+    `${reads.length} read, ${openable} active`,
+  );
+
   const connected = reads.filter((read) => read.accounts.ads + read.accounts.organic > 0);
   recorder.record(
     'every brand gets a reading',
