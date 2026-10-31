@@ -305,7 +305,7 @@ export function GoogleAdsTabView({
       return (
         <EmptyState
           body={state.message}
-          connect={false}
+          connect={state.reconnect === true}
           testId="google-empty-error"
           title={
             state.account

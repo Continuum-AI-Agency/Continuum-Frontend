@@ -38,7 +38,13 @@ export type GoogleAdsOverviewState =
   | { status: 'loading' }
   | { status: 'no-connection' }
   | { status: 'no-grant' }
-  | { status: 'error'; account: AdAccount | null; message: string }
+  | {
+      status: 'error';
+      account: AdAccount | null;
+      message: string;
+      /** Google refused the login (revoked or expired): the fix is to reconnect Google. */
+      reconnect?: boolean;
+    }
   | {
       status: 'ready';
       account: AdAccount;
@@ -156,7 +162,8 @@ export function useGoogleAdsOverview(
   };
   if (overview.isError) {
     const message = overview.error instanceof Error ? overview.error.message : 'Unknown error';
-    return { status: 'error', account, message };
+    const reconnect = (overview.error as { code?: unknown } | null)?.code === 'TOKEN_EXPIRED';
+    return { status: 'error', account, message, ...(reconnect ? { reconnect } : {}) };
   }
   if (!overview.data) return { status: 'loading' };
   return { status: 'ready', account, overview: overview.data, resultBucket };

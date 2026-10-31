@@ -9,25 +9,43 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 // campaign-performance-loader.ts does this for its own typed error envelope;
 // this is the untyped version for edge functions that just return { error }.
 export async function readEdgeErrorMessage(error: unknown, fallback: string): Promise<string> {
+  return (await readEdgeError(error, fallback)).message;
+}
+
+/**
+ * The message AND the typed `errorCode` an edge function wrote (`IntegrationErrorCode`), when it
+ * wrote one: a refused Google login answers TOKEN_EXPIRED so the page can offer to reconnect
+ * instead of printing a dead end (PP-DT-B-google-error-states-conflated).
+ */
+export async function readEdgeError(
+  error: unknown,
+  fallback: string,
+): Promise<{ message: string; code: string | null }> {
   if (!(error instanceof FunctionsHttpError)) {
-    return error instanceof Error && error.message ? error.message : fallback;
+    return {
+      message: error instanceof Error && error.message ? error.message : fallback,
+      code: null,
+    };
   }
 
   const context = error.context as unknown;
-  if (!context || typeof context !== 'object') return error.message || fallback;
+  if (!context || typeof context !== 'object')
+    return { message: error.message || fallback, code: null };
 
   const json = Reflect.get(context, 'json');
-  if (typeof json !== 'function') return error.message || fallback;
+  if (typeof json !== 'function') return { message: error.message || fallback, code: null };
 
   try {
     const body = await json.call(context);
     if (body && typeof body === 'object') {
       const message = Reflect.get(body, 'error');
-      if (typeof message === 'string' && message.trim()) return message;
+      const code = Reflect.get(body, 'errorCode');
+      if (typeof message === 'string' && message.trim())
+        return { message, code: typeof code === 'string' ? code : null };
     }
   } catch {
     // Body already consumed or not JSON: fall through to the generic message.
   }
 
-  return error.message || fallback;
+  return { message: error.message || fallback, code: null };
 }

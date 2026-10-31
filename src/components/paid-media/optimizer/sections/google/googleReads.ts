@@ -26,7 +26,7 @@ import {
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
+import { readEdgeError } from '@/lib/supabase/edgeErrorMessage';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 /** Every spending campaign of any account this product serves fits in one page; also the
@@ -50,9 +50,21 @@ export async function invokeGoogleMetrics(body: Record<string, unknown>): Promis
     { body: { platform: 'google-ads', ...body } },
   );
   if (error) {
-    throw new Error(await readEdgeErrorMessage(error, 'The Google Ads read did not answer.'));
+    const { message, code } = await readEdgeError(error, 'The Google Ads read did not answer.');
+    throw new GoogleReadError(message, code);
   }
   return data;
+}
+
+/** A failed Google read, with the edge's typed code (`TOKEN_EXPIRED`: Google refused the login). */
+export class GoogleReadError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+    this.name = 'GoogleReadError';
+  }
 }
 
 export const rangeOf = (window: GoogleReadWindow) => ({
