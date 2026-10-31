@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { templateVersionDiffResponseSchema, templateVersionHistoryResponseSchema, templateVersionResultSchema } from '@continuum/contracts';
+import { templateVersionDiffResponseSchema, templateVersionHistoryResponseSchema, templateVersionResultSchema, type TemplateOperation } from '@continuum/contracts';
 import { createChunks, stringToBase64URL } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright';
@@ -53,7 +53,11 @@ let page: Page | undefined;
 let authorization = '';
 let stopped = false;
 const unexpectedHosts = new Set<string>();
-const observed = { workingCopies: [] as string[], restarted: false, offlineEditRecovered: false };
+const observed = { workingCopies: [] as string[], restarted: false, offlineEditRecovered: false,
+  valueTransitions: [] as Array<{ action: string; before: number; after: number }>,
+  failedTransition: null as { action: string; before: number; expected: number; actual: number } | null,
+  historyTraversals: [] as Array<{ pages: number; events: number }>,
+  retainedOperations: [] as TemplateOperation[] };
 const describe = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
 const numeric = async (field: Locator) => Number((await field.inputValue()).replaceAll(',', ''));
 const hundredth = (value: number) => Math.round(value * 100) / 100;
@@ -84,6 +88,41 @@ async function api(action: string, body?: unknown) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(60_000),
   });
   return { status: response.status, body: await response.json() as unknown };
+}
+async function familyHistory(limit = '500') {
+  const events: TemplateOperation[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    assert(++pages <= 100, 'Family history exceeded the bounded 50,000-event traversal.');
+    const query = new URLSearchParams({ brandId: fixture.brandId, limit, ...(cursor ? { cursor } : {}) });
+    const history = await api(`history?${query}`);
+    assert.equal(history.status, 200);
+    const result = templateVersionHistoryResponseSchema.parse(history.body);
+    events.push(...result.items);
+    cursor = result.nextCursor ?? undefined;
+    if (cursor) {
+      assert(!cursors.has(cursor), 'History returned a repeated opaque cursor.');
+      cursors.add(cursor);
+    }
+  } while (cursor);
+  assert.equal(new Set(events.map((event) => event.id)).size, events.length, 'History pages must not duplicate events.');
+  observed.historyTraversals.push({ pages, events: events.length });
+  return events;
+}
+async function observeTransition(field: Locator, action: string, expected: number, perform: () => Promise<void>) {
+  const before = await numeric(field);
+  await perform();
+  let after: number;
+  try {
+    after = await until(() => numeric(field), (value) => value === expected, `observed ${action} Position X transition`);
+  } catch (cause) {
+    observed.failedTransition = { action, before, expected, actual: await numeric(field) };
+    throw cause;
+  }
+  assert.notEqual(before, after, `${action} must change the actual editor value.`);
+  observed.valueTransitions.push({ action, before, after });
 }
 async function sourcePins() {
   const [asset, source] = await Promise.all([
@@ -144,11 +183,12 @@ async function localDraftHas(workingCopyId: string, value: number) {
     opening.onerror = () => reject(opening.error);
     opening.onsuccess = () => {
       const db = opening.result;
-      const request = db.transaction('drafts', 'readonly').objectStore('drafts').getAll();
+      const transaction = db.transaction('drafts', 'readonly');
+      const request = transaction.objectStore('drafts').getAll();
       request.onsuccess = () => resolve(request.result.some((row: { scope?: { workingCopyId?: string }; commands?: unknown }) =>
         row.scope?.workingCopyId === workingCopyId && JSON.stringify(row.commands).includes(String(value))));
       request.onerror = () => reject(request.error);
-      request.transaction.oncomplete = () => db.close();
+      transaction.oncomplete = () => db.close();
     };
   }), { workingCopyId, value }, { timeout: 30_000 });
 }
@@ -192,7 +232,9 @@ try {
   }
   fixture.branches = branches;
   rec.record('Authenticated branch creation preserves shared immutable source pins', 'PASS');
-  const denied = await api(`authoring/working-copies?brandId=ffffffff-ffff-4fff-8fff-ffffffffffff`);
+  const accessible = await api(`authoring-working-copies?brandId=${fixture.brandId}`);
+  assert.equal(accessible.status, 200, 'The same-brand working-copy route must exist and admit its authenticated owner.');
+  const denied = await api('authoring-working-copies?brandId=ffffffff-ffff-4fff-8fff-ffffffffffff');
   assert([403, 404].includes(denied.status), `Wrong-brand request must refuse, got ${denied.status}`);
   rec.record('Actual Backend refuses access to another brand', 'PASS');
 
@@ -222,11 +264,25 @@ try {
   page = await context.newPage();
   await page.goto(`${appUrl}/forge?template=${fixture.sourceAssetId}`, { waitUntil: 'domcontentloaded', timeout: 180_000 });
   const first = await openBranch(0);
+  observed.workingCopies = [first.workingCopyId];
   const baseX = await numeric(first.field);
   assert(Number.isFinite(baseX));
   const valueA = hundredth(baseX + 17.25);
-  await first.field.fill(String(valueA)); await first.field.press('Tab');
+  await observeTransition(first.field, 'Position X control', valueA, async () => {
+    await first.field.fill(String(valueA)); await first.field.press('Tab');
+  });
+  const undo = page.getByRole('button', { name: 'Undo layer change', exact: true });
+  const redo = page.getByRole('button', { name: 'Redo layer change', exact: true });
+  await observeTransition(first.field, 'Undo button', baseX, () => undo.click());
+  await observeTransition(first.field, 'Redo button', valueA, () => redo.click());
+  // Focus a real button so browser-native input undo cannot impersonate the editor shortcut.
+  await undo.focus();
+  await observeTransition(first.field, 'Control+Z shortcut', baseX, () => page!.keyboard.press('Control+z'));
+  await redo.focus();
+  await observeTransition(first.field, 'Control+Shift+Z shortcut', valueA, () => page!.keyboard.press('Control+Shift+z'));
+  rec.record('Actual Position X control, Undo/Redo buttons and Control+Z/Control+Shift+Z change the observed editor value', 'PASS');
   const second = await openBranch(1);
+  observed.workingCopies.push(second.workingCopyId);
   assert.notEqual(second.workingCopyId, first.workingCopyId);
   assert.equal(await numeric(second.field), baseX, 'Branch B must not inherit A private edits.');
   const valueB = hundredth(baseX + 31.5);
@@ -235,7 +291,6 @@ try {
   const returned = await openBranch(0);
   assert.equal(returned.workingCopyId, first.workingCopyId);
   assert.equal(await numeric(returned.field), valueA);
-  observed.workingCopies = [first.workingCopyId, second.workingCopyId];
   rec.record('Real editor parks and restores independent dirty variants sharing source bytes', 'PASS');
 
   await context.setOffline(true);
@@ -275,19 +330,60 @@ try {
   assert.equal(retained.workingCopyId, first.workingCopyId);
   assert.equal(await numeric(retained.field), offlineValue);
   rec.record('Actual restoration appends once, rejects changed replay/stale heads, and preserves dirty copy at its captured base', 'PASS');
-  const events = await until(async () => {
-    const history = await api(`history?${new URLSearchParams({ brandId: fixture.brandId, limit: '500' })}`);
-    assert.equal(history.status, 200);
-    return templateVersionHistoryResponseSchema.parse(history.body).items;
-  }, (events) => [first.workingCopyId, second.workingCopyId].every((id) =>
-    events.some((event) => event.changes.authoringWorkingCopyId === id)), 'permanent authenticated operation delivery');
+  const events = await until(familyHistory, (events) =>
+    [first.workingCopyId, second.workingCopyId].every((id) => events.some((event) => event.changes.authoringWorkingCopyId === id)) &&
+    events.some((event) => event.changes.authoringWorkingCopyId === first.workingCopyId && event.origin?.shortcut === 'Control+Shift+Z'),
+  'permanent authenticated operation delivery across opaque family-history pages');
   const actions = events.filter((event) => observed.workingCopies.includes(String(event.changes.authoringWorkingCopyId)));
+  observed.retainedOperations = actions;
+  const pagedEvents = await familyHistory('100');
+  for (const event of actions) assert.deepEqual(pagedEvents.find((candidate) => candidate.id === event.id), event,
+    'Opaque-cursor traversal must retain every observed operation and its revision associations.');
   assert(actions.every((event) => event.principalId === session.user.id));
   assert(actions.some((event) => event.affectedObjects.length > 0 && event.evidence === 'recorded'));
-  const streams = new Map<string, number[]>();
-  for (const event of actions) streams.set(event.workingCopyId, [...(streams.get(event.workingCopyId) ?? []), event.sequence]);
-  for (const sequence of streams.values()) assert(sequence.every((value, index) => index === 0 || value > sequence[index - 1]!));
-  rec.record('Permanent operation evidence retains authenticated owner, affected objects and per-stream order after restart', 'PASS');
+  const streams = new Map<string, TemplateOperation[]>();
+  for (const event of actions) streams.set(event.workingCopyId, [...(streams.get(event.workingCopyId) ?? []), event]);
+  for (const stream of streams.values()) for (let index = 1; index < stream.length; index++) {
+    assert(stream[index]!.sequence > stream[index - 1]!.sequence, 'Retained sequence must increase within its own stream.');
+    assert(stream[index]!.causedBy.includes(stream[index - 1]!.id), 'Retained stream must preserve its prior action link.');
+  }
+  const firstActions = actions.filter((event) => event.changes.authoringWorkingCopyId === first.workingCopyId);
+  const edited = firstActions.find((event) => {
+    const command = event.changes.command;
+    return event.origin?.control === 'Position X' && command !== null && typeof command === 'object' &&
+      'edit' in command && command.edit !== null && typeof command.edit === 'object' && 'x' in command.edit && command.edit.x === valueA;
+  });
+  assert(edited, 'Retained Position X action must contain the actual edited value.');
+  assert.deepEqual(edited.origin, { tool: 'Forge inspector', control: 'Position X' });
+  assert.deepEqual(edited.affectedObjects, [`aep:${fixture.layer.compId}:${fixture.layer.layerId}`]);
+  const replayActions = [
+    { command: 'forge_undo', origin: { tool: 'Forge web editor', button: 'Undo' } },
+    { command: 'forge_redo', origin: { tool: 'Forge web editor', button: 'Redo' } },
+    { command: 'forge_undo', origin: { tool: 'Forge web editor', shortcut: 'Control+Z' } },
+    { command: 'forge_redo', origin: { tool: 'Forge web editor', shortcut: 'Control+Shift+Z' } },
+  ].map((expected) => {
+    const event = firstActions.find((candidate) => candidate.command === expected.command &&
+      candidate.origin?.button === ('button' in expected.origin ? expected.origin.button : undefined) &&
+      candidate.origin?.shortcut === ('shortcut' in expected.origin ? expected.origin.shortcut : undefined));
+    assert(event, `Retained history must contain actual ${JSON.stringify(expected.origin)}.`);
+    assert.deepEqual(event.origin, expected.origin);
+    assert(event.causedBy.includes(edited.id), 'Undo/redo must retain its affected edit identity.');
+    return event;
+  });
+  const selected = [edited, ...replayActions];
+  for (const [index, event] of selected.entries()) {
+    assert.equal(event.workingCopyId, edited.workingCopyId);
+    assert.equal(event.baseRevisionId, fixture.branches[0]!.revisionId);
+    assert.equal(event.channel, 'forge'); assert.equal(event.outcome, 'succeeded'); assert.equal(event.evidence, 'recorded');
+    if (index > 0) assert(event.sequence > selected[index - 1]!.sequence);
+  }
+  assert.deepEqual(replayActions[0]!.changes.before, replayActions[1]!.changes.after);
+  assert.deepEqual(replayActions[0]!.changes.after, replayActions[1]!.changes.before);
+  assert.deepEqual(replayActions[0]!.changes.before, replayActions[2]!.changes.before);
+  assert.deepEqual(replayActions[0]!.changes.after, replayActions[2]!.changes.after);
+  assert.deepEqual(replayActions[1]!.changes.before, replayActions[3]!.changes.before);
+  assert.deepEqual(replayActions[1]!.changes.after, replayActions[3]!.changes.after);
+  rec.record('Authenticated retained history preserves exact control/button/shortcut origins, affected edit, causal links and increasing stream sequence after restart', 'PASS');
   assert.deepEqual(await sourcePins(), original);
   rec.record('Original source version and upload metadata remain unchanged', 'PASS');
 } catch (cause) {
@@ -306,8 +402,8 @@ try {
     });
   }
   writeFileSync(path.join(stage, 'working-copy-browser-observed.json'), `${JSON.stringify({ ...observed,
-    blockedExternalHosts: [...unexpectedHosts], gracefulPersistentBrowserRestart: true,
+    blockedExternalHosts: [...unexpectedHosts], gracefulPersistentBrowserRestart: observed.restarted,
     boundary: 'Real authenticated local editor/draft/restart checks; no native compile, render, release promotion or deployment.' }, null, 2)}\n`);
 }
-rec.note('Local application qualification only. Native compilation, release/render pins and hosted rollout are outside this bench.');
+rec.note('Local application qualification only. Client origin labels are not authenticated identity; causal/per-stream order is not exact global execution order. No fabricated history append. Native compilation, release/render pins, external historical reconstruction and hosted rollout are outside this bench.');
 rec.finish({ json: true });
