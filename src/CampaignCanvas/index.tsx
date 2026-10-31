@@ -134,25 +134,6 @@ const CampaignFlowCanvasPage = ({
       <ReactFlowProvider>
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
-          <CanvasJainaContext.Provider value={bridge.canvasJaina}>
-            <CampaignCreativeActionsProvider value={handleGenerateCreative}>
-              <CampaignCanvas />
-            </CampaignCreativeActionsProvider>
-          </CanvasJainaContext.Provider>
-          {view === 'lectura' ? (
-            <div
-              className="absolute inset-0 z-30 bg-background"
-              data-testid="canvas-page-read"
-              style={
-                barClearance === null
-                  ? undefined
-                  : ({ '--canvas-bar-clearance': `${barClearance}px` } as React.CSSProperties)
-              }
-            >
-              <StoreLectura size="page" />
-            </div>
-          ) : null}
-
           {/* The record this canvas is showing, and the one way forward from it. */}
           {/* A phone wraps the bar inside the screen; centring it there pushed Back to chat
               and the Map/Read switch off both edges. */}
@@ -187,6 +168,30 @@ const CampaignFlowCanvasPage = ({
             <div className="pointer-events-auto shrink-0 rounded-lg bg-background/90 shadow-sm backdrop-blur">
               <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
             </div>
+          </div>
+
+          {view === 'lectura' ? (
+            <div
+              className="absolute inset-0 z-30 bg-background"
+              data-testid="canvas-page-read"
+              style={
+                barClearance === null
+                  ? undefined
+                  : ({ '--canvas-bar-clearance': `${barClearance}px` } as React.CSSProperties)
+              }
+            >
+              <StoreLectura size="page" />
+            </div>
+          ) : null}
+
+          {/* The Map last in the DOM, so Tab reaches the bar before any node or edge; inert while
+              Read covers it, so a keyboard never wanders through what it cannot see. */}
+          <div className="h-full w-full" inert={view === 'lectura'}>
+            <CanvasJainaContext.Provider value={bridge.canvasJaina}>
+              <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                <CampaignCanvas />
+              </CampaignCreativeActionsProvider>
+            </CanvasJainaContext.Provider>
           </div>
 
           {/* Jaina Floating Chat */}
