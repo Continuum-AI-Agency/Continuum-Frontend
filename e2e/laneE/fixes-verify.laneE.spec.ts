@@ -9,7 +9,11 @@ import { identityFor, Observations, openAs, revokeAll, settle, shot } from './su
 //   · Scale on Google-only Pink and Tangassi: Performance + opens (no connect gate);
 //   · Scale on an ads-less brand with a Facebook Page: the gate asks to connect Meta Ads;
 //   · Canvas page: the bar fits a phone, never covers Read's budget band, comes first for Tab;
-//     an unknown ?scaffold= says the proposal is not on this brand.
+//     an unknown ?scaffold= says the proposal is not on this brand;
+//   · Home cards: every Health and Opportunities link takes a tap 11.5 px above and below its
+//     centre line (the 24 px floor); the platform switch moves with the arrow keys.
+// The last two checks were added after the base run of 2026-10-31; their unit anchors were red
+// on the base.
 
 const VIVO_OWNER = 'mercadotecniavivo@gmail.com';
 const RAMIRO_BENCH = 'ramibuisel@gmail.com';
@@ -71,7 +75,28 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         await shot(opened.page, `fix-${LABEL}-${name}`);
         const failedLoad = /Couldn't load (campaigns|ads) right now/.test(text);
         const connect = (text.match(/Connect a Meta ad account to rank/g) ?? []).length;
-        obs.add({ name, failedLoad, connect });
+        const taps = await opened.page.evaluate(() =>
+          Array.from(
+            document.querySelectorAll(
+              '[data-home-module="health"] li a, [data-home-module="opp"] li a',
+            ),
+          ).map((link) => {
+            link.scrollIntoView({ block: 'center' });
+            const line = link.getClientRects()[0] ?? link.getBoundingClientRect();
+            const x = line.x + Math.min(line.width / 2, 20);
+            const y = line.y + line.height / 2;
+            const takes = (probeY: number) => {
+              const hit = document.elementFromPoint(x, probeY);
+              return Boolean(hit && (hit === link || link.contains(hit)));
+            };
+            return {
+              text: (link.textContent ?? '').slice(0, 40),
+              height: Math.round(line.height),
+              pad: takes(y - 11.5) && takes(y + 11.5),
+            };
+          }),
+        );
+        obs.add({ name, failedLoad, connect, taps });
         recorder.record(
           `${name}: Performance + and Creative + never read as a failed load`,
           failedLoad ? 'FAIL' : 'PASS',
@@ -80,6 +105,11 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
           `${name}: both say to connect a Meta ad account`,
           connect === 2 ? 'PASS' : 'FAIL',
           `${connect} connect lines`,
+        );
+        recorder.record(
+          `${name}: every Health and Opportunities link takes a tap across 24 px`,
+          taps.length === 0 ? 'WARN' : taps.every((tap) => tap.pad) ? 'PASS' : 'FAIL',
+          taps.map((tap) => `${tap.text} ${tap.height}px pad=${tap.pad}`).join(' | '),
         );
       } finally {
         await opened.close();
@@ -121,6 +151,11 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         let metaConnected: string | null = null;
         let tablistAria = '';
         let landingTab: string | null = null;
+        let arrow: { from: string | null; focused: string | null; selected: string | null } = {
+          from: null,
+          focused: null,
+          selected: null,
+        };
         if (tabs) {
           await opened.page.waitForTimeout(2500);
           landingTab = await opened.page
@@ -144,6 +179,24 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
           recommendOnly = await opened.page
             .locator('[data-testid="account-finding-recommend-only"]')
             .count();
+          const picked = opened.page
+            .locator('[data-testid^="platform-tab-"][aria-selected="true"]')
+            .first();
+          const from = await picked.getAttribute('data-tab');
+          await picked.focus();
+          await opened.page.keyboard.press('ArrowRight');
+          await opened.page.waitForTimeout(800);
+          arrow = await opened.page.evaluate(
+            (start) => ({
+              from: start,
+              focused: document.activeElement?.getAttribute('data-tab') ?? null,
+              selected:
+                document
+                  .querySelector('[data-testid^="platform-tab-"][aria-selected="true"]')
+                  ?.getAttribute('data-tab') ?? null,
+            }),
+            from,
+          );
         }
         await shot(opened.page, `fix-${LABEL}-${name}`);
         obs.add({
@@ -155,6 +208,7 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
           metaConnected,
           tablistAria,
           landingTab,
+          arrow,
         });
         if (tabs) {
           recorder.record(
@@ -174,6 +228,11 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
               ? 'PASS'
               : 'FAIL',
             tablistAria.replace(/\n/g, ' ').slice(0, 200),
+          );
+          recorder.record(
+            `${name}: ArrowRight moves the switch to the next platform`,
+            arrow.selected !== arrow.from && arrow.focused === arrow.selected ? 'PASS' : 'FAIL',
+            JSON.stringify(arrow),
           );
         }
         recorder.record(
