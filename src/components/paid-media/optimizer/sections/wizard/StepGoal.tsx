@@ -39,6 +39,7 @@ import {
   DEFAULT_SCALE_GROWTH_PCT,
   effectiveTargetMetric,
   MODE_COPY,
+  parseTypedAmount,
   type WizardDraft,
 } from './wizardModel';
 
@@ -245,9 +246,9 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
           <GoalCostCapControl
             busy={disabled}
             checked={draft.goalAsPlatformCostCap}
-            goal={Number.parseFloat(draft.target)}
+            goal={parseTypedAmount(draft.target) ?? Number.NaN}
             id="wizard-goal-cost-cap"
-            maxChangePctPerCycle={Number.parseFloat(draft.maxChangePct) / 100}
+            maxChangePctPerCycle={(parseTypedAmount(draft.maxChangePct) ?? Number.NaN) / 100}
             onCheckedChange={(next) => onChange({ goalAsPlatformCostCap: next })}
             targetMetric={targetMetric}
           />
