@@ -82,7 +82,9 @@ describe('Home cards the reading adds', () => {
   // PP-DT-E-home-cards-tap-targets (deep test 2026-10-31, lane E): these one-line links painted
   // 14–16 px tall with no hit pad, under the 24 px AA floor (WCAG 2.2 2.5.8) at every width. The
   // pad is the shared `hit-area` utility; the list caps it at the gap the rows share, so two
-  // rows' pads never meet.
+  // rows' pads never meet. A capped pad reaches only the link's box plus that gap, so the row
+  // pitch must reach 24 px: a 15 px link over gap-2 (7.25 px) stopped at 22 px in the browser.
+  // gap-3 plus py-0.5 on the link clears it on the 14.5 px root and on the 13 px one.
   it("gives every issue and opportunity link the 24 px hit pad, kept inside the rows' gap", () => {
     const { getAllByRole } = render(
       <>
@@ -103,8 +105,13 @@ describe('Home cards the reading adds', () => {
     const rowLinks = getAllByRole('link').filter((link) => link.closest('li'));
     expect(rowLinks).toHaveLength(4);
     for (const link of rowLinks) {
-      expect(link.className.split(/\s+/)).toContain('hit-area');
-      expect(link.closest('ul')?.className).toContain('hit-area-column');
+      const classes = link.className.split(/\s+/);
+      expect(classes).toContain('hit-area');
+      expect(classes).toContain('py-0.5');
+      const list = (link.closest('ul')?.className ?? '').split(/\s+/);
+      expect(list).toContain('hit-area-column');
+      expect(list).toContain('gap-3');
+      expect(list).toContain('[--hit-area-gap:calc(var(--spacing)*3)]');
     }
   });
 });

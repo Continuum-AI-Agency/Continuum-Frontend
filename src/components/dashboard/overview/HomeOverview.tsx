@@ -181,9 +181,12 @@ export function CreativeSlot({
 
 const RESULT_MODULES = new Set<HomeModuleId>(['performance', 'organic', 'creative']);
 
-/** A column of one-line text links. Each link's `hit-area` pad reaches the 24 px floor, and the
- *  column caps that growth at the gap the rows share (gap-2), so two rows' pads never meet. */
-const ROW_LINK_LIST = 'hit-area-column flex flex-col gap-2 [--hit-area-gap:calc(var(--spacing)*2)]';
+/** A column of one-line text links. Each link's `hit-area` pad grows toward the 24 px floor and
+ *  the column caps that growth at the gap the rows share, so two rows' pads never meet. A capped
+ *  pad reaches only the link's box plus the gap, so the row pitch has to reach 24 px: gap-3 and
+ *  each link's py-0.5 (ROW_LINK) clear it on the 14.5 px root and on the 13 px one. */
+const ROW_LINK_LIST = 'hit-area-column flex flex-col gap-3 [--hit-area-gap:calc(var(--spacing)*3)]';
+const ROW_LINK = 'hit-area py-0.5 underline-offset-2 hover:underline';
 
 const portfolioHref = (portfolioId: string) =>
   `/scale?tab=performance&optimizerView=portfolios&portfolio=${encodeURIComponent(portfolioId)}`;
@@ -201,7 +204,7 @@ export function HealthCard({ issues }: { issues: HomeIssue[] }) {
           <li key={`${issue.portfolioId}-${issue.title}`} className="text-xs">
             <Link
               href={portfolioHref(issue.portfolioId)}
-              className="hit-area text-destructive-ink underline-offset-2 hover:underline"
+              className={cn(ROW_LINK, 'text-destructive-ink')}
             >
               {issue.title}
             </Link>
@@ -235,7 +238,7 @@ export function OpportunitiesCard({ opportunities }: { opportunities: HomeOpport
                     ? portfolioHref(opportunity.portfolioId)
                     : '/scale?tab=performance&optimizerView=create'
                 }
-                className="hit-area min-w-0 underline-offset-2 hover:underline"
+                className={cn(ROW_LINK, 'min-w-0')}
               >
                 {opportunity.title}
               </Link>
