@@ -95,21 +95,48 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
       const opened = await openAs(browser, ramiro, brand.id, { width: 1440, height: 900 }, 'light');
       try {
         await opened.page.goto('/scale?tab=performance', { waitUntil: 'domcontentloaded' });
-        const tabs = await opened.page
-          .locator('[data-testid="platform-tabs"]')
+        // The Optimizer opens either on its tabs or, with no portfolio yet, on its onboarding —
+        // both are Performance +; only the connect gate is not.
+        await opened.page
+          .locator(
+            '[data-testid="platform-tabs"], section[aria-label="Paid setup diagnostics"], h1:has-text("Put ad sets under the Optimizer"), h2:has-text("Put ad sets under the Optimizer")',
+          )
           .first()
           .waitFor({ timeout: 90_000 })
-          .then(
-            () => true,
-            () => false,
-          );
+          .catch(() => undefined);
         await settle(opened.page, 45_000);
+        const tabs = (await opened.page.locator('[data-testid="platform-tabs"]').count()) > 0;
+        const onboarding = /Put ad sets under the Optimizer/.test(
+          await opened.page
+            .locator('main')
+            .first()
+            .innerText()
+            .catch(() => ''),
+        );
         const gate = await opened.page
           .locator('section[aria-label="Paid setup diagnostics"]')
           .count();
         let findings = 0;
         let recommendOnly = 0;
+        let metaConnected: string | null = null;
+        let tablistAria = '';
+        let landingTab: string | null = null;
         if (tabs) {
+          await opened.page.waitForTimeout(2500);
+          landingTab = await opened.page
+            .locator('[data-testid^="platform-tab-"][aria-selected="true"]')
+            .first()
+            .getAttribute('data-tab')
+            .catch(() => null);
+          metaConnected = await opened.page
+            .locator('[data-testid="platform-tab-meta"]')
+            .first()
+            .getAttribute('data-connected');
+          tablistAria = await opened.page
+            .locator('[data-testid="platform-tabs"]')
+            .first()
+            .ariaSnapshot()
+            .catch(() => '');
           const google = opened.page.locator('[data-testid="platform-tab-google_ads"]').first();
           if ((await google.getAttribute('aria-selected')) !== 'true') await google.click();
           await settle(opened.page, 60_000);
@@ -119,11 +146,40 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
             .count();
         }
         await shot(opened.page, `fix-${LABEL}-${name}`);
-        obs.add({ name, tabs, gate, findings, recommendOnly });
+        obs.add({
+          name,
+          tabs,
+          gate,
+          findings,
+          recommendOnly,
+          metaConnected,
+          tablistAria,
+          landingTab,
+        });
+        if (tabs) {
+          recorder.record(
+            `${name}: lands on the Google tab, not an empty All`,
+            landingTab === 'google_ads' ? 'PASS' : 'FAIL',
+            `landed on ${landingTab}`,
+          );
+          recorder.record(
+            `${name}: Meta reads not connected on a Google-only brand`,
+            metaConnected === 'false' ? 'PASS' : 'FAIL',
+            `data-connected=${metaConnected}`,
+          );
+          recorder.record(
+            `${name}: each platform tab is named once`,
+            /tab "Meta(\s?·\s?Connect)?"/.test(tablistAria) &&
+              !/Meta Meta|Google Ads Google/.test(tablistAria)
+              ? 'PASS'
+              : 'FAIL',
+            tablistAria.replace(/\n/g, ' ').slice(0, 200),
+          );
+        }
         recorder.record(
           `${name}: Performance + opens, no connect gate`,
-          tabs && gate === 0 ? 'PASS' : 'FAIL',
-          `tabs=${tabs} gate=${gate}`,
+          (tabs || onboarding) && gate === 0 ? 'PASS' : 'FAIL',
+          `tabs=${tabs} onboarding=${onboarding} gate=${gate}`,
         );
         if (brand.key === 'pink') {
           recorder.record(
