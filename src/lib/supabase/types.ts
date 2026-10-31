@@ -21712,6 +21712,8 @@ export type Database = {
           user_id: string
           variant_name: string | null
           verification: Json
+          working_copy_id: string | null
+          working_copy_scope: string | null
           workspace_seed_artifact_id: string | null
         }
         Insert: {
@@ -21748,6 +21750,8 @@ export type Database = {
           user_id: string
           variant_name?: string | null
           verification: Json
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
           workspace_seed_artifact_id?: string | null
         }
         Update: {
@@ -21784,6 +21788,8 @@ export type Database = {
           user_id?: string
           variant_name?: string | null
           verification?: Json
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
           workspace_seed_artifact_id?: string | null
         }
         Relationships: [
@@ -21796,7 +21802,13 @@ export type Database = {
           },
           {
             foreignKeyName: "template_authoring_artifacts_draft_fk"
-            columns: ["brand_id", "asset_id", "base_version_id", "user_id"]
+            columns: [
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
             isOneToOne: false
             referencedRelation: "template_authoring_drafts"
             referencedColumns: [
@@ -21804,6 +21816,7 @@ export type Database = {
               "asset_id",
               "base_version_id",
               "user_id",
+              "working_copy_scope",
             ]
           },
           {
@@ -21812,6 +21825,25 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "asset_versions"
             referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_artifacts_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
           },
           {
             foreignKeyName: "template_authoring_workspace_seed_reference_fk"
@@ -21825,6 +21857,7 @@ export type Database = {
       template_authoring_draft_attempts: {
         Row: {
           asset_id: string
+          authoring_working_copy_id: string | null
           base_version_id: string
           brand_id: string
           commands: Json
@@ -21842,6 +21875,7 @@ export type Database = {
         }
         Insert: {
           asset_id: string
+          authoring_working_copy_id?: string | null
           base_version_id: string
           brand_id: string
           commands: Json
@@ -21859,6 +21893,7 @@ export type Database = {
         }
         Update: {
           asset_id?: string
+          authoring_working_copy_id?: string | null
           base_version_id?: string
           brand_id?: string
           commands?: Json
@@ -21875,6 +21910,25 @@ export type Database = {
           working_copy_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "template_authoring_attempts_working_copy_fk"
+            columns: [
+              "authoring_working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
           {
             foreignKeyName: "template_authoring_draft_attempts_template_id_brand_id_fkey"
             columns: ["template_id", "brand_id"]
@@ -21961,6 +22015,8 @@ export type Database = {
           source_checksum: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string
         }
         Insert: {
           asset_id: string
@@ -21973,6 +22029,8 @@ export type Database = {
           source_checksum: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string
         }
         Update: {
           asset_id?: string
@@ -21985,6 +22043,8 @@ export type Database = {
           source_checksum?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string
         }
         Relationships: [
           {
@@ -22007,6 +22067,25 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "asset_versions"
             referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_drafts_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
           },
         ]
       }
@@ -22031,6 +22110,8 @@ export type Database = {
           state: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string | null
         }
         Insert: {
           artifact_id: string
@@ -22052,6 +22133,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Update: {
           artifact_id?: string
@@ -22073,6 +22156,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Relationships: [
           {
@@ -22092,6 +22177,46 @@ export type Database = {
               "asset_id",
               "base_version_id",
               "user_id",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_native_renders_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_native_working_artifact_fk"
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_artifacts"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
             ]
           },
         ]
@@ -22115,6 +22240,8 @@ export type Database = {
           state: string
           updated_at: string
           user_id: string
+          working_copy_id: string | null
+          working_copy_scope: string | null
         }
         Insert: {
           artifact_id: string
@@ -22134,6 +22261,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Update: {
           artifact_id?: string
@@ -22153,6 +22282,8 @@ export type Database = {
           state?: string
           updated_at?: string
           user_id?: string
+          working_copy_id?: string | null
+          working_copy_scope?: string | null
         }
         Relationships: [
           {
@@ -22173,6 +22304,130 @@ export type Database = {
               "base_version_id",
               "user_id",
             ]
+          },
+          {
+            foreignKeyName: "template_authoring_preparations_working_artifact_fk"
+            columns: [
+              "artifact_id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_artifacts"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "asset_id",
+              "base_version_id",
+              "user_id",
+              "working_copy_scope",
+            ]
+          },
+          {
+            foreignKeyName: "template_authoring_preparations_working_copy_fk"
+            columns: [
+              "working_copy_id",
+              "brand_id",
+              "user_id",
+              "asset_id",
+              "base_version_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "template_authoring_working_copies"
+            referencedColumns: [
+              "id",
+              "brand_id",
+              "user_id",
+              "source_asset_id",
+              "source_version_id",
+            ]
+          },
+        ]
+      }
+      template_authoring_working_copies: {
+        Row: {
+          base_revision_id: string
+          brand_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          landed_revision_id: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        Insert: {
+          base_revision_id: string
+          brand_id: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          landed_revision_id?: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        Update: {
+          base_revision_id?: string
+          brand_id?: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          landed_revision_id?: string | null
+          settings_snapshot?: Json
+          source_asset_id?: string
+          source_checksum?: string
+          source_version_id?: string
+          template_id?: string
+          user_id?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_authoring_working_co_base_revision_id_brand_id_te_fkey"
+            columns: ["base_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_landed_revision_id_brand_id__fkey"
+            columns: ["landed_revision_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_revisions"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_source_version_id_source_ass_fkey"
+            columns: ["source_version_id", "source_asset_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id", "asset_id", "brand_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_co_variant_id_brand_id_template_fkey"
+            columns: ["variant_id", "brand_id", "template_id"]
+            isOneToOne: false
+            referencedRelation: "template_variants"
+            referencedColumns: ["id", "brand_id", "template_id"]
+          },
+          {
+            foreignKeyName: "template_authoring_working_copies_template_id_brand_id_fkey"
+            columns: ["template_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id", "brand_id"]
           },
         ]
       }
@@ -23968,35 +24223,64 @@ export type Database = {
         }
         Returns: boolean
       }
-      attach_template_authoring_workspace_seed: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      attach_template_authoring_workspace_seed:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       backfill_template_revisions: {
         Args: { p_brand_id?: string }
         Returns: number
       }
-      begin_template_authoring_draft_attempt: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_commands: Json
-          p_expected_revision: number
-          p_origin: Json
-          p_request_id: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      begin_template_authoring_draft_attempt:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_origin: Json
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_origin: Json
+              p_request_id: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       caller_blocked_anywhere: { Args: never; Returns: boolean }
       caller_hidden_storage_objects: {
         Args: never
@@ -24049,6 +24333,10 @@ export type Database = {
       }
       capture_template_authoring_settings_plan: {
         Args: { p_asset_id: string; p_commands: Json }
+        Returns: Json
+      }
+      capture_template_authoring_working_copy_settings: {
+        Args: { p_commands: Json; p_working_copy_id: string }
         Returns: Json
       }
       checkpoint_service_template_ingest_dependencies: {
@@ -24904,6 +25192,28 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_template_authoring_working_copy_commit: {
+        Args: {
+          p_asset_id: string
+          p_base_version_id: string
+          p_brand_id: string
+          p_child_asset_id: string
+          p_child_version_id: string
+          p_command_digest: string
+          p_dependencies: Json
+          p_expected_head_revision_id: string
+          p_expected_revision: number
+          p_id: string
+          p_package_checksum: string
+          p_parent_revision_id: string
+          p_revision_edits: Json
+          p_save_target: string
+          p_source_checksum: string
+          p_user_id: string
+          p_working_copy_id: string
+        }
+        Returns: Json
+      }
       consume_presentation_export: {
         Args: {
           p_asset_id: string
@@ -24954,18 +25264,32 @@ export type Database = {
         Args: { p_options: Json; p_type: string }
         Returns: boolean
       }
-      detach_template_authoring_workspace_seed: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      detach_template_authoring_workspace_seed:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       drive_authenticate: { Args: { p_token_hash: string }; Returns: Json }
       drive_brands: {
         Args: { p_user_id: string }
@@ -25214,17 +25538,30 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      fail_template_authoring_draft_attempt: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_failure: Json
-          p_request_id: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      fail_template_authoring_draft_attempt:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_failure: Json
+              p_request_id: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_failure: Json
+              p_request_id: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       find_template_release_replay: {
         Args: {
           p_brand_id: string
@@ -25640,22 +25977,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      mark_template_authoring_preparation_pending: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_error_code: string
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      mark_template_authoring_preparation_pending:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_error_code: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_error_code: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       match_asset_frames: {
         Args: {
           exclude_asset_id?: string
@@ -25754,39 +26109,90 @@ export type Database = {
         Args: { p_collection: string }
         Returns: string
       }
-      observe_template_authoring_preparation_run: {
+      observe_template_authoring_preparation_run:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      observe_template_authoring_preparation_state_cas:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_expected_command_digest: string
+              p_expected_draft_revision: number
+              p_expected_package_checksum: string
+              p_expected_source_checksum: string
+              p_expected_state: string
+              p_expected_updated_at: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_error_code: string
+              p_expected_command_digest: string
+              p_expected_draft_revision: number
+              p_expected_package_checksum: string
+              p_expected_source_checksum: string
+              p_expected_state: string
+              p_expected_updated_at: string
+              p_forge_run_id: string
+              p_forge_state: string
+              p_progress: Json
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      open_template_authoring_working_copy: {
         Args: {
-          p_artifact_id: string
           p_asset_id: string
-          p_base_version_id: string
+          p_base_revision_id: string
           p_brand_id: string
-          p_error_code: string
-          p_forge_run_id: string
-          p_forge_state: string
-          p_progress: Json
-          p_state: string
           p_user_id: string
-        }
-        Returns: Json
-      }
-      observe_template_authoring_preparation_state_cas: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_error_code: string
-          p_expected_command_digest: string
-          p_expected_draft_revision: number
-          p_expected_package_checksum: string
-          p_expected_source_checksum: string
-          p_expected_state: string
-          p_expected_updated_at: string
-          p_forge_run_id: string
-          p_forge_state: string
-          p_progress: Json
-          p_state: string
-          p_user_id: string
+          p_variant_id: string
+          p_working_copy_id: string
         }
         Returns: Json
       }
@@ -25799,32 +26205,62 @@ export type Database = {
         }
         Returns: Json
       }
-      put_template_authoring_draft: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_commands: Json
-          p_expected_revision: number
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
-      put_template_authoring_draft_audited: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_commands: Json
-          p_expected_revision: number
-          p_request_id: string
-          p_response: Json
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      put_template_authoring_draft:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      put_template_authoring_draft_audited:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_request_id: string
+              p_response: Json
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_commands: Json
+              p_expected_revision: number
+              p_request_id: string
+              p_response: Json
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       read_editor_project_for_edit: {
         Args: { p_project_id: string; p_user_id: string }
         Returns: {
@@ -25850,22 +26286,40 @@ export type Database = {
           paths: string[]
         }[]
       }
-      reconcile_template_authoring_artifact_settings: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_committed_asset_id: string
-          p_committed_version_id: string
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      reconcile_template_authoring_artifact_settings:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_committed_asset_id: string
+              p_committed_version_id: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_committed_asset_id: string
+              p_committed_version_id: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
       record_canvas_lineage: {
         Args: {
@@ -25929,37 +26383,117 @@ export type Database = {
             }
             Returns: Json
           }
-      record_template_authoring_preparation_evidence: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_evidence: Json
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
-      record_template_authoring_preparation_run: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_forge_run_id: string
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_engine: string
+              p_error_code: string
+              p_frames: Json
+              p_id: string
+              p_native_run_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_required_samples: Json
+              p_source_checksum: string
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_engine: string
+              p_error_code: string
+              p_frames: Json
+              p_id: string
+              p_native_run_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_source_checksum: string
+              p_state: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      record_template_authoring_preparation_evidence:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_evidence: Json
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_evidence: Json
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      record_template_authoring_preparation_run:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_forge_run_id: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_forge_run_id: string
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       record_template_revision_publication: {
         Args: {
           p_binding_id: string
@@ -26106,6 +26640,36 @@ export type Database = {
         }
         Returns: undefined
       }
+      require_template_authoring_working_copy: {
+        Args: {
+          p_asset_id: string
+          p_base_version_id: string
+          p_brand_id: string
+          p_user_id: string
+          p_working_copy_id: string
+        }
+        Returns: {
+          base_revision_id: string
+          brand_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          landed_revision_id: string | null
+          settings_snapshot: Json
+          source_asset_id: string
+          source_checksum: string
+          source_version_id: string
+          template_id: string
+          user_id: string
+          variant_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "template_authoring_working_copies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       require_template_version_operator: {
         Args: {
           p_brand_id: string
@@ -26131,35 +26695,90 @@ export type Database = {
         }
         Returns: Json
       }
-      reserve_template_authoring_native_render: {
+      reserve_template_authoring_native_render:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_selections: Json
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_request_digest: string
+              p_selections: Json
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      reserve_template_authoring_preparation:
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_artifact_id: string
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_idempotency_key: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      reserve_template_authoring_working_copy_commit: {
         Args: {
-          p_artifact_id: string
           p_asset_id: string
           p_base_version_id: string
           p_brand_id: string
           p_command_digest: string
-          p_draft_revision: number
+          p_expected_head_revision_id: string
+          p_expected_revision: number
           p_id: string
+          p_name: string
           p_package_checksum: string
-          p_request_digest: string
-          p_selections: Json
+          p_parent_revision_id: string
+          p_save_target: string
           p_source_checksum: string
           p_user_id: string
-        }
-        Returns: Json
-      }
-      reserve_template_authoring_preparation: {
-        Args: {
-          p_artifact_id: string
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_idempotency_key: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
+          p_working_copy_id: string
         }
         Returns: Json
       }
@@ -26176,20 +26795,36 @@ export type Database = {
         }
         Returns: Json
       }
-      review_template_authoring_artifact: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_expected_revision: number
-          p_id: string
-          p_package_checksum: string
-          p_source_checksum: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      review_template_authoring_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_expected_revision: number
+              p_id: string
+              p_package_checksum: string
+              p_source_checksum: string
+              p_user_id: string
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       rollback_template_release: {
         Args: {
           p_brand_id: string
@@ -26265,46 +26900,90 @@ export type Database = {
           version_id: string
         }[]
       }
-      stage_template_authoring_artifact: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_filename: string
-          p_id: string
-          p_object_path: string
-          p_package_checksum: string
-          p_provenance?: Json
-          p_result_parse: Json
-          p_size_bytes: number
-          p_source_checksum: string
-          p_user_id: string
-          p_verification: Json
-        }
-        Returns: Json
-      }
-      stage_template_authoring_seed_artifact: {
-        Args: {
-          p_asset_id: string
-          p_base_version_id: string
-          p_brand_id: string
-          p_command_digest: string
-          p_draft_revision: number
-          p_filename: string
-          p_id: string
-          p_object_path: string
-          p_package_checksum: string
-          p_provenance?: Json
-          p_result_parse: Json
-          p_size_bytes: number
-          p_source_checksum: string
-          p_user_id: string
-          p_verification: Json
-        }
-        Returns: Json
-      }
+      stage_template_authoring_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance?: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
+      stage_template_authoring_seed_artifact:
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance?: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_asset_id: string
+              p_base_version_id: string
+              p_brand_id: string
+              p_command_digest: string
+              p_draft_revision: number
+              p_filename: string
+              p_id: string
+              p_object_path: string
+              p_package_checksum: string
+              p_provenance: Json
+              p_result_parse: Json
+              p_size_bytes: number
+              p_source_checksum: string
+              p_user_id: string
+              p_verification: Json
+              p_working_copy_id: string
+            }
+            Returns: Json
+          }
       storage_object_brand_id: { Args: { p_name: string }; Returns: string }
       transition_asset_review_guarded: {
         Args: {

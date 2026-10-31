@@ -105,3 +105,4 @@ export * from './workspace-template';
 export * from './zip-directory';
 
 export * from './template-versioning';
+export * from './template-authoring-working-copy';

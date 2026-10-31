@@ -17,10 +17,12 @@ import type {
   MediaAsset,
   TemplateAuthoringArtifactCommit,
   TemplateAuthoringCommand,
+  TemplateAuthoringWorkingCopy,
   TemplateAuthoringDocument,
   TemplateEditableLayer,
   TemplateLayerEdit,
   TemplatePreview,
+  TemplateRevision,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -136,6 +138,7 @@ import {
   fetchTemplateLayerInventory,
   fetchTemplateLayerScene,
   fetchTemplateRevisionVariants,
+  fetchExactTemplateRevision,
   fetchTemplateVariables,
   previewTemplateRevision,
   putTemplateAuthoringDraft,
@@ -297,12 +300,14 @@ export function TemplateLayerEditor({
   active,
   onSaved,
   onOpenVariant,
+  onOpenRevision,
   onDraftChange,
   hyperframesRevisionId,
   onOpenFontRepair,
   initialComp,
   templateKey,
   revisionId,
+  workingCopy,
 }: {
   brandId: string;
   assetId: string;
@@ -313,9 +318,11 @@ export function TemplateLayerEditor({
   active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void | Promise<void>;
+  onOpenRevision?: (revision: TemplateRevision) => void | Promise<unknown>;
   initialComp?: string;
   templateKey?: string | null;
   revisionId?: string;
+  workingCopy?: TemplateAuthoringWorkingCopy;
   onDraftChange?: LayerDraftChange;
   /** Private composition revision carried in from AI Studio, awaiting a seed-aware editor route. */
   hyperframesRevisionId?: string;
@@ -395,6 +402,7 @@ export function TemplateLayerEditor({
     name: string;
     artifactId: string;
     versionId: string;
+    revisionId?: string;
     published: boolean;
   } | null>(null);
   const [newText, setNewText] = useState('');
@@ -422,7 +430,7 @@ export function TemplateLayerEditor({
     resolver: zodResolver(nameSchema),
     defaultValues: { name: `${name} variant` },
   });
-  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}`;
+  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}${workingCopy ? `:working-copy:${workingCopy.id}` : ''}`;
   useEffect(() => {
     setLayerValidity({});
     setLayerInputs({});
@@ -430,8 +438,8 @@ export function TemplateLayerEditor({
   const relinkSourceKeyRef = useRef(sourceKey);
   relinkSourceKeyRef.current = sourceKey;
   const authoringScope = useMemo(
-    () => (effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null),
-    [brandId, assetId, effectiveVersionId],
+    () => (effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null),
+    [brandId, assetId, effectiveVersionId, workingCopy?.id],
   );
   const sourceKeyRef = useRef(sourceKey);
   const savedRevisionKeyRef = useRef<string | null>(null);
@@ -573,6 +581,7 @@ export function TemplateLayerEditor({
   }, [authoringCommands]);
   const authoringDraft = useTemplateAuthoringDraft({
     scope: authoringScope,
+    baseRevisionId: workingCopy?.baseRevisionId,
     enabled: ready,
     commands: authoringCommands,
     onRestore: restoreDraft,
@@ -587,10 +596,12 @@ export function TemplateLayerEditor({
   // The agent edits the SAVED draft: pending edits are flushed first, and a conflicted draft is
   // reconciled by the person before the agent may write.
   const prepareAgentTurn = useCallback(async () => {
+    const context = sourceKeyRef.current;
     const draftState = agentDraftRef.current;
     if (!draftState.ready || draftState.status === 'conflict' || draftState.status === 'source-mismatch')
       return null;
     if (!(await draftState.save())) return null;
+    if (sourceKeyRef.current !== context) return null;
     return agentDraftRef.current.persistedDraft?.revision ?? 0;
   }, []);
   // Each draft the agent saves becomes one undo step here.
@@ -621,16 +632,16 @@ export function TemplateLayerEditor({
     !workspaceSeed && currentWorkspaceIdentity?.startsWith('pinned_source:') === true;
   const hasUncompiledLifecycle = authoringCommands.length > 0;
   const baseInventory = useQuery({
-    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId],
-    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string),
+    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const baseScene = useQuery({
-    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId],
-    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId),
+    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
@@ -640,6 +651,7 @@ export function TemplateLayerEditor({
   const workspacePreview = useQuery({
     queryKey: [
       'forge-authoring-workspace-preview',
+      workingCopy?.id,
       authoringDraft.userId,
       brandId,
       assetId,
@@ -654,7 +666,7 @@ export function TemplateLayerEditor({
       if (!revision) throw new Error('The private workspace draft is not saved yet.');
       return fetchTemplateAuthoringWorkspacePreview(
         assetId,
-        { brandId, baseVersionId: effectiveVersionId as string },
+        { brandId, baseVersionId: effectiveVersionId as string, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) },
         revision,
         compId ?? undefined,
       );
@@ -865,7 +877,7 @@ export function TemplateLayerEditor({
         : undefined;
     void fetchTemplateAuthoringFontPreview(
       assetId,
-      { brandId, baseVersionId: effectiveVersionId },
+      { brandId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) },
       fontChoice,
       seedPins,
     )
@@ -899,7 +911,7 @@ export function TemplateLayerEditor({
   ]);
 
   const composed = useQuery({
-    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled],
+    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled, workingCopy?.id],
     queryFn: async () => ({
       view: await previewTemplateRevision(assetId, {
         brandId,
@@ -1415,6 +1427,7 @@ export function TemplateLayerEditor({
           emptyDraft = await putTemplateAuthoringDraft(assetId, {
             brandId,
             baseVersionId: effectiveVersionId,
+            ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
             expectedRevision: 0,
             commands: [],
           });
@@ -1435,7 +1448,7 @@ export function TemplateLayerEditor({
             existing.revision < 1 ||
             existing.scope.brandId !== brandId ||
             existing.scope.assetId !== assetId ||
-            existing.scope.baseVersionId !== effectiveVersionId ||
+            existing.scope.baseVersionId !== effectiveVersionId || existing.scope.workingCopyId !== workingCopy?.id ||
             !expectedChecksum ||
             existing.sourceChecksum !== expectedChecksum
           )
@@ -1449,7 +1462,7 @@ export function TemplateLayerEditor({
           emptyDraft.seed ||
           emptyDraft.scope.brandId !== brandId ||
           emptyDraft.scope.assetId !== assetId ||
-          emptyDraft.scope.baseVersionId !== effectiveVersionId ||
+          emptyDraft.scope.baseVersionId !== effectiveVersionId || emptyDraft.scope.workingCopyId !== workingCopy?.id ||
           emptyDraft.sourceChecksum !== authoringDraft.sourceDocument?.sourceChecksum
         )
           throw new Error(
@@ -1460,6 +1473,7 @@ export function TemplateLayerEditor({
         brandId,
         assetId,
         baseVersionId: effectiveVersionId,
+        ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
         expectedDraftRevision: emptyDraft.revision,
       });
       if (result.artifact.purpose !== 'workspace_seed')
@@ -1481,7 +1495,7 @@ export function TemplateLayerEditor({
   const authoringLifecycle = useTemplateAuthoringLifecycle({
     active,
     enabled: hasUncompiledLifecycle && !staleSource && !sourceChanged,
-    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null,
+    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null,
     revision: authoringDraft.revision,
     syncStatus: authoringDraft.status,
     draftDirty:
@@ -2203,7 +2217,7 @@ export function TemplateLayerEditor({
           saveTo,
           parentRevisionId: currentRevision.id,
           expectedHeadRevisionId:
-            saveTo === 'new_variant' ? currentRevision.id : currentVariant.draftHeadRevisionId,
+            saveTo === 'new_variant' ? currentRevision.id : workingCopy?.baseRevisionId ?? currentVariant.draftHeadRevisionId,
           ...(saveTo === 'this_variant' ? { variantId: currentVariant.variantId } : {}),
           ...(variantName ? { name: variantName } : {}),
         });
@@ -2232,6 +2246,7 @@ export function TemplateLayerEditor({
         name: variantName ?? name,
         artifactId: committed!.artifactId,
         versionId: result.versionId,
+        revisionId: result.revisionId,
         published: committed!.state === 'committed',
       });
       try {
@@ -2242,7 +2257,10 @@ export function TemplateLayerEditor({
       const stillDirty =
         sourceKeyRef.current.startsWith(`${brandId}:${assetId}:`) &&
         isLayerHistoryDirty(historyRef.current);
-      if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
+      if (openAfterSave && !stillDirty && sourceKeyRef.current === identity && onOpenRevision) {
+        try { await onOpenRevision(await fetchExactTemplateRevision(brandId, result.assetId, result.revisionId)); }
+        catch { setError('The version was saved. Reopen its exact revision from Variants.'); }
+      } else if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
       if (stillDirty)
         setError('The reviewed version was saved. Your newer edits stay in this private draft.');
       setSaving(false);
@@ -2251,10 +2269,12 @@ export function TemplateLayerEditor({
     return false;
   };
   const draftState: LayerDraftState = {
+    contextId: sourceKey,
     dirty: authoringDraft.dirty,
     busy: !authoringDraft.ready || authoringDraft.status === 'saving',
     saveLabel: 'Save private draft',
     save: saveDraft,
+    park: () => authoringDraft.park(commandsFromLayerSnapshot(historyRef.current.present)),
     discard,
     status: authoringDraft.status,
     retry: authoringDraft.retry,
@@ -2271,6 +2291,7 @@ export function TemplateLayerEditor({
     draftState.save,
     draftState.discard,
     draftState.retry,
+    workingCopy?.id,
   ]);
   useEffect(() => () => onDraftChangeRef.current?.(null), []);
   useEffect(() => {
@@ -2613,7 +2634,7 @@ export function TemplateLayerEditor({
                         recovery.workspaceIdentity ??
                         templateAuthoringWorkspaceIdentity(undefined, recovery.sourceChecksum);
                       const matchesWorkspace =
-                        !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity;
+                        !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity && recovery.scope.workingCopyId === authoringScope?.workingCopyId;
                       return (
                         <Button
                           size="xs"
@@ -3955,13 +3976,15 @@ export function TemplateLayerEditor({
               >
                 <aside className="h-full min-h-0 border-l border-border" aria-label="Template agent">
                   <ForgeAgentPanel
+                    key={`${sourceKey}:agent`}
                     assetId={assetId}
                     brandId={brandId}
                     baseVersionId={effectiveVersionId}
+                    workingCopyId={workingCopy?.id}
                     compId={compId ?? inventoryData?.compId ?? undefined}
                     selectedNodeIds={agentSelection}
                     prepare={prepareAgentTurn}
-                    onDraft={adoptAgentDraft}
+                    onDraft={async () => { if (sourceKeyRef.current === sourceKey) await adoptAgentDraft(); }}
                     onRunningChange={setAgentRunning}
                   />
                 </aside>
@@ -4082,7 +4105,9 @@ export function TemplateLayerEditor({
                 onClick={async () => {
                   try {
                     await onSaved();
-                    onOpenVariant?.(savedVariant.assetId);
+                    if (onOpenRevision && savedVariant.revisionId)
+                      await onOpenRevision(await fetchExactTemplateRevision(brandId, savedVariant.assetId, savedVariant.revisionId));
+                    else onOpenVariant?.(savedVariant.assetId);
                   } catch {
                     setError('Variant saved. The template list could not refresh. Try again.');
                   }
@@ -4128,13 +4153,14 @@ export function TemplateLayerEditor({
           assetId={assetId}
           revisionId={currentRevision.id}
           expectedHeadRevisionId={
-            currentVariant.original ? currentRevision.id : currentVariant.draftHeadRevisionId
+            currentVariant.original ? currentRevision.id : workingCopy?.baseRevisionId ?? currentVariant.draftHeadRevisionId
           }
           variantId={currentVariant.original ? undefined : currentVariant.variantId}
           onSaved={async (saved) => {
             await onSaved();
             await revisionCatalog.refetch();
-            await onOpenVariant?.(saved.sourceAssetId);
+            if (onOpenRevision) await onOpenRevision(saved);
+            else await onOpenVariant?.(saved.sourceAssetId);
           }}
         />
       ) : null}

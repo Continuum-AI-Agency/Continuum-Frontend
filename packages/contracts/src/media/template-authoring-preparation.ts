@@ -10,6 +10,7 @@ export const templateAuthoringPreparationArtifactSchema = z
     brandId: uuid,
     assetId: uuid,
     baseVersionId: uuid,
+    workingCopyId: uuid.optional(),
     draftRevision: z.number().int().positive(),
     sourceChecksum: sha256,
     commandDigest: sha256,
@@ -21,6 +22,7 @@ export type TemplateAuthoringPreparationArtifact = z.infer<typeof templateAuthor
 export const templateAuthoringPreparationRequestSchema = z
   .object({
     artifactId: uuid,
+    workingCopyId: uuid.optional(),
     expectedDraftRevision: z.number().int().positive(),
     sourceChecksum: sha256,
     commandDigest: sha256,
@@ -36,7 +38,7 @@ export const templateAuthoringPreparationStateSchema = z.enum([
 export const templateAuthoringPreparationSchema = z
   .object({
     artifactId: uuid,
-    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid }).strict(),
+    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid, workingCopyId: uuid.optional() }).strict(),
     userId: uuid,
     draftRevision: z.number().int().positive(),
     sourceChecksum: sha256,

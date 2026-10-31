@@ -67,17 +67,20 @@ export class TemplateOperationJournal {
     scope: TemplateAuthoringScope;
     workspaceIdentity: string;
     sourceChecksum: string;
+    baseRevisionId?: string;
     storage?: OperationJournalStorage;
     append: (events: TemplateOperationInput[]) => Promise<void>;
     onError?: (error: unknown) => void;
     onSaved?: () => void;
   }) {
-    this.key = `operation-history:${options.userId}:${options.scope.brandId}:${options.scope.assetId}:${options.scope.baseVersionId}:${options.workspaceIdentity}`;
+    this.key = `operation-history:${options.userId}:${options.scope.brandId}:${options.scope.assetId}:${options.scope.baseVersionId}:${options.workspaceIdentity}${options.scope.workingCopyId ? `:working-copy:${options.scope.workingCopyId}` : ''}`;
   }
 
   get busy(): boolean { return this.pending.length > 0 || this.sending !== null; }
 
   capture(action: ForgeDraftAction, draftRevision: number): string {
+    if (this.options.scope.workingCopyId && !this.options.baseRevisionId)
+      throw new Error('The exact working-copy base must be opened before recording an edit.');
     const id = crypto.randomUUID();
     this.pending.push({ id, action: structuredClone(action), draftRevision });
     void this.preserve().then(() => this.flush()).then(() => this.options.onSaved?.(), (error: unknown) => this.options.onError?.(error));
@@ -96,9 +99,10 @@ export class TemplateOperationJournal {
           const causedBy = [...new Set([...(action.causedBy ?? []), ...(prior ? [prior] : [])])].slice(-100);
           state.events.push({
             id: captured.id, workingCopyId: state.workingCopyId, sequence: ++state.sequence,
-            command: action.command, baseRevisionId: null, channel: 'forge', outcome: 'succeeded',
+            command: action.command, baseRevisionId: this.options.baseRevisionId ?? null, channel: 'forge', outcome: 'succeeded',
             affectedObjects: action.affectedObjects ?? [], causedBy, evidence: action.evidence ?? 'recorded',
             changes: { ...action.changes, baseVersionId: this.options.scope.baseVersionId,
+              ...(this.options.scope.workingCopyId ? { authoringWorkingCopyId: this.options.scope.workingCopyId } : {}),
               draftRevision: captured.draftRevision, sourceChecksum: this.options.sourceChecksum,
               workspaceIdentity: this.options.workspaceIdentity },
             ...(action.origin ? { origin: action.origin } : {}),
@@ -109,6 +113,9 @@ export class TemplateOperationJournal {
     });
     return this.writes;
   }
+
+  /** Parking waits for IndexedDB, without requiring a network save or changing the base. */
+  preserveLocal(): Promise<void> { return this.preserve(); }
 
   flush(): Promise<void> {
     if (this.sending) return this.sending.then(() => this.pending.length ? this.flush() : undefined);

@@ -12,6 +12,7 @@ export type TemplateLayerEdit = z.infer<typeof templateLayerEditSchema>;
 
 export const templateLayerPreviewRequestSchema = z
   .object({
+    workingCopyId: z.string().uuid().optional(),
     brandId: z.string().uuid(),
     expectedVersionId: z.string().uuid(),
     compId: z.number().int().positive().optional(),
@@ -128,6 +129,7 @@ export type TemplateLayerPreviewResponse = z.infer<typeof templateLayerPreviewRe
  */
 export const templateLayerViewQuerySchema = z
   .object({
+    workingCopyId: z.string().uuid().optional(),
     brandId: z.string().uuid(),
     versionId: z.string().uuid(),
     /** Scene only: the comp to draw. Omitted: the template's default (delivery) comp. */

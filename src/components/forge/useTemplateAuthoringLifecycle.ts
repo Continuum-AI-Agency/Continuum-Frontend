@@ -24,6 +24,7 @@ import {
   reviewTemplateAuthoringArtifact,
 } from '@/lib/library/templateSources';
 import type { LayerDraftSyncStatus } from './layerDraft';
+import { authoringScopeIdentity, sameAuthoringScope } from './authoringScope';
 
 type AuthoringLifecycleState = 'idle' | 'waiting' | 'compiling' | 'preparing' | 'rendering' | 'needs-input' | 'ready' | 'failed';
 
@@ -70,7 +71,7 @@ type PublishAttempt = { signature: string; promise: Promise<TemplateAuthoringArt
 const sameHash = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 
 function sameScope(left: TemplateAuthoringScope, right: TemplateAuthoringScope) {
-  return left.brandId === right.brandId && left.assetId === right.assetId && left.baseVersionId === right.baseVersionId;
+  return sameAuthoringScope(left, right);
 }
 
 function assertArtifactPins(
@@ -181,7 +182,7 @@ export function useTemplateAuthoringLifecycle({
 
   const sourceChecksum = persistedDraft?.sourceChecksum ?? sourceDocument?.sourceChecksum ?? null;
   const key = useMemo(
-    () => scope && sourceChecksum ? `${scope.brandId}:${scope.assetId}:${scope.baseVersionId}:${revision}:${sourceChecksum}` : '',
+    () => scope && sourceChecksum ? `${authoringScopeIdentity(scope)}:${revision}:${sourceChecksum}` : '',
     [scope, revision, sourceChecksum],
   );
   const draftIsCurrent = !!scope && !!persistedDraft && persistedDraft.revision === revision &&
@@ -206,6 +207,7 @@ export function useTemplateAuthoringLifecycle({
     ? artifact
     : null;
   const currentPreparation = preparation && currentArtifact &&
+    sameScope(preparation.scope, currentArtifact.scope) &&
     preparation.artifactId === currentArtifact.artifactId &&
     preparation.draftRevision === currentArtifact.draftRevision &&
     sameHash(preparation.sourceChecksum, currentArtifact.sourceChecksum) &&
@@ -214,6 +216,7 @@ export function useTemplateAuthoringLifecycle({
     ? preparation
     : null;
   const currentRenders = useMemo(() => currentArtifact ? renders.filter((render) =>
+    sameScope(render.scope, currentArtifact.scope) &&
     render.artifactId === currentArtifact.artifactId &&
     render.draftRevision === currentArtifact.draftRevision &&
     sameHash(render.sourceChecksum, currentArtifact.sourceChecksum) &&
@@ -253,6 +256,7 @@ export function useTemplateAuthoringLifecycle({
         nextArtifact = await compileTemplateAuthoring(scope.assetId, {
           brandId: scope.brandId,
           baseVersionId: scope.baseVersionId,
+          ...(scope.workingCopyId ? { workingCopyId: scope.workingCopyId } : {}),
           expectedRevision: persistedDraft.revision,
         });
         if (!isLive()) return;
@@ -289,7 +293,7 @@ export function useTemplateAuthoringLifecycle({
       for (const request of requests) {
         const render = await requestTemplateAuthoringNativeRender(scope.assetId, nextArtifact.artifactId, scope, request);
         if (!isLive()) return;
-        if (render.artifactId !== nextArtifact.artifactId || render.draftRevision !== nextArtifact.draftRevision ||
+        if (!sameScope(render.scope, scope) || render.artifactId !== nextArtifact.artifactId || render.draftRevision !== nextArtifact.draftRevision ||
             !sameHash(render.sourceChecksum, nextArtifact.sourceChecksum) ||
             !sameHash(render.commandDigest, nextArtifact.commandDigest) ||
             !sameHash(render.packageChecksum, nextArtifact.packageChecksum))
@@ -332,6 +336,7 @@ export function useTemplateAuthoringLifecycle({
         shouldPollArtifact
           ? fetchTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope).then((value) => {
               if (runGeneration === generation.current && value.artifactId === currentArtifact.artifactId &&
+                  sameScope(value.scope, scope) &&
                   value.draftRevision === currentArtifact.draftRevision &&
                   sameHash(value.sourceChecksum, currentArtifact.sourceChecksum) &&
                   sameHash(value.commandDigest, currentArtifact.commandDigest) &&
@@ -341,12 +346,12 @@ export function useTemplateAuthoringLifecycle({
           : Promise.resolve(),
         shouldPollPreparation
           ? fetchTemplateAuthoringPreparation(scope.assetId, currentArtifact.artifactId, scope).then((value) => {
-              if (runGeneration === generation.current) setPreparation(value);
+              if (runGeneration === generation.current && sameScope(value.scope, scope)) setPreparation(value);
             })
           : Promise.resolve(),
         ...currentRenders.filter((render) => ['submitted', 'running'].includes(render.state)).map((render) =>
           fetchTemplateAuthoringNativeRender(scope.assetId, currentArtifact.artifactId, render.renderId, scope).then((value) => {
-            if (runGeneration === generation.current) {
+            if (runGeneration === generation.current && sameScope(value.scope, scope)) {
               setRenders((current) => current.map((item) => item.renderId === value.renderId ? value : item));
               if (value.state === 'completed' && value.frames.length) {
                 void fetchTemplateAuthoringArtifact(scope.assetId, currentArtifact.artifactId, scope)

@@ -114,6 +114,8 @@ import { uploadNewAssetVersion } from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { revisionIsReadOnly, selectTemplateRevision } from './revisionSelection';
+import { useTemplateAuthoringWorkingCopy } from './useTemplateAuthoringWorkingCopy';
+import { TemplateWorkingCopyContext } from './TemplateWorkingCopyContext';
 import {
   InlineRename,
   sourceDisplayName,
@@ -256,6 +258,7 @@ export function TemplateDetail({
   revisionId?: string;
   onOpenRevision?: (
     revision: import('@continuum/contracts').TemplateRevision,
+    tab?: string,
   ) => void | Promise<void>;
 }) {
   const { assetId, templateKey } = source;
@@ -303,7 +306,7 @@ export function TemplateDetail({
   );
   const selectedRevisionVariant = revisionSelection?.variant;
   const inspectedRevision = revisionSelection?.revision;
-  const revisionReadOnly =
+  const inspectedReadOnly =
     !!revisionId && (!revisionSelection || revisionIsReadOnly(revisionSelection));
   const variantRoot =
     variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
@@ -338,6 +341,17 @@ export function TemplateDetail({
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [tab, setTab] = useState(initialTab ?? (revisionFile ? 'source' : 'checks'));
+  const [editSessionOpened, setEditSessionOpened] = useState(initialTab === 'layers' || initialTab === 'author');
+  useEffect(() => { if (tab === 'layers' || tab === 'author') setEditSessionOpened(true); }, [tab]);
+  const workingCopyState = useTemplateAuthoringWorkingCopy({ brandId,
+    requestKey: `${brandId}:${assetId}:${source.versionId}:${revisionId ?? 'legacy'}`,
+    selection: revisionSelection, enabled: editSessionOpened });
+  const workingCopy = workingCopyState.copy;
+  const workingCopyRevision = workingCopy && revisionCatalog?.flatMap((variant) => variant.revisions).find((revision) => revision.id === workingCopy.baseRevisionId);
+  const revisionReadOnly = workingCopyState.readOnly || inspectedReadOnly && !workingCopy;
+  const copyNotice = workingCopyState.error ?? (!revisionSelection && revisionCatalog
+    ? 'Choose an exact variant revision in Variants before opening a private working copy.'
+    : 'Opening the private working copy…');
   const authorIdentity = `${assetId}:${source.versionId ?? ''}`;
   const [mountedAuthorIdentity, setMountedAuthorIdentity] = useState<string | null>(() =>
     initialTab === 'author' ? authorIdentity : null,
@@ -403,7 +417,7 @@ export function TemplateDetail({
     });
   };
   const saveTextMoves = async () => {
-    if (revisionCatalog?.length) {
+    if (revisionId || revisionCatalog?.length) {
       setTab('layers');
       toast.info('Use Edit layers to save text changes in a new revision.');
       return;
@@ -622,7 +636,7 @@ export function TemplateDetail({
   }, [refreshEvents, run?.state]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
-    if (revisionCatalog?.length && !revisionSelection) {
+    if ((revisionId || revisionCatalog?.length) && !revisionSelection) {
       setTab('variants');
       toast.info('Choose an exact variant and revision before saving.');
       return false;
@@ -654,7 +668,8 @@ export function TemplateDetail({
         });
         await invalidateForgeBrand(queryClient, brandId);
         await onChanged();
-        await onOpenVariant?.(saved.sourceAssetId, 'variables');
+        if (onOpenRevision) await onOpenRevision(saved, 'variables');
+        else await onOpenVariant?.(saved.sourceAssetId, 'variables');
         toast.success('Saved template revision');
         return true;
       } catch (cause) {
@@ -1378,7 +1393,7 @@ export function TemplateDetail({
                   const head = variant?.revisions.find(
                     (item) => item.id === variant.draftHeadRevisionId,
                   );
-                  if (head && onOpenRevision) void onOpenRevision(head);
+                  if (head && onOpenRevision) void onOpenRevision(head, tab);
                   else if (
                     head &&
                     selectTemplateRevision(
@@ -1436,7 +1451,8 @@ export function TemplateDetail({
               }
               onCreated={async (saved) => {
                 await onChanged();
-                await onOpenVariant(saved.sourceAssetId, tab);
+                if (onOpenRevision) await onOpenRevision(saved, tab);
+                else await onOpenVariant(saved.sourceAssetId, tab);
               }}
             />
           ) : null}
@@ -1574,7 +1590,7 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
-          {missingFootage.length > 0 && !revisionCatalog?.length ? (
+          {missingFootage.length > 0 && !revisionId && !revisionCatalog?.length ? (
             <section
               className="rounded-md border border-destructive/50 p-3 text-xs"
               aria-label="Missing media repair"
@@ -1639,12 +1655,13 @@ export function TemplateDetail({
                   size="sm"
                   variant="outline"
                   disabled={
+                    !!revisionId || !!revisionCatalog?.length ||
                     Boolean(savedTextRepair) ||
                     !wireframeFrames(source.parse).some((frame) =>
                       frame.boxes.some((box) => box.kind === 'text' && box.instance),
                     )
                   }
-                  title="Move and resize text in your After Effects file"
+                  title={revisionId || revisionCatalog?.length ? 'Use Edit layers to save text changes in a new revision' : 'Move and resize text in your After Effects file'}
                   onClick={() => setEditingText(true)}
                 >
                   Repair text
@@ -1861,24 +1878,33 @@ export function TemplateDetail({
             </Panel>
           </TabsContent>
           <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+            {workingCopy && <TemplateWorkingCopyContext copy={workingCopy} variant={revisionCatalog?.find((variant) => variant.variantId === workingCopy.variantId)} />}
             {revisionReadOnly ? (
               <p className="text-xs text-muted-foreground">
                 This revision is read-only. Branch it in Variants before editing.
               </p>
+            ) : !workingCopy ? (
+              <div className="flex items-center gap-2 text-xs" role={workingCopyState.error ? 'alert' : 'status'}>
+                <span>{copyNotice}</span>
+                {workingCopyState.error && <Button size="xs" variant="outline" onClick={workingCopyState.retry}>Retry working copy</Button>}
+              </div>
             ) : (
               <TemplateLayerEditor
+                key={workingCopy.id}
                 brandId={brandId}
-                assetId={assetId}
+                assetId={workingCopy.sourceAssetId}
                 active={tab === 'layers'}
-                versionId={source.versionId}
-                revisionId={revisionId}
+                versionId={workingCopy.sourceVersionId}
+                revisionId={workingCopy.baseRevisionId}
+                workingCopy={workingCopy}
                 name={source.displayName ?? source.parse?.filename ?? 'Template'}
-                parse={source.parse}
+                parse={workingCopyRevision?.source.parse ?? null}
                 onSaved={async () => {
                   await invalidateForgeBrand(queryClient, brandId);
                   await Promise.all([onChanged(), loadVariables()]);
                 }}
                 onOpenVariant={(assetId) => onOpenVariant?.(assetId, 'layers')}
+                onOpenRevision={onOpenRevision}
                 onDraftChange={onDraftChange}
                 hyperframesRevisionId={hyperframesRevisionId}
                 onOpenFontRepair={() => setFontCheckFocusRequestId((requestId) => requestId + 1)}
@@ -1888,19 +1914,23 @@ export function TemplateDetail({
             )}
           </TabsContent>
           <TabsContent value="author" keepMounted className="p-[var(--card-pad)]">
+            {workingCopy && <TemplateWorkingCopyContext copy={workingCopy} variant={revisionCatalog?.find((variant) => variant.variantId === workingCopy.variantId)} />}
             {revisionReadOnly && <p className="text-xs text-muted-foreground">This revision is read-only. Branch it in Variants before editing.</p>}
-            {!revisionReadOnly && mountedAuthorIdentity === authorIdentity ? (
+            {!revisionReadOnly && !workingCopy && <p role={workingCopyState.error ? 'alert' : 'status'} className="text-xs">{copyNotice}</p>}
+            {!revisionReadOnly && workingCopy && mountedAuthorIdentity === authorIdentity ? (
               <TemplateAuthoringEditor
-                key={`${assetId}:${source.versionId}:author`}
+                key={`${workingCopy.id}:author`}
                 brandId={brandId}
-                assetId={assetId}
-                versionId={source.versionId}
-                revisionId={revisionId}
+                assetId={workingCopy.sourceAssetId}
+                versionId={workingCopy.sourceVersionId}
+                revisionId={workingCopy.baseRevisionId}
+                workingCopy={workingCopy}
                 name={source.displayName ?? 'Template'}
-                parse={source.parse}
+                parse={workingCopyRevision?.source.parse ?? null}
                 active={tab === 'author'}
                 onSaved={onChanged}
                 onOpenVariant={onOpenVariant ? (id) => onOpenVariant(id, 'variants') : undefined}
+                onOpenRevision={onOpenRevision}
                 onOpenRender={onOpenRender}
                 templateKey={templateKey}
                 onDraftChange={onDraftChange}
@@ -1909,6 +1939,7 @@ export function TemplateDetail({
             ) : null}
           </TabsContent>
           <TabsContent value="variables" keepMounted>
+            <fieldset disabled={!!revisionId && !revisionSelection || !!revisionSelection && revisionIsReadOnly(revisionSelection)}>
             <VariableEditor
               brandId={brandId}
               variables={variables}
@@ -1918,6 +1949,7 @@ export function TemplateDetail({
               saving={saving}
               onSave={onSave}
             />
+            </fieldset>
           </TabsContent>
           <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
             <TemplateMappingReviewPanel review={mappingReview ?? null} />
@@ -1930,7 +1962,7 @@ export function TemplateDetail({
             </TabsContent>
           ) : null}
           <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
-            {revisionCatalog?.length ? (
+            {revisionId || revisionCatalog?.length ? (
               <div className="space-y-2 text-xs">
                 <p>
                   {DESIGN_SOURCE[selectedRevisionVariant?.sourceKind ?? 'after_effects']

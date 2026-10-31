@@ -59,6 +59,24 @@ test('two actual commands remain ordered even when the existing draft projection
   expect('principalId' in storage.state.events[0]!).toBe(false);
 });
 
+test('same-byte branches isolate durable streams and bind each action to its captured authoring base', async () => {
+  const storage = new MemoryStorage();
+  const sent: TemplateOperationInput[] = [];
+  const make = (workingCopyId: string, baseRevisionId?: string) => new TemplateOperationJournal({ userId: 'actor',
+    scope: { ...scope, workingCopyId }, baseRevisionId, sourceChecksum: 'a'.repeat(64), workspaceIdentity: 'identical-package', storage,
+    append: async (events) => { sent.push(...events); } });
+  const a = make('50000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001');
+  const b = make('50000000-0000-4000-8000-000000000002', '60000000-0000-4000-8000-000000000002');
+  a.capture({ command: 'forge_authoring_command', changes: { command: command(10) } }, 1);
+  b.capture({ command: 'forge_authoring_command', changes: { command: command(20) } }, 1);
+  await Promise.all([a.flush(), b.flush()]);
+  expect(storage.states.size).toBe(2);
+  expect(new Set(sent.map(event => event.workingCopyId)).size).toBe(2);
+  expect(sent.map(event => event.baseRevisionId).sort()).toEqual(['60000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000002']);
+  expect(sent.every(event => event.changes.authoringWorkingCopyId && event.changes.baseVersionId === scope.baseVersionId)).toBe(true);
+  expect(() => make('50000000-0000-4000-8000-000000000003').capture({ command: 'forge_clear', changes: {} }, 1)).toThrow('exact working-copy base');
+});
+
 test('edits arriving during a failed send persist immediately and retry the frozen batch unchanged', async () => {
   const storage = new MemoryStorage();
   const attempts: TemplateOperationInput[][] = [];

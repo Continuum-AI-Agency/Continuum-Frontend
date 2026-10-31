@@ -8,6 +8,7 @@ export const hyperframesAepAuthoringRequestSchema = z.object({
   brandId: z.uuid(),
   assetId: z.uuid(),
   baseVersionId: z.uuid(),
+  workingCopyId: z.uuid().optional(),
   expectedDraftRevision: z.number().int().positive(),
   shaderStack: shaderStackV1Schema.nullable().optional(),
 }).strict();

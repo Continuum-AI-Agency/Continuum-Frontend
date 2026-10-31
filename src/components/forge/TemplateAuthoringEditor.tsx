@@ -16,6 +16,8 @@ import { selectTemplateRevision } from './revisionSelection';
 import {
   type TemplatePreview,
   type TemplateAuthoringCommand,
+  type TemplateAuthoringWorkingCopy,
+  type TemplateRevision,
   type TemplateAuthoringDocument,
   type TemplateAuthoringArtifactCommit,
   templateLayerPreviewRequestSchema,
@@ -108,6 +110,7 @@ import {
   fetchTemplateLayerInventory,
   fetchTemplateLayerScene,
   fetchTemplateRevisionVariants,
+  fetchExactTemplateRevision,
   fetchTemplateVariables,
   previewTemplateLayers,
   putTemplateAuthoringDraft,
@@ -240,12 +243,14 @@ export function TemplateAuthoringEditor({
   active,
   onSaved,
   onOpenVariant,
+  onOpenRevision,
   onOpenRender,
   templateKey,
   onDraftChange,
   hyperframesRevisionId,
   onOpenFontRepair,
   revisionId,
+  workingCopy,
 }: {
   brandId: string;
   assetId: string;
@@ -256,6 +261,7 @@ export function TemplateAuthoringEditor({
   active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void;
+  onOpenRevision?: (revision: TemplateRevision) => void | Promise<unknown>;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   templateKey?: string | null;
   onDraftChange?: LayerDraftChange;
@@ -264,6 +270,7 @@ export function TemplateAuthoringEditor({
   /** Move from an exact preparation font diagnostic to Forge's existing Fonts check. */
   onOpenFontRepair?: () => void;
   revisionId?: string;
+  workingCopy?: TemplateAuthoringWorkingCopy;
 }) {
   const [history, setHistory] = useState<LayerHistory>(() => createLayerHistory(EMPTY_DRAFT));
   const historyRef = useRef(history);
@@ -329,12 +336,12 @@ export function TemplateAuthoringEditor({
     resolver: zodResolver(nameSchema),
     defaultValues: { name: `${name} variant` },
   });
-  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}`;
+  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}${workingCopy ? `:working-copy:${workingCopy.id}` : ''}`;
   const relinkSourceKeyRef = useRef(sourceKey);
   relinkSourceKeyRef.current = sourceKey;
   const authoringScope = useMemo(
-    () => effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null,
-    [brandId, assetId, effectiveVersionId],
+    () => effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null,
+    [brandId, assetId, effectiveVersionId, workingCopy?.id],
   );
   const sourceKeyRef = useRef(sourceKey);
   const savedRevisionKeyRef = useRef<string | null>(null);
@@ -474,6 +481,7 @@ export function TemplateAuthoringEditor({
   }, [authoringCommands]);
   const authoringDraft = useTemplateAuthoringDraft({
     scope: authoringScope,
+    baseRevisionId: workingCopy?.baseRevisionId,
     // Keep private saving and the exit guard available after switching inner tabs.
     enabled: (active || draftSessionOpened) && !!effectiveVersionId,
     commands: authoringCommands,
@@ -500,15 +508,15 @@ export function TemplateAuthoringEditor({
     currentWorkspaceIdentity?.startsWith('pinned_source:') === true;
   const hasUncompiledLifecycle = authoringCommands.length > 0;
   const baseInventory = useQuery({
-    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId],
-    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string),
+    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const baseScene = useQuery({
-    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId],
-    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId),
+    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     placeholderData: keepPreviousData,
@@ -517,6 +525,7 @@ export function TemplateAuthoringEditor({
   const workspacePreview = useQuery({
     queryKey: [
       'forge-authoring-workspace-preview',
+      workingCopy?.id,
       authoringDraft.userId,
       brandId,
       assetId,
@@ -531,7 +540,7 @@ export function TemplateAuthoringEditor({
       if (!revision) throw new Error('The private workspace draft is not saved yet.');
       return fetchTemplateAuthoringWorkspacePreview(
         assetId,
-        { brandId, baseVersionId: effectiveVersionId as string },
+        { brandId, baseVersionId: effectiveVersionId as string, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) },
         revision,
         compId ?? undefined,
       );
@@ -681,7 +690,7 @@ export function TemplateAuthoringEditor({
           expectedRevision: authoringDraft.persistedDraft.revision,
         }
       : undefined;
-    void fetchTemplateAuthoringFontPreview(assetId, { brandId, baseVersionId: effectiveVersionId }, fontChoice, seedPins)
+    void fetchTemplateAuthoringFontPreview(assetId, { brandId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) }, fontChoice, seedPins)
       .then(async ({ bytes }) => {
         const face = await new FontFace(family, bytes).load();
         if (cancelled) return;
@@ -703,11 +712,12 @@ export function TemplateAuthoringEditor({
     templateLayerPreviewRequestSchema.parse({
       brandId,
       expectedVersionId: effectiveVersionId,
+      ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
       ...(compId ? { compId } : {}),
       edits: change.edits.filter((edit) => edit.compId === compId),
     });
   const composed = useQuery({
-    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled],
+    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled, workingCopy?.id],
     queryFn: async () => ({
       view: await previewTemplateLayers(assetId, request(settled)),
       changes: settled,
@@ -1051,22 +1061,23 @@ export function TemplateAuthoringEditor({
           emptyDraft = await putTemplateAuthoringDraft(assetId, {
             brandId,
             baseVersionId: effectiveVersionId,
+            ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
             expectedRevision: 0,
             commands: [],
           });
         } catch (writeError) {
           // The bootstrap is idempotent only after an exact owner/scope read proves that an empty
           // draft won the revision-zero CAS. Never retry a blind write over a concurrent draft.
-          const existing = await fetchTemplateAuthoringDraft(assetId, brandId, effectiveVersionId).catch(() => null);
+          const existing = await fetchTemplateAuthoringDraft(assetId, brandId, effectiveVersionId, workingCopy?.id).catch(() => null);
           const expectedChecksum = authoringDraft.sourceDocument?.sourceChecksum;
           if (!existing || existing.requiresReconciliation || existing.seed || existing.commands.length ||
               existing.revision < 1 || existing.scope.brandId !== brandId || existing.scope.assetId !== assetId ||
-              existing.scope.baseVersionId !== effectiveVersionId || !expectedChecksum || existing.sourceChecksum !== expectedChecksum)
+              existing.scope.baseVersionId !== effectiveVersionId || existing.scope.workingCopyId !== workingCopy?.id || !expectedChecksum || existing.sourceChecksum !== expectedChecksum)
             throw writeError;
           emptyDraft = existing;
         }
         if (emptyDraft.revision < 1 || emptyDraft.commands.length || emptyDraft.requiresReconciliation || emptyDraft.seed ||
-            emptyDraft.scope.brandId !== brandId || emptyDraft.scope.assetId !== assetId || emptyDraft.scope.baseVersionId !== effectiveVersionId ||
+            emptyDraft.scope.brandId !== brandId || emptyDraft.scope.assetId !== assetId || emptyDraft.scope.baseVersionId !== effectiveVersionId || emptyDraft.scope.workingCopyId !== workingCopy?.id ||
             emptyDraft.sourceChecksum !== authoringDraft.sourceDocument?.sourceChecksum)
           throw new Error('Forge did not confirm an empty private draft for this exact source. Your local work is unchanged.');
       }
@@ -1074,6 +1085,7 @@ export function TemplateAuthoringEditor({
         brandId,
         assetId,
         baseVersionId: effectiveVersionId,
+        ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
         expectedDraftRevision: emptyDraft.revision,
       });
       if (result.artifact.purpose !== 'workspace_seed')
@@ -1093,7 +1105,7 @@ export function TemplateAuthoringEditor({
   const authoringLifecycle = useTemplateAuthoringLifecycle({
     active,
     enabled: hasUncompiledLifecycle && !staleSource && !sourceChanged,
-    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null,
+    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null,
     revision: authoringDraft.revision,
     syncStatus: authoringDraft.status,
     draftDirty: authoringDraft.dirty || !same(authoringCommands, authoringDraft.persistedDraft?.commands ?? []),
@@ -1606,7 +1618,7 @@ export function TemplateAuthoringEditor({
           saveTo,
           parentRevisionId,
           expectedHeadRevisionId: saveTo === 'this_variant'
-            ? sourceVariant.draftHeadRevisionId
+            ? workingCopy?.baseRevisionId ?? sourceVariant.draftHeadRevisionId
             : parentRevisionId,
           ...(saveTo === 'this_variant' ? { variantId: sourceVariant.variantId } : {}),
           ...(variantName ? { name: variantName } : {}),
@@ -1642,7 +1654,10 @@ export function TemplateAuthoringEditor({
         setError('Package saved as a version. The template list could not refresh.');
       }
       const stillDirty = sourceKeyRef.current.startsWith(`${brandId}:${assetId}:`) && isLayerHistoryDirty(historyRef.current);
-      if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
+      if (openAfterSave && !stillDirty && sourceKeyRef.current === identity && onOpenRevision) {
+        try { await onOpenRevision(await fetchExactTemplateRevision(brandId, result.assetId, result.revisionId)); }
+        catch { setError('The version was saved. Reopen its exact revision from Variants.'); }
+      } else if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
       if (stillDirty) setError('The reviewed version was saved. Your newer edits stay in this private draft.');
       setSaving(false);
       return !stillDirty;
@@ -1650,10 +1665,12 @@ export function TemplateAuthoringEditor({
     return false;
   };
   const draftState: LayerDraftState = {
+    contextId: sourceKey,
     dirty: authoringDraft.dirty,
     busy: !authoringDraft.ready || !authoringDraft.sourceDocument || authoringDraft.status === 'saving',
     saveLabel: 'Save private draft',
     save: saveDraft,
+    park: () => authoringDraft.park(commandsFromLayerSnapshot(historyRef.current.present)),
     discard,
     status: authoringDraft.status,
     retry: authoringDraft.retry,
@@ -1670,6 +1687,7 @@ export function TemplateAuthoringEditor({
     draftState.save,
     draftState.discard,
     draftState.retry,
+    workingCopy?.id,
   ]);
   useEffect(() => () => onDraftChangeRef.current?.(null), []);
   useEffect(() => {
@@ -1892,7 +1910,7 @@ export function TemplateAuthoringEditor({
                     </details>
                     {(() => {
                       const recoveryIdentity = recovery.workspaceIdentity ?? templateAuthoringWorkspaceIdentity(undefined, recovery.sourceChecksum);
-                      const matchesWorkspace = !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity;
+                      const matchesWorkspace = !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity && recovery.scope.workingCopyId === authoringScope?.workingCopyId;
                       return (
                         <Button size="xs" variant="outline" disabled={!!authoringDraft.serverDraft?.requiresReconciliation || !matchesWorkspace} onClick={() => void authoringDraft.restoreRecovery(recovery.id)}>
                           {authoringDraft.serverDraft?.requiresReconciliation ? 'Restore unavailable for changed source' : !matchesWorkspace ? 'Different workspace · preserved' : 'Restore this copy'}
@@ -2805,7 +2823,9 @@ export function TemplateAuthoringEditor({
                 onClick={async () => {
                   try {
                     await onSaved();
-                    onOpenVariant?.(savedVariant.assetId);
+                    if (onOpenRevision)
+                      await onOpenRevision(await fetchExactTemplateRevision(brandId, savedVariant.assetId, savedVariant.revisionRef.revisionId));
+                    else onOpenVariant?.(savedVariant.assetId);
                   } catch {
                     setError('Variant saved. The template list could not refresh. Try again.');
                   }
@@ -2822,9 +2842,9 @@ export function TemplateAuthoringEditor({
           brandId={brandId}
           assetId={assetId}
           revisionId={exactSourceRevision.id}
-          expectedHeadRevisionId={sourceVariant?.draftHeadRevisionId ?? exactSourceRevision.id}
+          expectedHeadRevisionId={workingCopy?.baseRevisionId ?? sourceVariant?.draftHeadRevisionId ?? exactSourceRevision.id}
           variantId={sourceVariant && !sourceVariant.original ? sourceVariant.variantId : undefined}
-          onSaved={onSaved}
+          onSaved={async (saved) => { await onSaved(); if (onOpenRevision) await onOpenRevision(saved); }}
         />
       ) : null}
     </>

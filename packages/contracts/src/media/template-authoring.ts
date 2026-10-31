@@ -110,7 +110,7 @@ export const templateAuthoringDraftNodeEditSchema = z
   .refine((v) => Object.values(v).some((value) => value !== undefined), 'Choose a layer change');
 
 export const templateAuthoringScopeSchema = z
-  .object({ brandId: uuid, assetId: uuid, baseVersionId: uuid })
+  .object({ brandId: uuid, assetId: uuid, baseVersionId: uuid, workingCopyId: uuid.optional() })
   .strict();
 export type TemplateAuthoringScope = z.infer<typeof templateAuthoringScopeSchema>;
 
@@ -655,6 +655,7 @@ export type TemplateAuthoringDraft = z.infer<typeof templateAuthoringDraftSchema
 
 export const templateAuthoringDraftPutSchema = z
   .object({
+    workingCopyId: uuid.optional(),
     requestId: uuid.optional(),
     origin: templateOperationOriginSchema.optional(),
     brandId: uuid,
@@ -862,12 +863,13 @@ export const templateAuthoringArtifactSchema = z
 export type TemplateAuthoringArtifact = z.infer<typeof templateAuthoringArtifactSchema>;
 
 export const templateAuthoringCompileRequestSchema = z
-  .object({ brandId: uuid, baseVersionId: uuid, expectedRevision: z.number().int().positive() })
+  .object({ brandId: uuid, baseVersionId: uuid, workingCopyId: uuid.optional(), expectedRevision: z.number().int().positive() })
   .strict();
 export type TemplateAuthoringCompileRequest = z.infer<typeof templateAuthoringCompileRequestSchema>;
 
 export const templateAuthoringArtifactReviewSchema = z
   .object({
+    workingCopyId: uuid.optional(),
     artifactId: uuid,
     expectedDraftRevision: z.number().int().positive(),
     sourceChecksum: z.string().regex(/^[a-f0-9]{64}$/i),

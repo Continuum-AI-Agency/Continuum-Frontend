@@ -408,14 +408,16 @@ export function ForgeWorkbench({
 
   const current =
     selectedRevision?.source ?? sources.find((source) => source.assetId === selected) ?? null;
-  const openRevision = (revision: TemplateRevision) =>
-    exitGuard.runGuarded(() =>
+  const openRevision = async (revision: TemplateRevision, tab = 'variants', comp?: string): Promise<void> => {
+    await exitGuard.runPreserving(() =>
       morph(() => {
         setSelected(revision.sourceAssetId);
         setSelectedRevision(revision);
-        setDetailTab('variants');
+        setDetailTab(tab);
+        setDetailComp(comp);
       }),
     );
+  };
   const currentShared = current
     ? null
     : (shared.find((template) => sharedTemplateId(template) === selectedShared) ?? null);
@@ -722,6 +724,7 @@ export function ForgeWorkbench({
           shared={shared}
           adopting={adopting}
           onOpen={open}
+          onOpenRevision={openRevision}
           onOpenShared={openShared}
           onRename={(assetId, title) => void rename(assetId, title)}
           onToggleShared={(template) => void toggleShared(template)}

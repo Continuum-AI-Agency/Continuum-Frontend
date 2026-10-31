@@ -10,10 +10,12 @@ export type LayerDraftSyncStatus =
   'loading' | 'saved' | 'saving' | 'unsaved' | 'error' | 'conflict' | 'source-mismatch';
 
 export type LayerDraftState = {
+  contextId?: string;
   dirty: boolean;
   busy: boolean;
   saveLabel: string;
   save: () => Promise<boolean>;
+  park?: () => Promise<boolean>;
   discard: () => void;
   status?: LayerDraftSyncStatus;
   retry?: () => Promise<boolean>;

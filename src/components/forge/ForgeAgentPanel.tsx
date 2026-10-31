@@ -106,6 +106,7 @@ export function ForgeAgentPanel({
   assetId,
   brandId,
   baseVersionId,
+  workingCopyId,
   compId,
   selectedNodeIds,
   prepare,
@@ -115,6 +116,7 @@ export function ForgeAgentPanel({
   assetId: string;
   brandId: string;
   baseVersionId: string;
+  workingCopyId?: string;
   compId?: number;
   selectedNodeIds: readonly string[];
   /** Saves pending editor changes; the draft revision the agent starts from, or null to refuse. */
@@ -165,6 +167,7 @@ export function ForgeAgentPanel({
       const request: ForgeAgentRequest = {
         brandId,
         baseVersionId,
+        ...(workingCopyId ? { workingCopyId } : {}),
         prompt: prompt.slice(0, 8_000),
         history,
         selection: { nodeIds: selectedNodeIds.slice(0, 200) },

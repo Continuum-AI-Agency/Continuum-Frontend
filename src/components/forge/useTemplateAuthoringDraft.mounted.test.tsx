@@ -4,8 +4,11 @@ import type {
   TemplateAuthoringDocument,
   TemplateAuthoringDraft,
   TemplateAuthoringScope,
+  TemplateAuthoringDraftPut,
 } from '@continuum/contracts';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { commandsFromLayerSnapshot } from './layerDraft';
 import { listTemplateDraftRecoveries } from './templateDraftRecovery';
 
 const scope: TemplateAuthoringScope = {
@@ -17,14 +20,14 @@ const checksum = 'a'.repeat(64);
 const document: TemplateAuthoringDocument = {
   scope, sourceChecksum: checksum, workspacePackage: { kind: 'pinned_source', packageChecksum: checksum },
 } as TemplateAuthoringDocument;
-const draft = (revision: number, commands: TemplateAuthoringCommand[] = []): TemplateAuthoringDraft => ({
-  scope, sourceChecksum: checksum, revision, commands, updatedAt: new Date().toISOString(),
+const draft = (revision: number, commands: TemplateAuthoringCommand[] = [], selectedScope = scope): TemplateAuthoringDraft => ({
+  scope: selectedScope, sourceChecksum: checksum, revision, commands, updatedAt: new Date().toISOString(),
   requiresReconciliation: false,
   currentSource: {
     templateSourceVersionId: scope.baseVersionId, templateSourceChecksum: checksum,
     assetHeadVersionId: scope.baseVersionId, assetHeadChecksum: checksum,
   },
-  projectedDocument: document,
+  projectedDocument: { ...document, scope: selectedScope },
 });
 const edit: TemplateAuthoringCommand = {
   type: 'layer.edit', nodeId: 'aep:7:31', edit: { compId: 7, layerId: 31, rotation: 15 },
@@ -33,15 +36,20 @@ const emptyCommands: TemplateAuthoringCommand[] = [];
 const noopRestore = () => {};
 
 let currentDraft: TemplateAuthoringDraft | null = null;
-const fetchDraft = mock(async () => currentDraft);
+const scopedDrafts = new Map<string, TemplateAuthoringDraft>();
+const fetchDraft = mock(async (_assetId?: string, _brandId?: string, _versionId?: string, workingCopyId?: string) => workingCopyId ? scopedDrafts.get(workingCopyId) ?? null : currentDraft);
 const appendedHistory: unknown[][] = [];
 const historyAppend = mock(async (_userId: string, _assetId: string, _brandId: string, events: unknown[]) => { appendedHistory.push(structuredClone(events)); });
-const putDraft = mock(async (_assetId: string, request: { expectedRevision: number; commands: TemplateAuthoringCommand[] }) => {
-  currentDraft = draft(request.expectedRevision + 1, request.commands);
+const putDraft = mock(async (_assetId: string, request: TemplateAuthoringDraftPut) => {
+  currentDraft = draft(request.expectedRevision + 1, request.commands, { ...scope, assetId: _assetId, brandId: request.brandId,
+    baseVersionId: request.baseVersionId, ...(request.workingCopyId ? { workingCopyId: request.workingCopyId } : {}) });
+  if (request.workingCopyId) scopedDrafts.set(request.workingCopyId, currentDraft);
   return currentDraft;
 });
 mock.module('@/lib/library/templateSources', () => ({
-  fetchTemplateAuthoringDocument: mock(async () => document),
+  fetchTemplateAuthoringDocument: mock(async (assetId: string, brandId: string, baseVersionId: string, workingCopyId?: string) => ({
+    ...document, scope: { assetId, brandId, baseVersionId, ...(workingCopyId ? { workingCopyId } : {}) },
+  })),
   fetchTemplateAuthoringDraft: fetchDraft,
   fetchTemplateAuthoringUserId: mock(async () => 'actor-a'),
   appendTemplateAuthoringHistory: historyAppend,
@@ -104,6 +112,7 @@ function installIndexedDb() {
 
 const originals = { indexedDB: globalThis.indexedDB, BroadcastChannel: globalThis.BroadcastChannel };
 beforeEach(() => {
+  scopedDrafts.clear();
   appendedHistory.length = 0;
   historyAppend.mockClear();
   putDraft.mockClear();
@@ -120,6 +129,84 @@ afterEach(() => {
 });
 
 describe('mounted authoring draft tab sync', () => {
+  test('two variants with identical source bytes park and reopen separate persistent dirty copies', async () => {
+    const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
+    const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };
+    const restores: TemplateAuthoringCommand[][] = [];
+    const useEditor = (selectedScope: TemplateAuthoringScope) => {
+      const [commands, setCommands] = useState<TemplateAuthoringCommand[]>([]);
+      const state = useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands,
+        onRestore: (snapshot) => { const restored = commandsFromLayerSnapshot(snapshot); restores.push(restored); setCommands(restored); } });
+      return state;
+    };
+    const { result, rerender, unmount } = renderHook(({ selectedScope }) => useEditor(selectedScope), { initialProps: { selectedScope: a } });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    await act(async () => { expect(await result.current.park([edit])).toBe(true); });
+    rerender({ selectedScope: b });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    const second = { ...edit, edit: { compId: 7, layerId: 31, rotation: 30 } } as TemplateAuthoringCommand;
+    await act(async () => { expect(await result.current.park([second])).toBe(true); });
+    rerender({ selectedScope: a });
+    await waitFor(() => expect(restores.at(-1)).toEqual([edit]));
+    expect((await listTemplateDraftRecoveries('actor-a', b)).some((item) => JSON.stringify(item.commands) === JSON.stringify([second]))).toBe(true);
+    unmount();
+    const restarted = renderHook(() => useEditor(a));
+    await waitFor(() => expect(restarted.result.current.ready).toBe(true));
+    await waitFor(() => expect(restores.at(-1)).toEqual([edit]));
+    expect(restarted.result.current.dirty).toBe(true);
+  });
+
+  test('same-working-copy tabs conflict while another variant stream stays independent', async () => {
+    const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
+    const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };
+    const first = renderHook(() => useTemplateAuthoringDraft({ scope: a, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    const other = renderHook(() => useTemplateAuthoringDraft({ scope: b, enabled: true, commands: emptyCommands, onRestore: noopRestore }));
+    await waitFor(() => expect(FakeBroadcastChannel.instances).toHaveLength(2));
+    act(() => first.result.current.update([edit]));
+    const peer = new FakeBroadcastChannel(FakeBroadcastChannel.instances[0]!.name);
+    await act(async () => peer.postMessage({ tabId: 'same-copy-peer', revision: 2 }));
+    await waitFor(() => expect(first.result.current.status).toBe('conflict'));
+    expect(other.result.current.status).toBe('saved');
+  });
+
+  test('a delayed save cannot move a new branch context and later edits remain recoverable in the old copy', async () => {
+    const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
+    const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };
+    let finish!: (value: TemplateAuthoringDraft) => void;
+    putDraft.mockImplementationOnce(async (_assetId, request) => new Promise((resolve) => { finish = (value) => { scopedDrafts.set(request.workingCopyId!, value); resolve(value); }; }));
+    const { result, rerender } = renderHook(({ selectedScope }) => useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands: emptyCommands, onRestore: noopRestore }),
+      { initialProps: { selectedScope: a } });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    act(() => result.current.update([edit]));
+    const saving = result.current.save();
+    await waitFor(() => expect(putDraft).toHaveBeenCalledTimes(1));
+    const tail = { ...edit, edit: { compId: 7, layerId: 31, rotation: 45 } } as TemplateAuthoringCommand;
+    await act(async () => { expect(await result.current.park([tail])).toBe(true); });
+    rerender({ selectedScope: b });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    await act(async () => { finish(draft(1, [edit], a)); await saving; });
+    expect(result.current.persistedDraft).toBeNull();
+    const retained = await listTemplateDraftRecoveries('actor-a', a);
+    expect(retained.some((item) => JSON.stringify(item.commands) === JSON.stringify([tail]))).toBe(true);
+    expect((putDraft.mock.calls[0]![1]).workingCopyId).toBe(a.workingCopyId);
+  });
+
+  test('a delayed agent draft read cannot replace another working copy', async () => {
+    const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
+    const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };
+    const { result, rerender } = renderHook(({ selectedScope }) => useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands: emptyCommands, onRestore: noopRestore }),
+      { initialProps: { selectedScope: a } });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    let finish!: (value: TemplateAuthoringDraft) => void;
+    fetchDraft.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const reading = result.current.adoptAgentDraft();
+    rerender({ selectedScope: b });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    await act(async () => { finish(draft(4, [edit], a)); expect(await reading).toBeNull(); });
+    expect(result.current.persistedDraft).toBeNull();
+    expect(result.current.revision).toBe(0);
+  });
+
   test('a source transition during history upload cannot flush the replacement autosaver', async () => {
     const { result, rerender } = renderHook(({ selectedScope }) => useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands: emptyCommands, onRestore: noopRestore }),
       { initialProps: { selectedScope: scope } });
