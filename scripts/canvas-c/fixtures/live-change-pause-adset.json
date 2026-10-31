@@ -1,0 +1,918 @@
+{
+  "capturedAt": "2026-10-31T13:50:16.160Z",
+  "source": "live",
+  "toolName": "pause_meta_entity",
+  "frame": {
+    "type": "paid.live_change_preview",
+    "data": {
+      "approvalId": "capture_appr_0",
+      "toolCallId": "capture_call_0",
+      "toolName": "pause_meta_entity",
+      "partId": "live-change:capture_appr_0",
+      "subject": "adset 120252366801240236",
+      "currency": "MXN",
+      "nodes": [
+        {
+          "id": "120250871917580236",
+          "parentId": null,
+          "level": "campaign",
+          "name": "ITESO // MENSAJES // AGOSTO 2026",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808240236",
+          "parentId": "120250871917580236",
+          "level": "adset",
+          "name": "ITESO // AGOSTO - BAU - Mensajes",
+          "status": "PAUSED",
+          "dailyBudgetMinor": 19436,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064980236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+          "status": "ADSET_PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064970236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+          "status": "ADSET_PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064990236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808230236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808220236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // DAYPASS // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808250236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808210236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366808170236",
+          "parentId": "120252366808240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801240236",
+          "parentId": "120250871917580236",
+          "level": "adset",
+          "name": "ITESO // OCTUBRE - LKL - Mensajes",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": 45000,
+          "mark": "paused",
+          "changes": [
+            {
+              "field": "status",
+              "before": "ACTIVE",
+              "after": "PAUSED"
+            }
+          ],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913260236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 1 IMAGEN $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913240236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913100236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913180236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913140236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913120236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // DAYPASS // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913070236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913160236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913110236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913130236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // $99 PRIMER MES // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253515913150236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419626600236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 1 IMAGEN $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064940236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419592350236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 1 VIDEO $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419619640236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 2 VIDEO $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064950236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252692064960236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801290236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801280236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // DAYPASS // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801270236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801260236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366801250236",
+          "parentId": "120252366801240236",
+          "level": "ad",
+          "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+          "status": "PAUSED",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252366741610236",
+          "parentId": "120250871917580236",
+          "level": "adset",
+          "name": "ITESO // OCTUBRE - BROAD - Mensajes",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": 43077,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419519360236",
+          "parentId": "120252366741610236",
+          "level": "ad",
+          "name": "ITESO // IMAGEN 1 $31 PRIMER MES // OCTUBRE - Copia",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419461180236",
+          "parentId": "120252366741610236",
+          "level": "ad",
+          "name": "ITESO // VIDEO 2 $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252657010500236",
+          "parentId": "120252366741610236",
+          "level": "ad",
+          "name": "ITESO // DAY PASS // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120253419512830236",
+          "parentId": "120252366741610236",
+          "level": "ad",
+          "name": "ITESO // VIDEO 1 $31 PRIMER MES // OCTUBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        },
+        {
+          "id": "120252657010480236",
+          "parentId": "120252366741610236",
+          "level": "ad",
+          "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE",
+          "status": "ACTIVE",
+          "dailyBudgetMinor": null,
+          "mark": "unchanged",
+          "changes": [],
+          "basedOnId": null
+        }
+      ],
+      "truncated": false,
+      "counts": {
+        "changed": 0,
+        "added": 0,
+        "paused": 1
+      },
+      "readAt": "2026-10-31T13:50:16.731Z"
+    }
+  },
+  "parts": [
+    {
+      "type": "data-jaina-live-change",
+      "id": "live-change:capture_appr_0",
+      "data": {
+        "approvalId": "capture_appr_0",
+        "toolCallId": "capture_call_0",
+        "toolName": "pause_meta_entity",
+        "partId": "live-change:capture_appr_0",
+        "subject": "adset 120252366801240236",
+        "currency": "MXN",
+        "nodes": [
+          {
+            "id": "120250871917580236",
+            "parentId": null,
+            "level": "campaign",
+            "name": "ITESO // MENSAJES // AGOSTO 2026",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808240236",
+            "parentId": "120250871917580236",
+            "level": "adset",
+            "name": "ITESO // AGOSTO - BAU - Mensajes",
+            "status": "PAUSED",
+            "dailyBudgetMinor": 19436,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064980236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+            "status": "ADSET_PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064970236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+            "status": "ADSET_PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064990236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808230236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808220236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // DAYPASS // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808250236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808210236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366808170236",
+            "parentId": "120252366808240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801240236",
+            "parentId": "120250871917580236",
+            "level": "adset",
+            "name": "ITESO // OCTUBRE - LKL - Mensajes",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": 45000,
+            "mark": "paused",
+            "changes": [
+              {
+                "field": "status",
+                "before": "ACTIVE",
+                "after": "PAUSED"
+              }
+            ],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913260236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 1 IMAGEN $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913240236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913100236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913180236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913140236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913120236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // DAYPASS // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913070236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913160236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913110236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913130236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // $99 PRIMER MES // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253515913150236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419626600236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 1 IMAGEN $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064940236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // DAY PASS // SEPTIEMBRE - Copy",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419592350236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 1 VIDEO $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419619640236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 2 VIDEO $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064950236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE - Copy",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252692064960236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // ANUALIDAD + 2 MESES // SEPTIEMBRE - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801290236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801280236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // DAYPASS // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801270236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (3) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801260236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // 50% ANUALIDAD (2) // AGOSTO - Copia - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366801250236",
+            "parentId": "120252366801240236",
+            "level": "ad",
+            "name": "ITESO // PRIMER MES $12 (2) // AGOSTO - Copy",
+            "status": "PAUSED",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252366741610236",
+            "parentId": "120250871917580236",
+            "level": "adset",
+            "name": "ITESO // OCTUBRE - BROAD - Mensajes",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": 43077,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419519360236",
+            "parentId": "120252366741610236",
+            "level": "ad",
+            "name": "ITESO // IMAGEN 1 $31 PRIMER MES // OCTUBRE - Copia",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419461180236",
+            "parentId": "120252366741610236",
+            "level": "ad",
+            "name": "ITESO // VIDEO 2 $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252657010500236",
+            "parentId": "120252366741610236",
+            "level": "ad",
+            "name": "ITESO // DAY PASS // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120253419512830236",
+            "parentId": "120252366741610236",
+            "level": "ad",
+            "name": "ITESO // VIDEO 1 $31 PRIMER MES // OCTUBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          },
+          {
+            "id": "120252657010480236",
+            "parentId": "120252366741610236",
+            "level": "ad",
+            "name": "ITESO // $31 PRIMER MES // SEPTIEMBRE",
+            "status": "ACTIVE",
+            "dailyBudgetMinor": null,
+            "mark": "unchanged",
+            "changes": [],
+            "basedOnId": null
+          }
+        ],
+        "truncated": false,
+        "counts": {
+          "changed": 0,
+          "added": 0,
+          "paused": 1
+        },
+        "readAt": "2026-10-31T13:50:16.731Z"
+      }
+    }
+  ]
+}

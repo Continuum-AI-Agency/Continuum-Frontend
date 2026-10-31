@@ -1,15 +1,15 @@
 'use client';
 
 import type {
+  CampaignStructurePayload,
   JainaOperatorAction,
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
 } from '@continuum/contracts';
-import { ExternalLink, Maximize2, Network, Table2 } from 'lucide-react';
-import Link from 'next/link';
 import * as React from 'react';
+import { LecturaView } from '@/CampaignCanvas/lectura/LecturaView';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { ApprovalChangeTable } from '@/components/paid-media/jaina/components/ApprovalChangeTable';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
@@ -23,17 +23,19 @@ import {
   AgentDecisionCard,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import {
   buildCampaignCreativeRequest,
   scaffoldCreativeQuery,
 } from '@/lib/campaign-canvas/creativeGeneration';
+import {
+  campaignViewFromScaffoldRows,
+  campaignViewFromStructure,
+  type ScaffoldTreeSource,
+} from '@/lib/campaign-canvas/lectura';
 import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
-import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
-import { ScaffoldAdSetTable } from './ScaffoldAdSetTable';
+import { type ScaffoldTree, targetingSummary } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldCreativePreview } from './ScaffoldCreativePreview';
 import {
   ScaffoldAudiences,
@@ -42,9 +44,6 @@ import {
   ScaffoldFields,
   ScaffoldSummaryStrip,
 } from './ScaffoldPlanSections';
-import { ScaffoldStatusPill } from './ScaffoldStatusPill';
-import { ScaffoldTreeCanvas } from './ScaffoldTreeCanvas';
-import { formatAdSetBudget, formatDailyBudget } from './scaffoldBudget';
 import {
   audienceLinesOf,
   creativeTilesOf,
@@ -102,147 +101,28 @@ const summaryLine = (scaffold: JainaScaffoldState, tree: ScaffoldTree | null): s
 };
 
 /**
- * The graph is the DEFAULT view, and the table is the alternate.
- *
- * A scaffold's first question is structural — how many ad sets hang off this campaign,
- * how the ads divide between them, which branch failed — and a table answers that by
- * making the reader rebuild the tree in their head from indented rows. It was behind a
- * ghost icon in the table header, which is where it was found least.
+ * The campaign at chat size, on the canvas's own Read pieces (design C, option 27): the
+ * changes first — a campaign copy's new test ad sets, from the Backend's diff — then the daily
+ * budget and "Open in canvas". Ids are path keys, the anchor the diff and the rows share.
  */
-type ScaffoldView = 'graph' | 'table';
-
-/** Below this the inline graph is unreadable (a campaign node alone is 300px). */
-const NARROW_CARD_PX = 560;
-
-/**
- * The card's own width, or null before the first measurement.
- *
- * Measured rather than container-queried because React Flow cannot be hidden with CSS:
- * `fitView` runs against a zero-sized box under `display: none` and never re-fits. So a
- * narrow card never MOUNTS the graph, and widening it (maximizing the panel) mounts a
- * fresh one at its real size.
- */
-function useCardWidth(ref: React.RefObject<HTMLElement | null>): number | null {
-  const [width, setWidth] = React.useState<number | null>(null);
-  React.useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    setWidth(element.getBoundingClientRect().width);
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return width;
-}
-
-function ViewSwitch({
-  view,
-  onChange,
-  onExpand,
-  canvasHref,
-}: {
-  view: ScaffoldView;
-  onChange: (next: ScaffoldView) => void;
-  onExpand: () => void;
-  canvasHref: string | null;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex items-center gap-1 rounded-md bg-background/80 p-0.5">
-        {(
-          [
-            ['graph', 'Graph', Network],
-            ['table', 'Table', Table2],
-          ] as const
-        ).map(([value, label, Icon]) => (
-          <Button
-            key={value}
-            type="button"
-            variant={view === value ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 gap-1.5 px-2"
-            aria-pressed={view === value}
-            onClick={() => onChange(value)}
-          >
-            <Icon className="size-3.5" />
-            {label}
-          </Button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        {view === 'graph' ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5"
-            onClick={onExpand}
-          >
-            <Maximize2 className="size-3.5" />
-            Expand
-          </Button>
-        ) : null}
-        {canvasHref ? (
-          <Link
-            href={canvasHref}
-            className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'h-7 gap-1.5' })}
-            data-testid="scaffold-open-canvas"
-          >
-            <ExternalLink className="size-3.5" />
-            Open on canvas
-          </Link>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-const OUTLINE_LIMIT = 6;
-
-/** The tree at a glance for a card too narrow to draw it: one line per ad set. */
-function ScaffoldOutline({ tree, currency }: { tree: ScaffoldTree; currency: string | null }) {
-  const hidden = tree.adSets.length - OUTLINE_LIMIT;
-  return (
-    <ul
-      className="divide-y divide-foreground/5 rounded-xl bg-background/80 text-sm"
-      data-testid="scaffold-outline"
-    >
-      {tree.campaign ? (
-        <li className="flex items-center gap-2 px-2.5 py-1.5 font-medium">
-          <span className="min-w-0 flex-1 truncate" title={tree.campaign.name}>
-            {tree.campaign.name}
-          </span>
-          {/* Under CBO the campaign holds the one budget, so it is said once, here. */}
-          {tree.campaign.budget ? (
-            <span className="shrink-0 font-normal text-muted-foreground text-xs tabular-nums">
-              {formatDailyBudget(tree.campaign.budget.dailyBudgetMinorUnits, currency)}
-            </span>
-          ) : null}
-        </li>
-      ) : null}
-      {tree.adSets.slice(0, OUTLINE_LIMIT).map((adSet) => (
-        <li key={adSet.pathKey} className="flex items-center gap-2 py-1.5 pr-2.5 pl-5">
-          <span className="min-w-0 flex-1 truncate" title={adSet.name}>
-            {adSet.name}
-          </span>
-          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-            {formatAdSetBudget(adSet, currency)} · {adSet.ads.length} ad
-            {adSet.ads.length === 1 ? '' : 's'}
-          </span>
-          <ScaffoldStatusPill status={adSet.status} />
-        </li>
-      ))}
-      {hidden > 0 ? (
-        <li className="px-2.5 py-1.5 text-muted-foreground text-xs">
-          +{hidden} more ad set{hidden === 1 ? '' : 's'} — expand or open on canvas for all of them.
-        </li>
-      ) : null}
-    </ul>
-  );
-}
+const treeSourceOf = (tree: ScaffoldTree): ScaffoldTreeSource => ({
+  campaign: tree.campaign
+    ? {
+        id: tree.campaign.id,
+        pathKey: tree.campaign.pathKey,
+        name: tree.campaign.name,
+        budgetMinor: tree.campaign.budget?.dailyBudgetMinorUnits ?? null,
+      }
+    : null,
+  adSets: tree.adSets.map((adSet) => ({
+    id: adSet.id,
+    pathKey: adSet.pathKey,
+    name: adSet.name,
+    budgetMinor: adSet.budgetHeldByCampaign ? null : adSet.dailyBudgetMinorUnits,
+    audience: targetingSummary(adSet.derived.targeting),
+    ads: adSet.ads.map((ad) => ({ id: ad.id, pathKey: ad.pathKey, name: ad.name })),
+  })),
+});
 
 /** What keeps "Deploy paused" disabled, each named in words a person can act on. */
 function DeployBlockers({ blockers }: { blockers: DeployBlocker[] }) {
@@ -281,8 +161,11 @@ export function PaidScaffoldCard({
   onDeploy,
   onRequestCreative,
   supersededByVersion,
+  structure = null,
 }: {
   scaffold: JainaScaffoldState;
+  /** The same turn's drawing of this scaffold (a copy's diff), drawn here instead of twice. */
+  structure?: CampaignStructurePayload | null;
   approval: JainaToolApprovalRequiredPayload | null;
   resolution: JainaToolApprovalResolvedPayload | null;
   denial: JainaToolOutputDeniedPayload | null;
@@ -303,17 +186,13 @@ export function PaidScaffoldCard({
     onSettled?: (outcome: OperatorActionOutcome) => void,
   ) => void;
 }) {
-  const [canvasOpen, setCanvasOpen] = React.useState(false);
   const [selectedPathKey, setSelectedPathKey] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<ScaffoldView>('graph');
   // Set on click and cleared when a gate arrives: the gate lands on a NEW card, so this one
   // says so instead of looking like the click did nothing.
   const [deployRequested, setDeployRequested] = React.useState(false);
   // Why the last Deploy paused did not open a gate, in the Backend's own words.
   const [deployError, setDeployError] = React.useState<string | null>(null);
   const [deployOpenedBelow, setDeployOpenedBelow] = React.useState(false);
-  const measureRef = React.useRef<HTMLDivElement | null>(null);
-  const width = useCardWidth(measureRef);
 
   const {
     tree: savedTree,
@@ -348,11 +227,24 @@ export function PaidScaffoldCard({
   const parentScaffoldId = scaffold.parentScaffoldId ?? header?.scaffoldId ?? null;
   const { sessionId, onScaffoldFocus } = useScaffoldThread();
   const canvasHref = parentScaffoldId ? scaffoldCanvasHref(parentScaffoldId, sessionId) : null;
-  // Beside a companion canvas, Expand edits the scaffold there; elsewhere it opens the dialog.
-  const handleExpand =
-    onScaffoldFocus && parentScaffoldId
-      ? () => onScaffoldFocus(parentScaffoldId)
-      : () => setCanvasOpen(true);
+  // Beside a companion canvas, "Open in canvas" shows the scaffold there; elsewhere it links
+  // to the Canvas page.
+  const openInCompanion =
+    onScaffoldFocus && parentScaffoldId ? () => onScaffoldFocus(parentScaffoldId) : undefined;
+  // The rows once they hold the campaign; before that, the turn's own drawing of it.
+  const treeHasNodes = Boolean(tree && (tree.campaign || tree.adSets.length > 0));
+  const readModel = React.useMemo(
+    () =>
+      tree && treeHasNodes
+        ? campaignViewFromScaffoldRows(treeSourceOf(tree), {
+            currency,
+            diff: structure?.diff ?? null,
+          })
+        : structure
+          ? campaignViewFromStructure(structure)
+          : null,
+    [tree, treeHasNodes, currency, structure],
+  );
 
   const summary = React.useMemo(
     () => scaffoldSummaryOf(plan, tree, currency),
@@ -471,267 +363,220 @@ export function PaidScaffoldCard({
   const preview = approval?.preview?.rows.length ? approval.preview : null;
 
   return (
-    <>
-      {/* A plan awaiting a decision: the answer's decision module — primary tint, no border. */}
-      <AgentDecisionCard
-        className="rounded-xl border-0 bg-primary/10"
-        data-testid="paid-scaffold-card"
-        data-scaffold-version={scaffold.scaffoldId}
-      >
-        <div className="px-4 pt-3">
-          <AgentCardEyebrow
-            label="Paid campaign scaffold"
-            right={
-              <ScaffoldStatus
-                superseded={superseded ? (supersededByVersion ?? null) : undefined}
-                awaiting={Boolean(approval)}
-                decided={decided}
-                receipt={scaffold.receipt}
-                expired={expired}
-                tree={tree}
-              />
-            }
-          />
-        </div>
-        <AgentCardBody className="flex flex-col gap-4 pt-1 pb-4">
-          <div>
-            {name ? (
-              <AgentCardTitle>
-                {name}
-                {version ? (
-                  <span className="ml-1.5 font-normal text-muted-foreground text-sm">
-                    v{version}
-                  </span>
-                ) : null}
-                {liveTree ? (
-                  <span
-                    className="ml-1.5 font-normal text-primary-ink text-xs"
-                    data-testid="scaffold-live-canvas"
-                  >
-                    Live on canvas
-                  </span>
-                ) : null}
-              </AgentCardTitle>
-            ) : null}
-            <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
-          </div>
-
-          <ScaffoldSummaryStrip summary={summary} />
-
-          {progressTotal > 0 && !scaffold.receipt ? (
-            <div className="flex flex-col gap-1">
-              <Progress value={(progressDone / progressTotal) * 100} className="h-1.5" />
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {progressDone} of {progressTotal} created
-              </span>
-            </div>
-          ) : null}
-
-          <ScaffoldReceiptNotice scaffold={scaffold} />
-
-          {superseded ? (
-            <p
-              className="rounded-lg bg-background/80 px-3 py-2 text-muted-foreground text-sm"
-              data-testid="scaffold-superseded"
-            >
-              {supersededByVersion !== undefined
-                ? `v${supersededByVersion} replaced this version, so it can no longer be deployed. Review and approve v${supersededByVersion} instead.`
-                : 'A newer version replaced this one, so it can no longer be deployed. Review and approve the newer version instead.'}
-            </p>
-          ) : null}
-
-          {preview && !decided && !superseded ? (
-            <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
-              <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
-              <div className="rounded-lg bg-background/80 px-1 py-1.5">
-                <ApprovalChangeTable preview={preview} />
-              </div>
-            </section>
-          ) : null}
-
-          <ScaffoldEvidence plan={plan} />
-          <ScaffoldAudiences audiences={audiences} />
-          <ScaffoldCreatives tiles={creatives} brandId={scaffold.brandId ?? header?.brandId} />
-          <ScaffoldFields groups={fieldGroups} />
-
-          {isError ? (
-            <p className="text-destructive text-sm">
-              {error?.message ?? 'Could not load the scaffold.'}
-            </p>
-          ) : (
-            <div ref={measureRef} className="flex flex-col gap-2">
-              <ViewSwitch
-                view={view}
-                onChange={setView}
-                onExpand={handleExpand}
-                canvasHref={canvasHref}
-              />
-              {view === 'graph' && width !== null && width < NARROW_CARD_PX ? (
-                tree ? (
-                  <ScaffoldOutline tree={tree} currency={currency} />
-                ) : (
-                  <p className="text-muted-foreground text-sm">Loading the scaffold…</p>
-                )
-              ) : view === 'graph' ? (
-                <div className="h-[380px] overflow-hidden rounded-lg bg-background">
-                  {tree && width !== null ? (
-                    <ScaffoldTreeCanvas
-                      inline
-                      tree={tree}
-                      currency={currency}
-                      selectedPathKey={selectedPathKey}
-                      onSelect={setSelectedPathKey}
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-                      {isLoading ? 'Loading the scaffold…' : 'This scaffold has no nodes.'}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <ScaffoldAdSetTable tree={tree} isLoading={isLoading} currency={currency} />
-              )}
-            </div>
-          )}
-
-          {selectedAd && header ? (
-            <>
-              <label className="mt-2 flex items-center gap-2 text-xs">
-                Creative slot
-                <select
-                  aria-label="Creative slot"
-                  className="min-w-0 rounded bg-background p-1"
-                  value={selectedAd.pathKey}
-                  onChange={(event) => setSelectedPathKey(event.target.value)}
+    // A plan awaiting a decision: the answer's decision module — primary tint, no border.
+    <AgentDecisionCard
+      className="rounded-xl border-0 bg-primary/10"
+      data-testid="paid-scaffold-card"
+      data-scaffold-version={scaffold.scaffoldId}
+    >
+      <div className="px-4 pt-3">
+        <AgentCardEyebrow
+          label="Paid campaign scaffold"
+          right={
+            <ScaffoldStatus
+              superseded={superseded ? (supersededByVersion ?? null) : undefined}
+              awaiting={Boolean(approval)}
+              decided={decided}
+              receipt={scaffold.receipt}
+              expired={expired}
+              tree={tree}
+            />
+          }
+        />
+      </div>
+      <AgentCardBody className="flex flex-col gap-4 pt-1 pb-4">
+        <div>
+          {name ? (
+            <AgentCardTitle>
+              {name}
+              {version ? (
+                <span className="ml-1.5 font-normal text-muted-foreground text-sm">v{version}</span>
+              ) : null}
+              {liveTree ? (
+                <span
+                  className="ml-1.5 font-normal text-primary-ink text-xs"
+                  data-testid="scaffold-live-canvas"
                 >
-                  {ads.map((ad) => (
-                    <option key={ad.pathKey} value={ad.pathKey}>
-                      {ad.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ScaffoldCreativePreview
-                brandId={header.brandId}
-                assetId={selectedAd.creativeAssetId}
-                name={selectedAd.name}
-                onGenerate={requestCreative}
-                disabled={
-                  isStreaming ||
-                  !['proposed', 'built'].includes(header.lifecycle ?? 'proposed') ||
-                  Boolean(approval) ||
-                  superseded
-                }
-              />
-            </>
+                  Live on canvas
+                </span>
+              ) : null}
+            </AgentCardTitle>
           ) : null}
+          <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
+        </div>
 
-          {denial?.reason ? (
-            <p className="text-muted-foreground text-sm">Reason: {denial.reason}</p>
-          ) : null}
+        <ScaffoldSummaryStrip summary={summary} />
 
-          {expired && !decided ? (
-            <p className="text-muted-foreground text-sm">
-              That approval expired, so nothing was created. Deploy again to open a fresh one.
-            </p>
-          ) : null}
+        {progressTotal > 0 && !scaffold.receipt ? (
+          <div className="flex flex-col gap-1">
+            <Progress value={(progressDone / progressTotal) * 100} className="h-1.5" />
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {progressDone} of {progressTotal} created
+            </span>
+          </div>
+        ) : null}
 
-          {deployMode !== 'none' && !scaffold.receipt ? (
-            <DeployBlockers blockers={blockers} />
-          ) : null}
+        <ScaffoldReceiptNotice scaffold={scaffold} />
 
-          {deployError ? (
-            <p
-              className="rounded-lg bg-destructive/5 px-3 py-2 text-destructive text-sm"
-              data-testid="scaffold-deploy-error"
-              role="alert"
-            >
-              {deployError}
-            </p>
-          ) : null}
-        </AgentCardBody>
+        {superseded ? (
+          <p
+            className="rounded-lg bg-background/80 px-3 py-2 text-muted-foreground text-sm"
+            data-testid="scaffold-superseded"
+          >
+            {supersededByVersion !== undefined
+              ? `v${supersededByVersion} replaced this version, so it can no longer be deployed. Review and approve v${supersededByVersion} instead.`
+              : 'A newer version replaced this one, so it can no longer be deployed. Review and approve the newer version instead.'}
+          </p>
+        ) : null}
 
-        {liveApproval && onDecide && approval && gate?.gate === 'publish' ? (
-          <AgentActions className="flex-wrap px-4 pb-4">
-            <AgentButton
-              variant="ghost"
-              disabled={isStreaming}
-              onClick={() => onDecide?.(approval, 'deny')}
-            >
-              Deny
-            </AgentButton>
-            <AgentButton
-              variant="ghost"
-              disabled={isStreaming}
-              onClick={() => onDecide?.(approval, 'approve', 'publish_only')}
-            >
-              Publish only
-            </AgentButton>
+        {preview && !decided && !superseded ? (
+          <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
+            <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
+            <div className="rounded-lg bg-background/80 px-1 py-1.5">
+              <ApprovalChangeTable preview={preview} />
+            </div>
+          </section>
+        ) : null}
+
+        <ScaffoldEvidence plan={plan} />
+        <ScaffoldAudiences audiences={audiences} />
+        <ScaffoldCreatives tiles={creatives} brandId={scaffold.brandId ?? header?.brandId} />
+        <ScaffoldFields groups={fieldGroups} />
+
+        {isError ? (
+          <p className="text-destructive text-sm">
+            {error?.message ?? 'Could not load the scaffold.'}
+          </p>
+        ) : readModel ? (
+          <LecturaView
+            size="chat"
+            model={readModel}
+            onOpen={openInCompanion}
+            openHref={canvasHref}
+          />
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            {isLoading ? 'Loading the scaffold…' : 'This scaffold has no nodes.'}
+          </p>
+        )}
+
+        {selectedAd && header ? (
+          <>
+            <label className="mt-2 flex items-center gap-2 text-xs">
+              Creative slot
+              <select
+                aria-label="Creative slot"
+                className="min-w-0 rounded bg-background p-1"
+                value={selectedAd.pathKey}
+                onChange={(event) => setSelectedPathKey(event.target.value)}
+              >
+                {ads.map((ad) => (
+                  <option key={ad.pathKey} value={ad.pathKey}>
+                    {ad.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ScaffoldCreativePreview
+              brandId={header.brandId}
+              assetId={selectedAd.creativeAssetId}
+              name={selectedAd.name}
+              onGenerate={requestCreative}
+              disabled={
+                isStreaming ||
+                !['proposed', 'built'].includes(header.lifecycle ?? 'proposed') ||
+                Boolean(approval) ||
+                superseded
+              }
+            />
+          </>
+        ) : null}
+
+        {denial?.reason ? (
+          <p className="text-muted-foreground text-sm">Reason: {denial.reason}</p>
+        ) : null}
+
+        {expired && !decided ? (
+          <p className="text-muted-foreground text-sm">
+            That approval expired, so nothing was created. Deploy again to open a fresh one.
+          </p>
+        ) : null}
+
+        {deployMode !== 'none' && !scaffold.receipt ? <DeployBlockers blockers={blockers} /> : null}
+
+        {deployError ? (
+          <p
+            className="rounded-lg bg-destructive/5 px-3 py-2 text-destructive text-sm"
+            data-testid="scaffold-deploy-error"
+            role="alert"
+          >
+            {deployError}
+          </p>
+        ) : null}
+      </AgentCardBody>
+
+      {liveApproval && onDecide && approval && gate?.gate === 'publish' ? (
+        <AgentActions className="flex-wrap px-4 pb-4">
+          <AgentButton
+            variant="ghost"
+            disabled={isStreaming}
+            onClick={() => onDecide?.(approval, 'deny')}
+          >
+            Deny
+          </AgentButton>
+          <AgentButton
+            variant="ghost"
+            disabled={isStreaming}
+            onClick={() => onDecide?.(approval, 'approve', 'publish_only')}
+          >
+            Publish only
+          </AgentButton>
+          <AgentButton
+            variant="primary"
+            disabled={isStreaming}
+            onClick={() => onDecide?.(approval, 'approve', 'publish_and_enroll')}
+          >
+            Publish &amp; auto-enroll
+          </AgentButton>
+        </AgentActions>
+      ) : deployMode !== 'none' ? (
+        <AgentActions className="mt-0 flex-wrap justify-between gap-2 px-4 py-3">
+          <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
+            {deployRequested
+              ? 'Opening the approval below…'
+              : deployOpenedBelow
+                ? 'The approval opened below — answer it there.'
+                : 'Everything lands paused. Going live is a separate unpause you approve.'}
+          </p>
+          <div className="flex items-center gap-1">
+            {deployMode === 'approve' && approval ? (
+              <AgentButton
+                variant="ghost"
+                disabled={isStreaming}
+                onClick={() => onDecide?.(approval, 'deny')}
+              >
+                Dismiss
+              </AgentButton>
+            ) : null}
             <AgentButton
               variant="primary"
-              disabled={isStreaming}
-              onClick={() => onDecide?.(approval, 'approve', 'publish_and_enroll')}
+              disabled={
+                isStreaming ||
+                deployRequested ||
+                blockers.length > 0 ||
+                (deployMode === 'open' && !contentHash)
+              }
+              onClick={handleDeploy}
+              data-testid="scaffold-deploy"
+              data-action={deployMode}
+              title={blockers[0]?.message}
             >
-              Publish &amp; auto-enroll
+              {deployMode === 'approve' && gate ? gate.label : 'Deploy paused'}
             </AgentButton>
-          </AgentActions>
-        ) : deployMode !== 'none' ? (
-          <AgentActions className="mt-0 flex-wrap justify-between gap-2 px-4 py-3">
-            <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
-              {deployRequested
-                ? 'Opening the approval below…'
-                : deployOpenedBelow
-                  ? 'The approval opened below — answer it there.'
-                  : 'Everything lands paused. Going live is a separate unpause you approve.'}
-            </p>
-            <div className="flex items-center gap-1">
-              {deployMode === 'approve' && approval ? (
-                <AgentButton
-                  variant="ghost"
-                  disabled={isStreaming}
-                  onClick={() => onDecide?.(approval, 'deny')}
-                >
-                  Dismiss
-                </AgentButton>
-              ) : null}
-              <AgentButton
-                variant="primary"
-                disabled={
-                  isStreaming ||
-                  deployRequested ||
-                  blockers.length > 0 ||
-                  (deployMode === 'open' && !contentHash)
-                }
-                onClick={handleDeploy}
-                data-testid="scaffold-deploy"
-                data-action={deployMode}
-                title={blockers[0]?.message}
-              >
-                {deployMode === 'approve' && gate ? gate.label : 'Deploy paused'}
-              </AgentButton>
-            </div>
-          </AgentActions>
-        ) : null}
-      </AgentDecisionCard>
-
-      <Dialog open={canvasOpen} onOpenChange={setCanvasOpen}>
-        <DialogContent className="flex h-[88vh] w-[95vw] max-w-[95vw] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b px-4 py-3">
-            <DialogTitle className="text-sm">Campaign scaffold — tree view</DialogTitle>
-          </DialogHeader>
-          <div className="min-h-0 flex-1">
-            {tree ? (
-              <ScaffoldTreeCanvas
-                tree={tree}
-                currency={currency}
-                selectedPathKey={selectedPathKey}
-                onSelect={setSelectedPathKey}
-              />
-            ) : null}
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        </AgentActions>
+      ) : null}
+    </AgentDecisionCard>
   );
 }
 

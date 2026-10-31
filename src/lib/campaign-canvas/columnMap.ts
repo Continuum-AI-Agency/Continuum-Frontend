@@ -20,6 +20,7 @@ import {
   lecturaMoney,
   type ScaffoldMark,
 } from './lectura';
+import { type CampaignPlatform, type PlatformLabels, platformLabelsOf } from './platformLabels';
 
 export type MapCardLevel = 'campaign' | 'adset' | 'ad';
 
@@ -47,7 +48,11 @@ export type MapCard = {
 export type MapAdSet = MapCard & { ads: MapCard[] };
 export type MapCampaign = MapCard & { adSets: MapAdSet[] };
 
-export type ColumnMapModel = { campaigns: MapCampaign[] };
+export type ColumnMapModel = {
+  campaigns: MapCampaign[];
+  /** Whose words the cards use (Meta's ad set, Google's ad group / asset group, TikTok's). */
+  platform: CampaignPlatform;
+};
 
 /** Sizes of the companion's compact Map. 3 × 168 + 2 × 24 = 552 ≤ the 560 px narrowest pane. */
 export const COLUMN_MAP = {
@@ -92,35 +97,63 @@ const CARD = {
   line: 15,
   row: 30,
   thumbnail: 40,
-  /** Characters of 12 px semibold that safely fit one title line in a 168 px card. */
-  titleCharsPerLine: 20,
+  /** The title's box: 168 less the 1.5 px borders and the 10 px side padding. */
+  titleWidth: 145,
+  /** Beside a 40 px thumbnail and its 8 px gap. */
+  titleWidthWithThumbnail: 97,
+  /** 12 px semibold. */
+  fontSize: 12,
 } as const;
 
 /**
- * How many lines the title wraps to (clamped at 2), by greedy word wrap. It errs long — an
- * over-estimate leaves a little air, an under-estimate would clip the line below the title.
+ * Advance widths of Geist SemiBold — the app's sans at the title's weight — in hundredths of an
+ * em, measured in Chromium (`canvas.measureText`, 2026-10-31). A character outside the table
+ * counts as a wide lowercase.
  */
-export const titleLinesOf = (title: string): 1 | 2 => {
+const GLYPHS =
+  ' !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~áéíóúñÁÉÍÓÚÑ¿¡·—';
+const GLYPH_EM: readonly number[] = [
+  24, 24, 38, 55, 66, 82, 68, 20, 31, 31, 42, 57, 23, 42, 23, 51, 68, 43, 64, 64, 64, 66, 62, 54,
+  64, 62, 31, 31, 55, 55, 55, 58, 94, 71, 70, 72, 71, 62, 60, 73, 72, 29, 62, 67, 59, 90, 75, 76,
+  66, 76, 69, 67, 58, 70, 71, 99, 66, 61, 58, 38, 49, 38, 45, 56, 27, 58, 62, 58, 62, 59, 43, 62,
+  60, 27, 31, 63, 30, 89, 60, 60, 62, 62, 41, 55, 43, 60, 58, 84, 63, 57, 57, 40, 28, 40, 52, 58,
+  59, 27, 60, 60, 60, 71, 62, 29, 76, 70, 75, 58, 24, 23, 91,
+];
+const GLYPH_WIDTH = new Map(
+  [...GLYPHS].map((glyph, index) => [glyph, (GLYPH_EM[index] ?? 62) / 100]),
+);
+/** A word's width in px, 2% long so a line that only just fits wraps on paper first. */
+const wordPx = (word: string): number =>
+  [...word].reduce((total, glyph) => total + (GLYPH_WIDTH.get(glyph) ?? 0.62), 0) *
+  CARD.fontSize *
+  1.02;
+
+/**
+ * How many lines the title wraps to (clamped at 2), by greedy word wrap over the font's own
+ * glyph widths. A count of characters erred two lines on titles that render on one, which left
+ * a blank line under them; widths keep the estimate on the line the browser actually breaks at.
+ */
+export const titleLinesOf = (title: string, width: number = CARD.titleWidth): 1 | 2 => {
+  const space = wordPx(' ');
   let line = 0;
-  let lines = 1;
   for (const word of title.trim().split(/\s+/)) {
-    const needed = line === 0 ? word.length : line + 1 + word.length;
-    if (needed <= CARD.titleCharsPerLine) {
+    const needed = line === 0 ? wordPx(word) : line + space + wordPx(word);
+    if (needed <= width) {
       line = needed;
       continue;
     }
-    lines += 1;
-    if (lines >= 2) return 2;
-    line = word.length;
+    // A word longer than the line breaks inside it (break-words): it alone fills two.
+    return 2;
   }
-  return lines > 1 ? 2 : 1;
+  return 1;
 };
 
 export const cardHeight = (card: MapCard): number => {
+  const titleWidth = card.thumbnailUrl ? CARD.titleWidthWithThumbnail : CARD.titleWidth;
   const text =
     CARD.padding +
     CARD.header +
-    CARD.titleLine * titleLinesOf(card.title) +
+    CARD.titleLine * titleLinesOf(card.title, titleWidth) +
     CARD.line * (card.lines.length + (card.note ? 1 : 0) + (card.audienceLine ? 1 : 0)) +
     CARD.row * card.rows.length;
   return card.thumbnailUrl ? Math.max(text, CARD.padding + CARD.thumbnail) : text;
@@ -159,8 +192,11 @@ export type ColumnCampaignView = { campaign: MapCampaign; slots: ColumnSlot[] };
 
 export const collapsedGroupId = (campaignId: string): string => `${campaignId}:unchanged`;
 
-export const collapsedGroupLabel = (group: CollapsedGroup): string => {
-  const noun = group.count === 1 ? 'unchanged ad set' : 'unchanged ad sets';
+export const collapsedGroupLabel = (
+  group: CollapsedGroup,
+  labels: PlatformLabels = platformLabelsOf('meta'),
+): string => {
+  const noun = `unchanged ${group.count === 1 ? labels.singular.adset : labels.plural.adset}`;
   return group.expanded ? `Hide ${group.count} ${noun}` : `+ ${group.count} ${noun}`;
 };
 
@@ -412,8 +448,12 @@ const perDay = (minor: number | null, currency: string | null): string | null =>
   return text ? `${text}/day` : null;
 };
 
+/** The title already carries a new name; a 168 px row cannot hold two long names anyway. */
 const shownRows = (rows: LecturaRow[]): LecturaRow[] =>
-  rows.filter((row) => row.field !== 'status');
+  rows.filter((row) => row.field !== 'status' && row.field !== 'name');
+
+const renamedNote = (rows: LecturaRow[]): string | null =>
+  rows.some((row) => row.field === 'name') ? 'renamed' : null;
 
 const creativeLine = (ad: LecturaAd): string =>
   ad.creativeKind
@@ -429,7 +469,9 @@ const creativeLine = (ad: LecturaAd): string =>
 export const columnMapFromView = (model: CampaignViewModel): ColumnMapModel => {
   const { currency } = model;
   const live = model.source === 'live';
+  const labels = platformLabelsOf(model.platform);
   return {
+    platform: model.platform,
     campaigns: model.campaigns.map(
       (campaign): MapCampaign => ({
         id: campaign.id,
@@ -440,7 +482,7 @@ export const columnMapFromView = (model: CampaignViewModel): ColumnMapModel => {
         lines: factLine(campaign.objective, perDay(campaign.budgetMinor, currency)),
         audienceLine: null,
         rows: shownRows(campaign.rows),
-        note: null,
+        note: renamedNote(campaign.rows),
         thumbnailUrl: null,
         folded: NO_FOLD,
         adSets: campaign.adSets.map(
@@ -460,21 +502,23 @@ export const columnMapFromView = (model: CampaignViewModel): ColumnMapModel => {
                 : null,
             thumbnailUrl: null,
             folded: { audienceId: adSet.audienceId, creativeId: null },
-            ads: adSet.ads.map(
-              (ad): MapCard => ({
-                id: ad.id,
-                level: 'ad',
-                mark: ad.mark,
-                title: ad.name,
-                status: humanStatus(ad.status),
-                lines: live ? factLine(perDay(ad.budgetMinor, currency)) : [creativeLine(ad)],
-                audienceLine: null,
-                rows: shownRows(ad.rows),
-                note: ad.stops ? 'stops with its ad set' : null,
-                thumbnailUrl: ad.thumbnailUrl,
-                folded: { audienceId: null, creativeId: ad.creativeId },
-              }),
-            ),
+            ads: !labels.hasAds
+              ? assetCardsOf(adSet, labels)
+              : adSet.ads.map(
+                  (ad): MapCard => ({
+                    id: ad.id,
+                    level: 'ad',
+                    mark: ad.mark,
+                    title: ad.name,
+                    status: humanStatus(ad.status),
+                    lines: live ? factLine(perDay(ad.budgetMinor, currency)) : [creativeLine(ad)],
+                    audienceLine: null,
+                    rows: shownRows(ad.rows),
+                    note: ad.stops ? `stops with its ${labels.singular.adset}` : null,
+                    thumbnailUrl: ad.thumbnailUrl,
+                    folded: { audienceId: null, creativeId: ad.creativeId },
+                  }),
+                ),
           }),
         ),
       }),
@@ -483,6 +527,36 @@ export const columnMapFromView = (model: CampaignViewModel): ColumnMapModel => {
 };
 
 const NO_FOLD = { audienceId: null, creativeId: null } as const;
+
+/**
+ * Performance Max has no ads: an asset group holds a pool of assets Google combines, so its
+ * third-column card is what the pool holds — one card, marked new with a new asset group.
+ */
+const assetCardsOf = (
+  adSet: CampaignViewModel['campaigns'][number]['adSets'][number],
+  labels: PlatformLabels,
+): MapCard[] =>
+  adSet.assetSummary
+    ? [
+        {
+          id: `${adSet.id}:assets`,
+          level: 'ad',
+          mark: adSet.mark === 'added' ? 'added' : 'unchanged',
+          // The level already says "Assets"; the title says what the pool holds.
+          title: adSet.assetSummary,
+          status: null,
+          lines: [],
+          audienceLine: null,
+          rows: [],
+          note:
+            adSet.mark === 'paused' || adSet.stopsWithParent
+              ? `stops with its ${labels.singular.adset}`
+              : null,
+          thumbnailUrl: null,
+          folded: NO_FOLD,
+        },
+      ]
+    : [];
 
 /** A pending edit to a live campaign, with Meta's own marks. */
 export const columnMapFromLiveChange = (preview: LiveChangePreviewPayload): ColumnMapModel =>

@@ -13,10 +13,6 @@ import type { BaseCampaignNodeData } from '../types';
  * read "Approved" on an ad set and "approved" on an ad would be two vocabularies for
  * one fact. Draft nodes render nothing at all, which is how the two kinds of node stay
  * visually distinguishable without a badge announcing it.
- *
- * The pill vocabulary is deliberately the SAME one `ScaffoldStatusPill` uses on the
- * scaffold card, for the same reason: a reader moving between the two surfaces should
- * not have to relearn what a colour means.
  */
 
 type Tone = 'success' | 'error' | 'warning' | 'info';
@@ -82,7 +78,10 @@ export function NodeProvenance({ data }: { data: BaseCampaignNodeData }) {
           </span>
         ) : null}
 
-        <span className="font-mono text-2xs text-muted-foreground" data-testid="canvas-node-meta-id">
+        <span
+          className="font-mono text-2xs text-muted-foreground"
+          data-testid="canvas-node-meta-id"
+        >
           {data.metaId ? `Meta ID: ${data.metaId}` : `Not on Meta · ${provenance.pathKey}`}
         </span>
       </div>

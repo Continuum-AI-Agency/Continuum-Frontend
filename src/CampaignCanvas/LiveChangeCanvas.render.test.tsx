@@ -65,6 +65,7 @@ const cardHtml = (id: string) => {
   return renderToStaticMarkup(
     <MapCardBox
       card={card}
+      levelLabel={card.level === 'adset' ? 'Ad set' : card.level === 'ad' ? 'Ad' : 'Campaign'}
       height={cardHeight(card)}
       dimmed={card.mark === 'unchanged'}
       focused={false}

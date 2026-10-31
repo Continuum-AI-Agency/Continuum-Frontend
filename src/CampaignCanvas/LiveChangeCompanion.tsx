@@ -10,7 +10,7 @@ import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { LiveChangeCanvas, LiveChangeDecisionPill } from './LiveChangeCanvas';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
-import { LecturaView } from './lectura/LecturaView';
+import { LecturaView, PlatformChip } from './lectura/LecturaView';
 
 export function LiveChangeCompanion({
   preview,
@@ -24,8 +24,9 @@ export function LiveChangeCompanion({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background" data-testid="live-change-companion">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
-        <span className="min-w-[12rem] flex-1 text-[13px] text-muted-foreground">
-          {preview.subject ?? 'Pending change'}
+        <span className="flex min-w-[12rem] flex-1 items-baseline gap-2 text-[13px] text-muted-foreground">
+          <PlatformChip platform={model.platform} />
+          <span className="min-w-0">{preview.subject ?? 'Pending change'}</span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <LiveChangeDecisionPill decision={decision} />

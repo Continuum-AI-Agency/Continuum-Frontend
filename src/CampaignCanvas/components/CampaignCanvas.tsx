@@ -69,7 +69,9 @@ import {
   initialColumnViewport,
 } from '@/lib/campaign-canvas/columnMap';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
 import { ColumnMapFlow } from '../columnMap/ColumnMapFlow';
+import { useStoreScaffoldMarks } from '../lectura/StoreLectura';
 import { AdNode } from '../nodes/AdNode';
 import { AdSetNode } from '../nodes/AdSetNode';
 import { AudienceNode } from '../nodes/AudienceNode';
@@ -128,7 +130,14 @@ function getClientPositionFromPointerEvent(
  */
 export type CampaignCanvasLayout = 'free' | 'columns';
 
-export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLayout }) => {
+export const CampaignCanvas = ({
+  layout = 'free',
+  structureDiff = null,
+}: {
+  layout?: CampaignCanvasLayout;
+  /** The Backend's diff of a campaign copy, from the chat beside the canvas (columns only). */
+  structureDiff?: ScaffoldStructureDiff | null;
+}) => {
   const {
     nodes,
     edges,
@@ -353,10 +362,13 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
 
   const selectedCount = useMemo(() => nodes.filter((n) => n.selected).length, [nodes]);
 
+  const marks = useStoreScaffoldMarks(structureDiff);
   const columnModel = useMemo(
     () =>
-      layout === 'columns' && platform !== 'openai' ? columnMapFromCanvasGraph(nodes, edges) : null,
-    [edges, layout, nodes, platform],
+      layout === 'columns' && platform !== 'openai'
+        ? columnMapFromCanvasGraph(nodes, edges, marks)
+        : null,
+    [edges, layout, marks, nodes, platform],
   );
   const inColumns = columnModel !== null && columnsShowEveryNode(columnModel, nodes);
   // "Fit to screen" in columns fits the WIDTH: the map grows downward, and fitting its height

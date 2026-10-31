@@ -16,6 +16,7 @@ import {
   PanelRightOpen,
   PlayCircle,
 } from 'lucide-react';
+import Link from 'next/link';
 import * as React from 'react';
 import {
   type BudgetSlice,
@@ -29,6 +30,12 @@ import {
   lecturaMoney,
   prefersLecturaTable,
 } from '@/lib/campaign-canvas/lectura';
+import {
+  type CampaignPlatform,
+  countOf,
+  type PlatformLabels,
+  platformLabelsOf,
+} from '@/lib/campaign-canvas/platformLabels';
 import { cn } from '@/lib/utils';
 
 const CARD_TONE: Record<LecturaMark, string> = {
@@ -61,6 +68,19 @@ const SLICE_LABEL: Record<BudgetSlice['tone'], string> = {
   removed: 'Stops',
   new: 'New, paused',
 };
+
+/** Whose campaign this is — Meta, Google Search, Google PMax, TikTok — beside the header. */
+export function PlatformChip({ platform }: { platform: CampaignPlatform }) {
+  return (
+    <span
+      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-[10.5px] uppercase leading-4 tracking-wide text-muted-foreground"
+      data-testid="platform-chip"
+      data-platform={platform}
+    >
+      {platformLabelsOf(platform).chip}
+    </span>
+  );
+}
 
 function MarkTag({ mark }: { mark: LecturaMark }) {
   const tag = TAG[mark];
@@ -103,6 +123,9 @@ function Rows({ rows }: { rows: LecturaRow[] }) {
 
 const KIND_ICON = { image: ImageIcon, video: PlayCircle, carousel: Images } as const;
 
+/** Meta says ACTIVE, Google ENABLED: delivering needs no word of its own. */
+const DELIVERING_STATUS = new Set(['ACTIVE', 'ENABLED']);
+
 function AdThumb({ ad }: { ad: LecturaAd }) {
   const Icon = ad.creativeKind ? KIND_ICON[ad.creativeKind] : ImageIcon;
   // A signed thumbnail URL expires; a broken image reads worse than the typed placeholder.
@@ -127,10 +150,10 @@ function AdThumb({ ad }: { ad: LecturaAd }) {
 
 const ADS_SHOWN = 6;
 
-function AdList({ ads }: { ads: LecturaAd[] }) {
+function AdList({ ads, labels }: { ads: LecturaAd[]; labels: PlatformLabels }) {
   const [showAll, setShowAll] = React.useState(false);
   if (ads.length === 0) {
-    return <p className="text-[13px] text-muted-foreground">No ads read</p>;
+    return <p className="text-[13px] text-muted-foreground">No {labels.plural.ad} read</p>;
   }
   const shown = showAll ? ads : ads.slice(0, ADS_SHOWN);
   return (
@@ -145,7 +168,9 @@ function AdList({ ads }: { ads: LecturaAd[] }) {
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium">{ad.name}</span>
             {ad.stops ? (
-              <span className="block text-xs text-muted-foreground">Stops with its ad set</span>
+              <span className="block text-xs text-muted-foreground">
+                Stops with its {labels.singular.adset}
+              </span>
             ) : ad.mark !== 'unchanged' ? (
               <span className="block text-xs text-muted-foreground">
                 {TAG[ad.mark]?.label ?? null}
@@ -161,7 +186,7 @@ function AdList({ ads }: { ads: LecturaAd[] }) {
             className="text-[13px] font-medium text-primary-ink hover:underline focus-visible:underline focus-visible:outline-none"
             onClick={() => setShowAll((value) => !value)}
           >
-            {showAll ? 'Show fewer' : `Show all ${ads.length} ads`}
+            {showAll ? 'Show fewer' : `Show all ${ads.length} ${labels.plural.ad}`}
           </button>
         </li>
       ) : null}
@@ -176,7 +201,8 @@ function BudgetLine({ adSet, currency }: { adSet: LecturaAdSet; currency: string
   const budgetRowShown = adSet.rows.some((row) => row.field === 'daily_budget');
   if (budgetRowShown) return null;
   if (adSet.mark === 'paused' || adSet.stopsWithParent) {
-    return <BeforeAfter before={`${before ?? after}/day`} after="stops" />;
+    // Under a campaign budget the ad set has none of its own to stop.
+    return before ? <BeforeAfter before={`${before}/day`} after="stops" /> : null;
   }
   return <span className="tabular-nums">{`${after ?? before}/day`}</span>;
 }
@@ -205,14 +231,27 @@ function ProvenancePills({ adSet }: { adSet: LecturaAdSet }) {
   );
 }
 
+/** Performance Max: an asset group holds a pool of assets, not ads — one line says what. */
+function AssetSummary({ adSet }: { adSet: LecturaAdSet }) {
+  return (
+    <p className="text-[13px] text-muted-foreground" data-testid={`lectura-assets-${adSet.id}`}>
+      <span className="font-medium text-foreground">Assets</span>
+      {' · '}
+      {adSet.assetSummary ?? 'No assets read'}
+    </p>
+  );
+}
+
 export function LecturaAdSetCard({
   adSet,
   currency,
   dimUnchanged,
+  labels = platformLabelsOf('meta'),
 }: {
   adSet: LecturaAdSet;
   currency: string | null;
   dimUnchanged: boolean;
+  labels?: PlatformLabels;
 }) {
   const stopped = adSet.mark === 'paused' || adSet.stopsWithParent;
   return (
@@ -236,13 +275,13 @@ export function LecturaAdSetCard({
       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-muted-foreground">
         <BudgetLine adSet={adSet} currency={currency} />
         {adSet.audience ? <span className="min-w-0 break-words">{adSet.audience}</span> : null}
-        {adSet.status && !stopped && adSet.status !== 'ACTIVE' ? (
+        {adSet.status && !stopped && !DELIVERING_STATUS.has(adSet.status) ? (
           <span className="opacity-75">{humanStatus(adSet.status)}</span>
         ) : null}
         {adSet.stopsWithParent ? <span>Stops with its campaign</span> : null}
       </div>
       <ProvenancePills adSet={adSet} />
-      <AdList ads={adSet.ads} />
+      {labels.hasAds ? <AdList ads={adSet.ads} labels={labels} /> : <AssetSummary adSet={adSet} />}
     </article>
   );
 }
@@ -251,12 +290,14 @@ function ChangeCard({
   change,
   adSet,
   currency,
+  labels,
   expanded,
   onToggle,
 }: {
   change: LecturaChange;
   adSet: LecturaAdSet | null;
   currency: string | null;
+  labels: PlatformLabels;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -306,7 +347,12 @@ function ChangeCard({
           className="border-t border-border/70 p-2"
           data-testid={`lectura-change-${change.id}-expanded`}
         >
-          <LecturaAdSetCard adSet={adSet} currency={currency} dimUnchanged={false} />
+          <LecturaAdSetCard
+            adSet={adSet}
+            currency={currency}
+            dimUnchanged={false}
+            labels={labels}
+          />
         </div>
       ) : null}
     </li>
@@ -377,6 +423,7 @@ function BudgetBand({ model }: { model: LecturaModel }) {
 }
 
 function LecturaTable({ model }: { model: LecturaModel }) {
+  const labels = platformLabelsOf(model.platform);
   return (
     <div
       className="overflow-x-auto rounded-xl border border-border bg-card"
@@ -385,10 +432,10 @@ function LecturaTable({ model }: { model: LecturaModel }) {
       <table className="w-full min-w-[520px] border-collapse text-[13px] tabular-nums">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-3 py-2 font-medium">Ad set</th>
+            <th className="px-3 py-2 font-medium">{labels.level.adset}</th>
             <th className="px-3 py-2 font-medium">Budget/day</th>
             <th className="px-3 py-2 font-medium">Change</th>
-            <th className="px-3 py-2 text-right font-medium">Ads</th>
+            <th className="px-3 py-2 text-right font-medium">{labels.hasAds ? 'Ads' : 'Assets'}</th>
           </tr>
         </thead>
         <tbody>
@@ -455,7 +502,9 @@ function LecturaTable({ model }: { model: LecturaModel }) {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right">{adSet.ads.length}</td>
+                    <td className="px-3 py-2 text-right">
+                      {labels.hasAds ? adSet.ads.length : (adSet.assetSummary ?? '—')}
+                    </td>
                   </tr>
                 );
               })}
@@ -474,6 +523,46 @@ export type CampaignViewSize = 'chat' | 'panel' | 'page';
 
 /** The chat keeps the first few changes; the rest wait behind "Open in canvas". */
 export const CHAT_CHANGES_SHOWN = 3;
+
+/** A new campaign has no changes to list: the chat names its first few ad sets instead. */
+export const CHAT_AD_SETS_SHOWN = 4;
+
+/** A brand-new campaign at chat size: one line per ad set — name, budget, how many ads. */
+function ChatAdSetLines({ model, labels }: { model: LecturaModel; labels: PlatformLabels }) {
+  const adSets = model.campaigns.flatMap((campaign) => campaign.adSets);
+  const shown = adSets.slice(0, CHAT_AD_SETS_SHOWN);
+  const more = adSets.length - shown.length;
+  if (shown.length === 0) return null;
+  return (
+    <ul
+      className="grid divide-y divide-border/70 rounded-lg border border-border text-[13px]"
+      data-testid="lectura-chat-adsets"
+    >
+      {shown.map((adSet) => {
+        const budget = lecturaMoney(adSet.budgetMinor, model.currency);
+        const detail = [
+          budget ? `${budget}/day` : null,
+          labels.hasAds ? countOf(labels, 'ad', adSet.ads.length) : adSet.assetSummary,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <li key={adSet.id} className="flex min-w-0 items-baseline gap-2 px-2.5 py-1.5">
+            <span className="min-w-0 flex-1 truncate font-medium" title={adSet.name}>
+              {adSet.name}
+            </span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{detail}</span>
+          </li>
+        );
+      })}
+      {more > 0 ? (
+        <li className="px-2.5 py-1.5 text-xs text-muted-foreground">
+          +{countOf(labels, 'adset', more)} more in the canvas
+        </li>
+      ) : null}
+    </ul>
+  );
+}
 
 /** The daily total as one line: "$1,150 → $1,000/day", or "$600/day". */
 function BudgetSummary({ model }: { model: LecturaModel }) {
@@ -505,32 +594,43 @@ function BudgetSummary({ model }: { model: LecturaModel }) {
  * The chat's size: the changes first (no expanding — the canvas is one click away), the
  * budget before → after, and "Open in canvas". Drawn by the same pieces as the pane.
  */
+const OPEN_CLASS =
+  'inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[13px] font-medium text-primary-ink hover:bg-secondary focus-visible:outline-2 focus-visible:outline-primary';
+
 export function LecturaChatCard({
   model,
   title,
   onOpen,
+  openHref,
+  testId = 'lectura-chat-card',
 }: {
   model: LecturaModel;
   title?: string | null;
   onOpen?: () => void;
+  /** Where no canvas sits beside the chat: "Open in canvas" goes to the Canvas page. */
+  openHref?: string | null;
+  testId?: string;
 }) {
+  const labels = platformLabelsOf(model.platform);
   const shown = model.changes.slice(0, CHAT_CHANGES_SHOWN);
   const more = model.changes.length - shown.length;
   return (
     <section
       className="grid min-w-0 gap-2.5 rounded-xl border border-border bg-card p-3"
-      data-testid="lectura-chat-card"
+      data-testid={testId}
       data-size="chat"
+      data-platform={model.platform}
       aria-label={title ?? 'Campaign changes'}
     >
       <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <h3 className="min-w-0 break-words text-sm font-semibold leading-snug">
-          {title ?? model.campaigns[0]?.name ?? 'Campaign'}
+        <h3 className="flex min-w-0 items-baseline gap-2 break-words text-sm font-semibold leading-snug">
+          <PlatformChip platform={model.platform} />
+          <span className="min-w-0">{title ?? model.campaigns[0]?.name ?? 'Campaign'}</span>
         </h3>
         {/* A given title (Jaina's subject) already counts the changes; the campaign name does not. */}
         <span className={cn('text-xs text-muted-foreground', title && 'sr-only')}>
           {model.changes.length === 0
-            ? `${model.adSetCount} ${model.adSetCount === 1 ? 'ad set' : 'ad sets'}`
+            ? countOf(labels, 'adset', model.adSetCount)
             : model.changes.length === 1
               ? '1 change'
               : `${model.changes.length} changes`}
@@ -544,6 +644,7 @@ export function LecturaChatCard({
               change={change}
               adSet={null}
               currency={model.currency}
+              labels={labels}
               expanded={false}
               onToggle={() => {}}
             />
@@ -555,17 +656,23 @@ export function LecturaChatCard({
           +{more} more {more === 1 ? 'change' : 'changes'} in the canvas
         </p>
       ) : null}
+      {model.changes.length === 0 ? <ChatAdSetLines model={model} labels={labels} /> : null}
       <BudgetSummary model={model} />
       {onOpen ? (
         <button
           type="button"
           onClick={onOpen}
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[13px] font-medium text-primary-ink hover:bg-secondary focus-visible:outline-2 focus-visible:outline-primary"
+          className={OPEN_CLASS}
           data-testid="lectura-open-in-canvas"
         >
           <PanelRightOpen className="size-3.5" aria-hidden />
           Open in canvas
         </button>
+      ) : openHref ? (
+        <Link href={openHref} className={OPEN_CLASS} data-testid="lectura-open-in-canvas">
+          <PanelRightOpen className="size-3.5" aria-hidden />
+          Open in canvas
+        </Link>
       ) : null}
     </section>
   );
@@ -578,6 +685,7 @@ export function LecturaView({
   size = 'panel',
   title,
   onOpen,
+  openHref,
 }: {
   model: LecturaModel;
   initialExpandedId?: string | null;
@@ -587,8 +695,12 @@ export function LecturaView({
   title?: string | null;
   /** `chat` only: opens the companion canvas on this campaign. */
   onOpen?: () => void;
+  /** `chat` only, without `onOpen`: the Canvas page for this campaign. */
+  openHref?: string | null;
 }) {
-  if (size === 'chat') return <LecturaChatCard model={model} title={title} onOpen={onOpen} />;
+  if (size === 'chat') {
+    return <LecturaChatCard model={model} title={title} onOpen={onOpen} openHref={openHref} />;
+  }
   return (
     <LecturaPane
       model={model}
@@ -621,6 +733,7 @@ function LecturaPane({
       ),
     [model],
   );
+  const labels = platformLabelsOf(model.platform);
   // A live edit and a campaign copy both carry changes; a brand-new campaign carries none.
   const showChanges = model.changes.length > 0;
   const multiCampaign = model.campaigns.length > 1;
@@ -652,6 +765,7 @@ function LecturaPane({
                     change={change}
                     adSet={adSet}
                     currency={model.currency}
+                    labels={labels}
                     expanded={expandedId === change.id}
                     onToggle={() =>
                       setExpandedId((current) => (current === change.id ? null : change.id))
@@ -668,7 +782,7 @@ function LecturaPane({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {showChanges ? 'Whole campaign · ' : ''}
-            {model.adSetCount === 1 ? '1 ad set' : `${model.adSetCount} ad sets`}
+            {countOf(labels, 'adset', model.adSetCount)}
           </h3>
           <fieldset
             aria-label="Layout"
@@ -717,6 +831,7 @@ function LecturaPane({
                       adSet={adSet}
                       currency={model.currency}
                       dimUnchanged={showChanges}
+                      labels={labels}
                     />
                   ))}
                 </div>

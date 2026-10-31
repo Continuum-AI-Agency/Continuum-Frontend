@@ -48,6 +48,7 @@ import {
 } from '@/lib/campaign-canvas/creativeGeneration';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
 import {
@@ -434,6 +435,10 @@ export default function PaidMediaClientPage({
   // Why the companion shows its scaffold: a proposal opens in Read, anything else in Map.
   const [companionViewContext, setCompanionViewContext] =
     React.useState<CanvasViewContext>('manual');
+  const [companionViewTask, setCompanionViewTask] = React.useState(0);
+  // The Backend's diff of a campaign copy, so the companion marks exactly what it adds.
+  const [companionStructureDiff, setCompanionStructureDiff] =
+    React.useState<ScaffoldStructureDiff | null>(null);
   // A pending edit to a live campaign, shown on the same pane until a scaffold takes it over.
   const [companionLiveChange, setCompanionLiveChange] = React.useState<{
     preview: LiveChangePreviewPayload;
@@ -590,9 +595,16 @@ export default function PaidMediaClientPage({
   // A proposal or a card's Expand opens the companion; a loaded thread only points it, so
   // switching threads never reopens a canvas someone closed.
   const handleScaffoldFocus = React.useCallback(
-    (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
+    (
+      parentScaffoldId: string,
+      reason: 'proposed' | 'thread' | 'expand',
+      diff: ScaffoldStructureDiff | null,
+    ) => {
       setCompanionScaffoldId(parentScaffoldId);
       setCompanionViewContext(canvasViewContextOf(reason));
+      setCompanionStructureDiff(diff);
+      // Each focus is a task of its own: a second proposal re-opens in Read even mid-edit.
+      setCompanionViewTask((task) => task + 1);
       if (reason !== 'thread') {
         setCompanionLiveChange(null);
         setIsCanvasOpen(true);
@@ -1082,6 +1094,8 @@ export default function PaidMediaClientPage({
                               brandId={brandProfileId}
                               scaffoldId={companionScaffoldId}
                               viewContext={companionViewContext}
+                              viewTaskKey={companionViewTask}
+                              structureDiff={companionStructureDiff}
                               onSend={sendCompanionTurn}
                               onDeploy={companionDeploy.requestDeploy}
                               deployInFlight={companionDeploy.inFlight}

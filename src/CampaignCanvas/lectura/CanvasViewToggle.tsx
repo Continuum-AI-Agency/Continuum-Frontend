@@ -49,9 +49,13 @@ const usePhoneViewport = (): boolean => {
  * auto picks per task; your last explicit pick per task kind overrides). It starts on the
  * rule's default so the server and the first client paint agree, then reads the person's
  * remembered choices after mount. A new `context` from the host is a new task: it forgets
- * that the last one was being edited.
+ * that the last one was being edited. So is a new `taskKey` with the same context — a second
+ * proposal arriving while the person edits the first one opens in Read again.
  */
-export function useCanvasView(context: CanvasViewContext): {
+export function useCanvasView(
+  context: CanvasViewContext,
+  taskKey: number | string = 0,
+): {
   view: CanvasView;
   setView: (view: CanvasView) => void;
   isPhone: boolean;
@@ -71,9 +75,10 @@ export function useCanvasView(context: CanvasViewContext): {
     setStored(readStoredCanvasViews(browserStorage()));
     setHintDismissed(readCanvasViewHintDismissed(browserStorage()));
   }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: taskKey IS the trigger — a new task with the same context must still reset the view.
   React.useEffect(() => {
     setTask((current) => nextCanvasViewTask(current, { type: 'task', context }));
-  }, [context]);
+  }, [context, taskKey]);
 
   const decision = decideCanvasView({
     context: task.context,

@@ -46,6 +46,7 @@ import {
   stepChange,
 } from '@/lib/campaign-canvas/columnMap';
 import type { LecturaMark } from '@/lib/campaign-canvas/lectura';
+import { type PlatformLabels, platformLabelsOf } from '@/lib/campaign-canvas/platformLabels';
 import { cn } from '@/lib/utils';
 
 const MARK_CLASS: Record<LecturaMark, string> = {
@@ -74,14 +75,10 @@ const MARK_MINIMAP_FILL: Record<LecturaMark | 'collapsed', string> = {
   collapsed: 'var(--muted)',
 };
 
-const LEVEL_LABEL: Record<MapCard['level'], string> = {
-  campaign: 'Campaign',
-  adset: 'Ad set',
-  ad: 'Ad',
-};
-
 export type CardNodeData = {
   card: MapCard;
+  /** The level in the platform's words: "Ad set", "Ad group", "Asset group". */
+  levelLabel: string;
   height: number;
   /** In a proposal, the unchanged boxes step back so the change reads first. */
   dimmed: boolean;
@@ -92,7 +89,11 @@ export type CardNodeData = {
   onSelectFolded: ((id: string) => void) | null;
 };
 
-type CollapsedNodeData = { group: CollapsedGroup; onToggle: (id: string) => void };
+type CollapsedNodeData = {
+  group: CollapsedGroup;
+  labels: PlatformLabels;
+  onToggle: (id: string) => void;
+};
 
 type CardFlowNode = Node<CardNodeData, 'map-card'>;
 type CollapsedFlowNode = Node<CollapsedNodeData, 'map-collapsed'>;
@@ -129,6 +130,7 @@ function MapCardNode({ data, selected }: NodeProps<CardFlowNode>) {
 /** One box of the Map, drawn at exactly the height the layout gave it. */
 export function MapCardBox({
   card,
+  levelLabel,
   height,
   dimmed,
   focused,
@@ -170,7 +172,7 @@ export function MapCardBox({
         <div className="min-w-0 flex-1">
           <div className="flex h-[14px] items-center justify-between gap-1 font-mono text-[10px] leading-[14px] text-muted-foreground">
             <span className="min-w-0 truncate">
-              <span className="uppercase tracking-wide">{LEVEL_LABEL[card.level]}</span>
+              <span className="uppercase tracking-wide">{levelLabel}</span>
               {card.status ? (
                 <span className="font-sans text-muted-foreground/70" data-testid="map-card-status">
                   {' · '}
@@ -254,7 +256,7 @@ function CollapsedGroupNode({ data }: NodeProps<CollapsedFlowNode>) {
         isConnectable={false}
         className={handleClass}
       />
-      {collapsedGroupLabel(data.group)}
+      {collapsedGroupLabel(data.group, data.labels)}
     </button>
   );
 }
@@ -380,6 +382,7 @@ export function ColumnMapFlow({
     });
   }, []);
 
+  const labels = platformLabelsOf(model.platform);
   const views = React.useMemo(() => collapseUnchangedBranches(model, expanded), [model, expanded]);
   const layout = React.useMemo(() => layoutColumns(views), [views]);
   const cards = React.useMemo(() => cardsById(model), [model]);
@@ -410,6 +413,7 @@ export function ColumnMapFlow({
             selectable: false,
             data: {
               group: group ?? { id: placement.id, count: 0, adSetIds: [], expanded: false },
+              labels,
               onToggle: toggleGroup,
             },
           };
@@ -427,6 +431,7 @@ export function ColumnMapFlow({
           selectable: Boolean(onNodesChange),
           data: {
             card,
+            levelLabel: labels.level[card.level],
             height: placement.height,
             dimmed: proposal && card.mark === 'unchanged',
             focused: placement.id === focusedId,
@@ -439,6 +444,7 @@ export function ColumnMapFlow({
     [
       cards,
       focusedId,
+      labels,
       layout,
       onNodesChange,
       onSelectFolded,

@@ -4,11 +4,13 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { PencilLine } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import type { CanvasViewContext } from '@/lib/campaign-canvas/canvasView';
+import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
 import { CanvasJainaContext, canvasJainaSending } from './canvasJaina';
 import { CampaignCanvas } from './components/CampaignCanvas';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import type { CanvasDeployRequest } from './hooks/useDeployRequest';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
+import { PlatformChip } from './lectura/LecturaView';
 import { StoreLectura } from './lectura/StoreLectura';
 import { useCampaignStore } from './stores/useCampaignStore';
 
@@ -36,6 +38,8 @@ export function ScaleCompanionCanvas({
   deployInFlight,
   deployRefusal,
   viewContext = 'manual',
+  viewTaskKey = 0,
+  structureDiff = null,
 }: {
   brandId: string;
   scaffoldId: string | null;
@@ -46,10 +50,16 @@ export function ScaleCompanionCanvas({
   deployRefusal: string | null;
   /** Why the pane is open: a Jaina proposal opens in Read, anything else in Map. */
   viewContext?: CanvasViewContext;
+  /** A new value is a new task (another proposal): it ends editing and re-applies auto mode. */
+  viewTaskKey?: number | string;
+  /** The Backend's diff of a campaign copy, from the chat: exact marks on the copy's nodes. */
+  structureDiff?: ScaffoldStructureDiff | null;
 }) {
   const canvasJaina = useMemo(() => canvasJainaSending(onSend), [onSend]);
-  const { view, setView, isPhone, startEditing, openByHand, hint, dismissHint } =
-    useCanvasView(viewContext);
+  const { view, setView, isPhone, startEditing, openByHand, hint, dismissHint } = useCanvasView(
+    viewContext,
+    viewTaskKey,
+  );
   // The first change to a node makes the task the person's: the Map, whatever opened it.
   const isDirty = useCampaignStore((store) => store.isDirty);
   const wasDirty = useRef(isDirty);
@@ -58,6 +68,7 @@ export function ScaleCompanionCanvas({
     wasDirty.current = isDirty;
   }, [isDirty, startEditing]);
   const hasCampaign = useCampaignStore((store) => store.nodes.length > 0);
+  const platform = useCampaignStore((store) => store.platform);
   return (
     <ReactFlowProvider>
       <CanvasJainaContext.Provider value={canvasJaina}>
@@ -75,6 +86,7 @@ export function ScaleCompanionCanvas({
               />
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {hasCampaign && platform === 'meta' ? <PlatformChip platform="meta" /> : null}
               {view === 'lectura' && hasCampaign && !isPhone ? (
                 <button
                   type="button"
@@ -95,7 +107,11 @@ export function ScaleCompanionCanvas({
             ) : null}
           </div>
           <div className="relative min-h-0 flex-1">
-            {view === 'lectura' ? <StoreLectura /> : <CampaignCanvas layout="columns" />}
+            {view === 'lectura' ? (
+              <StoreLectura structureDiff={structureDiff} />
+            ) : (
+              <CampaignCanvas layout="columns" structureDiff={structureDiff} />
+            )}
           </div>
         </div>
       </CanvasJainaContext.Provider>

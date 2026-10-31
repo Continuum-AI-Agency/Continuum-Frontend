@@ -359,6 +359,47 @@ describe('a build gate asked for a turn after the proposal', () => {
     expect(screen.getByText('Awaiting your approval')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
   });
+
+  it("draws a copy's diff ON its scaffold card, in Read, once — not as a second figure", async () => {
+    const { fixtureStructure } = await import('../blocks/campaignStructure.fixtures');
+    const base = toJainaChatMessage(
+      {
+        id: 'msg_copy',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'paid_scaffold_build',
+            toolCallId: 'call_build',
+            state: 'approval-requested',
+            input: { scaffold_version_id: VERSION, content_hash: 'abc' },
+            approval: { id: 'appr_build' },
+          },
+        ],
+      } as unknown as JainaUIMessage,
+      { isStreaming: false },
+    );
+    const message = {
+      ...base,
+      campaignStructures: [
+        fixtureStructure('diff', { scaffoldId: VERSION }),
+        fixtureStructure('tree', { scaffoldId: VERSION }),
+      ],
+    } as JainaChatMessage;
+
+    render(<JainaMessageItem message={message} onApprovalDecision={() => {}} />, {
+      wrapper: withTree,
+    });
+
+    const card = screen.getByTestId('paid-scaffold-card');
+    expect(
+      card.querySelector('[data-testid="lectura-change-c0/a2"]')?.getAttribute('data-mark'),
+    ).toBe('added');
+    // The compiled picture still draws above; the diff is not drawn a second time.
+    const figures = screen.getAllByTestId('campaign-structure');
+    expect(figures.map((figure) => figure.getAttribute('data-layout'))).toEqual(['tree']);
+    expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
+  });
 });
 
 describe('a live change at chat size', () => {

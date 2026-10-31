@@ -7,11 +7,14 @@
 // per ad set.
 
 import {
+  type CampaignStructurePayload,
   type FieldProvenance,
   formatMoney,
   type LiveChangeNode,
   type LiveChangePreviewPayload,
   type StructureDiff,
+  type StructureDiffEntry,
+  type StructureNode,
 } from '@continuum/contracts';
 import type {
   AdData,
@@ -24,6 +27,13 @@ import type {
   CreativeData,
 } from '@/CampaignCanvas/types';
 import { liveChangeFieldLabel, liveChangeValueText } from './liveChange';
+import {
+  type CampaignPlatform,
+  type PlatformLabels,
+  platformLabelsOf,
+  platformOfLiveChange,
+  platformOfSource,
+} from './platformLabels';
 
 export type LecturaMark = 'changed' | 'added' | 'paused' | 'unchanged';
 
@@ -64,6 +74,8 @@ export type LecturaAdSet = {
   audience: string | null;
   /** The store node of its audience (a scaffold), so the Map can open it. */
   audienceId: string | null;
+  /** Performance Max: what the asset group holds ("5 headlines · 4 images"), in place of ads. */
+  assetSummary: string | null;
   ads: LecturaAd[];
   stopsWithParent: boolean;
   provenance: LecturaProvenance | null;
@@ -106,6 +118,8 @@ export type LecturaModel = {
   kind: 'change' | 'new';
   /** What it was built from: a live change preview, or a scaffold graph (the canvas store). */
   source: 'live' | 'scaffold';
+  /** Whose words the views use: Meta's ad set, Google's ad group or asset group, TikTok's. */
+  platform: CampaignPlatform;
   currency: string | null;
   campaigns: LecturaCampaign[];
   changes: LecturaChange[];
@@ -182,13 +196,19 @@ const budgetAfterOfLive = (node: LiveChangeNode): number | null => {
   return node.dailyBudgetMinor;
 };
 
+/** A Performance Max asset group's assets, worded by the source (`assetSummary`, passthrough). */
+const assetSummaryOf = (node: LiveChangeNode): string | null => {
+  const summary = (node as Record<string, unknown>).assetSummary;
+  return typeof summary === 'string' && summary.trim().length > 0 ? summary.trim() : null;
+};
+
 const basisOf = (node: LiveChangeNode): string | null => {
   const basis = (node as Record<string, unknown>).basis;
   return typeof basis === 'string' && basis.trim().length > 0 ? basis.trim() : null;
 };
 
-const titleOf = (node: LiveChangeNode, rows: LecturaRow[]): string => {
-  const level = node.level === 'adset' ? 'ad set' : node.level;
+const titleOf = (node: LiveChangeNode, rows: LecturaRow[], labels: PlatformLabels): string => {
+  const level = labels.singular[node.level];
   if (node.mark === 'paused') return `Pause the ${level}`;
   if (node.mark === 'added') return `New ${level}, created paused`;
   const fields = rows.filter((row) => row.field !== 'status').map((row) => row.label);
@@ -197,6 +217,8 @@ const titleOf = (node: LiveChangeNode, rows: LecturaRow[]): string => {
 
 export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): LecturaModel => {
   const { currency } = payload;
+  const platform = platformOfLiveChange(payload);
+  const labels = platformLabelsOf(platform);
   const nameOf = new Map(payload.nodes.map((node) => [node.id, node.name]));
   const childrenOf = (id: string) => payload.nodes.filter((node) => node.parentId === id);
   const changes: LecturaChange[] = [];
@@ -219,7 +241,7 @@ export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): Lectur
           mark: campaign.mark,
           campaignName: campaign.name,
           adSetName: null,
-          title: titleOf(campaign, campaignRows),
+          title: titleOf(campaign, campaignRows, labels),
           rows: campaignRows,
           basis: basisOf(campaign),
           adSetId: null,
@@ -302,7 +324,7 @@ export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): Lectur
               mark: adSet.mark,
               campaignName: campaign.name,
               adSetName: adSet.name,
-              title: titleOf(adSet, rows),
+              title: titleOf(adSet, rows, labels),
               rows,
               basis: basisOf(adSet),
               adSetId: adSet.id,
@@ -317,7 +339,7 @@ export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): Lectur
               mark: ad.mark,
               campaignName: campaign.name,
               adSetName: adSet.name,
-              title: `${ad.name}: ${titleOf(ad, adRows).toLowerCase()}`,
+              title: `${ad.name}: ${titleOf(ad, adRows, labels).toLowerCase()}`,
               rows: adRows,
               basis: basisOf(ad),
               adSetId: adSet.id,
@@ -336,6 +358,7 @@ export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): Lectur
             basedOnName: adSet.basedOnId ? (nameOf.get(adSet.basedOnId) ?? 'an ad set') : null,
             audience: null,
             audienceId: null,
+            assetSummary: assetSummaryOf(adSet),
             ads,
             stopsWithParent,
             provenance: null,
@@ -358,6 +381,7 @@ export const lecturaFromLiveChange = (payload: LiveChangePreviewPayload): Lectur
   return {
     kind: 'change',
     source: 'live',
+    platform,
     currency,
     campaigns,
     changes,
@@ -422,9 +446,14 @@ const toMinor = (major: number | null | undefined): number | null =>
 // ---------------------------------------------------------------------------
 
 /** What a scaffold node is relative to the live campaign it was copied from. */
-export type ScaffoldMark = { mark: LecturaMark; rows: LecturaRow[] };
+export type ScaffoldMark = {
+  mark: LecturaMark;
+  rows: LecturaRow[];
+  /** An added node planned from a source node: that node's name ("Based on …"). */
+  basedOnName?: string;
+};
 
-const DIFF_MARK: Record<StructureDiff['entries'][number]['change'], LecturaMark | null> = {
+const DIFF_MARK: Record<StructureDiffEntry['change'], LecturaMark | null> = {
   added: 'added',
   changed: 'changed',
   unchanged: 'unchanged',
@@ -434,6 +463,42 @@ const DIFF_MARK: Record<StructureDiff['entries'][number]['change'], LecturaMark 
 const diffValueText = (value: string | number | boolean | null): string =>
   value === null || value === '' ? 'none' : String(value);
 
+/**
+ * The Backend's per-node diff of a campaign copy (`paid.campaign_structure`, layout 'diff'),
+ * keyed by path key. Every copied node is created PAUSED, so the diff says "status ACTIVE →
+ * PAUSED" on all of them; that is the copy, not a change anyone asked for, so the row is left
+ * out and a node with nothing else is unchanged — the copied branches fold and "next change"
+ * walks only what was asked: the new test ad sets and any field the copy really changes (its
+ * name, a budget). An added node's `name` row is where it came from, said as "Based on …".
+ */
+export const marksFromStructureDiff = (
+  diff: StructureDiff | null | undefined,
+): Map<string, ScaffoldMark> => {
+  const marks = new Map<string, ScaffoldMark>();
+  for (const entry of diff?.entries ?? []) {
+    const mark = DIFF_MARK[entry.change];
+    if (!mark) continue;
+    const named = entry.fields.find((field) => field.key === 'name');
+    const rows = entry.fields
+      .filter((field) => field.key !== 'status' && !(mark === 'added' && field.key === 'name'))
+      .map((field) => ({
+        field: field.key,
+        label: field.label,
+        before: diffValueText(field.before),
+        after: diffValueText(field.after),
+      }));
+    const settled: LecturaMark = mark === 'changed' && rows.length === 0 ? 'unchanged' : mark;
+    marks.set(entry.path_key, {
+      mark: settled,
+      rows,
+      ...(mark === 'added' && typeof named?.before === 'string' && named.before
+        ? { basedOnName: named.before }
+        : {}),
+    });
+  }
+  return marks;
+};
+
 const pathKeyOf = (node: CampaignCanvasNode): string | null =>
   (node.data as { provenance?: { pathKey?: string } }).provenance?.pathKey ?? null;
 
@@ -442,11 +507,11 @@ const pathKeyOf = (node: CampaignCanvasNode): string | null =>
  * (P5 design 08) is a diff — the copied ad sets are the original, the test ad sets beside
  * them are new — so the Map folds the copied ones and "next change" walks the new ones.
  *
- * The Backend's duplicate builder words that diff per node (`paid.campaign_structure`,
- * layout 'diff', keyed by path_key); when the canvas has it, it is the truth. Without it the
- * graph still says it: a copied ad set reads its source's targeting verbatim (audience mode
- * `copied`), so in a campaign that has copied ad sets every other ad set — and its ads — is
- * new. A campaign with no copied ad set is new as a whole and carries no marks: nothing folds.
+ * The Backend's duplicate builder words that diff per node (`marksFromStructureDiff`); when the
+ * canvas has it, it is the truth. Without it the graph still says it: a copied ad set reads its
+ * source's targeting verbatim (audience mode `copied`), so in a campaign that has copied ad sets
+ * every other ad set — and its ads — is new. A campaign with no copied ad set is new as a whole
+ * and carries no marks: nothing folds.
  */
 export const scaffoldMarksOf = (
   nodes: readonly CampaignCanvasNode[],
@@ -454,22 +519,12 @@ export const scaffoldMarksOf = (
   diff: StructureDiff | null = null,
 ): Map<string, ScaffoldMark> => {
   const marks = new Map<string, ScaffoldMark>();
-  if (diff && diff.entries.length > 0) {
-    const byPath = new Map(diff.entries.map((entry) => [entry.path_key, entry]));
+  const byPath = marksFromStructureDiff(diff);
+  if (byPath.size > 0) {
     for (const node of nodes) {
       const path = pathKeyOf(node);
-      const entry = path ? byPath.get(path) : undefined;
-      const mark = entry ? DIFF_MARK[entry.change] : null;
-      if (!entry || !mark) continue;
-      marks.set(node.id, {
-        mark,
-        rows: entry.fields.map((field) => ({
-          field: field.key,
-          label: field.label,
-          before: diffValueText(field.before),
-          after: diffValueText(field.after),
-        })),
-      });
+      const mark = path ? byPath.get(path) : undefined;
+      if (mark) marks.set(node.id, mark);
     }
     if (marks.size > 0) return marks;
   }
@@ -497,6 +552,212 @@ export const scaffoldMarksOf = (
   return marks;
 };
 
+// ---------------------------------------------------------------------------
+// One shape for every scaffold source (the canvas store, the saved rows, a structure frame)
+// ---------------------------------------------------------------------------
+
+type PlainAd = {
+  id: string;
+  name: string;
+  status: string | null;
+  thumbnailUrl: string | null;
+  creativeKind: CreativeAssetType | null;
+  creativeId: string | null;
+};
+
+type PlainAdSet = {
+  id: string;
+  name: string;
+  status: string | null;
+  /** Its own daily budget, minor units; null under CBO or when not set. */
+  budgetMinor: number | null;
+  audience: string | null;
+  audienceId: string | null;
+  /** Where a copied audience came from, when the source says so. */
+  copiedFromName: string | null;
+  assetSummary: string | null;
+  provenance: LecturaProvenance | null;
+  ads: PlainAd[];
+};
+
+type PlainCampaign = {
+  id: string;
+  name: string;
+  status: string | null;
+  cbo: boolean;
+  /** CBO only: the campaign's daily budget, minor units. */
+  budgetMinor: number | null;
+  objective: string | null;
+  adSets: PlainAdSet[];
+};
+
+type PlainScaffold = {
+  campaigns: PlainCampaign[];
+  currency: string | null;
+  platform: CampaignPlatform;
+  truncated: boolean;
+};
+
+const changeTitle = (
+  labels: PlatformLabels,
+  level: keyof PlatformLabels['singular'],
+  mark: Exclude<LecturaMark, 'unchanged'>,
+  rows: LecturaRow[],
+): string => {
+  if (mark === 'added') return `New ${labels.singular[level]}`;
+  if (mark === 'paused') return `Pause the ${labels.singular[level]}`;
+  // The row already says the old and the new name; the title says what happened.
+  return rows.length > 0
+    ? rows.map((row) => (row.field === 'name' ? 'Renamed' : row.label)).join(' · ')
+    : `Change the ${labels.singular[level]}`;
+};
+
+const NO_MARK: ScaffoldMark = { mark: 'unchanged', rows: [] };
+
+/** The campaign model of a scaffold, whichever source it was read from. */
+const modelFromPlainScaffold = (
+  scaffold: PlainScaffold,
+  markOf: (id: string) => ScaffoldMark,
+): LecturaModel => {
+  const labels = platformLabelsOf(scaffold.platform);
+  let total = 0;
+  let anyBudget = false;
+  const split: BudgetSlice[] = [];
+  const changes: LecturaChange[] = [];
+
+  const campaigns = scaffold.campaigns.map((campaign): LecturaCampaign => {
+    const campaignMark = markOf(campaign.id);
+    if (campaign.budgetMinor !== null) {
+      anyBudget = true;
+      total += campaign.budgetMinor;
+      split.push({
+        id: campaign.id,
+        name: campaign.name,
+        minor: campaign.budgetMinor,
+        tone: 'kept',
+      });
+    }
+    if (campaignMark.mark !== 'unchanged') {
+      changes.push({
+        id: campaign.id,
+        level: 'campaign',
+        mark: campaignMark.mark,
+        campaignName: campaign.name,
+        adSetName: null,
+        title: changeTitle(labels, 'campaign', campaignMark.mark, campaignMark.rows),
+        rows: campaignMark.rows,
+        basis: null,
+        adSetId: null,
+      });
+    }
+    const adSets = campaign.adSets.map((adSet): LecturaAdSet => {
+      const adSetMark = markOf(adSet.id);
+      if (adSet.budgetMinor !== null) {
+        anyBudget = true;
+        total += adSet.budgetMinor;
+        split.push({
+          id: adSet.id,
+          name: adSet.name,
+          minor: adSet.budgetMinor,
+          tone: adSetMark.mark === 'added' ? 'new' : 'kept',
+        });
+      }
+      if (adSetMark.mark !== 'unchanged') {
+        changes.push({
+          id: adSet.id,
+          level: 'adset',
+          mark: adSetMark.mark,
+          campaignName: campaign.name,
+          adSetName: adSet.name,
+          title: changeTitle(labels, 'adset', adSetMark.mark, adSetMark.rows),
+          rows: adSetMark.rows,
+          basis: adSetMark.basedOnName ? `Based on ${adSetMark.basedOnName}` : null,
+          adSetId: adSet.id,
+        });
+      }
+      const ads = adSet.ads.map((ad): LecturaAd => {
+        const adMark = markOf(ad.id);
+        // The ads of a new ad set are part of that one change, not changes of their own.
+        if (adMark.mark !== 'unchanged' && adSetMark.mark !== 'added') {
+          changes.push({
+            id: ad.id,
+            level: 'ad',
+            mark: adMark.mark,
+            campaignName: campaign.name,
+            adSetName: adSet.name,
+            title: `${ad.name}: ${changeTitle(labels, 'ad', adMark.mark, adMark.rows).toLowerCase()}`,
+            rows: adMark.rows,
+            basis: null,
+            adSetId: adSet.id,
+          });
+        }
+        return {
+          id: ad.id,
+          name: ad.name,
+          mark: adMark.mark,
+          status: ad.status,
+          budgetMinor: null,
+          rows: adMark.rows,
+          stops: false,
+          thumbnailUrl: ad.thumbnailUrl,
+          creativeKind: ad.creativeKind,
+          creativeId: ad.creativeId,
+        };
+      });
+      return {
+        id: adSet.id,
+        name: adSet.name,
+        mark: adSetMark.mark,
+        status: adSet.status,
+        budgetMinor: adSet.budgetMinor,
+        budgetBefore: null,
+        budgetAfter: adSet.budgetMinor,
+        rows: adSetMark.rows,
+        // A copied ad set keeps its source's name: "Based on" itself would say nothing.
+        basedOnName:
+          adSetMark.basedOnName ??
+          (adSet.copiedFromName && adSet.copiedFromName !== adSet.name
+            ? adSet.copiedFromName
+            : null),
+        audience: adSet.audience,
+        audienceId: adSet.audienceId,
+        assetSummary: adSet.assetSummary,
+        ads,
+        stopsWithParent: false,
+        provenance: adSet.provenance,
+      };
+    });
+    return {
+      id: campaign.id,
+      name: campaign.name,
+      mark: campaignMark.mark,
+      status: campaign.status,
+      budgetMinor: campaign.budgetMinor,
+      objective: campaign.objective,
+      rows: campaignMark.rows,
+      campaignBudget: campaign.cbo,
+      adSets,
+    };
+  });
+
+  return {
+    kind: 'new',
+    source: 'scaffold',
+    platform: scaffold.platform,
+    currency: scaffold.currency,
+    campaigns,
+    changes,
+    truncated: scaffold.truncated,
+    totals: { before: null, after: anyBudget ? total : null, newWhenActivated: 0 },
+    split,
+    adSetCount: sum(campaigns.map((campaign) => campaign.adSets.length)),
+  };
+};
+
+// ---------------------------------------------------------------------------
+// From a scaffold graph (the companion canvas's store)
+// ---------------------------------------------------------------------------
+
 const OBJECTIVE_LABEL: Record<CampaignData['objective'], string> = {
   OUTCOME_SALES: 'Sales',
   OUTCOME_LEADS: 'Leads',
@@ -504,20 +765,6 @@ const OBJECTIVE_LABEL: Record<CampaignData['objective'], string> = {
   OUTCOME_AWARENESS: 'Awareness',
   OUTCOME_TRAFFIC: 'Traffic',
   OUTCOME_APP_PROMOTION: 'App promotion',
-};
-
-const SCAFFOLD_LEVEL_WORD = { campaign: 'campaign', adset: 'ad set', ad: 'ad' } as const;
-
-const scaffoldChangeTitle = (
-  level: keyof typeof SCAFFOLD_LEVEL_WORD,
-  mark: Exclude<LecturaMark, 'unchanged'>,
-  rows: LecturaRow[],
-): string => {
-  if (mark === 'added') return `New ${SCAFFOLD_LEVEL_WORD[level]}`;
-  if (mark === 'paused') return `Pause the ${SCAFFOLD_LEVEL_WORD[level]}`;
-  return rows.length > 0
-    ? rows.map((row) => row.label).join(' · ')
-    : `Change the ${SCAFFOLD_LEVEL_WORD[level]}`;
 };
 
 /**
@@ -528,160 +775,246 @@ export const lecturaFromCanvasGraph = (
   nodes: readonly CampaignCanvasNode[],
   edges: readonly CampaignCanvasEdge[],
   marks: ReadonlyMap<string, ScaffoldMark> = scaffoldMarksOf(nodes, edges),
+  platform: CampaignPlatform = 'meta',
 ): LecturaModel => {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const targetsOf = (id: string) =>
     edges.filter((edge) => edge.source === id).map((edge) => byId.get(edge.target));
   const sourcesOf = (id: string) =>
     edges.filter((edge) => edge.target === id).map((edge) => byId.get(edge.source));
-  const markOf = (id: string): ScaffoldMark => marks.get(id) ?? { mark: 'unchanged', rows: [] };
-
-  const campaignNodes = nodes.filter((node) => node.type === 'campaign');
   let currency: string | null = null;
-  let total = 0;
-  let anyBudget = false;
-  const split: BudgetSlice[] = [];
-  const changes: LecturaChange[] = [];
 
-  const campaigns = campaignNodes.map((campaignNode): LecturaCampaign => {
-    const campaign = campaignNode.data as CampaignData;
-    const cbo = campaign.budgetMode === 'cbo';
-    const campaignMark = markOf(campaignNode.id);
-    currency ??= campaign.budgetCurrency ?? null;
-    const campaignMinor = cbo ? toMinor(campaign.campaignBudgetAmount) : null;
-    if (campaignMinor !== null) {
-      anyBudget = true;
-      total += campaignMinor;
-      split.push({ id: campaignNode.id, name: campaign.label, minor: campaignMinor, tone: 'kept' });
-    }
-    if (campaignMark.mark !== 'unchanged') {
-      changes.push({
-        id: campaignNode.id,
-        level: 'campaign',
-        mark: campaignMark.mark,
-        campaignName: campaign.label,
-        adSetName: null,
-        title: scaffoldChangeTitle('campaign', campaignMark.mark, campaignMark.rows),
-        rows: campaignMark.rows,
-        basis: null,
-        adSetId: null,
-      });
-    }
-    const adSets = targetsOf(campaignNode.id)
-      .filter((node): node is CampaignCanvasNode => node?.type === 'ad-set')
-      .map((adSetNode): LecturaAdSet => {
-        const adSet = adSetNode.data as AdSetData;
-        const adSetMark = markOf(adSetNode.id);
-        currency ??= adSet.budgetCurrency ?? null;
-        const minor = cbo ? null : toMinor(adSet.budgetAmount);
-        if (minor !== null) {
-          anyBudget = true;
-          total += minor;
-          split.push({
+  const campaigns = nodes
+    .filter((node) => node.type === 'campaign')
+    .map((campaignNode): PlainCampaign => {
+      const campaign = campaignNode.data as CampaignData;
+      const cbo = campaign.budgetMode === 'cbo';
+      currency ??= campaign.budgetCurrency ?? null;
+      const adSets = targetsOf(campaignNode.id)
+        .filter((node): node is CampaignCanvasNode => node?.type === 'ad-set')
+        .map((adSetNode): PlainAdSet => {
+          const adSet = adSetNode.data as AdSetData;
+          currency ??= adSet.budgetCurrency ?? null;
+          const audienceNode = sourcesOf(adSetNode.id).find((node) => node?.type === 'audience');
+          const audience = (audienceNode?.data as AudienceData | undefined) ?? null;
+          const provenance: LecturaProvenance = { userGave: 0, jainaFilled: 0, jainaAsks: 0 };
+          countProvenance(provenance, adSet.fieldProvenance);
+          countProvenance(provenance, audience?.fieldProvenance);
+          const ads = targetsOf(adSetNode.id)
+            .filter((node): node is CampaignCanvasNode => node?.type === 'ad')
+            .map((adNode): PlainAd => {
+              countProvenance(provenance, adNode.data.fieldProvenance as LecturaFieldProvenance);
+              const creativeNode = targetsOf(adNode.id).find((node) => node?.type === 'creative');
+              const creative = (creativeNode?.data as CreativeData | undefined) ?? null;
+              if (creative) countProvenance(provenance, creative.fieldProvenance);
+              return {
+                id: adNode.id,
+                name: adNode.data.label,
+                status: (adNode.data as AdData).provenance?.metaStatus ?? null,
+                thumbnailUrl:
+                  creative?.thumbnailUrl ??
+                  creative?.cards?.find((card) => card.thumbnailUrl)?.thumbnailUrl ??
+                  null,
+                creativeKind: creative?.assetType ?? null,
+                creativeId: creativeNode?.id ?? null,
+              };
+            });
+          const counted = provenance.userGave + provenance.jainaFilled + provenance.jainaAsks;
+          return {
             id: adSetNode.id,
             name: adSet.label,
-            minor,
-            tone: adSetMark.mark === 'added' ? 'new' : 'kept',
-          });
-        }
-        const audienceNode = sourcesOf(adSetNode.id).find((node) => node?.type === 'audience');
-        const audience = (audienceNode?.data as AudienceData | undefined) ?? null;
-        const provenance: LecturaProvenance = { userGave: 0, jainaFilled: 0, jainaAsks: 0 };
-        countProvenance(provenance, adSet.fieldProvenance);
-        countProvenance(provenance, audience?.fieldProvenance);
-        if (adSetMark.mark !== 'unchanged') {
-          changes.push({
-            id: adSetNode.id,
-            level: 'adset',
-            mark: adSetMark.mark,
-            campaignName: campaign.label,
-            adSetName: adSet.label,
-            title: scaffoldChangeTitle('adset', adSetMark.mark, adSetMark.rows),
-            rows: adSetMark.rows,
-            basis: null,
-            adSetId: adSetNode.id,
-          });
-        }
-        const ads = targetsOf(adSetNode.id)
-          .filter((node): node is CampaignCanvasNode => node?.type === 'ad')
-          .map((adNode): LecturaAd => {
-            countProvenance(provenance, adNode.data.fieldProvenance as LecturaFieldProvenance);
-            const creativeNode = targetsOf(adNode.id).find((node) => node?.type === 'creative');
-            const creative = (creativeNode?.data as CreativeData | undefined) ?? null;
-            if (creative) countProvenance(provenance, creative.fieldProvenance);
-            const adMark = markOf(adNode.id);
-            // The ads of a new ad set are part of that one change, not changes of their own.
-            if (adMark.mark !== 'unchanged' && adSetMark.mark !== 'added') {
-              changes.push({
-                id: adNode.id,
-                level: 'ad',
-                mark: adMark.mark,
-                campaignName: campaign.label,
-                adSetName: adSet.label,
-                title: `${adNode.data.label}: ${scaffoldChangeTitle('ad', adMark.mark, adMark.rows).toLowerCase()}`,
-                rows: adMark.rows,
-                basis: null,
-                adSetId: adSetNode.id,
-              });
-            }
-            return {
-              id: adNode.id,
-              name: adNode.data.label,
-              mark: adMark.mark,
-              status: (adNode.data as AdData).provenance?.metaStatus ?? null,
-              budgetMinor: null,
-              rows: adMark.rows,
-              stops: false,
-              thumbnailUrl:
-                creative?.thumbnailUrl ??
-                creative?.cards?.find((card) => card.thumbnailUrl)?.thumbnailUrl ??
-                null,
-              creativeKind: creative?.assetType ?? null,
-              creativeId: creativeNode?.id ?? null,
-            };
-          });
-        const counted = provenance.userGave + provenance.jainaFilled + provenance.jainaAsks;
-        return {
-          id: adSetNode.id,
-          name: adSet.label,
-          mark: adSetMark.mark,
-          status: adSet.provenance?.metaStatus ?? null,
-          budgetMinor: minor,
-          budgetBefore: null,
-          budgetAfter: minor,
-          rows: adSetMark.rows,
-          basedOnName: audience?.mode === 'copied' ? (audience.copiedFromAdSetName ?? null) : null,
-          audience: audienceLineOf(audience),
-          audienceId: audienceNode?.id ?? null,
-          ads,
-          stopsWithParent: false,
-          provenance: counted > 0 ? provenance : null,
-        };
-      });
-    return {
-      id: campaignNode.id,
-      name: campaign.label,
-      mark: campaignMark.mark,
-      status: campaign.provenance?.metaStatus ?? null,
-      budgetMinor: campaignMinor,
-      objective: OBJECTIVE_LABEL[campaign.objective] ?? null,
-      rows: campaignMark.rows,
-      campaignBudget: cbo,
-      adSets,
-    };
-  });
+            status: adSet.provenance?.metaStatus ?? null,
+            budgetMinor: cbo ? null : toMinor(adSet.budgetAmount),
+            audience: audienceLineOf(audience),
+            audienceId: audienceNode?.id ?? null,
+            copiedFromName:
+              audience?.mode === 'copied' ? (audience.copiedFromAdSetName ?? null) : null,
+            assetSummary: null,
+            provenance: counted > 0 ? provenance : null,
+            ads,
+          };
+        });
+      return {
+        id: campaignNode.id,
+        name: campaign.label,
+        status: campaign.provenance?.metaStatus ?? null,
+        cbo,
+        budgetMinor: cbo ? toMinor(campaign.campaignBudgetAmount) : null,
+        objective: OBJECTIVE_LABEL[campaign.objective] ?? null,
+        adSets,
+      };
+    });
 
-  return {
-    kind: 'new',
-    source: 'scaffold',
-    currency,
-    campaigns,
-    changes,
-    truncated: false,
-    totals: { before: null, after: anyBudget ? total : null, newWhenActivated: 0 },
-    split,
-    adSetCount: sum(campaigns.map((campaign) => campaign.adSets.length)),
+  return modelFromPlainScaffold(
+    { campaigns, currency, platform, truncated: false },
+    (id) => marks.get(id) ?? NO_MARK,
+  );
+};
+
+// ---------------------------------------------------------------------------
+// From a scaffold's saved rows (the chat's scaffold card)
+// ---------------------------------------------------------------------------
+
+/** The rows a scaffold card already loads, built into its tree (`buildScaffoldTree`). */
+export type ScaffoldTreeSource = {
+  campaign: { id: string; pathKey: string; name: string; budgetMinor: number | null } | null;
+  adSets: {
+    id: string;
+    pathKey: string;
+    name: string;
+    budgetMinor: number | null;
+    audience: string | null;
+    ads: { id: string; pathKey: string; name: string }[];
+  }[];
+};
+
+/**
+ * A scaffold card's campaign, from its saved rows, marked by the Backend's diff when the turn
+ * that proposed it drew one (a campaign copy). Ids are path keys: the diff's own anchor.
+ */
+export const campaignViewFromScaffoldRows = (
+  tree: ScaffoldTreeSource,
+  options: { currency: string | null; diff?: StructureDiff | null; platform?: CampaignPlatform },
+): LecturaModel => {
+  const marks = marksFromStructureDiff(options.diff);
+  const campaign = tree.campaign;
+  const adSets = tree.adSets.map(
+    (adSet): PlainAdSet => ({
+      id: adSet.pathKey,
+      name: adSet.name,
+      status: null,
+      budgetMinor: adSet.budgetMinor,
+      audience: adSet.audience,
+      audienceId: null,
+      copiedFromName: null,
+      assetSummary: null,
+      provenance: null,
+      ads: adSet.ads.map((ad) => ({
+        id: ad.pathKey,
+        name: ad.name,
+        status: null,
+        thumbnailUrl: null,
+        creativeKind: null,
+        creativeId: null,
+      })),
+    }),
+  );
+  return modelFromPlainScaffold(
+    {
+      campaigns: [
+        {
+          id: campaign?.pathKey ?? 'c0',
+          name: campaign?.name ?? 'Campaign',
+          status: null,
+          cbo: campaign?.budgetMinor !== null && campaign?.budgetMinor !== undefined,
+          budgetMinor: campaign?.budgetMinor ?? null,
+          objective: null,
+          adSets,
+        },
+      ],
+      currency: options.currency,
+      platform: options.platform ?? 'meta',
+      truncated: false,
+    },
+    (id) => marks.get(id) ?? NO_MARK,
+  );
+};
+
+// ---------------------------------------------------------------------------
+// From a structure frame (the chat's drawing of a proposal)
+// ---------------------------------------------------------------------------
+
+/**
+ * A structure field prints its money already worded ("$100 MXN"). The model counts minor units,
+ * so the figure is read back — and kept only when printing it again gives the very same words,
+ * so a format this reader does not know costs the budget line, never a wrong total.
+ */
+export const minorFromWordedMoney = (
+  text: unknown,
+): { minor: number; currency: string | null } | null => {
+  if (typeof text !== 'string') return null;
+  const currency = /\b([A-Z]{3})\s*$/.exec(text.trim())?.[1] ?? null;
+  const digits = /-?\d[\d,]*(?:\.\d+)?/.exec(text)?.[0];
+  if (!digits) return null;
+  const major = Number(digits.replace(/,/g, ''));
+  if (!Number.isFinite(major)) return null;
+  return formatMoney(major, currency) === text.trim()
+    ? { minor: Math.round(major * 100), currency }
+    : null;
+};
+
+const fieldValue = (node: StructureNode, key: string): StructureNode['fields'][number] | null =>
+  node.fields.find((field) => field.key === key) ?? null;
+
+/**
+ * The chat's drawing of a proposal (`paid.campaign_structure`): its nodes are the campaign,
+ * and a copy's `diff` marks them. A truncated frame carries the campaigns only — the model
+ * says so, and the scaffold card and canvas hold the rest.
+ */
+export const campaignViewFromStructure = (structure: CampaignStructurePayload): LecturaModel => {
+  const marks = marksFromStructureDiff(structure.diff);
+  let currency: string | null = null;
+  const budgetOf = (node: StructureNode, key: string): number | null => {
+    const money = minorFromWordedMoney(fieldValue(node, key)?.value);
+    if (!money) return null;
+    currency ??= money.currency;
+    return money.minor;
   };
+  const childrenOf = (pathKey: string, level: StructureNode['level']) =>
+    structure.nodes.filter((node) => node.parent_path_key === pathKey && node.level === level);
+  const campaigns = structure.nodes
+    .filter((node) => node.level === 'campaign')
+    .map((campaign): PlainCampaign => {
+      const campaignBudget = budgetOf(campaign, 'campaign_daily_budget_minor_units');
+      const objective = fieldValue(campaign, 'objective')?.value;
+      return {
+        id: campaign.path_key,
+        name: campaign.name,
+        status: null,
+        cbo: campaignBudget !== null,
+        budgetMinor: campaignBudget,
+        objective: typeof objective === 'string' ? objective : null,
+        adSets: childrenOf(campaign.path_key, 'adset').map((adSet): PlainAdSet => {
+          const provenance: LecturaProvenance = { userGave: 0, jainaFilled: 0, jainaAsks: 0 };
+          const nodes = [adSet, ...childrenOf(adSet.path_key, 'ad')];
+          countProvenance(
+            provenance,
+            Object.fromEntries(
+              nodes.flatMap((node) =>
+                node.fields.map((field) => [`${node.path_key}:${field.key}`, field.provenance]),
+              ),
+            ),
+          );
+          const audience = fieldValue(adSet, 'audience')?.value;
+          const assets = fieldValue(adSet, 'assets')?.value;
+          const counted = provenance.userGave + provenance.jainaFilled + provenance.jainaAsks;
+          return {
+            id: adSet.path_key,
+            name: adSet.name,
+            status: null,
+            budgetMinor:
+              campaignBudget === null ? budgetOf(adSet, 'daily_budget_minor_units') : null,
+            audience: typeof audience === 'string' ? audience : null,
+            audienceId: null,
+            copiedFromName: null,
+            assetSummary: typeof assets === 'string' ? assets : null,
+            provenance: counted > 0 ? provenance : null,
+            ads: childrenOf(adSet.path_key, 'ad').map((ad) => ({
+              id: ad.path_key,
+              name: ad.name,
+              status: null,
+              thumbnailUrl: null,
+              creativeKind: null,
+              creativeId: null,
+            })),
+          };
+        }),
+      };
+    });
+  return modelFromPlainScaffold(
+    { campaigns, currency, platform: platformOfSource(structure), truncated: structure.truncated },
+    (id) => marks.get(id) ?? NO_MARK,
+  );
 };
 
 /** The one model, by its name in every view: built from a live preview… */

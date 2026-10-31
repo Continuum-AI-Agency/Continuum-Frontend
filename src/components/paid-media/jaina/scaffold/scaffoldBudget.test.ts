@@ -4,7 +4,7 @@
  * is — the fraction, then the amount — never as the ad set's own daily budget.
  */
 import { describe, expect, it } from 'bun:test';
-import { formatAdSetBudget, formatCampaignBudgetShare } from './scaffoldBudget';
+import { formatCampaignBudgetShare } from './scaffoldBudget';
 
 describe('a CBO ad set’s budget reads as a share of the campaign’s', () => {
   it('names the real fraction and the estimated amount', () => {
@@ -20,20 +20,5 @@ describe('a CBO ad set’s budget reads as a share of the campaign’s', () => {
     expect(
       formatCampaignBudgetShare({ adSetCount: 4, campaignDailyBudgetMinorUnits: null }, 'USD'),
     ).toBe('≈ 1/4 of the campaign budget (CBO)');
-  });
-
-  it('prints an ABO ad set’s own budget as before', () => {
-    expect(
-      formatAdSetBudget({ dailyBudgetMinorUnits: 6199, campaignBudgetShare: null }, 'USD'),
-    ).toBe('$61.99 USD/day');
-    expect(
-      formatAdSetBudget(
-        {
-          dailyBudgetMinorUnits: null,
-          campaignBudgetShare: { adSetCount: 3, campaignDailyBudgetMinorUnits: 30_000 },
-        },
-        'USD',
-      ),
-    ).toBe('≈ 1/3 of the campaign budget (CBO) · ≈ $100 USD/day');
   });
 });

@@ -124,6 +124,10 @@ import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
+import {
+  latestStructureDiffFor,
+  type ScaffoldStructureDiff,
+} from '@/lib/campaign-canvas/scaffoldDiff';
 import { clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
@@ -267,9 +271,14 @@ type JainaChatSurfaceProps = {
    * A host with a companion canvas beside the chat (the Scale page). Called with the thread's
    * latest scaffold — `proposed` when Jaina just proposed it, `thread` when a loaded thread
    * carries one, `expand` when a card's Expand asked for it — so the canvas shows what the
-   * conversation is about.
+   * conversation is about. `diff` is the Backend's per-node diff when the thread drew one for
+   * that scaffold (a campaign copy), so the canvas marks exactly what the copy adds.
    */
-  onScaffoldFocus?: (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => void;
+  onScaffoldFocus?: (
+    parentScaffoldId: string,
+    reason: 'proposed' | 'thread' | 'expand',
+    diff: ScaffoldStructureDiff | null,
+  ) => void;
   /**
    * A host with a companion canvas (the Scale page). Called with the thread's newest live-edit
    * preview (`paid.live_change_preview`) and the decision on its approval, every time either
@@ -2705,12 +2714,22 @@ export function JainaChatSurface({
     retryHistory();
   }, [initialSessionId, retryHistory, stopChat]);
 
-  // The companion canvas follows the thread's latest scaffold, once per scaffold.
+  // The companion canvas follows the thread's latest scaffold, once per proposed VERSION: a
+  // second proposal (a new scaffold, or a new version of this one) is a new task for the
+  // canvas, while a later card of the same version (its deploy gate) is not. The diff a copy's
+  // structure part carries rides along, and a diff landing after its card re-points.
   const latestScaffold = React.useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       const parentScaffoldId = message?.scaffold?.parentScaffoldId;
-      if (message && parentScaffoldId) return { parentScaffoldId, messageId: message.id };
+      if (message && parentScaffoldId) {
+        return {
+          parentScaffoldId,
+          versionId: message.scaffold?.scaffoldId ?? parentScaffoldId,
+          messageId: message.id,
+          diff: latestStructureDiffFor(messages, parentScaffoldId),
+        };
+      }
     }
     return null;
   }, [messages]);
@@ -2725,11 +2744,13 @@ export function JainaChatSurface({
   const focusedScaffoldRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!onScaffoldFocus || !latestScaffold) return;
-    if (focusedScaffoldRef.current === latestScaffold.parentScaffoldId) return;
-    focusedScaffoldRef.current = latestScaffold.parentScaffoldId;
+    const key = `${latestScaffold.versionId}:${latestScaffold.diff?.scaffoldVersionId ?? ''}`;
+    if (focusedScaffoldRef.current === key) return;
+    focusedScaffoldRef.current = key;
     onScaffoldFocus(
       latestScaffold.parentScaffoldId,
       historyMessageIds.has(latestScaffold.messageId) ? 'thread' : 'proposed',
+      latestScaffold.diff,
     );
   }, [historyMessageIds, latestScaffold, onScaffoldFocus]);
 
@@ -2758,7 +2779,11 @@ export function JainaChatSurface({
       ...(onScaffoldFocus
         ? {
             onScaffoldFocus: (parentScaffoldId: string) =>
-              onScaffoldFocus(parentScaffoldId, 'expand'),
+              onScaffoldFocus(
+                parentScaffoldId,
+                'expand',
+                latestStructureDiffFor(liveChangeMessagesRef.current, parentScaffoldId),
+              ),
           }
         : {}),
       ...(onLiveChangeFocus

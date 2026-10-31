@@ -30,43 +30,32 @@ afterEach(() => {
   cleanup();
 });
 
-const names = (root: HTMLElement) =>
-  [...root.querySelectorAll('[data-testid="structure-node-name"]')].map((node) => node.textContent);
+// 08 and 09 are the canvas's own Read pieces at chat size (design C, option 27).
+const chatCard = (root: HTMLElement) =>
+  root.querySelector('[data-testid="lectura-chat-card"]') as HTMLElement;
 
-describe('09 · the outline', () => {
-  it('names every node of the structure and nests them by level', () => {
-    const { getByTestId } = render(
-      <JainaCampaignStructure structure={fixtureStructure('outline')} />,
-    );
-    const outline = getByTestId('campaign-structure-outline');
-    expect(names(outline)).toEqual(LEADS_MTY_NODES.map((node) => node.name));
-    const adSet = outline.querySelector('[data-node="c0/a0"]');
-    expect(adSet?.querySelector('[data-node="c0/a0/ad1"]')).toBeTruthy();
-  });
-
-  it('opens the campaign and its first ad set, and folds the rest', () => {
+describe('09 · the outline, in Read', () => {
+  it('names the campaign and each ad set with its budget and ads', () => {
     const { container } = render(
       <JainaCampaignStructure structure={fixtureStructure('outline')} />,
     );
-    const open = (path: string) =>
-      (container.querySelector(`[data-node="${path}"]`) as HTMLDetailsElement).open;
-    expect(open('c0')).toBe(true);
-    expect(open('c0/a0')).toBe(true);
-    expect(open('c0/a1')).toBe(false);
+    const card = chatCard(container);
+    expect(card.textContent).toContain('Leads MTY');
+    const lines = [...card.querySelectorAll('[data-testid="lectura-chat-adsets"] li')].map(
+      (line) => line.textContent,
+    );
+    expect(lines).toEqual([
+      'LAL 1%$300 MXN/day · 2 ads',
+      'Broad 25-45$300 MXN/day · 1 ad',
+      'Retargeting 30d$200 MXN/day · 1 ad',
+    ]);
   });
 
-  it('says who supplied each field, and marks what Jaina still asks', () => {
+  it('totals the daily budget the ad sets hold, read back from the printed figures', () => {
     const { container } = render(
       <JainaCampaignStructure structure={fixtureStructure('outline')} />,
     );
-    const ad = container.querySelector('[data-node="c0/a0/ad1"]') as HTMLElement;
-    expect(ad.querySelector('summary [data-provenance="jaina_asks"]')).toBeTruthy();
-    const budget = [...container.querySelectorAll('[data-node="c0/a0"] > div > dl dd')].find(
-      (dd) => dd.textContent?.includes('$300 MXN'),
-    );
-    expect(budget?.querySelector('[data-provenance="user_gave"]')?.getAttribute('aria-label')).toBe(
-      'You gave this',
-    );
+    expect(chatCard(container).textContent).toContain('Daily budget$800 MXN/day');
   });
 
   it('carries the you-gave / filled / asks counts', () => {
@@ -84,35 +73,34 @@ describe('09 · the outline', () => {
       nodes: LEADS_MTY_NODES.filter((node) => node.level === 'campaign'),
     });
     const { getByTestId } = render(<JainaCampaignStructure structure={structure} />);
-    expect(getByTestId('campaign-structure-outline').textContent).toContain(
+    expect(getByTestId('campaign-structure').textContent).toContain(
       '3 ad sets and 4 ads are too many to list here',
     );
   });
 });
 
-describe('08 · the difference', () => {
-  it('draws the original beside the copy, with every change named', () => {
-    const { getByTestId } = render(<JainaCampaignStructure structure={fixtureStructure('diff')} />);
-    const diff = getByTestId('campaign-structure-diff');
-    const change = (path: string) =>
-      diff.querySelector(`[data-node="${path}"]`)?.getAttribute('data-change');
-    expect(change('c0')).toBe('changed');
-    expect(change('c0/a1')).toBe('removed');
-    expect(change('c0/a2')).toBe('added');
-    expect(diff.textContent).toContain('Original · Promo Oct');
-    expect(diff.textContent).toContain('Daily budget: $300 MXN → $450 MXN');
-    // The original column names the original, not the renamed copy.
-    expect(diff.querySelector('[data-node="c0"] > div')?.textContent).toContain('Promo Oct');
-    expect(diff.querySelector('[data-node="c0/a2"]')?.textContent).toContain('Daily budget: $250 MXN');
-    expect(diff.querySelector('[data-node="c0/a1"]')?.textContent).toContain('— removed');
-    expect(diff.querySelector('[data-node="c0/a2"]')?.textContent).toContain('Not in the original');
+describe('08 · the difference, in Read', () => {
+  it('lists what the copy changes first, each with its before → after', () => {
+    const { container } = render(<JainaCampaignStructure structure={fixtureStructure('diff')} />);
+    const card = chatCard(container);
+    const mark = (path: string) =>
+      card.querySelector(`[data-testid="lectura-change-${path}"]`)?.getAttribute('data-mark');
+    expect(mark('c0')).toBe('changed');
+    expect(mark('c0/a0')).toBe('changed');
+    expect(mark('c0/a2')).toBe('added');
+    expect(card.querySelector('[data-testid="lectura-change-c0"]')?.textContent).toContain(
+      'Name: Promo Oct→Promo Nov',
+    );
+    expect(card.querySelector('[data-testid="lectura-change-c0/a0"]')?.textContent).toContain(
+      'Daily budget: $300 MXN→$450 MXN',
+    );
   });
 
-  it('draws the outline when a difference has no diff to show', () => {
-    const { getByTestId } = render(
+  it('draws the plain campaign when a difference has no diff to show', () => {
+    const { container } = render(
       <JainaCampaignStructure structure={fixtureStructure('diff', { diff: null } as never)} />,
     );
-    expect(getByTestId('campaign-structure-outline')).toBeTruthy();
+    expect(chatCard(container).querySelector('[data-testid="lectura-chat-adsets"]')).toBeTruthy();
   });
 });
 
@@ -135,12 +123,12 @@ describe('01 · 04 · 05 · the compiled designs', () => {
     });
   }
 
-  it('falls back to the outline when the picture cannot be signed', async () => {
+  it('falls back to Read when the picture cannot be signed', async () => {
     signResult = null;
     const { findByTestId, container } = render(
       <JainaCampaignStructure structure={fixtureStructure('tree')} />,
     );
-    expect(await findByTestId('campaign-structure-outline')).toBeTruthy();
+    expect(await findByTestId('lectura-chat-card')).toBeTruthy();
     expect(container.querySelector('iframe')).toBeNull();
   });
 });
@@ -152,8 +140,32 @@ describe('the drawing around every design', () => {
         <JainaCampaignStructure structure={fixtureStructure('outline')} />
       </ScaffoldThreadContext.Provider>,
     );
-    expect(getByTestId('campaign-structure-open-canvas').getAttribute('href')).toBe(
+    expect(getByTestId('lectura-open-in-canvas').getAttribute('href')).toBe(
       `/scale/campaign-canvas?scaffold=${FIXTURE_PARENT_ID}&session=sess-1`,
+    );
+  });
+
+  it('opens the companion canvas instead when one sits beside the chat', () => {
+    const focused: string[] = [];
+    const { getByTestId } = render(
+      <ScaffoldThreadContext.Provider
+        value={{ sessionId: 'sess-1', onScaffoldFocus: (id: string) => focused.push(id) }}
+      >
+        <JainaCampaignStructure structure={fixtureStructure('diff')} />
+      </ScaffoldThreadContext.Provider>,
+    );
+    fireEvent.click(getByTestId('lectura-open-in-canvas'));
+    expect(focused).toEqual([FIXTURE_PARENT_ID]);
+  });
+
+  it('keeps the canvas link in the caption for a compiled picture', () => {
+    const { getByTestId } = render(
+      <ScaffoldThreadContext.Provider value={{ sessionId: null }}>
+        <JainaCampaignStructure structure={fixtureStructure('tree')} />
+      </ScaffoldThreadContext.Provider>,
+    );
+    expect(getByTestId('campaign-structure-open-canvas').getAttribute('href')).toBe(
+      `/scale/campaign-canvas?scaffold=${FIXTURE_PARENT_ID}`,
     );
   });
 
@@ -173,14 +185,5 @@ describe('the drawing around every design', () => {
     expect(
       getAllByTestId('campaign-structure').map((el) => el.getAttribute('data-layout')),
     ).toEqual(['tree', 'matrix']);
-  });
-
-  it('folds and unfolds an ad set when its line is pressed', () => {
-    const { container } = render(
-      <JainaCampaignStructure structure={fixtureStructure('outline')} />,
-    );
-    const details = container.querySelector('[data-node="c0/a1"]') as HTMLDetailsElement;
-    fireEvent.click(details.querySelector('summary') as HTMLElement);
-    expect(details.open).toBe(true);
   });
 });

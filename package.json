@@ -51,6 +51,7 @@
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "beta-review-fixes:e2e:bench": "playwright test --config playwright.beta-review-fixes.config.ts --workers=1",
     "home:overview:e2e:bench": "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://api.trycontinuum.ai} playwright test --config playwright.home-overview.config.ts --workers=1",
+    "canvas:e2e:bench": "bun scripts/canvas-c/canvas-e2e.bench.ts",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",
     "scale:campaigns:e2e:bench": "playwright test --config playwright.scale-campaigns.config.ts --workers=1",
     "jaina:approval:card:e2e:bench": "playwright test --config playwright.jaina-approval-card.config.ts --workers=1",

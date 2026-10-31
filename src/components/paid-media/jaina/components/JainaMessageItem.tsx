@@ -15,7 +15,10 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
-import { JainaCampaignStructures } from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
+import {
+  isReadStructure,
+  JainaCampaignStructures,
+} from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
@@ -260,7 +263,17 @@ function JainaMessageItemImpl({
   const artifacts = message.artifacts;
   const optimizerCitations = message.optimizerCitations ?? [];
   const optimizerHyperframes = message.optimizerHyperframes ?? [];
-  const campaignStructures = message.campaignStructures ?? [];
+  // A copy's diff (or an outline) of the scaffold this message's card shows is drawn ON the
+  // card, in Read — one drawing of one campaign, not two stacked.
+  const cardStructure =
+    (scaffold &&
+      (message.campaignStructures ?? []).find(
+        (structure) => isReadStructure(structure) && structure.scaffoldId === scaffold.scaffoldId,
+      )) ||
+    null;
+  const campaignStructures = (message.campaignStructures ?? []).filter(
+    (structure) => structure !== cardStructure,
+  );
   const liveChangePreview = message.liveChangePreviews?.at(-1) ?? null;
   const { onLiveChangeOpen } = useScaffoldThread();
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
@@ -395,6 +408,7 @@ function JainaMessageItemImpl({
             {scaffold ? (
               <PaidScaffoldCard
                 scaffold={scaffold}
+                structure={cardStructure}
                 approval={scaffoldApproval}
                 resolution={scaffoldResolution}
                 denial={scaffoldDenial}
