@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-import type { TemplateOperation, TemplateRevision, TemplateRevisionVariant, TemplateReleaseListResponse } from '@continuum/contracts';
+import type { TemplateOperation, TemplateRevision, TemplateRevisionVariant, TemplateReleaseListResponse, TemplateVersionMergePreview } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
@@ -133,7 +133,7 @@ const diff = mock(
     changes: [{ path: '/layers/1:2/opacity', from: 50, to: 75 }],
   }),
 );
-const mergePreview = mock(async () => ({
+const mergePreview = mock(async (): Promise<TemplateVersionMergePreview> => ({
   baseRevisionId: original.id,
   headRevisionId: tallHead.id,
   sourceHeadRevisionId: copy.id,
@@ -301,6 +301,50 @@ test('merge resolves every conflict and pins both reviewed heads; a refreshed he
     resolutions: [{ path: '/layers/1:2/opacity', choice: 'theirs' }],
   });
 });
+for (const choice of ['ours', 'theirs'] as const) {
+  test(`source conflict reviews exact whole saved states and commits only the ${choice} selection`, async () => {
+    const ours = { revisionId: tallHead.id, sourceAssetId: id(81), sourceVersionId: id(82), checksum: 'b'.repeat(64), family: 'blender' };
+    const theirs = { revisionId: copy.id, sourceAssetId: id(83), sourceVersionId: id(84), checksum: 'c'.repeat(64), family: 'hyperframes' };
+    mergePreview.mockResolvedValueOnce({
+      baseRevisionId: original.id, headRevisionId: tallHead.id, sourceHeadRevisionId: copy.id,
+      previewToken: 'd'.repeat(64), edits: original.edits,
+      conflicts: [
+        { path: '/source', kind: 'source', base: { revisionId: original.id, sourceAssetId: assetId, sourceVersionId: versionId, checksum: original.checksum, family: original.source.family }, ours, theirs },
+        // An older server may include field conflicts; incompatible sources must have one whole-state choice.
+        { path: '/layers/1:2/opacity', kind: 'field', base: 100, ours: 50, theirs: 75 },
+      ],
+    });
+    const view = mounted(tallHead.id);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge', exact: true }));
+    openSelect('Source variant head'); chooseOption('Copy · Revision 13');
+    const preview = screen.getByRole('button', { name: 'Preview merge' });
+    await waitFor(() => expect(preview.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(preview);
+    const review = await screen.findByRole('group', { name: 'Complete saved state' });
+    expect(review.textContent).toContain('source, edits, dependencies, native scene and output mappings');
+    expect(review.textContent).toContain('Both branch heads remain parents');
+    expect(review.textContent).toContain('source-rebind review');
+    for (const state of [ours, theirs]) {
+      for (const identity of Object.values(state)) expect(review.textContent).toContain(identity);
+    }
+    expect(screen.queryByText('/layers/1:2/opacity · field')).toBeNull();
+    const commit = screen.getByRole('button', { name: 'Commit reviewed merge' });
+    expect(commit.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: choice === 'ours' ? 'Use complete Tall state' : 'Use complete Copy state' }));
+    expect(commit.hasAttribute('disabled')).toBe(false);
+    const advanced = variants.map((item) => item.variantId === copy.variantId ? { ...item, draftHeadRevisionId: id(77) } : item);
+    view.rerender(view.node(advanced));
+    expect(commit.hasAttribute('disabled')).toBe(true);
+    expect(merge).not.toHaveBeenCalled();
+    view.rerender(view.node());
+    fireEvent.click(commit);
+    await waitFor(() => expect(merge).toHaveBeenCalledTimes(1));
+    expect(merge.mock.calls[0]![1]).toMatchObject({
+      expectedHeadRevisionId: tallHead.id, expectedSourceHeadRevisionId: copy.id,
+      previewToken: 'd'.repeat(64), resolutions: [{ path: '/source', choice }],
+    });
+  });
+}
 test('restoration compares against the destination head and appends only after explicit confirmation', async () => {
   mounted(tallHead.id);
   fireEvent.click(screen.getByRole('button', { name: 'Compare / restore' }));

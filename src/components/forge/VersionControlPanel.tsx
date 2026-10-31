@@ -149,6 +149,10 @@ export function VersionControlPanel({
   const otherHead = other?.variant.draftHeadRevisionId;
   const previewCurrent =
     preview?.headRevisionId === destinationHead && preview?.sourceHeadRevisionId === otherHead;
+  const sourceConflict = preview?.conflicts.find(
+    (conflict) => conflict.kind === 'source' && conflict.path === '/source',
+  );
+  const mergeConflicts = sourceConflict ? [sourceConflict] : (preview?.conflicts ?? []);
   const locked = busy || !recoveryReady || !!pending;
   const editableBranch = selected && !selected.variant.original && !selected.variant.archivedAt;
   const invalidateReview = () => {
@@ -585,25 +589,48 @@ export function VersionControlPanel({
                             </p>
                           )}
                           <p className="text-xs">
-                            {preview.conflicts.length
-                              ? 'Choose a value for every conflict.'
-                              : 'Independent changes combine without conflicts.'}
+                            {sourceConflict
+                              ? 'Choose one complete saved state for the source conflict.'
+                              : preview.conflicts.length
+                                ? 'Choose a value for every conflict.'
+                                : 'Independent changes combine without conflicts.'}
                           </p>
-                          {preview.conflicts.map((conflict) => (
+                          {mergeConflicts.map((conflict) => (
                             <fieldset
                               key={conflict.path}
                               className="space-y-1 border-y border-border py-2 text-xs"
                             >
                               <legend className="break-all font-mono">
-                                {conflict.path} · {conflict.kind}
+                                {sourceConflict
+                                  ? 'Complete saved state'
+                                  : `${conflict.path} · ${conflict.kind}`}
                               </legend>
-                              <p className="break-words">Base: {value(conflict.base)}</p>
-                              <p className="break-words">
-                                {label(selected.variant)}: {value(conflict.ours)}
-                              </p>
-                              <p className="break-words">
-                                {other ? label(other.variant) : 'Source'}: {value(conflict.theirs)}
-                              </p>
+                              {sourceConflict ? (
+                                <>
+                                  <p>
+                                    Select either saved revision’s source, edits, dependencies,
+                                    native scene and output mappings together. Both branch heads
+                                    remain parents of the new revision.
+                                  </p>
+                                  <p>
+                                    For individual changes across sources, use the source-rebind
+                                    review.
+                                  </p>
+                                  <MergeSourceState name="Base" snapshot={conflict.base} />
+                                  <MergeSourceState name={label(selected.variant)} snapshot={conflict.ours} />
+                                  <MergeSourceState name={other ? label(other.variant) : 'Source'} snapshot={conflict.theirs} />
+                                </>
+                              ) : (
+                                <>
+                                  <p className="break-words">Base: {value(conflict.base)}</p>
+                                  <p className="break-words">
+                                    {label(selected.variant)}: {value(conflict.ours)}
+                                  </p>
+                                  <p className="break-words">
+                                    {other ? label(other.variant) : 'Source'}: {value(conflict.theirs)}
+                                  </p>
+                                </>
+                              )}
                               {(['ours', 'theirs'] as const).map((choice) => (
                                 <Button
                                   key={choice}
@@ -620,9 +647,11 @@ export function VersionControlPanel({
                                     }))
                                   }
                                 >
-                                  {choice === 'ours'
-                                    ? `Keep ${label(selected.variant)}`
-                                    : `Take ${other ? label(other.variant) : 'source'}`}
+                                  {sourceConflict
+                                    ? `Use complete ${choice === 'ours' ? label(selected.variant) : other ? label(other.variant) : 'source'} state`
+                                    : choice === 'ours'
+                                      ? `Keep ${label(selected.variant)}`
+                                      : `Take ${other ? label(other.variant) : 'source'}`}
                                 </Button>
                               ))}
                             </fieldset>
@@ -632,7 +661,7 @@ export function VersionControlPanel({
                             disabled={
                               locked ||
                               !previewCurrent ||
-                              preview.conflicts.some((conflict) => !choices[conflict.path])
+                              mergeConflicts.some((conflict) => !choices[conflict.path])
                             }
                             onClick={() =>
                               void run(() =>
@@ -640,7 +669,7 @@ export function VersionControlPanel({
                                   ...mergeInput!,
                                   origin: { tool: 'Forge versions', button: 'Commit reviewed merge' },
                                   previewToken: preview.previewToken,
-                                  resolutions: preview.conflicts.map((conflict) => ({
+                                  resolutions: mergeConflicts.map((conflict) => ({
                                     path: conflict.path,
                                     choice: choices[conflict.path],
                                   })),
@@ -895,6 +924,35 @@ const emptyHistory = (scope: string): HistoryState => ({
   loading: false,
   error: null,
 });
+
+function MergeSourceState({ name, snapshot }: { name: string; snapshot: unknown }) {
+  const labels: Record<string, string> = {
+    revisionId: 'Revision',
+    sourceAssetId: 'Source asset',
+    sourceVersionId: 'Source version',
+    checksum: 'Checksum',
+    family: 'Format',
+  };
+  return (
+    <div className="min-w-0 space-y-1 py-1">
+      <p className="font-medium">{name} saved state</p>
+      {snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? (
+        <dl>
+          {Object.entries(snapshot).map(([key, entry]) => (
+            <div key={key} className="grid min-w-0 gap-x-2 sm:grid-cols-[7rem_minmax(0,1fr)]">
+              <dt className="text-muted-foreground">{labels[key] ?? key}</dt>
+              <dd className="min-w-0 break-all font-mono">
+                {typeof entry === 'string' ? entry : value(entry)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="break-all font-mono">{value(snapshot)}</p>
+      )}
+    </div>
+  );
+}
 
 function OperationHistory({
   brandId,
