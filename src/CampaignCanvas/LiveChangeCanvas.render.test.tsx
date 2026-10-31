@@ -86,13 +86,27 @@ describe('LiveChangeCanvas', () => {
     expect(copy).toContain('instagram reels');
   });
 
-  it('draws the map in columns with the summary, the next-change control and the minimap', () => {
+  it('docks the summary and the next-change control in the bar above the map, not over it', () => {
     const html = renderToStaticMarkup(<LiveChangeCanvas preview={PREVIEW} decision="pending" />);
     expect(html).toContain('data-testid="column-map"');
-    expect(html).toContain('2 new, paused');
-    expect(html).toContain('data-testid="map-next-change"');
-    expect(html).toContain('data-testid="rf__minimap"');
+    const bar = html.slice(
+      html.indexOf('data-testid="column-map-bar"'),
+      html.indexOf('rf__wrapper'),
+    );
+    expect(bar).toContain('2 new, paused');
+    expect(bar).toContain('data-testid="map-next-change"');
     expect(html).toContain('Preview · approve in chat');
+    // Fit to screen fits the width; the minimap waits for a measured pane ≥ 600 px.
+    expect(html).toContain('data-testid="map-fit-width"');
+    expect(html).not.toContain('react-flow__controls-fitview');
+    expect(html).not.toContain('data-testid="rf__minimap"');
+  });
+
+  it('words the status and dims it, instead of a raw ACTIVE', () => {
+    const html = cardHtml('200');
+    expect(html).toContain('Active');
+    expect(html).not.toContain('ACTIVE');
+    expect(html).toContain('data-testid="map-card-status"');
   });
 
   it('says how the approval ended', () => {

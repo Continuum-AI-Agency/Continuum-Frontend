@@ -1,14 +1,25 @@
 'use client';
 
-// Lectura: the companion canvas laid out to be READ at 100% in a 640 px pane (design C,
-// options 20 over 4 and 19). The changes come first, one card each, and a card opens in place
-// into its ad set; then the daily total with its split; then one card per ad set (or a table
-// past LECTURA_TABLE_THRESHOLD ad sets). Read-only: approving stays on the chat card.
+// Lectura: a campaign laid out to be READ (design C, options 20 over 4 and 19), at three sizes
+// of one drawing (option 27): `chat` — a compact summary card in the conversation, changes
+// first, the budget before → after and "Open in canvas"; `panel` — the companion pane at 100%
+// in 640 px; `page` — the full Canvas page, wider. All three read the one campaign model
+// (lib/campaign-canvas/lectura.ts). The changes come first, one card each, and a card opens in
+// place into its ad set; then the daily total with its split; then one card per ad set (or a
+// table past LECTURA_TABLE_THRESHOLD ad sets). Read-only: approving stays on the chat card.
 
-import { ChevronDown, ChevronRight, ImageIcon, Images, PlayCircle } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ImageIcon,
+  Images,
+  PanelRightOpen,
+  PlayCircle,
+} from 'lucide-react';
 import * as React from 'react';
 import {
   type BudgetSlice,
+  humanStatus,
   type LecturaAd,
   type LecturaAdSet,
   type LecturaChange,
@@ -226,7 +237,7 @@ export function LecturaAdSetCard({
         <BudgetLine adSet={adSet} currency={currency} />
         {adSet.audience ? <span className="min-w-0 break-words">{adSet.audience}</span> : null}
         {adSet.status && !stopped && adSet.status !== 'ACTIVE' ? (
-          <span>{adSet.status.toLowerCase().replace(/_/g, ' ')}</span>
+          <span className="opacity-75">{humanStatus(adSet.status)}</span>
         ) : null}
         {adSet.stopsWithParent ? <span>Stops with its campaign</span> : null}
       </div>
@@ -458,14 +469,146 @@ function LecturaTable({ model }: { model: LecturaModel }) {
 
 export type LecturaLayout = 'cards' | 'table';
 
+/** One drawing, three sizes: the chat's summary card, the companion pane, the Canvas page. */
+export type CampaignViewSize = 'chat' | 'panel' | 'page';
+
+/** The chat keeps the first few changes; the rest wait behind "Open in canvas". */
+export const CHAT_CHANGES_SHOWN = 3;
+
+/** The daily total as one line: "$1,150 → $1,000/day", or "$600/day". */
+function BudgetSummary({ model }: { model: LecturaModel }) {
+  const { before, after, newWhenActivated } = model.totals;
+  if (before === null && after === null) return null;
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+      <span className="text-muted-foreground">Daily budget</span>
+      <span className="font-semibold tabular-nums">
+        {before !== null && after !== null && before !== after ? (
+          <BeforeAfter
+            before={lecturaMoney(before, model.currency) ?? ''}
+            after={`${lecturaMoney(after, model.currency)}/day`}
+          />
+        ) : (
+          `${lecturaMoney(after ?? before, model.currency)}/day`
+        )}
+      </span>
+      {newWhenActivated > 0 ? (
+        <span className="text-xs text-muted-foreground">
+          +{lecturaMoney(newWhenActivated, model.currency)} once activated
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
+/**
+ * The chat's size: the changes first (no expanding — the canvas is one click away), the
+ * budget before → after, and "Open in canvas". Drawn by the same pieces as the pane.
+ */
+export function LecturaChatCard({
+  model,
+  title,
+  onOpen,
+}: {
+  model: LecturaModel;
+  title?: string | null;
+  onOpen?: () => void;
+}) {
+  const shown = model.changes.slice(0, CHAT_CHANGES_SHOWN);
+  const more = model.changes.length - shown.length;
+  return (
+    <section
+      className="grid min-w-0 gap-2.5 rounded-xl border border-border bg-card p-3"
+      data-testid="lectura-chat-card"
+      data-size="chat"
+      aria-label={title ?? 'Campaign changes'}
+    >
+      <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <h3 className="min-w-0 break-words text-sm font-semibold leading-snug">
+          {title ?? model.campaigns[0]?.name ?? 'Campaign'}
+        </h3>
+        {/* A given title (Jaina's subject) already counts the changes; the campaign name does not. */}
+        <span className={cn('text-xs text-muted-foreground', title && 'sr-only')}>
+          {model.changes.length === 0
+            ? `${model.adSetCount} ${model.adSetCount === 1 ? 'ad set' : 'ad sets'}`
+            : model.changes.length === 1
+              ? '1 change'
+              : `${model.changes.length} changes`}
+        </span>
+      </header>
+      {shown.length > 0 ? (
+        <ul className="grid gap-1.5">
+          {shown.map((change) => (
+            <ChangeCard
+              key={change.id}
+              change={change}
+              adSet={null}
+              currency={model.currency}
+              expanded={false}
+              onToggle={() => {}}
+            />
+          ))}
+        </ul>
+      ) : null}
+      {more > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          +{more} more {more === 1 ? 'change' : 'changes'} in the canvas
+        </p>
+      ) : null}
+      <BudgetSummary model={model} />
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[13px] font-medium text-primary-ink hover:bg-secondary focus-visible:outline-2 focus-visible:outline-primary"
+          data-testid="lectura-open-in-canvas"
+        >
+          <PanelRightOpen className="size-3.5" aria-hidden />
+          Open in canvas
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
 export function LecturaView({
   model,
   initialExpandedId = null,
   initialLayout,
+  size = 'panel',
+  title,
+  onOpen,
 }: {
   model: LecturaModel;
   initialExpandedId?: string | null;
   initialLayout?: LecturaLayout;
+  size?: CampaignViewSize;
+  /** `chat` only: the card's heading (defaults to the campaign name). */
+  title?: string | null;
+  /** `chat` only: opens the companion canvas on this campaign. */
+  onOpen?: () => void;
+}) {
+  if (size === 'chat') return <LecturaChatCard model={model} title={title} onOpen={onOpen} />;
+  return (
+    <LecturaPane
+      model={model}
+      initialExpandedId={initialExpandedId}
+      initialLayout={initialLayout}
+      size={size}
+    />
+  );
+}
+
+function LecturaPane({
+  model,
+  initialExpandedId,
+  initialLayout,
+  size,
+}: {
+  model: LecturaModel;
+  initialExpandedId: string | null;
+  initialLayout?: LecturaLayout;
+  size: Exclude<CampaignViewSize, 'chat'>;
 }) {
   const [expandedId, setExpandedId] = React.useState<string | null>(initialExpandedId);
   const [layout, setLayout] = React.useState<LecturaLayout>(
@@ -478,7 +621,8 @@ export function LecturaView({
       ),
     [model],
   );
-  const showChanges = model.kind === 'change' && model.changes.length > 0;
+  // A live edit and a campaign copy both carry changes; a brand-new campaign carries none.
+  const showChanges = model.changes.length > 0;
   const multiCampaign = model.campaigns.length > 1;
 
   return (
@@ -486,8 +630,14 @@ export function LecturaView({
       className="h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background"
       data-testid="lectura-view"
       data-kind={model.kind}
+      data-size={size}
     >
-      <div className="@container mx-auto grid w-full max-w-3xl gap-4 p-3 sm:p-4">
+      <div
+        className={cn(
+          '@container mx-auto grid w-full gap-4 p-3 sm:p-4',
+          size === 'page' ? 'max-w-6xl pt-16' : 'max-w-3xl',
+        )}
+      >
         {showChanges ? (
           <section className="grid gap-2" aria-label="Changes">
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -555,13 +705,18 @@ export function LecturaView({
               {campaign.adSets.length === 0 ? (
                 <p className="text-[13px] text-muted-foreground">No ad sets yet</p>
               ) : (
-                <div className="grid grid-cols-1 gap-2.5 @min-[560px]:grid-cols-2">
+                <div
+                  className={cn(
+                    'grid grid-cols-1 gap-2.5 @min-[560px]:grid-cols-2',
+                    size === 'page' && '@min-[960px]:grid-cols-3',
+                  )}
+                >
                   {campaign.adSets.map((adSet) => (
                     <LecturaAdSetCard
                       key={adSet.id}
                       adSet={adSet}
                       currency={model.currency}
-                      dimUnchanged={model.kind === 'change'}
+                      dimUnchanged={showChanges}
                     />
                   ))}
                 </div>

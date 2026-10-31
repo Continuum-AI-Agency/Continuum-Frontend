@@ -115,7 +115,11 @@ import {
   campaignCanvasActionsEnvelopeSchema,
   extractCampaignCanvasActionsEnvelope,
 } from '@/lib/campaign-canvas/agent-actions';
-import { type LiveChangeDecision, latestLiveChangeOf } from '@/lib/campaign-canvas/liveChange';
+import {
+  type LiveChangeDecision,
+  latestLiveChangeOf,
+  liveChangeByPartIdOf,
+} from '@/lib/campaign-canvas/liveChange';
 import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
@@ -2744,6 +2748,10 @@ export function JainaChatSurface({
     onLiveChangeFocus({ preview, decision, opened: fresh });
   }, [historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
 
+  // Read through a ref so the thread context (and every memoized message) does not change
+  // on each streamed token just to keep "Open in canvas" pointed at the latest messages.
+  const liveChangeMessagesRef = React.useRef(messages);
+  liveChangeMessagesRef.current = messages;
   const scaffoldThread = React.useMemo<ScaffoldThread>(
     () => ({
       sessionId,
@@ -2753,8 +2761,16 @@ export function JainaChatSurface({
               onScaffoldFocus(parentScaffoldId, 'expand'),
           }
         : {}),
+      ...(onLiveChangeFocus
+        ? {
+            onLiveChangeOpen: (partId: string) => {
+              const found = liveChangeByPartIdOf(liveChangeMessagesRef.current, partId);
+              if (found) onLiveChangeFocus({ ...found, opened: true });
+            },
+          }
+        : {}),
     }),
-    [onScaffoldFocus, sessionId],
+    [onLiveChangeFocus, onScaffoldFocus, sessionId],
   );
 
   const consumedOperatorRequestRef = React.useRef<string | null>(null);

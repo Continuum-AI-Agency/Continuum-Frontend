@@ -24,6 +24,8 @@ import { CampaignCanvas } from './components/CampaignCanvas';
 import { CampaignCreativeActionsProvider } from './components/CampaignCreativeActions';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import { useCanvasChatBridge } from './hooks/useCanvasChatBridge';
+import { CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
+import { StoreLectura } from './lectura/StoreLectura';
 import { useCampaignStore } from './stores/useCampaignStore';
 
 /** Where "Back to chat" leads: the thread that opened this canvas, else the Jaina tab. */
@@ -44,6 +46,13 @@ const CampaignFlowCanvasPage = ({
   const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
+  // The full page is where people build by hand: auto opens the Map, Read is one click away,
+  // and the pick is remembered with the companion's own manual pick (canvasView.ts).
+  const { view, setView, isPhone, startEditing, openByHand } = useCanvasView('manual');
+  const isDirty = useCampaignStore((store) => store.isDirty);
+  React.useEffect(() => {
+    if (isDirty) startEditing();
+  }, [isDirty, startEditing]);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
   const { activeBrandId, brandSummaries, user } = useActiveBrandContext();
@@ -106,6 +115,11 @@ const CampaignFlowCanvasPage = ({
               <CampaignCanvas />
             </CampaignCreativeActionsProvider>
           </CanvasJainaContext.Provider>
+          {view === 'lectura' ? (
+            <div className="absolute inset-0 z-30 bg-background" data-testid="canvas-page-read">
+              <StoreLectura size="page" />
+            </div>
+          ) : null}
 
           {/* The record this canvas is showing, and the one way forward from it. */}
           <div className="pointer-events-none absolute top-3 left-1/2 z-40 flex -translate-x-1/2 items-start gap-2">
@@ -131,7 +145,11 @@ const CampaignFlowCanvasPage = ({
               onDeploy={bridge.deployInChat}
               deployInFlight={deploy.inFlight}
               deployRefusal={deploy.refusal}
+              onScaffoldPicked={openByHand}
             />
+            <div className="pointer-events-auto shrink-0 rounded-lg bg-background/90 shadow-sm backdrop-blur">
+              <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
+            </div>
           </div>
 
           {/* Jaina Floating Chat */}

@@ -9,7 +9,7 @@ import * as React from 'react';
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { LiveChangeCanvas, LiveChangeDecisionPill } from './LiveChangeCanvas';
-import { CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
+import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
 import { LecturaView } from './lectura/LecturaView';
 
 export function LiveChangeCompanion({
@@ -19,7 +19,7 @@ export function LiveChangeCompanion({
   preview: LiveChangePreviewPayload;
   decision: LiveChangeDecision;
 }) {
-  const { view, setView, isPhone } = useCanvasView('proposed');
+  const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
   return (
     <div className="flex h-full min-h-0 flex-col bg-background" data-testid="live-change-companion">
@@ -31,6 +31,11 @@ export function LiveChangeCompanion({
           <LiveChangeDecisionPill decision={decision} />
           <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
         </div>
+        {hint ? (
+          <div className="flex w-full justify-end">
+            <CanvasViewHint hint={hint} onDismiss={dismissHint} />
+          </div>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1">
         {view === 'lectura' ? (

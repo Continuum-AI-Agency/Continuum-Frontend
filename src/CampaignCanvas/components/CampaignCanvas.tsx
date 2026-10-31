@@ -62,7 +62,12 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
-import { columnMapFromCanvasGraph, columnsShowEveryNode } from '@/lib/campaign-canvas/columnMap';
+import {
+  COLUMN_MAP_WIDTH,
+  columnMapFromCanvasGraph,
+  columnsShowEveryNode,
+  initialColumnViewport,
+} from '@/lib/campaign-canvas/columnMap';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { ColumnMapFlow } from '../columnMap/ColumnMapFlow';
 import { AdNode } from '../nodes/AdNode';
@@ -144,7 +149,7 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
     platform,
   } = useCampaignStore();
 
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, setViewport } = useReactFlow();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { show: toast } = useToast();
 
@@ -354,6 +359,22 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
     [edges, layout, nodes, platform],
   );
   const inColumns = columnModel !== null && columnsShowEveryNode(columnModel, nodes);
+  // "Fit to screen" in columns fits the WIDTH: the map grows downward, and fitting its height
+  // would shrink a 24-ad campaign to unreadable. The free layout keeps React Flow's fit.
+  const fitScreen = useCallback(() => {
+    const surface = surfaceRef.current;
+    if (inColumns && surface) {
+      void setViewport(
+        initialColumnViewport(
+          { width: surface.clientWidth, height: surface.clientHeight },
+          COLUMN_MAP_WIDTH,
+        ),
+        { duration: 300 },
+      );
+      return;
+    }
+    void fitView({ duration: 800 });
+  }, [fitView, inColumns, setViewport]);
   const selectedIds = useMemo(
     () => new Set(nodes.filter((node) => node.selected).map((node) => node.id)),
     [nodes],
@@ -397,7 +418,7 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
         }
       } else if (event.shiftKey && !isCmd && event.key.toLowerCase() === 'f' && !inField) {
         // The shortcut the "Fit to Screen" menu item advertises.
-        fitView({ duration: 800 });
+        fitScreen();
       } else if (isCmd && event.key === 'd' && !inField) {
         event.preventDefault();
         const selected = nodes.find((n) => n.selected);
@@ -415,7 +436,7 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, undo, redo, duplicateNode, toast, fitView]);
+  }, [nodes, undo, redo, duplicateNode, toast, fitScreen]);
 
   const panels = (
     <>
@@ -602,7 +623,7 @@ export const CampaignCanvas = ({ layout = 'free' }: { layout?: CampaignCanvasLay
                 Straight Connections
               </ContextMenuCheckboxItem>
               <ContextMenuSeparator />
-              <ContextMenuItem onClick={() => fitView({ duration: 800 })}>
+              <ContextMenuItem onClick={fitScreen}>
                 Fit to Screen
                 <ContextMenuShortcut>⇧F</ContextMenuShortcut>
               </ContextMenuItem>

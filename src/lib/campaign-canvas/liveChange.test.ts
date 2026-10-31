@@ -4,6 +4,7 @@ import {
   adStopsWithParent,
   latestLiveChangeOf,
   liveChangeBudgetText,
+  liveChangeByPartIdOf,
   liveChangeSummaryOf,
   liveChangeTreeOf,
   liveChangeValueText,
@@ -119,5 +120,20 @@ describe('latestLiveChangeOf', () => {
   it('is pending until a decision exists, and null with no preview', () => {
     expect(latestLiveChangeOf([{ liveChangePreviews: [PAUSE] }])?.decision).toBe('pending');
     expect(latestLiveChangeOf([{}])).toBe(null);
+  });
+});
+
+describe('liveChangeByPartIdOf', () => {
+  it("finds an older card's preview for its Open in canvas, with that approval's decision", () => {
+    const second = { ...PAUSE, approvalId: 'appr_2', partId: 'live-change:appr_2' };
+    const messages = [
+      { liveChangePreviews: [PAUSE] },
+      { liveChangePreviews: [second] },
+      { resolvedApprovals: { [PAUSE.approvalId]: { decision: 'denied' as const } } },
+    ];
+    const found = liveChangeByPartIdOf(messages, PAUSE.partId);
+    expect(found?.preview).toBe(PAUSE);
+    expect(found?.decision).toBe('denied');
+    expect(liveChangeByPartIdOf(messages, 'live-change:missing')).toBe(null);
   });
 });

@@ -1,15 +1,15 @@
 'use client';
 
 import { ReactFlowProvider } from '@xyflow/react';
-import { useMemo } from 'react';
+import { PencilLine } from 'lucide-react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { CanvasViewContext } from '@/lib/campaign-canvas/canvasView';
-import { lecturaFromCanvasGraph } from '@/lib/campaign-canvas/lectura';
 import { CanvasJainaContext, canvasJainaSending } from './canvasJaina';
 import { CampaignCanvas } from './components/CampaignCanvas';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import type { CanvasDeployRequest } from './hooks/useDeployRequest';
-import { CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
-import { LecturaView } from './lectura/LecturaView';
+import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
+import { StoreLectura } from './lectura/StoreLectura';
 import { useCampaignStore } from './stores/useCampaignStore';
 
 const ignoreAdAccount = () => {};
@@ -24,8 +24,9 @@ const ignoreAdAccount = () => {};
  * would make every analytics question an operator turn.
  *
  * Two views of the same graph (design C): Map, the node graph to think and edit in, and Read,
- * the cards a person approves from. A scaffold Jaina just proposed opens in Read; a pane opened
- * by hand opens in Map; the person's own choice wins for each (`canvasView.ts`).
+ * the cards a person approves from. Auto mode by task (`canvasView.ts`): a scaffold Jaina just
+ * proposed opens in Read; a scaffold picked from the record bar, Edit, or the first change to
+ * a node opens the Map; the person's own pick per task kind wins over auto.
  */
 export function ScaleCompanionCanvas({
   brandId,
@@ -47,7 +48,16 @@ export function ScaleCompanionCanvas({
   viewContext?: CanvasViewContext;
 }) {
   const canvasJaina = useMemo(() => canvasJainaSending(onSend), [onSend]);
-  const { view, setView, isPhone } = useCanvasView(viewContext);
+  const { view, setView, isPhone, startEditing, openByHand, hint, dismissHint } =
+    useCanvasView(viewContext);
+  // The first change to a node makes the task the person's: the Map, whatever opened it.
+  const isDirty = useCampaignStore((store) => store.isDirty);
+  const wasDirty = useRef(isDirty);
+  useEffect(() => {
+    if (isDirty && !wasDirty.current) startEditing();
+    wasDirty.current = isDirty;
+  }, [isDirty, startEditing]);
+  const hasCampaign = useCampaignStore((store) => store.nodes.length > 0);
   return (
     <ReactFlowProvider>
       <CanvasJainaContext.Provider value={canvasJaina}>
@@ -61,9 +71,28 @@ export function ScaleCompanionCanvas({
                 onDeploy={onDeploy}
                 deployInFlight={deployInFlight}
                 deployRefusal={deployRefusal}
+                onScaffoldPicked={openByHand}
               />
             </div>
-            <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              {view === 'lectura' && hasCampaign && !isPhone ? (
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-[13px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+                  data-testid="canvas-edit"
+                >
+                  <PencilLine className="size-3.5" aria-hidden />
+                  Edit
+                </button>
+              ) : null}
+              <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
+            </div>
+            {hint ? (
+              <div className="flex w-full justify-end">
+                <CanvasViewHint hint={hint} onDismiss={dismissHint} />
+              </div>
+            ) : null}
           </div>
           <div className="relative min-h-0 flex-1">
             {view === 'lectura' ? <StoreLectura /> : <CampaignCanvas layout="columns" />}
@@ -72,19 +101,4 @@ export function ScaleCompanionCanvas({
       </CanvasJainaContext.Provider>
     </ReactFlowProvider>
   );
-}
-
-/** Read, drawn from the same graph the Map edits — a save in one is what the other shows. */
-function StoreLectura() {
-  const nodes = useCampaignStore((store) => store.nodes);
-  const edges = useCampaignStore((store) => store.edges);
-  const model = useMemo(() => lecturaFromCanvasGraph(nodes, edges), [nodes, edges]);
-  if (model.campaigns.length === 0) {
-    return (
-      <div className="grid h-full place-items-center p-6 text-center text-[13px] text-muted-foreground">
-        No campaign on the canvas yet. When Jaina proposes one, it appears here.
-      </div>
-    );
-  }
-  return <LecturaView model={model} />;
 }

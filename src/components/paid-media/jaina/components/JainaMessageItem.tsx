@@ -8,6 +8,7 @@ import type {
 } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
+import { LiveChangeChatCard } from '@/CampaignCanvas/lectura/LiveChangeChatCard';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { SentDocumentAttachments } from '@/components/chat/attachments';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -18,6 +19,7 @@ import { JainaCampaignStructures } from '@/components/paid-media/jaina/blocks/Ja
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { useScaffoldThread } from '@/components/paid-media/jaina/scaffold/scaffoldThreadContext';
 import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import {
   type CreativeArtifact,
@@ -259,6 +261,8 @@ function JainaMessageItemImpl({
   const optimizerCitations = message.optimizerCitations ?? [];
   const optimizerHyperframes = message.optimizerHyperframes ?? [];
   const campaignStructures = message.campaignStructures ?? [];
+  const liveChangePreview = message.liveChangePreviews?.at(-1) ?? null;
+  const { onLiveChangeOpen } = useScaffoldThread();
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -376,6 +380,16 @@ function JainaMessageItemImpl({
             {/* The drawing sits above the card it illustrates; approval stays on the card. */}
             {campaignStructures.length > 0 ? (
               <JainaCampaignStructures structures={campaignStructures} />
+            ) : null}
+
+            {/* A live edit at chat size: the canvas's Read pieces, one click from the pane. */}
+            {liveChangePreview ? (
+              <LiveChangeChatCard
+                preview={liveChangePreview}
+                onOpen={
+                  onLiveChangeOpen ? () => onLiveChangeOpen(liveChangePreview.partId) : undefined
+                }
+              />
             ) : null}
 
             {scaffold ? (

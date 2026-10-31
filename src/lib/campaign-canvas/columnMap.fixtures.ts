@@ -38,9 +38,20 @@ const flowEdge = (source: string, target: string): CampaignCanvasEdge => ({
   target,
 });
 
-const buildScaffold24 = (): { nodes: CampaignCanvasNode[]; edges: CampaignCanvasEdge[] } => {
+const pathOf = (pathKey: string) => ({
+  provenance: { sourceId: pathKey, pathKey, gate: null, metaStatus: null },
+});
+
+/**
+ * `copiedSets`: the ad set indexes that are a COPY of a live ad set (their audience is the
+ * source's verbatim, mode `copied`); the others are new test ad sets beside them.
+ */
+const buildScaffold24 = (
+  copiedSets: readonly number[] = [],
+): { nodes: CampaignCanvasNode[]; edges: CampaignCanvasEdge[] } => {
   const nodes: CampaignCanvasNode[] = [
     flowNode('c', 'campaign', {
+      ...pathOf('c0'),
       label: 'ZAPOPAN // MENSAJES // Noviembre 2026',
       objective: 'OUTCOME_ENGAGEMENT',
       buyingType: 'AUCTION',
@@ -54,6 +65,7 @@ const buildScaffold24 = (): { nodes: CampaignCanvasNode[]; edges: CampaignCanvas
     const setId = `s${setIndex + 1}`;
     nodes.push(
       flowNode(setId, 'ad-set', {
+        ...pathOf(`c0/a${setIndex}`),
         label: AD_SET_NAMES[setIndex],
         optimizationGoal: 'CONVERSATIONS',
         billingEvent: 'IMPRESSIONS',
@@ -62,7 +74,10 @@ const buildScaffold24 = (): { nodes: CampaignCanvasNode[]; edges: CampaignCanvas
       }),
       flowNode(`${setId}:audience`, 'audience', {
         label: 'Audience',
-        mode: 'broad',
+        mode: copiedSets.includes(setIndex) ? 'copied' : 'broad',
+        ...(copiedSets.includes(setIndex)
+          ? { copiedFromAdSetName: `${AD_SET_NAMES[setIndex]} (live)` }
+          : {}),
         locations: ['MX'],
         ageMin: 25,
         ageMax: 44,
@@ -74,6 +89,7 @@ const buildScaffold24 = (): { nodes: CampaignCanvasNode[]; edges: CampaignCanvas
       const adId = `${setId}a${adIndex + 1}`;
       nodes.push(
         flowNode(adId, 'ad', {
+          ...pathOf(`c0/a${setIndex}/ad${adIndex}`),
           label: AD_NAMES[adIndex % AD_NAMES.length],
           adFormat: adIndex % 2 === 0 ? 'VIDEO' : 'IMAGE',
           primaryText: '',
@@ -92,6 +108,12 @@ const buildScaffold24 = (): { nodes: CampaignCanvasNode[]; edges: CampaignCanvas
 };
 
 export const SCAFFOLD_24_ADS = buildScaffold24();
+
+/**
+ * A campaign COPY (P5 design 08): ad sets 1-3 copied from the live campaign, ad sets 4 and 5
+ * new test ad sets Jaina added beside them.
+ */
+export const SCAFFOLD_COPY_WITH_TESTS = buildScaffold24([0, 1, 2]);
 
 const live = (
   overrides: Partial<LiveChangeNode> & Pick<LiveChangeNode, 'id' | 'level' | 'name'>,

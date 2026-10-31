@@ -3,28 +3,23 @@
 // The old map spread ads sideways (24 ads ≈ 10,900 px, fitView at ~6% zoom); here an ad set's
 // ads stack beside it and its creative and audience fold into the cards.
 //
-// Pure: the card model (from a live change preview or a scaffold graph), the collapse of the
+// Pure: the card model (projected from the one campaign model), the collapse of the
 // unchanged branches, the layout, the reading order of the changes and the viewport math. The
 // components only draw what this returns.
 
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
-import type {
-  AdData,
-  AdSetData,
-  AudienceData,
-  CampaignCanvasEdge,
-  CampaignCanvasNode,
-  CampaignData,
-  CreativeData,
-} from '@/CampaignCanvas/types';
-import { audienceLineOf, type LecturaMark, type LecturaRow, lecturaMoney } from './lectura';
+import type { CampaignCanvasEdge, CampaignCanvasNode } from '@/CampaignCanvas/types';
 import {
-  adStopsWithParent,
-  liveChangeBudgetText,
-  liveChangeFieldLabel,
-  liveChangeTreeOf,
-  liveChangeValueText,
-} from './liveChange';
+  type CampaignViewModel,
+  humanStatus,
+  type LecturaAd,
+  type LecturaMark,
+  type LecturaRow,
+  lecturaFromCanvasGraph,
+  lecturaFromLiveChange,
+  lecturaMoney,
+  type ScaffoldMark,
+} from './lectura';
 
 export type MapCardLevel = 'campaign' | 'adset' | 'ad';
 
@@ -34,7 +29,9 @@ export type MapCard = {
   level: MapCardLevel;
   mark: LecturaMark;
   title: string;
-  /** Short fact lines: budget, status, creative. */
+  /** Meta's status in words ("Active", "Paused"), drawn dimmed beside the level; null for a draft. */
+  status: string | null;
+  /** Short fact lines: budget, objective, creative. */
   lines: string[];
   /** The folded audience, worded ("MX · 25-44 · women"); a click opens it. */
   audienceLine: string | null;
@@ -330,7 +327,8 @@ export type Viewport = { x: number; y: number; zoom: number };
 
 /**
  * The map's full width at the largest zoom ≤ 1 that fits the pane, top-aligned below
- * `topInset` (room for the "next change" control floating over the map).
+ * `topInset`. This is also what "Fit to screen" does in columns: the map grows downward, so
+ * fitting its height would shrink 24 ads to unreadable; fitting the width keeps them legible.
  */
 export const initialColumnViewport = (
   pane: PaneSize,
@@ -342,8 +340,46 @@ export const initialColumnViewport = (
   return { x: (pane.width - mapWidth * zoom) / 2, y: COLUMN_MAP.panePadding * 4 + topInset, zoom };
 };
 
-/** Height kept free above the map for the "Change 1 of 3" control. */
-export const NEXT_CHANGE_INSET = 48;
+/** The minimap's footprint in the pane's bottom-right corner: 64 px wide plus its margins. */
+export const MINIMAP_FOOTPRINT = 64 + 2 * 8;
+
+/**
+ * Below this pane width the minimap would sit on the ad column (the columns are centred, so
+ * the gutter on each side must hold it); it is left out rather than covering a card.
+ */
+export const MINIMAP_MIN_PANE_WIDTH = COLUMN_MAP_WIDTH + 2 * MINIMAP_FOOTPRINT;
+
+export const showsMinimap = (pane: PaneSize | null): boolean =>
+  pane !== null && pane.width >= MINIMAP_MIN_PANE_WIDTH;
+
+/** Where an edge leaves and enters a card: level with the title, not the card's middle. */
+export const EDGE_ANCHOR_TOP = 22;
+
+/**
+ * One trunk per parent: out of the parent's side, a short stub to a vertical bus half a column
+ * gap away, down the bus, and a short stub into each child. Every child of one parent shares
+ * the bus x, so their lines lie on one trunk instead of zig-zagging; a child level with its
+ * parent is one straight line. Corners are rounded by `radius`.
+ */
+export const busEdgePath = (
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  radius = 6,
+): string => {
+  const busX = source.x + COLUMN_MAP.columnGap / 2;
+  const dy = target.y - source.y;
+  if (Math.abs(dy) < 1) return `M ${source.x} ${source.y} H ${target.x}`;
+  const r = Math.min(radius, Math.abs(dy) / 2, COLUMN_MAP.columnGap / 2);
+  const down = Math.sign(dy);
+  return [
+    `M ${source.x} ${source.y}`,
+    `H ${busX - r}`,
+    `Q ${busX} ${source.y} ${busX} ${source.y + down * r}`,
+    `V ${target.y - down * r}`,
+    `Q ${busX} ${target.y} ${busX + r} ${target.y}`,
+    `H ${target.x}`,
+  ].join(' ');
+};
 
 /**
  * Where "next change" takes the viewport: the node centred vertically at a zoom that keeps it
@@ -363,181 +399,105 @@ export const focusViewport = (
 };
 
 // ---------------------------------------------------------------------------
-// Card models
+// Card models: projected from the one campaign model (lectura.ts), never read from a payload
 // ---------------------------------------------------------------------------
-
-const NO_FOLD = { audienceId: null, creativeId: null } as const;
-
-const liveRows = (
-  node: LiveChangePreviewPayload['nodes'][number],
-  currency: string | null,
-): LecturaRow[] =>
-  node.changes.map((row) => ({
-    field: row.field,
-    label: liveChangeFieldLabel(row.field),
-    before: liveChangeValueText(row, 'before', currency),
-    after: liveChangeValueText(row, 'after', currency),
-  }));
 
 const factLine = (...parts: (string | null | undefined)[]): string[] => {
   const line = parts.filter((part): part is string => Boolean(part)).join(' · ');
   return line ? [line] : [];
 };
 
-/** A pending edit to a live campaign, with Meta's own marks. */
-export const columnMapFromLiveChange = (preview: LiveChangePreviewPayload): ColumnMapModel => {
-  const { currency } = preview;
-  const nameOf = new Map(preview.nodes.map((node) => [node.id, node.name]));
-  const card = (
-    node: LiveChangePreviewPayload['nodes'][number],
-    level: MapCardLevel,
-    note: string | null,
-  ): MapCard => ({
-    id: node.id,
-    level,
-    mark: node.mark,
-    title: node.name,
-    lines: factLine(node.status, liveChangeBudgetText(node, currency)),
-    audienceLine: null,
-    rows: liveRows(node, currency).filter((row) => row.field !== 'status'),
-    note,
-    thumbnailUrl: null,
-    folded: NO_FOLD,
-  });
-  return {
-    campaigns: liveChangeTreeOf(preview).map((campaign) => ({
-      ...card(campaign.node, 'campaign', null),
-      adSets: campaign.adSets.map((adSet) => ({
-        ...card(
-          adSet.node,
-          'adset',
-          adSet.node.basedOnId
-            ? `copy of ${nameOf.get(adSet.node.basedOnId) ?? 'an ad set'}`
-            : adSet.stopsWithParent
-              ? 'stops with its campaign'
-              : null,
-        ),
-        ads: adSet.ads.map((ad) =>
-          card(ad, 'ad', adStopsWithParent(adSet, ad) ? 'stops with its ad set' : null),
-        ),
-      })),
-    })),
-  };
-};
-
-const OBJECTIVE_LABEL: Record<CampaignData['objective'], string> = {
-  OUTCOME_SALES: 'Sales',
-  OUTCOME_LEADS: 'Leads',
-  OUTCOME_ENGAGEMENT: 'Engagement',
-  OUTCOME_AWARENESS: 'Awareness',
-  OUTCOME_TRAFFIC: 'Traffic',
-  OUTCOME_APP_PROMOTION: 'App promotion',
-};
-
-const minorOf = (major: number | null | undefined): number | null =>
-  typeof major === 'number' && Number.isFinite(major) ? Math.round(major * 100) : null;
-
-const perDay = (major: number | null | undefined, currency: string | null): string | null => {
-  const text = lecturaMoney(minorOf(major), currency);
+const perDay = (minor: number | null, currency: string | null): string | null => {
+  const text = lecturaMoney(minor, currency);
   return text ? `${text}/day` : null;
 };
 
+const shownRows = (rows: LecturaRow[]): LecturaRow[] =>
+  rows.filter((row) => row.field !== 'status');
+
+const creativeLine = (ad: LecturaAd): string =>
+  ad.creativeKind
+    ? ad.creativeKind.charAt(0).toUpperCase() + ad.creativeKind.slice(1)
+    : 'No creative yet';
+
 /**
- * The companion's own graph (the scaffold store). A scaffold carries no marks — what it shows
- * is all proposed, not a diff — so every card is `unchanged` and nothing folds; the audience
- * and creative fold into their ad set and ad, which keep their ids to select them.
+ * The Map's cards for a campaign model. The status is its own dimmed word ("Active"), not a
+ * fact line; a live preview's ad set says what it was copied from or that it stops with its
+ * campaign; a scaffold's audience and creative fold into their ad set and ad, which keep the
+ * store ids so a click still opens them.
+ */
+export const columnMapFromView = (model: CampaignViewModel): ColumnMapModel => {
+  const { currency } = model;
+  const live = model.source === 'live';
+  return {
+    campaigns: model.campaigns.map(
+      (campaign): MapCampaign => ({
+        id: campaign.id,
+        level: 'campaign',
+        mark: campaign.mark,
+        title: campaign.name,
+        status: humanStatus(campaign.status),
+        lines: factLine(campaign.objective, perDay(campaign.budgetMinor, currency)),
+        audienceLine: null,
+        rows: shownRows(campaign.rows),
+        note: null,
+        thumbnailUrl: null,
+        folded: NO_FOLD,
+        adSets: campaign.adSets.map(
+          (adSet): MapAdSet => ({
+            id: adSet.id,
+            level: 'adset',
+            mark: adSet.mark,
+            title: adSet.name,
+            status: humanStatus(adSet.status),
+            lines: factLine(perDay(adSet.budgetMinor, currency)),
+            audienceLine: adSet.audience,
+            rows: shownRows(adSet.rows),
+            note: adSet.basedOnName
+              ? `copy of ${adSet.basedOnName}`
+              : adSet.stopsWithParent
+                ? 'stops with its campaign'
+                : null,
+            thumbnailUrl: null,
+            folded: { audienceId: adSet.audienceId, creativeId: null },
+            ads: adSet.ads.map(
+              (ad): MapCard => ({
+                id: ad.id,
+                level: 'ad',
+                mark: ad.mark,
+                title: ad.name,
+                status: humanStatus(ad.status),
+                lines: live ? factLine(perDay(ad.budgetMinor, currency)) : [creativeLine(ad)],
+                audienceLine: null,
+                rows: shownRows(ad.rows),
+                note: ad.stops ? 'stops with its ad set' : null,
+                thumbnailUrl: ad.thumbnailUrl,
+                folded: { audienceId: null, creativeId: ad.creativeId },
+              }),
+            ),
+          }),
+        ),
+      }),
+    ),
+  };
+};
+
+const NO_FOLD = { audienceId: null, creativeId: null } as const;
+
+/** A pending edit to a live campaign, with Meta's own marks. */
+export const columnMapFromLiveChange = (preview: LiveChangePreviewPayload): ColumnMapModel =>
+  columnMapFromView(lecturaFromLiveChange(preview));
+
+/**
+ * The companion's own graph (the scaffold store). A new campaign carries no marks — what it
+ * shows is all proposed, not a diff — so nothing folds; a campaign COPY marks the ad sets it
+ * adds (`scaffoldMarksOf`), so its copied ones fold and "next change" walks the new ones.
  */
 export const columnMapFromCanvasGraph = (
   nodes: readonly CampaignCanvasNode[],
   edges: readonly CampaignCanvasEdge[],
-): ColumnMapModel => {
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const targetsOf = (id: string) =>
-    edges
-      .filter((edge) => edge.source === id)
-      .map((edge) => byId.get(edge.target))
-      .filter((node): node is CampaignCanvasNode => Boolean(node));
-  const sourcesOf = (id: string) =>
-    edges
-      .filter((edge) => edge.target === id)
-      .map((edge) => byId.get(edge.source))
-      .filter((node): node is CampaignCanvasNode => Boolean(node));
-
-  return {
-    campaigns: nodes
-      .filter((node) => node.type === 'campaign')
-      .map((campaignNode): MapCampaign => {
-        const campaign = campaignNode.data as CampaignData;
-        const currency = campaign.budgetCurrency ?? null;
-        const cbo = campaign.budgetMode === 'cbo';
-        return {
-          id: campaignNode.id,
-          level: 'campaign',
-          mark: 'unchanged',
-          title: campaign.label,
-          lines: factLine(
-            OBJECTIVE_LABEL[campaign.objective] ?? null,
-            cbo ? perDay(campaign.campaignBudgetAmount, currency) : null,
-          ),
-          audienceLine: null,
-          rows: [],
-          note: null,
-          thumbnailUrl: null,
-          folded: NO_FOLD,
-          adSets: targetsOf(campaignNode.id)
-            .filter((node) => node.type === 'ad-set')
-            .map((adSetNode): MapAdSet => {
-              const adSet = adSetNode.data as AdSetData;
-              const audienceNode = sourcesOf(adSetNode.id).find((node) => node.type === 'audience');
-              const audience = audienceLineOf((audienceNode?.data as AudienceData) ?? null);
-              return {
-                id: adSetNode.id,
-                level: 'adset',
-                mark: 'unchanged',
-                title: adSet.label,
-                lines: factLine(
-                  cbo ? null : perDay(adSet.budgetAmount, adSet.budgetCurrency ?? currency),
-                ),
-                audienceLine: audience,
-                rows: [],
-                note: null,
-                thumbnailUrl: null,
-                folded: { audienceId: audienceNode?.id ?? null, creativeId: null },
-                ads: targetsOf(adSetNode.id)
-                  .filter((node) => node.type === 'ad')
-                  .map((adNode): MapCard => {
-                    const ad = adNode.data as AdData;
-                    const creativeNode = targetsOf(adNode.id).find(
-                      (node) => node.type === 'creative',
-                    );
-                    const creative = (creativeNode?.data as CreativeData | undefined) ?? null;
-                    const thumbnailUrl =
-                      creative?.thumbnailUrl ??
-                      creative?.cards?.find((entry) => entry.thumbnailUrl)?.thumbnailUrl ??
-                      null;
-                    return {
-                      id: adNode.id,
-                      level: 'ad',
-                      mark: 'unchanged',
-                      title: ad.label,
-                      lines: factLine(
-                        creative?.assetType
-                          ? creative.assetType.charAt(0).toUpperCase() + creative.assetType.slice(1)
-                          : 'No creative yet',
-                      ),
-                      audienceLine: null,
-                      rows: [],
-                      note: null,
-                      thumbnailUrl,
-                      folded: { audienceId: null, creativeId: creativeNode?.id ?? null },
-                    };
-                  }),
-              };
-            }),
-        };
-      }),
-  };
-};
+  marks?: ReadonlyMap<string, ScaffoldMark>,
+): ColumnMapModel => columnMapFromView(lecturaFromCanvasGraph(nodes, edges, marks));
 
 /** Every card of the model by id, for the node components. */
 export const cardsById = (model: ColumnMapModel): Map<string, MapCard> => {

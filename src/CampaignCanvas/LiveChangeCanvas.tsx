@@ -60,17 +60,23 @@ export function LiveChangeCanvas({
           <LiveChangeDecisionPill decision={decision} />
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-border bg-card/70 px-3 py-2 text-xs tabular-nums">
-        <span className="font-semibold">{liveChangeSummaryOf(preview)}</span>
-        {preview.truncated ? (
-          <span className="text-muted-foreground">
-            Large campaign: only the first items are shown
-          </span>
-        ) : null}
-      </div>
       <div className="min-h-0 flex-1">
         <ReactFlowProvider>
-          <ColumnMapFlow key={preview.partId} model={model} testIdPrefix="live-change-node-" />
+          <ColumnMapFlow
+            key={preview.partId}
+            model={model}
+            testIdPrefix="live-change-node-"
+            header={
+              <span className="flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+                <span className="font-semibold">{liveChangeSummaryOf(preview)}</span>
+                {preview.truncated ? (
+                  <span className="text-muted-foreground">
+                    Large campaign: only the first items are shown
+                  </span>
+                ) : null}
+              </span>
+            }
+          />
         </ReactFlowProvider>
       </div>
     </div>

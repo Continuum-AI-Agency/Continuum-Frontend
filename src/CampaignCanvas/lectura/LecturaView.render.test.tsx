@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { SCAFFOLD_COPY_WITH_TESTS } from '@/lib/campaign-canvas/columnMap.fixtures';
 import { lecturaFromCanvasGraph, lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import { LIVE_BATCH_PREVIEW, SCAFFOLD_GRAPH } from '@/lib/campaign-canvas/lectura.fixtures';
 import { LiveChangeCompanion } from '../LiveChangeCompanion';
-import { CanvasViewToggle } from './CanvasViewToggle';
-import { LecturaView } from './LecturaView';
+import { CanvasViewHint, CanvasViewToggle } from './CanvasViewToggle';
+import { CHAT_CHANGES_SHOWN, LecturaView } from './LecturaView';
+import { LiveChangeChatCard } from './LiveChangeChatCard';
 
 const liveModel = lecturaFromLiveChange(LIVE_BATCH_PREVIEW);
 
@@ -105,5 +107,66 @@ describe('the Map / Read switch', () => {
     expect(html).toContain('data-testid="lectura-view"');
     expect(html).not.toContain('data-testid="live-change-canvas"');
     expect(html).toContain('Preview · approve in chat');
+  });
+});
+
+describe('one drawing, three sizes', () => {
+  it('chat: changes first, the budget before → after and Open in canvas, no ad set cards', () => {
+    let opened = 0;
+    const html = renderToStaticMarkup(
+      <LiveChangeChatCard preview={LIVE_BATCH_PREVIEW} onOpen={() => (opened += 1)} />,
+    );
+    expect(html).toContain('data-testid="lectura-chat-card"');
+    expect(html).toContain('3 changes');
+    expect(html).toContain('data-testid="lectura-change-2202" data-mark="paused"');
+    expect(html).toMatch(/line-through">\$1,150 MXN<\/span>.*\$1,000 MXN\/day/);
+    expect(html).toContain('Open in canvas');
+    expect(html).not.toContain('data-testid="lectura-adset-');
+    expect(html.indexOf('lectura-change-2202')).toBeLessThan(html.indexOf('Daily budget'));
+    expect(opened).toBe(0);
+  });
+
+  it('chat: past three changes, the rest wait in the canvas', () => {
+    const many = {
+      ...liveModel,
+      changes: [...liveModel.changes, ...liveModel.changes.map((c) => ({ ...c, id: `${c.id}b` }))],
+    };
+    const html = renderToStaticMarkup(<LecturaView model={many} size="chat" />);
+    expect(html.match(/data-testid="lectura-change-/g)).toHaveLength(CHAT_CHANGES_SHOWN);
+    expect(html).toContain('+3 more changes in the canvas');
+    expect(html).not.toContain('Open in canvas');
+  });
+
+  it('panel and page draw the same pieces; the page is wider', () => {
+    const panel = renderToStaticMarkup(<LecturaView model={liveModel} size="panel" />);
+    const page = renderToStaticMarkup(<LecturaView model={liveModel} size="page" />);
+    expect(panel).toContain('data-size="panel"');
+    expect(page).toContain('data-size="page"');
+    expect(page).toContain('max-w-6xl');
+    for (const id of ['lectura-change-2202', 'lectura-adset-2203']) {
+      expect(panel).toContain(id);
+      expect(page).toContain(id);
+    }
+  });
+
+  it('a campaign copy reads its new ad sets first, as changes', () => {
+    const copy = lecturaFromCanvasGraph(
+      SCAFFOLD_COPY_WITH_TESTS.nodes,
+      SCAFFOLD_COPY_WITH_TESTS.edges,
+    );
+    const html = renderToStaticMarkup(<LecturaView model={copy} />);
+    expect(html).toContain('2 changes');
+    expect(html).toContain('data-testid="lectura-change-s4" data-mark="added"');
+  });
+});
+
+describe('the auto-switch hint', () => {
+  it('says why the pane opened in Read and can be dismissed', () => {
+    const html = renderToStaticMarkup(
+      <CanvasViewHint hint="Opened in Read because Jaina proposed changes" onDismiss={() => {}} />,
+    );
+    expect(html).toContain('Opened in Read because Jaina proposed changes');
+    expect(html).toContain('aria-label="Dismiss"');
+    expect(renderToStaticMarkup(<CanvasViewHint hint={null} onDismiss={() => {}} />)).toBe('');
   });
 });

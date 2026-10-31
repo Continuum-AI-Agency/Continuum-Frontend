@@ -96,23 +96,45 @@ export const liveChangeBudgetText = (
     ? null
     : `${formatMoney(node.dailyBudgetMinor / 100, currency)}/day`;
 
+type LiveChangeThreadMessage = {
+  liveChangePreviews?: readonly LiveChangePreviewPayload[];
+  resolvedApprovals?: Readonly<Record<string, { decision: 'approved' | 'denied' }>>;
+};
+
+/** Where an approval stands across the thread: the last resolution wins, else pending. */
+export const liveChangeDecisionOf = (
+  messages: readonly LiveChangeThreadMessage[],
+  approvalId: string,
+): LiveChangeDecision => {
+  let decision: LiveChangeDecision = 'pending';
+  for (const message of messages) {
+    const resolved = message.resolvedApprovals?.[approvalId];
+    if (resolved) decision = resolved.decision;
+  }
+  return decision;
+};
+
 /** The newest preview across the thread, and the decision on its approval. */
 export const latestLiveChangeOf = (
-  messages: readonly {
-    liveChangePreviews?: readonly LiveChangePreviewPayload[];
-    resolvedApprovals?: Readonly<Record<string, { decision: 'approved' | 'denied' }>>;
-  }[],
+  messages: readonly LiveChangeThreadMessage[],
 ): { preview: LiveChangePreviewPayload; decision: LiveChangeDecision; index: number } | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const previews = messages[index]?.liveChangePreviews ?? [];
     const preview = previews[previews.length - 1];
     if (!preview) continue;
-    let decision: LiveChangeDecision = 'pending';
-    for (const message of messages) {
-      const resolved = message.resolvedApprovals?.[preview.approvalId];
-      if (resolved) decision = resolved.decision;
-    }
-    return { preview, decision, index };
+    return { preview, decision: liveChangeDecisionOf(messages, preview.approvalId), index };
+  }
+  return null;
+};
+
+/** One preview of the thread by its part id — what a chat card's "Open in canvas" opens. */
+export const liveChangeByPartIdOf = (
+  messages: readonly LiveChangeThreadMessage[],
+  partId: string,
+): { preview: LiveChangePreviewPayload; decision: LiveChangeDecision } | null => {
+  for (const message of messages) {
+    const preview = message.liveChangePreviews?.find((entry) => entry.partId === partId);
+    if (preview) return { preview, decision: liveChangeDecisionOf(messages, preview.approvalId) };
   }
   return null;
 };

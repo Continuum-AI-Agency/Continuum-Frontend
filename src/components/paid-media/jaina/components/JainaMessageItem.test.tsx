@@ -360,3 +360,28 @@ describe('a build gate asked for a turn after the proposal', () => {
     expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
   });
 });
+
+describe('a live change at chat size', () => {
+  it("draws the canvas's Read card and opens the companion on it", async () => {
+    const { LIVE_BATCH_PREVIEW } = await import('@/lib/campaign-canvas/lectura.fixtures');
+    const { ScaffoldThreadContext } = await import('../scaffold/scaffoldThreadContext');
+    const opened: string[] = [];
+    const message = {
+      ...persistedMessage(),
+      pendingClarification: undefined,
+      liveChangePreviews: [LIVE_BATCH_PREVIEW],
+    } as unknown as JainaChatMessage;
+    render(
+      <ScaffoldThreadContext.Provider
+        value={{ sessionId: 's1', onLiveChangeOpen: (partId) => opened.push(partId) }}
+      >
+        <JainaMessageItem message={message} />
+      </ScaffoldThreadContext.Provider>,
+      { wrapper },
+    );
+    expect(screen.getByTestId('lectura-chat-card')).toBeTruthy();
+    expect(screen.getByText('3 changes')).toBeTruthy();
+    screen.getByTestId('lectura-open-in-canvas').click();
+    expect(opened).toEqual([LIVE_BATCH_PREVIEW.partId]);
+  });
+});

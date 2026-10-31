@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { LiveChangePreviewPayload } from '@continuum/contracts';
 import {
+  busEdgePath,
   COLUMN_MAP,
   COLUMN_MAP_WIDTH,
   type ColumnPlacement,
@@ -12,16 +13,28 @@ import {
   collapseUnchangedBranches,
   columnMapFromCanvasGraph,
   columnMapFromLiveChange,
+  columnMapFromView,
   columnsShowEveryNode,
   columnX,
   FOCUS_MIN_ZOOM,
   focusViewport,
   initialColumnViewport,
   layoutColumns,
+  showsMinimap,
   stepChange,
   titleLinesOf,
 } from './columnMap';
-import { LIVE_24_ADS_PREVIEW, SCAFFOLD_24_ADS } from './columnMap.fixtures';
+import {
+  LIVE_24_ADS_PREVIEW,
+  SCAFFOLD_24_ADS,
+  SCAFFOLD_COPY_WITH_TESTS,
+} from './columnMap.fixtures';
+import {
+  humanStatus,
+  lecturaFromCanvasGraph,
+  lecturaFromLiveChange,
+  scaffoldMarksOf,
+} from './lectura';
 import { LIVE_BATCH_PREVIEW } from './lectura.fixtures';
 
 const overlaps = (a: ColumnPlacement, b: ColumnPlacement) =>
@@ -263,5 +276,141 @@ describe('columnsShowEveryNode', () => {
     const model = columnMapFromCanvasGraph(SCAFFOLD_24_ADS.nodes, SCAFFOLD_24_ADS.edges);
     expect(columnsShowEveryNode(model, nodes)).toBe(false);
     expect(columnsShowEveryNode({ campaigns: [] }, [])).toBe(false);
+  });
+});
+
+describe('one campaign model: the Map is projected from it', () => {
+  it('draws the same cards from the model as from the payload', () => {
+    expect(columnMapFromView(lecturaFromLiveChange(LIVE_24_ADS_PREVIEW))).toEqual(
+      columnMapFromLiveChange(LIVE_24_ADS_PREVIEW),
+    );
+    expect(
+      columnMapFromView(lecturaFromCanvasGraph(SCAFFOLD_24_ADS.nodes, SCAFFOLD_24_ADS.edges)),
+    ).toEqual(columnMapFromCanvasGraph(SCAFFOLD_24_ADS.nodes, SCAFFOLD_24_ADS.edges));
+  });
+
+  it('words the status for a person and keeps it out of the fact lines', () => {
+    const [campaign] = columnMapFromLiveChange(LIVE_24_ADS_PREVIEW).campaigns;
+    const adSet = campaign?.adSets[0];
+    expect(adSet?.status).toBe('Active');
+    expect(adSet?.lines).toEqual(['$200 MXN/day']);
+    expect(humanStatus('CAMPAIGN_PAUSED')).toBe('Campaign paused');
+    expect(humanStatus('WITH_SOME_NEW_STATE')).toBe('With some new state');
+    expect(humanStatus(null)).toBeNull();
+  });
+});
+
+describe('marks for a campaign copy', () => {
+  const { nodes, edges } = SCAFFOLD_COPY_WITH_TESTS;
+
+  it('marks the new test ad sets (and their ads) added, the copied ones not at all', () => {
+    const marks = scaffoldMarksOf(nodes, edges);
+    expect([...marks.entries()].filter(([, m]) => m.mark === 'added').map(([id]) => id)).toEqual([
+      's4',
+      's4a1',
+      's4a2',
+      's4a3',
+      's4a4',
+      's5',
+      's5a1',
+      's5a2',
+      's5a3',
+      's5a4',
+    ]);
+    expect(marks.has('s1')).toBe(false);
+  });
+
+  it('folds the copied ad sets and walks only the new ones', () => {
+    const model = columnMapFromCanvasGraph(nodes, edges);
+    const slots = collapseUnchangedBranches(model)[0]?.slots ?? [];
+    expect(slots.map((slot) => (slot.kind === 'adset' ? slot.adSet.id : slot.group.id))).toEqual([
+      's4',
+      's5',
+      collapsedGroupId('c'),
+    ]);
+    expect(changeOrder(model)).toEqual(['s4', 's5']);
+  });
+
+  it('puts the new ad sets first in Read, as changes', () => {
+    const view = lecturaFromCanvasGraph(nodes, edges);
+    expect(view.changes.map((change) => [change.id, change.mark, change.title])).toEqual([
+      ['s4', 'added', 'New ad set'],
+      ['s5', 'added', 'New ad set'],
+    ]);
+    expect(view.split.filter((slice) => slice.tone === 'new').map((slice) => slice.id)).toEqual([
+      's4',
+      's5',
+    ]);
+  });
+
+  it('marks nothing on a brand-new campaign, so nothing folds', () => {
+    expect(scaffoldMarksOf(SCAFFOLD_24_ADS.nodes, SCAFFOLD_24_ADS.edges).size).toBe(0);
+  });
+
+  it("takes the Backend's per-node diff over the graph's own reading when it has one", () => {
+    const marks = scaffoldMarksOf(nodes, edges, {
+      source: { kind: 'campaign', id: '120', name: 'ZAPOPAN live' },
+      entries: [
+        {
+          path_key: 'c0/a0',
+          source_path_key: 'c0/a0',
+          level: 'adset',
+          name: 'Mujeres',
+          change: 'changed',
+          fields: [{ key: 'daily_budget', label: 'Daily budget', before: 200, after: 300 }],
+        },
+        {
+          path_key: 'c0/a3',
+          source_path_key: null,
+          level: 'adset',
+          name: 'Test',
+          change: 'added',
+          fields: [],
+        },
+        {
+          path_key: 'c0/a9',
+          source_path_key: 'c0/a9',
+          level: 'adset',
+          name: 'Gone',
+          change: 'removed',
+          fields: [],
+        },
+      ],
+    });
+    expect(marks.get('s1')).toEqual({
+      mark: 'changed',
+      rows: [{ field: 'daily_budget', label: 'Daily budget', before: '200', after: '300' }],
+    });
+    expect(marks.get('s4')?.mark).toBe('added');
+    expect(marks.has('s5')).toBe(false);
+  });
+});
+
+describe('polish: trunk edges, fit to width, minimap', () => {
+  it('draws one straight line to a child level with its parent', () => {
+    expect(busEdgePath({ x: 168, y: 22 }, { x: 192, y: 22 })).toBe('M 168 22 H 192');
+  });
+
+  it('runs every child of one parent down the same bus, half a column gap out', () => {
+    const busX = 168 + COLUMN_MAP.columnGap / 2;
+    for (const y of [120, 400, 900]) {
+      const path = busEdgePath({ x: 168, y: 22 }, { x: 192, y });
+      expect(path).toContain(`V ${y - 6}`);
+      expect(path).toContain(`Q ${busX} ${y} ${busX + 6} ${y}`);
+      expect(path.endsWith('H 192')).toBe(true);
+    }
+  });
+
+  it('hides the minimap whenever it would cover the ad column', () => {
+    expect(showsMinimap(null)).toBe(false);
+    expect(showsMinimap({ width: 560, height: 800 })).toBe(false);
+    // 640: the centred columns leave a 44 px gutter, too narrow for the 80 px minimap.
+    expect(showsMinimap({ width: 640, height: 800 })).toBe(false);
+    expect(showsMinimap({ width: 720, height: 800 })).toBe(true);
+  });
+
+  it('fits the width, never the height: a tall map keeps the readable zoom', () => {
+    const viewport = initialColumnViewport({ width: 640, height: 300 });
+    expect(viewport.zoom).toBe(1);
   });
 });

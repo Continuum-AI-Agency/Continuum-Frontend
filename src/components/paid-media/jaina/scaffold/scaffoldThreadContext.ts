@@ -14,6 +14,8 @@ import * as React from 'react';
 export type ScaffoldThread = {
   sessionId: string | null;
   onScaffoldFocus?: (parentScaffoldId: string) => void;
+  /** Opens the companion canvas on a live change preview, by its part id (a chat card's button). */
+  onLiveChangeOpen?: (partId: string) => void;
 };
 
 export const ScaffoldThreadContext = React.createContext<ScaffoldThread>({ sessionId: null });

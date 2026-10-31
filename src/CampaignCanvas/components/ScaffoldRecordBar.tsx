@@ -123,6 +123,7 @@ export function ScaffoldRecordBar({
   onDeploy,
   deployInFlight = false,
   deployRefusal = null,
+  onScaffoldPicked,
 }: {
   brandId: string;
   /**
@@ -143,6 +144,8 @@ export function ScaffoldRecordBar({
   deployInFlight?: boolean;
   /** Why the last Deploy paused opened no gate, in the Backend's words. */
   deployRefusal?: string | null;
+  /** The person picked a scaffold from the list themselves: a task they opened by hand. */
+  onScaffoldPicked?: () => void;
 }) {
   const { show: toast } = useToast();
   const queryClient = useQueryClient();
@@ -320,9 +323,11 @@ export function ScaffoldRecordBar({
   const handleSelect = React.useCallback(
     (scaffoldId: string) => {
       const scaffold = scaffolds?.find((entry) => entry.id === scaffoldId);
-      if (scaffold) loadScaffold(scaffold);
+      if (!scaffold) return;
+      loadScaffold(scaffold);
+      onScaffoldPicked?.();
     },
-    [loadScaffold, scaffolds],
+    [loadScaffold, onScaffoldPicked, scaffolds],
   );
 
   const emptyState = recordBarEmptyState({

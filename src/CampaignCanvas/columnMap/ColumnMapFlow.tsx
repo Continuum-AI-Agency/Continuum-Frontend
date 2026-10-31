@@ -1,28 +1,33 @@
 'use client';
 
-// The Map in columns (design C, phase 2): campaign → ad sets → ads in three fixed columns that
-// fit the companion pane at 100% and grow only downward; the unchanged branches of a proposal
-// folded into one node; "Change 1 of 3 →" and a minimap that marks each change by its colour.
+// The Map in columns (design C, phases 2-3): campaign → ad sets → ads in three fixed columns
+// that fit the companion pane at 100% and grow only downward; the unchanged branches of a
+// proposal folded into one node; one trunk per parent instead of a fan of curves; "Change 1 of
+// 3 →" docked in the bar above the map (never over a card); Fit to screen fits the width; a
+// minimap that marks each change by its colour, left out of panes too narrow for it.
 // Everything it draws comes from lib/campaign-canvas/columnMap.ts.
 
 import {
+  BaseEdge,
+  ControlButton,
   type Edge,
+  type EdgeProps,
+  type EdgeTypes,
   Handle,
-  MarkerType,
   MiniMap,
   type Node,
   type NodeChange,
   type NodeProps,
   type NodeTypes,
-  Panel,
   Position,
   useReactFlow,
 } from '@xyflow/react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoveHorizontal } from 'lucide-react';
 import * as React from 'react';
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
 import {
+  busEdgePath,
   type CollapsedGroup,
   type ColumnMapModel,
   type ColumnPlacement,
@@ -31,12 +36,13 @@ import {
   changeOrder,
   collapsedGroupLabel,
   collapseUnchangedBranches,
+  EDGE_ANCHOR_TOP,
   focusViewport,
   initialColumnViewport,
   layoutColumns,
   type MapCard,
-  NEXT_CHANGE_INSET,
   type PaneSize,
+  showsMinimap,
   stepChange,
 } from '@/lib/campaign-canvas/columnMap';
 import type { LecturaMark } from '@/lib/campaign-canvas/lectura';
@@ -92,6 +98,8 @@ type CardFlowNode = Node<CardNodeData, 'map-card'>;
 type CollapsedFlowNode = Node<CollapsedNodeData, 'map-collapsed'>;
 
 const handleClass = '!h-1.5 !w-1.5 !min-w-0 !border-0 !bg-[color:var(--ring)]';
+/** Level with the title, so a child on its parent's row is joined by one straight line. */
+const handleStyle = { top: EDGE_ANCHOR_TOP } as const;
 
 function MapCardNode({ data, selected }: NodeProps<CardFlowNode>) {
   return (
@@ -102,6 +110,7 @@ function MapCardNode({ data, selected }: NodeProps<CardFlowNode>) {
           position={Position.Left}
           isConnectable={false}
           className={handleClass}
+          style={handleStyle}
         />
       ) : null}
       {data.card.level !== 'ad' ? (
@@ -110,6 +119,7 @@ function MapCardNode({ data, selected }: NodeProps<CardFlowNode>) {
           position={Position.Right}
           isConnectable={false}
           className={handleClass}
+          style={handleStyle}
         />
       ) : null}
     </MapCardBox>
@@ -158,8 +168,16 @@ export function MapCardBox({
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="flex h-[14px] items-center justify-between gap-1 font-mono text-[10px] uppercase leading-[14px] tracking-wide text-muted-foreground">
-            <span className="truncate">{LEVEL_LABEL[card.level]}</span>
+          <div className="flex h-[14px] items-center justify-between gap-1 font-mono text-[10px] leading-[14px] text-muted-foreground">
+            <span className="min-w-0 truncate">
+              <span className="uppercase tracking-wide">{LEVEL_LABEL[card.level]}</span>
+              {card.status ? (
+                <span className="font-sans text-muted-foreground/70" data-testid="map-card-status">
+                  {' · '}
+                  {card.status}
+                </span>
+              ) : null}
+            </span>
             {tag ? (
               <span className={cn('shrink-0 rounded-full px-1.5 normal-case', tag.className)}>
                 {tag.label}
@@ -246,10 +264,22 @@ const nodeTypes: NodeTypes = {
   'map-collapsed': CollapsedGroupNode as NodeTypes[string],
 };
 
+/** One trunk per parent with short stubs (`busEdgePath`), no arrowheads: the columns read left to right. */
+function BusEdge({ id, sourceX, sourceY, targetX, targetY, style }: EdgeProps) {
+  return (
+    <BaseEdge
+      id={id}
+      path={busEdgePath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY })}
+      style={style}
+    />
+  );
+}
+
+const edgeTypes: EdgeTypes = { bus: BusEdge };
+
 const defaultEdgeOptions = {
-  type: 'smoothstep',
-  markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--ring)', width: 14, height: 14 },
-  style: { stroke: 'var(--ring)', strokeWidth: 1.25 },
+  type: 'bus',
+  style: { stroke: 'color-mix(in srgb, var(--ring) 70%, transparent)', strokeWidth: 1.25 },
 };
 
 /** The control in the map's top bar: "‹ Change 1 of 3 ›". */
@@ -269,7 +299,7 @@ function NextChangeControl({
       : changeCounterLabel(index, total);
   return (
     <div
-      className="flex items-center gap-0.5 rounded-full border border-border bg-card/95 p-0.5 text-xs shadow-sm backdrop-blur"
+      className="flex shrink-0 items-center gap-0.5 rounded-full border border-border bg-card p-0.5 text-xs"
       data-testid="map-next-change"
     >
       <button
@@ -326,6 +356,8 @@ export type ColumnMapFlowProps = {
   children?: React.ReactNode;
   /** Focus this change first (screenshots and deep links). */
   initialFocusIndex?: number | null;
+  /** Drawn at the start of the bar above the map, beside "Change 1 of 3" (e.g. the summary). */
+  header?: React.ReactNode;
 };
 
 export function ColumnMapFlow({
@@ -336,6 +368,7 @@ export function ColumnMapFlow({
   testIdPrefix = 'map-card-',
   children,
   initialFocusIndex = null,
+  header,
 }: ColumnMapFlowProps) {
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const toggleGroup = React.useCallback((id: string) => {
@@ -459,9 +492,13 @@ export function ColumnMapFlow({
     void setViewport(
       focused
         ? focusViewport(focused, pane, layout.width)
-        : initialColumnViewport(pane, layout.width, proposal ? NEXT_CHANGE_INSET : 0),
+        : initialColumnViewport(pane, layout.width),
     );
-  }, [focusedId, layout, pane, proposal, setViewport]);
+  }, [focusedId, layout, pane, setViewport]);
+
+  const fitWidth = React.useCallback(() => {
+    if (pane) void setViewport(initialColumnViewport(pane, layout.width), { duration: 300 });
+  }, [layout.width, pane, setViewport]);
 
   const stepTo = React.useCallback(
     (direction: 1 | -1) => {
@@ -487,42 +524,63 @@ export function ColumnMapFlow({
     return MARK_MINIMAP_FILL[mark];
   }, []);
 
+  const showBar = proposal || Boolean(header);
   return (
-    <div ref={paneRef} className="relative h-full w-full" data-testid="column-map">
-      <Canvas
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        onNodesChange={handleNodesChange}
-        fitView={false}
-        minZoom={0.2}
-        maxZoom={1.5}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={Boolean(onNodesChange)}
-        edgesFocusable={false}
-        selectionOnDrag={false}
-        deleteKeyCode={onNodesChange ? undefined : null}
-      >
-        {proposal ? (
-          <Panel position="top-center">
+    <div className="flex h-full w-full min-h-0 flex-col" data-testid="column-map">
+      {showBar ? (
+        <div
+          className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-card/80 px-3 py-1.5 text-xs"
+          data-testid="column-map-bar"
+        >
+          <div className="min-w-0 flex-1">{header}</div>
+          {proposal ? (
             <NextChangeControl index={focusIndex} total={changes.length} onStep={stepTo} />
-          </Panel>
-        ) : null}
-        <Controls position="bottom-left" showInteractive={false} />
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          nodeColor={minimapFill}
-          nodeStrokeWidth={0}
-          maskColor="color-mix(in srgb, var(--background) 70%, transparent)"
-          className="!m-2 !h-[112px] !w-[64px] overflow-hidden rounded-md border !bg-card shadow-sm [&>svg]:!h-full [&>svg]:!w-full"
-          ariaLabel="Map overview: changes are coloured"
-        />
-        {children}
-      </Canvas>
+          ) : null}
+        </div>
+      ) : null}
+      <div ref={paneRef} className="relative min-h-0 w-full flex-1">
+        <Canvas
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
+          onNodesChange={handleNodesChange}
+          fitView={false}
+          minZoom={0.2}
+          maxZoom={1.5}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={Boolean(onNodesChange)}
+          edgesFocusable={false}
+          selectionOnDrag={false}
+          deleteKeyCode={onNodesChange ? undefined : null}
+        >
+          <Controls position="bottom-left" showInteractive={false} showFitView={false}>
+            <ControlButton
+              onClick={fitWidth}
+              title="Fit to width"
+              aria-label="Fit to width"
+              data-testid="map-fit-width"
+            >
+              <MoveHorizontal aria-hidden />
+            </ControlButton>
+          </Controls>
+          {showsMinimap(pane) ? (
+            <MiniMap
+              position="bottom-right"
+              pannable
+              zoomable
+              nodeColor={minimapFill}
+              nodeStrokeWidth={0}
+              maskColor="color-mix(in srgb, var(--background) 70%, transparent)"
+              className="!m-2 !h-[112px] !w-[64px] overflow-hidden rounded-md border !bg-card shadow-sm [&>svg]:!h-full [&>svg]:!w-full"
+              ariaLabel="Map overview: changes are coloured"
+            />
+          ) : null}
+          {children}
+        </Canvas>
+      </div>
     </div>
   );
 }
