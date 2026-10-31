@@ -340,6 +340,7 @@ function seedBucketsFromResult(
 }
 
 const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_MS = 1_000;
 
 export async function runAgentPreview(
   input: AgentPreviewInput,
@@ -351,8 +352,12 @@ export async function runAgentPreview(
 
   let lastEventAt = Date.now();
   let lastSeq = input.resumeLastEventId ?? 0;
+  let sawTerminal = false;
   const handleEvent = (event: OnboardingPreviewEvent) => {
-    lastEventAt = Date.now();
+    // A ping proves the connection is open, not that the run is alive: the Backend keeps
+    // pinging a run whose worker died. Only real events hold off the status check.
+    if (event.type !== 'ping') lastEventAt = Date.now();
+    if (event.type === 'complete' || event.type === 'error') sawTerminal = true;
     reducer(event);
   };
   const onSequence = (n: number) => {
@@ -369,35 +374,38 @@ export async function runAgentPreview(
   if (signal.aborted) activeController.abort();
   else signal.addEventListener('abort', onCallerAbort, { once: true });
 
+  // Asks the Backend where the run stands. A finished run seeds the cards from its
+  // snapshot and settles; a running run that is ahead of us asks for a reconnect.
+  const syncWithStatus = async (): Promise<'settled' | 'running' | null> => {
+    if (!runId) return null;
+    const snap = await fetchPreviewStatus(runId).catch(() => null);
+    if (!snap) return null;
+    if (snap.status === 'running') {
+      if (snap.lastSeq != null && snap.lastSeq > lastSeq) {
+        void trackPreviewReconnect(runId, snap.lastSeq, lastSeq);
+        needsReconnect = true;
+      }
+      return 'running';
+    }
+    void trackPreviewRecovery(runId, snap.status);
+    if (snap.result) {
+      seedBucketsFromResult(buckets, snap.result, dispatch);
+    }
+    if (snap.error) {
+      reducer({ type: 'error', message: snap.error.message });
+    } else if (snap.status === 'failed') {
+      reducer({ type: 'error', message: 'Preview run failed.' });
+    }
+    watchdogResolved = true;
+    return 'settled';
+  };
+
   const tick = async () => {
     if (!runId) return;
     if (buckets.result) return;
     if (Date.now() - lastEventAt < SILENCE_THRESHOLD_MS) return;
-    try {
-      const snap = await fetchPreviewStatus(runId);
-      if (!snap) return;
-      if (snap.status !== 'running') {
-        void trackPreviewRecovery(runId, snap.status);
-        if (snap.result) {
-          seedBucketsFromResult(buckets, snap.result, dispatch);
-        }
-        if (snap.error) {
-          reducer({ type: 'error', message: snap.error.message });
-        } else if (snap.status === 'failed') {
-          reducer({ type: 'error', message: 'Preview run failed.' });
-        }
-        watchdogResolved = true;
-        activeController.abort();
-        return;
-      }
-      if (snap.lastSeq != null && snap.lastSeq > lastSeq) {
-        void trackPreviewReconnect(runId, snap.lastSeq, lastSeq);
-        needsReconnect = true;
-        activeController.abort();
-      }
-    } catch {
-      // ignore — retry next tick or settle when SSE closes
-    }
+    const outcome = await syncWithStatus();
+    if (outcome === 'settled' || needsReconnect) activeController.abort();
   };
 
   const startWatchdog = () => {
@@ -466,7 +474,16 @@ export async function runAgentPreview(
           });
           if (!runId && result.runId) runId = result.runId;
         }
-        // Consumer returned cleanly — stream is done.
+        // The stream ended. Without a `complete` or `error` the connection dropped (a proxy
+        // timeout, a Backend deploy) while the run may go on: ask where it stands, and pick
+        // it up from the last event if it is still running.
+        if (!sawTerminal && !watchdogResolved && attempt < MAX_RECONNECT_ATTEMPTS) {
+          if ((await syncWithStatus()) === 'running') {
+            attempt += 1;
+            await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
+            continue;
+          }
+        }
         break;
       } catch (error) {
         if (watchdogResolved) break;
@@ -490,6 +507,16 @@ export async function runAgentPreview(
     }
 
     return { inputKey: input.inputKey, runId, buckets };
+  } catch (error) {
+    // The cards that arrived stay; the ones still drafting will not finish.
+    if (
+      !signal.aborted &&
+      previewSectionSchema.options.some((s) => buckets.sectionStatus[s] === 'running')
+    ) {
+      flipRunningToError(buckets);
+      dispatch();
+    }
+    throw error;
   } finally {
     if (watchdogTimer) clearInterval(watchdogTimer);
     signal.removeEventListener('abort', onCallerAbort);

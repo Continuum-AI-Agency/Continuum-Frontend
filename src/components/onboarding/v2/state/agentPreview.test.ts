@@ -29,9 +29,14 @@ const resumeOnboardingPreviewMock = mock<
   ) => Promise<{ brandProfile?: unknown; structured?: unknown; complete?: unknown }>
 >(async () => ({}));
 
+const fetchPreviewStatusMock = mock<
+  (runId: string) => Promise<{ status: string; lastSeq?: number; result?: unknown } | null>
+>(async () => null);
+
 mock.module('@/lib/onboarding/agentClient', () => ({
   runOnboardingPreview: runOnboardingPreviewMock,
   resumeOnboardingPreview: resumeOnboardingPreviewMock,
+  fetchPreviewStatus: fetchPreviewStatusMock,
 }));
 
 import {
@@ -56,6 +61,70 @@ describe('runAgentPreview', () => {
   beforeEach(() => {
     runOnboardingPreviewMock.mockReset();
     resumeOnboardingPreviewMock.mockReset();
+    fetchPreviewStatusMock.mockReset();
+    fetchPreviewStatusMock.mockImplementation(async () => null);
+  });
+
+  it('picks a running run back up from the last event when the stream drops before complete', async () => {
+    runOnboardingPreviewMock.mockImplementation(async (options) => {
+      options.onRunId?.('run-1');
+      (options as { onSequence?: (n: number) => void }).onSequence?.(7);
+      options.onEvent?.({ type: 'voice', payload: { tone: 'Bold' } });
+      return { runId: 'run-1' };
+    });
+    fetchPreviewStatusMock.mockImplementation(async () => ({ status: 'running', lastSeq: 7 }));
+    resumeOnboardingPreviewMock.mockImplementation(async (_runId, { onEvent }) => {
+      onEvent?.({ type: 'audience', payload: { summary: 'Founders' } });
+      onEvent?.({ type: 'complete', phase: 'preview', status: 'ok', result: undefined });
+      return {};
+    });
+
+    const outcome = await runAgentPreview(makeInput(), new AbortController().signal);
+
+    expect(resumeOnboardingPreviewMock).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({ lastEventId: 7 }),
+    );
+    expect(outcome.buckets.voice?.tone).toBe('Bold');
+    expect(outcome.buckets.audience?.summary).toBe('Founders');
+  });
+
+  it('settles from the snapshot when the stream drops on a run that already finished', async () => {
+    runOnboardingPreviewMock.mockImplementation(async (options) => {
+      options.onRunId?.('run-2');
+      options.onEvent?.({ type: 'status', section: 'audience', status: 'running' });
+      return { runId: 'run-2' };
+    });
+    fetchPreviewStatusMock.mockImplementation(async () => ({
+      status: 'completed',
+      result: {
+        prompt_version: 1,
+        structured: { target_audience: { summary: 'From the snapshot' } },
+      },
+    }));
+
+    const outcome = await runAgentPreview(makeInput(), new AbortController().signal);
+
+    expect(resumeOnboardingPreviewMock).not.toHaveBeenCalled();
+    expect(outcome.buckets.audience?.summary).toBe('From the snapshot');
+    expect(outcome.buckets.sectionStatus.audience).toBe('done');
+  });
+
+  it('a failed run keeps the cards that arrived and stops the ones still drafting', async () => {
+    runOnboardingPreviewMock.mockImplementation(async ({ onEvent }) => {
+      onEvent?.({ type: 'voice', payload: { tone: 'Bold' } });
+      onEvent?.({ type: 'status', section: 'audience', status: 'running' });
+      throw new Error('network down');
+    });
+    const input = makeInput();
+
+    await expect(runAgentPreview(input, new AbortController().signal)).rejects.toThrow(
+      'network down',
+    );
+
+    const last = input.onUpdate.mock.calls.at(-1)?.[0] as unknown as AgentPreviewBuckets;
+    expect(last.voice?.tone).toBe('Bold');
+    expect(last.sectionStatus.audience).toBe('error');
   });
 
   it('aggregates voice/audience/business buckets from sequential events', async () => {

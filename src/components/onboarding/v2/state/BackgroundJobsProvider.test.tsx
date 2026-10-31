@@ -33,3 +33,24 @@ test('a superseded job cannot replace a newer completed result', async () => {
   });
   expect(screen.getByRole('status').textContent).toBe('new result');
 });
+
+test('a failed job keeps the partial data it streamed', async () => {
+  let jobs: ReturnType<typeof useBackgroundJobs> | undefined;
+  function Consumer() {
+    jobs = useBackgroundJobs();
+    const job = jobs.jobs.agentPreview;
+    return <output>{`${job.status}:${String(job.data)}`}</output>;
+  }
+  render(
+    <BackgroundJobsProvider>
+      <Consumer />
+    </BackgroundJobsProvider>,
+  );
+  await act(async () => {
+    await jobs?.start('agentPreview', async () => {
+      jobs?.patch('agentPreview', 'voice card');
+      throw new Error('stream failed');
+    });
+  });
+  expect(screen.getByRole('status').textContent).toBe('error:voice card');
+});
