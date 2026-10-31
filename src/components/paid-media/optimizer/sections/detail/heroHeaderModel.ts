@@ -15,6 +15,7 @@ import type {
   PortfolioListItem,
 } from '@continuum/contracts';
 import { formatCurrency, humanize } from '../../format';
+import { portfolioPlanPerDay } from '../portfolioPlan';
 import { rosterLine, rosterTone, staleLine } from '../portfolioStaleness';
 import { type GoalMismatch, goalMismatchOf } from './goalMismatch';
 
@@ -55,6 +56,7 @@ export type HeroPortfolio = Pick<
   | 'cpa_target'
   | 'daily_total'
   | 'budget_source'
+  | 'conserved_daily_total'
   | 'lookback_window'
   | 'next_realloc_at'
   | 'stale_for_days'
@@ -194,9 +196,9 @@ export function buildHeroHeader(args: {
         setting: 'budget',
         label: 'Budget',
         value:
-          portfolio.daily_total == null
+          portfolioPlanPerDay(portfolio) == null
             ? 'not set'
-            : `${formatCurrency(portfolio.daily_total, currency)}/day · ${budgetSourceWords(portfolio.budget_source)}`,
+            : `${formatCurrency(portfolioPlanPerDay(portfolio), currency)}/day · ${budgetSourceWords(portfolio.budget_source)}`,
       },
       {
         setting: 'target',

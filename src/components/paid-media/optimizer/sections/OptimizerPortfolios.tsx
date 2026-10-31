@@ -65,6 +65,7 @@ import {
 import { portfolioPlatforms } from './platforms/platformTabsModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { pacingSideLabel, portfolioPacingLine } from './portfolioPacingLine';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { usePortfolioFigures } from './usePortfolioFigures';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
@@ -204,8 +205,8 @@ function PortfolioTableRow({
             currency={currency}
             figureKey={figureKey('daily')}
             narrowSuffix="/day"
-            raw={portfolio.daily_total}
-            text={formatCurrency(portfolio.daily_total, currency)}
+            raw={portfolioPlanPerDay(portfolio)}
+            text={formatCurrency(portfolioPlanPerDay(portfolio), currency)}
           />
           <FigureCell
             narrowSuffix={` ${memberNoun(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}`}
@@ -298,11 +299,11 @@ function ArchivedPortfolios({
                   <span
                     {...figureProps(
                       `portfolios.archived.${portfolio.id}.daily`,
-                      portfolio.daily_total,
+                      portfolioPlanPerDay(portfolio),
                       currency,
                     )}
                   >
-                    {formatCurrency(portfolio.daily_total, currency)}
+                    {formatCurrency(portfolioPlanPerDay(portfolio), currency)}
                   </span>
                   /d
                 </p>

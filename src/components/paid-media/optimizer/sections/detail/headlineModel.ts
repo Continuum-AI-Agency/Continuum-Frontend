@@ -27,6 +27,7 @@ import type { KpiTileState } from '../../components/KpiTile';
 import { type FigureUnit, type FigureWindow, formatCurrency } from '../../format';
 import { spendState, windowState } from '../account/overviewModel';
 import { figureAsOfText } from '../portfolioFigure';
+import { type PlanSource, portfolioPlanPerDay } from '../portfolioPlan';
 import type { BeforeAfter } from './beforeAfterModel';
 import type { HeroMismatch, HeroSetting } from './heroHeaderModel';
 import type { HeroView } from './heroModel';
@@ -613,7 +614,7 @@ function tilesOf(args: {
 export function buildPortfolioHeadline(args: {
   view: HeroView;
   report: ParsedCycleRunReport | null;
-  portfolio: { name: string; daily_total: number | null; apply_mode: string | null };
+  portfolio: { name: string; apply_mode: string | null } & PlanSource;
   metric: OptimizationMetricDefinition;
   currency: string | null;
   mismatch: HeroMismatch | null;
@@ -636,7 +637,7 @@ export function buildPortfolioHeadline(args: {
     opportunity: opportunitySentence({
       brief: view.brief,
       items,
-      dailyTotal: args.portfolio.daily_total,
+      dailyTotal: portfolioPlanPerDay(args.portfolio),
       currency,
       words,
     }),
@@ -648,7 +649,7 @@ export function buildPortfolioHeadline(args: {
       words,
       currency,
       days,
-      dailyTotal: args.portfolio.daily_total,
+      dailyTotal: portfolioPlanPerDay(args.portfolio),
       waiting,
       atStakePerDay,
     }).filter((tile) => !unread || tile.key === 'decisions'),

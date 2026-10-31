@@ -124,6 +124,7 @@ import {
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
 import { type PortfolioFigure, portfolioFigureFromReads } from './portfolioFigure';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { underManagement } from './portfolioStaleness';
 import { usePortfolioFigures } from './usePortfolioFigures';
 
@@ -280,7 +281,10 @@ export function OptimizerOverview({
   const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
   const autopilot = autopilotSummary(portfolios);
   const book = underManagement(portfolios);
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
   const portfoliosWithDecisions = portfolios.filter(
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
@@ -905,7 +909,10 @@ function PlatformPortfolioSections({
         bareAccountId(account.account_id) === bareAccountId(portfolio.ad_account_id),
     )?.currency ??
     null;
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
 
   // One paint once every read below has settled: a skeleton that collapses to nothing, or
   // rows that land before the cards, pushed what was already on screen (CLS 0.25 at 375).

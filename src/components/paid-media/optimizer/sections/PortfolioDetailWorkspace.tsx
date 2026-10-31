@@ -123,6 +123,7 @@ import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
 import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { portfolioFigureFromReads } from './portfolioFigure';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { isStale, pacingStaleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -416,7 +417,8 @@ export function PortfolioDetailWorkspace({
       reason: stopping ? 'Stopped from the portfolio header' : undefined,
     });
   };
-  const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
+  const plan = portfolioPlanPerDay(portfolio);
+  const dailyRead = buildDailyRead(heroView, plan);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   /** The asked-for row whose adopt/build/dismiss is mid-write. */
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
@@ -435,10 +437,10 @@ export function PortfolioDetailWorkspace({
   const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
   const askedRows = useMemo(
     () =>
-      buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total, {
+      buildAskedForRows(suggestionsQuery.data.rows, plan, {
         proposals: audienceProposalsQuery.data,
       }),
-    [suggestionsQuery.data.rows, portfolio.daily_total, audienceProposalsQuery.data],
+    [suggestionsQuery.data.rows, plan, audienceProposalsQuery.data],
   );
   const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
   /** The asked-for row whose audience proposal is open under it. */
@@ -760,7 +762,7 @@ export function PortfolioDetailWorkspace({
             target: targetDisplay ?? null,
           }}
           currency={currency ?? null}
-          dailyTotal={portfolio.daily_total ?? null}
+          dailyTotal={plan}
           explainHref={jainaPromptHref(
             `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
           )}

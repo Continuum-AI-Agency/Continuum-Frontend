@@ -1262,6 +1262,10 @@ export const PortfolioListItemSchema = z.object({
    * exactly as before when they are absent.
    */
   last_actual_cycle_at: z.string().nullable().optional(),
+  /** The daily budget the last cycle conserved (its run's total_budget; null before any). On
+   *  budget_source 'observed' this is the plan — daily_total is a creation-time sum that kept
+   *  paused and ended members (PP-DT-B-portfolio-plan-counts-paused-campaigns). */
+  conserved_daily_total: z.number().nullable().optional(),
   /** Whole days since the last actual cycle (or creation) once the gap reaches two
    *  cycle_intervals; null while fresh. Mirrors Continuum-Optimizer/src/staleness.ts. */
   stale_for_days: z.number().int().nonnegative().nullable().optional(),

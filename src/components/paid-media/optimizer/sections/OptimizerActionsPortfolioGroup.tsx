@@ -123,6 +123,7 @@ import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { cardActionsOf, cardRecommendationId } from './platformCards/platformCardActionModel';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 import { QueueTraySkeleton } from './QueueTraySkeleton';
 import { RecEvidenceChart } from './RecEvidenceChart';
@@ -1372,7 +1373,7 @@ export function OptimizerActionsPortfolioGroup({
             candidates={[...platformCards]}
             cardActions={cardActions}
             currency={currency}
-            dailySpend={portfolio.daily_total}
+            dailySpend={portfolioPlanPerDay(portfolio)}
             portfolioNames={NO_PORTFOLIO_NAMES}
           />
         </div>

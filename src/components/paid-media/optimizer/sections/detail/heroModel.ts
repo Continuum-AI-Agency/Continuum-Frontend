@@ -22,6 +22,7 @@ import {
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { platformName } from '../../entityNoun';
 import { holdsOtherPlatforms, type PortfolioFigure } from '../portfolioFigure';
+import { portfolioPlanPerDay } from '../portfolioPlan';
 import { impactPerDay } from '../recQueueModel';
 import { stripPaceClaim } from './paceClaim';
 import type { ResolvedRange } from './rangeModel';
@@ -496,7 +497,7 @@ export function buildHeroView(args: {
           candidates: report
             ? candidatesFromReport(report, growth.cost_per_result ?? args.target)
             : [],
-          dailyTotal: args.portfolio.daily_total,
+          dailyTotal: portfolioPlanPerDay(args.portfolio),
           standing: report ? readBriefStanding(report.latest_run, report.latest_items) : null,
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
