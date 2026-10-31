@@ -355,8 +355,13 @@ export function MetricCardDelta({
   );
 }
 
-function isActiveStatus(status: string | undefined): boolean {
-  return (status ?? '').toUpperCase() === 'ACTIVE';
+/** Each platform's word for a running campaign or ad set: Meta ACTIVE, Google ENABLED, TikTok
+ *  ENABLE. Meta's alone hid every Google campaign behind "Active only", which is on by default
+ *  (PP-DT-B-dashboard-active-only-hides-google). */
+const RUNNING_STATUSES: ReadonlySet<string> = new Set(['ACTIVE', 'ENABLED', 'ENABLE']);
+
+export function isActiveStatus(status: string | undefined): boolean {
+  return RUNNING_STATUSES.has((status ?? '').toUpperCase());
 }
 
 /** Null where the day has no CPA: the edge nulled it, or nothing converted (an undefined
