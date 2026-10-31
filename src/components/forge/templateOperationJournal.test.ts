@@ -147,3 +147,24 @@ test('ambiguous draft writes retain their exact request ID and body before newer
   expect(replay.matched).toBe(false);
   expect(storage.state.draftIntent).toBeUndefined();
 });
+
+test('restart resumes an uncertain draft without requiring another edit, retaining failures until exact acknowledgement', async () => {
+  const storage = new MemoryStorage();
+  const first = journal(storage, async () => undefined);
+  const request: TemplateAuthoringDraftPut = { brandId: scope.brandId, baseVersionId: scope.baseVersionId,
+    expectedRevision: 1, commands: [command(10)] };
+  await expect(first.writeDraft(request, async () => { throw new Error('Lost acknowledgement'); })).rejects.toThrow();
+  const frozen = structuredClone(storage.state.draftIntent);
+  const restarted = journal(storage, async () => undefined);
+  await expect(restarted.resumeDraft(async (intent) => {
+    expect(intent).toEqual(frozen);
+    throw new Error('Still offline');
+  })).rejects.toThrow('Still offline');
+  expect(storage.state.draftIntent).toEqual(frozen);
+  expect(await restarted.resumeDraft(async (intent) => {
+    expect(intent).toEqual(frozen);
+    return { revision: 2 };
+  })).toEqual({ revision: 2 });
+  expect(storage.state.draftIntent).toBeUndefined();
+  expect(await restarted.resumeDraft(async () => { throw new Error('No pending write'); })).toBeNull();
+});

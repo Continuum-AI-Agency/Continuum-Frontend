@@ -10,6 +10,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { commandsFromLayerSnapshot } from './layerDraft';
 import { listTemplateDraftRecoveries } from './templateDraftRecovery';
+import { TemplateOperationJournal } from './templateOperationJournal';
 
 const scope: TemplateAuthoringScope = {
   brandId: '00000000-0000-4000-8000-000000000001',
@@ -129,6 +130,70 @@ afterEach(() => {
 });
 
 describe('mounted authoring draft tab sync', () => {
+  for (const newerHead of [false, true]) test(`restart acknowledges its frozen save without replacing a ${newerHead ? 'newer' : 'matching'} server draft`, async () => {
+    const selectedScope = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000011' };
+    const accepted = draft(2, [edit], selectedScope);
+    const latest = newerHead ? draft(3, [{ ...edit, edit: { compId: 7, layerId: 31, rotation: 45 } } as TemplateAuthoringCommand], selectedScope) : accepted;
+    scopedDrafts.set(selectedScope.workingCopyId, latest);
+    const journal = new TemplateOperationJournal({ userId: 'actor-a', scope: selectedScope,
+      workspaceIdentity: `pinned_source:${checksum}`, sourceChecksum: checksum, append: async () => undefined });
+    let frozen: TemplateAuthoringDraftPut | undefined;
+    await expect(journal.writeDraft({ brandId: scope.brandId, baseVersionId: scope.baseVersionId,
+      workingCopyId: selectedScope.workingCopyId, expectedRevision: 1, commands: [edit] }, async (request) => {
+      frozen = request;
+      throw new Error('Accepted server write lost its response');
+    })).rejects.toThrow('lost its response');
+    let acknowledge!: () => void;
+    const response = new Promise<void>((resolve) => { acknowledge = resolve; });
+    putDraft.mockImplementationOnce(async (_assetId, request) => {
+      expect(request).toEqual(frozen);
+      await response;
+      return accepted;
+    });
+    const mounted = renderHook(() => {
+      const [commands, setCommands] = useState<TemplateAuthoringCommand[]>([]);
+      return { ...useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands,
+        onRestore: (snapshot) => setCommands(commandsFromLayerSnapshot(snapshot)) }), commands };
+    });
+    await waitFor(() => expect(putDraft).toHaveBeenCalledTimes(1));
+    expect(mounted.result.current.ready).toBe(false);
+    expect(mounted.result.current.status).not.toBe('saved');
+    await act(async () => { acknowledge(); });
+    await waitFor(() => expect(mounted.result.current.ready).toBe(true));
+    expect(mounted.result.current.revision).toBe(latest.revision);
+    expect(mounted.result.current.commands).toEqual(latest.commands);
+    expect(scopedDrafts.get(selectedScope.workingCopyId)).toEqual(latest);
+    expect(await journal.resumeDraft(async () => { throw new Error('Acknowledged intent must be cleared'); })).toBeNull();
+  });
+
+  test('Retry reopens an uncertain hydration save without requiring a new edit or losing its request identity', async () => {
+    const selectedScope = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000012' };
+    const accepted = draft(2, [edit], selectedScope);
+    scopedDrafts.set(selectedScope.workingCopyId, accepted);
+    const journal = new TemplateOperationJournal({ userId: 'actor-a', scope: selectedScope,
+      workspaceIdentity: `pinned_source:${checksum}`, sourceChecksum: checksum, append: async () => undefined });
+    let frozen: TemplateAuthoringDraftPut | undefined;
+    await expect(journal.writeDraft({ brandId: scope.brandId, baseVersionId: scope.baseVersionId,
+      workingCopyId: selectedScope.workingCopyId, expectedRevision: 1, commands: [edit] }, async (request) => {
+      frozen = request;
+      throw new Error('Lost acknowledgement');
+    })).rejects.toThrow();
+    putDraft.mockImplementationOnce(async () => { throw new Error('Still offline'); });
+    putDraft.mockImplementationOnce(async (_assetId, request) => { expect(request).toEqual(frozen); return accepted; });
+    const mounted = renderHook(() => {
+      const [commands, setCommands] = useState<TemplateAuthoringCommand[]>([]);
+      return useTemplateAuthoringDraft({ scope: selectedScope, enabled: true, commands,
+        onRestore: (snapshot) => setCommands(commandsFromLayerSnapshot(snapshot)) });
+    });
+    await waitFor(() => expect(mounted.result.current.status).toBe('error'));
+    await waitFor(() => expect(mounted.result.current.ready).toBe(true));
+    await act(async () => { expect(await mounted.result.current.retry()).toBe(true); });
+    await waitFor(() => expect(putDraft).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mounted.result.current.status).toBe('saved'));
+    expect(mounted.result.current.revision).toBe(2);
+    expect(await journal.resumeDraft(async () => { throw new Error('Already acknowledged'); })).toBeNull();
+  });
+
   test('two variants with identical source bytes park and reopen separate persistent dirty copies', async () => {
     const a = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000001' };
     const b = { ...scope, workingCopyId: '50000000-0000-4000-8000-000000000002' };

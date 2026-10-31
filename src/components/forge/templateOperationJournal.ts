@@ -168,4 +168,14 @@ export class TemplateOperationJournal {
     if (!matched && request.expectedRevision === result.revision) return this.writeDraft(request, write);
     return { result, matched };
   }
+
+  /** Recover an uncertain acknowledgement even when the fetched server commands already match. */
+  async resumeDraft<T extends { revision: number }>(
+    write: (frozen: TemplateAuthoringDraftPut) => Promise<T>,
+  ): Promise<T | null> {
+    const storage = this.options.storage ?? indexedDbOperationJournal;
+    const frozen = await storage.change(this.key, (state) => state.draftIntent ? structuredClone(state.draftIntent) : null);
+    if (!frozen) return null;
+    return (await this.writeDraft(frozen, write)).result;
+  }
 }

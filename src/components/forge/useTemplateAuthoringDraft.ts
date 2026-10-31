@@ -4,6 +4,7 @@ import type {
   TemplateAuthoringCommand,
   TemplateAuthoringDocument,
   TemplateAuthoringDraft,
+  TemplateAuthoringDraftPut,
   TemplateAuthoringScope,
   TemplateAuthoringWorkspacePackage,
 } from '@continuum/contracts';
@@ -108,6 +109,23 @@ const identityFromDraft = (draft: TemplateAuthoringDraft | null) => draft?.seed
 
 const identityForLocal = (draft: LocalTemplateAuthoringDraft) =>
   draft.workspaceIdentity ?? templateAuthoringWorkspaceIdentity(undefined, draft.sourceChecksum);
+
+async function writePinnedDraft(
+  scope: TemplateAuthoringScope,
+  sourceChecksum: string,
+  userId: string,
+  frozen: TemplateAuthoringDraftPut,
+) {
+  if (frozen.brandId !== scope.brandId || frozen.baseVersionId !== scope.baseVersionId || frozen.workingCopyId !== scope.workingCopyId)
+    throw new Error('The frozen save belongs to a different private working copy.');
+  const acknowledged = await putTemplateAuthoringDraft(scope.assetId, frozen, userId);
+  if (!sameAuthoringScope(acknowledged.scope, scope))
+    throw new Error('The server returned a draft for a different template.');
+  if (acknowledged.sourceChecksum !== sourceChecksum)
+    throw new TemplateAuthoringDraftError(409, 'source_mismatch',
+      'The source package changed. Your local edits are preserved for reconciliation.');
+  return acknowledged;
+}
 
 export function reconcileTemplateAuthoringTabSave(
   autosaver: LayerDraftAutosaver,
@@ -221,6 +239,7 @@ export function useTemplateAuthoringDraft({
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationPending, setOperationPending] = useState(false);
   const journalRef = useRef<TemplateOperationJournal | null>(null);
+  const draftRecoveryRequired = useRef(false);
   const autosaverRef = useRef<LayerDraftAutosaver | null>(null);
   const baseRevisionRef = useRef(baseRevisionId);
   baseRevisionRef.current = baseRevisionId;
@@ -285,16 +304,7 @@ export function useTemplateAuthoringDraft({
             expectedRevision,
             commands: nextCommands,
             origin: { tool: 'Forge web private draft' },
-          }, async (frozen) => {
-            const acknowledged = await putTemplateAuthoringDraft(args.scope.assetId, frozen, args.userId);
-            if (acknowledged.scope.brandId !== draftScope.brandId || acknowledged.scope.assetId !== draftScope.assetId ||
-                acknowledged.scope.baseVersionId !== draftScope.baseVersionId || acknowledged.scope.workingCopyId !== draftScope.workingCopyId)
-              throw new Error('The server returned a draft for a different template.');
-            if (acknowledged.sourceChecksum !== args.sourceChecksum)
-              throw new TemplateAuthoringDraftError(409, 'source_mismatch',
-                'The source package changed. Your local edits are preserved for reconciliation.');
-            return acknowledged;
-          });
+          }, (frozen) => writePinnedDraft(draftScope, args.sourceChecksum, args.userId, frozen));
           if (!matched) throw new TemplateAuthoringDraftError(409, 'revision_conflict',
             'An earlier frozen save was acknowledged. Your newer edits are preserved; review both draft copies before saving.');
           tabChannel.current?.postMessage({ tabId: tabId.current, revision: result.revision });
@@ -427,6 +437,7 @@ export function useTemplateAuthoringDraft({
     activeSourceChecksum.current = null;
     activeWorkspaceIdentity.current = null;
     journalRef.current = null;
+    draftRecoveryRequired.current = false;
     setOperationError(null);
     setOperationPending(false);
     setWorkspaceIdentity(null);
@@ -474,7 +485,7 @@ export function useTemplateAuthoringDraft({
             ? fetchTemplateAuthoringDraft(scope.assetId, scope.brandId, scope.baseVersionId, scope.workingCopyId)
             : fetchTemplateAuthoringDraft(scope.assetId, scope.brandId, scope.baseVersionId),
         ]);
-        const remote = remoteResult.status === 'fulfilled' ? remoteResult.value : null;
+        let remote = remoteResult.status === 'fulfilled' ? remoteResult.value : null;
         if (remote && !sameAuthoringScope(remote.scope, scope)) throw new Error('The server returned another private working copy. Local copies are preserved.');
         remoteSnapshot = remote;
         if (remote && !cancelled && generation.current === run) setPersistedDraft(remote);
@@ -586,8 +597,6 @@ export function useTemplateAuthoringDraft({
         activeSourceChecksum.current = document.sourceChecksum;
         if (!equal(document.scope, scope))
           throw new Error('The authoring source does not match this template version.');
-        const persisted = remote?.commands ?? [];
-        const revision = remote?.revision ?? 0;
         if (
           remote &&
           (!equal(remote.scope, scope) || remote.sourceChecksum !== document.sourceChecksum)
@@ -596,6 +605,31 @@ export function useTemplateAuthoringDraft({
             'The saved draft belongs to a different source package. Local edits were not replaced.',
           );
         }
+        if (cancelled || generation.current !== run) return;
+        const journal = new TemplateOperationJournal({ userId, scope, workspaceIdentity: activeIdentity,
+          sourceChecksum: document.sourceChecksum, baseRevisionId: baseRevisionRef.current,
+          append: (events) => appendTemplateAuthoringHistory(userId, scope.assetId, scope.brandId, events) });
+        draftRecoveryRequired.current = true;
+        const resumed = await journal.resumeDraft((frozen) => {
+          if (cancelled || generation.current !== run) throw new Error('The private working copy changed during recovery.');
+          return writePinnedDraft(scope, document.sourceChecksum, userId, frozen);
+        });
+        if (cancelled || generation.current !== run) return;
+        if (resumed) {
+          // Replay returns its original acknowledgement; another tab may already have advanced beyond it.
+          const latest = await fetchTemplateAuthoringDraft(scope.assetId, scope.brandId, scope.baseVersionId, scope.workingCopyId);
+          if ((await fetchTemplateAuthoringUserId()) !== userId || !latest ||
+              !sameAuthoringScope(latest.scope, scope) || latest.sourceChecksum !== document.sourceChecksum ||
+              latest.requiresReconciliation || identityFromDraft(latest) !== activeIdentity)
+            throw new Error('The recovered save needs reconciliation. Private copies are preserved.');
+          if (cancelled || generation.current !== run) return;
+          remote = latest;
+          remoteSnapshot = latest;
+          setPersistedDraft(latest);
+        }
+        draftRecoveryRequired.current = false;
+        const persisted = remote?.commands ?? [];
+        const revision = remote?.revision ?? 0;
         let initial = persisted;
         let conflict = false;
         let initialError: string | undefined;
@@ -862,6 +896,11 @@ export function useTemplateAuthoringDraft({
     }
     await recoveryQueue.current;
     if (generation.current !== run) return false;
+    if (draftRecoveryRequired.current) {
+      if (!(await park()) || generation.current !== run) return false;
+      setLoadAttempt((attempt) => attempt + 1);
+      return true;
+    }
     if (recoveryError) {
       const pending = pendingRecovery.current;
       if (pending) {
@@ -884,7 +923,7 @@ export function useTemplateAuthoringDraft({
       return true;
     }
     return autosaverRef.current.retry();
-  }, [loaded, recoveryError]);
+  }, [loaded, recoveryError, park]);
 
   const restoreRecovery = useCallback(async (id: string) => {
     const item = recoveries.find((entry) => entry.id === id);
