@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import { buildHydratedCanvasGraph, type CanvasHydration } from '@/lib/campaign-canvas/hydrate';
 import {
   buildScaffoldSaveRequest,
@@ -200,7 +201,7 @@ export function ScaffoldRecordBar({
         })
         .catch((cause: unknown) => {
           if (!isCurrent()) return;
-          setError(cause instanceof Error ? cause.message : 'Could not load that proposal.');
+          setError(loadFailureMessage('this proposal', cause));
           return false;
         })
         .finally(() => {
@@ -322,7 +323,7 @@ export function ScaffoldRecordBar({
       .catch((cause: unknown) => {
         if (cancelled) return;
         setScaffolds([]);
-        setError(cause instanceof Error ? cause.message : "Couldn't load this brand's proposals.");
+        setError(loadFailureMessage("this brand's proposals", cause));
       });
     return () => {
       cancelled = true;
