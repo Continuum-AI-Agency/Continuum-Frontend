@@ -56,13 +56,21 @@ export function recordBarEmptyState(params: {
   hydration: CanvasHydration | null;
   nodeCount: number;
   isLoadingGraph: boolean;
+  /** The page was opened on `?scaffold=` naming a proposal this brand's list does not hold. */
+  requestedMissing?: boolean;
 }): string | null {
-  const { scaffoldCount, hydration, nodeCount, isLoadingGraph } = params;
+  const { scaffoldCount, hydration, nodeCount, isLoadingGraph, requestedMissing = false } = params;
   if (scaffoldCount === null) return null;
+  const canvasInUse = hydration !== null || nodeCount > 0 || isLoadingGraph;
+  if (requestedMissing && !canvasInUse) {
+    return scaffoldCount === 0
+      ? 'The proposal this link opened is not on this brand, and it has no other proposal yet. Ask Jaina to propose a campaign.'
+      : 'The proposal this link opened is not on this brand. Pick one below, or ask Jaina to propose a campaign.';
+  }
   if (scaffoldCount === 0) {
     return 'No proposals yet — ask Jaina to propose a campaign and it will appear here.';
   }
-  if (hydration || nodeCount > 0 || isLoadingGraph) return null;
+  if (canvasInUse) return null;
   return 'Nothing on the canvas yet. Pick a proposal to edit it here, or ask Jaina to propose a campaign.';
 }
 
@@ -159,6 +167,7 @@ export function ScaffoldRecordBar({
 
   const [scaffolds, setScaffolds] = React.useState<ScaffoldSummary[] | null>(null);
   const [selectedId, setSelectedId] = React.useState<string>('');
+  const [requestedMissing, setRequestedMissing] = React.useState(false);
   const [isLoadingGraph, setIsLoadingGraph] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Bumped by Retry: the brand read's effect re-ran only on a brand change, so a failed read
@@ -301,6 +310,7 @@ export function ScaffoldRecordBar({
         setScaffolds(rows);
         setError(null);
         const requested = rows.find((row) => row.id === requestedScaffoldId);
+        setRequestedMissing(Boolean(requestedScaffoldId) && !requested);
         if (requested) {
           loadScaffold(requested);
           return;
@@ -335,6 +345,7 @@ export function ScaffoldRecordBar({
     hydration,
     nodeCount,
     isLoadingGraph,
+    requestedMissing,
   });
 
   const proposeBlockedBecause = isLoadingGraph
