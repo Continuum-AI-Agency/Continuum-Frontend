@@ -762,8 +762,12 @@ function LecturaPane({
     >
       <div
         className={cn(
-          '@container mx-auto grid w-full gap-4 p-3 sm:p-4',
-          size === 'page' ? 'max-w-6xl pt-16' : 'max-w-3xl',
+          '@container mx-auto grid w-full gap-4 px-3 pb-3 sm:px-4 sm:pb-4',
+          // The Canvas page floats its bar over Read and measures it (--canvas-bar-clearance);
+          // no shorthand may undo that at a breakpoint, or the budget band sits under the bar.
+          size === 'page'
+            ? 'max-w-6xl pt-[var(--canvas-bar-clearance,4rem)]'
+            : 'max-w-3xl pt-3 sm:pt-4',
         )}
       >
         {showChanges ? (
