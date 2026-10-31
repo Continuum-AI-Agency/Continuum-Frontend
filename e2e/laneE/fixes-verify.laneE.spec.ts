@@ -368,10 +368,12 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
     // Canvas page and Vivo 47's Google tab.
     const vivo = await identityFor(VIVO_OWNER);
 
-    // P8 on Vivo 47's Google tab: a brand with Meta and Google, so no gate on any branch.
+    // P8 on Vivo 47's Google tab: a brand with Meta and Google, so no gate on any branch. At
+    // 1024, where the first sweep measured a CLS of 12.7–15.8 in repeated 0.64 shifts — so the
+    // page is also watched for 10 s once loaded: a load shifts once, a resize loop keeps going.
     if (runs('p8')) {
-      const name = 'p8-vivo47@1440-light';
-      const opened = await openAs(browser, vivo, VIVO_47, { width: 1440, height: 900 }, 'light');
+      const name = 'p8-vivo47@1024-light';
+      const opened = await openAs(browser, vivo, VIVO_47, { width: 1024, height: 768 }, 'light');
       try {
         await opened.page.goto(
           '/scale?tab=performance&optimizerView=overview&platform=google_ads',
@@ -389,8 +391,42 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         const ideas = await opened.page
           .locator('[data-testid="account-finding"]')
           .evaluateAll((els) => els.map((el) => el.getAttribute('data-idea')));
+        const still = await opened.page.evaluate(async () => {
+          type Shift = {
+            value: number;
+            hadRecentInput: boolean;
+            sources?: { node?: Node | null }[];
+          };
+          const describe = (node: Node | null | undefined) => {
+            if (!(node instanceof Element)) return null;
+            const owner = node.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
+            const heading =
+              node.closest('section, article')?.querySelector('h2, h3, h4')?.textContent ?? '';
+            return `${node.tagName.toLowerCase()}.${String(node.className).slice(0, 60)} in ${owner} "${heading.slice(0, 50)}"`;
+          };
+          const seen: { value: number; node: string | null }[] = [];
+          const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries() as unknown as Shift[]) {
+              if (!entry.hadRecentInput)
+                seen.push({ value: entry.value, node: describe(entry.sources?.[0]?.node) });
+            }
+          });
+          observer.observe({ type: 'layout-shift', buffered: false });
+          await new Promise((resolve) => setTimeout(resolve, 10_000));
+          observer.disconnect();
+          return {
+            count: seen.length,
+            total: Number(seen.reduce((sum, shift) => sum + shift.value, 0).toFixed(3)),
+            nodes: Array.from(new Set(seen.map((shift) => shift.node))).slice(0, 4),
+          };
+        });
         await shot(opened.page, `fix-${LABEL}-${name}`, false);
-        obs.add({ name, p8, ideas, chromeNames, notFound: opened.events.notFound });
+        obs.add({ name, p8, ideas, chromeNames, still, notFound: opened.events.notFound });
+        recorder.record(
+          `${name}: the Google tab holds still once loaded (10 s watched)`,
+          still.count === 0 ? 'PASS' : 'FAIL',
+          `${still.count} shifts, total ${still.total}; ${still.nodes.join(' | ')}`,
+        );
         recorder.record(
           `${name}: every stored P8 account finding renders on the Google tab`,
           p8.count >= STORED_P8.vivo47 ? 'PASS' : 'FAIL',
