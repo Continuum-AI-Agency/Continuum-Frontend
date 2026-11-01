@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { loadFailureCause, loadFailureWhy } from '@/lib/api/loadFailure';
 import { useApprove, useReject } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';
@@ -41,6 +42,19 @@ const KEY_OWNING_TARGET = [
   '[role="dialog"]',
   '[role="alertdialog"]',
 ].join(', ');
+
+/**
+ * Why a decision failed, in the product's words — never the edge client's own ("Failed to send a
+ * request to the Edge Function"). An Approve that never reached the server says nothing changed
+ * on the platform; any other failure claims nothing it cannot know
+ * (PP-DT-C-approve-failure-toast-raw-edge-string).
+ */
+function decisionFailure(verb: 'Approve' | 'Reject', error: unknown): string {
+  const why = loadFailureWhy(error) ?? 'it did not go through.';
+  const source = error instanceof Error && error.cause !== undefined ? error.cause : error;
+  const neverLeft = verb === 'Approve' && loadFailureCause(source) === 'offline';
+  return `${verb} failed — ${why}${neverLeft ? ' Nothing changed on the platform.' : ''}`;
+}
 
 type DecisionActionsHandle = {
   approve: () => Promise<void>;
@@ -80,7 +94,7 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
           toast.success(`Approved · ${actionTypeLabel(action.action_type)}`);
         }
       } catch (err) {
-        toast.error(`Approve failed · ${(err as Error).message}`);
+        toast.error(decisionFailure('Approve', err));
       } finally {
         clearOptimistic(action.id);
       }
@@ -99,7 +113,7 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
             toast.success(`Rejected · ${actionTypeLabel(action.action_type)}`);
           }
         } catch (err) {
-          toast.error(`Reject failed · ${(err as Error).message}`);
+          toast.error(decisionFailure('Reject', err));
         } finally {
           clearOptimistic(action.id);
         }
