@@ -1498,12 +1498,21 @@ export type AdsetBudget = z.infer<typeof AdsetBudgetSchema>;
 /** Request to convert a CBO campaign to ad-set budgets (optimizer-convert-cbo edge).
  *  `dryRun` (default true) returns the computed per-ad-set budgets WITHOUT writing to
  *  Meta — the FE previews them before the real convert (which is one POST /{campaign_id}
- *  with `adset_budgets`, removing the campaign budget). */
+ *  with `adset_budgets`, removing the campaign budget).
+ *
+ *  `expectedAdsetBudgets` binds a real convert (dryRun:false) to the preview the person
+ *  approved: the edge recomputes the split and, unless it is exactly these budgets (same ad
+ *  sets, same daily budgets in MINOR units), answers `reason: 'preview_changed'` with the
+ *  fresh ones and writes nothing. Without it a real convert writes what it computes; the MCP
+ *  apply binds through its own confirm token instead. */
 export const ConvertCboRequestSchema = z.object({
   brandId: z.string().uuid(),
   accountId: z.string().min(1),
   campaignId: z.string().min(1),
   dryRun: z.boolean().optional(),
+  expectedAdsetBudgets: z
+    .array(AdsetBudgetSchema.pick({ adset_id: true, daily_budget: true }))
+    .optional(),
 });
 export type ConvertCboRequest = z.infer<typeof ConvertCboRequestSchema>;
 
@@ -1530,7 +1539,9 @@ export const ConvertReadBackSchema = z.object({
 export type ConvertReadBack = z.infer<typeof ConvertReadBackSchema>;
 
 /** optimizer-convert-cbo response — the per-ad-set budgets that would be (dryRun) or were
- *  set. `reason` is present on a soft failure (not_permitted / no_adsets / no_token). */
+ *  set. `reason` is present on a soft failure (not_permitted / no_adsets / no_token /
+ *  preview_changed); on preview_changed nothing was written and `adset_budgets` carries the
+ *  split computed now, for a fresh approval. */
 export const ConvertCboResponseSchema = z.object({
   ok: z.boolean(),
   dryRun: z.boolean().optional(),

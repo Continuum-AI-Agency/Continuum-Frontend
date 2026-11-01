@@ -1,18 +1,27 @@
 'use client';
 
 // Surfaces the account's CBO ("Advantage Campaign Budget") campaigns as
-// not-yet-optimizable, with a one-click "Convert to ad-set budgets" preview. The
+// not-yet-optimizable, with a one-click "Convert to ad-set budgets". The
 // Optimizer stays ad-set-level only: it never reallocates a campaign budget.
 // Instead, converting a CBO campaign to ABO (budgets on the ad sets) makes its ad
 // sets optimizable by the existing ad-set optimizer.
 //
-// Money safety: the convert edge does the real Meta write, but the FE only ever
-// calls it with dryRun:true — a PREVIEW of the per-ad-set budgets that WOULD be
-// set, zero writes. The dialog's "Apply" action is disabled until a sandbox bench
-// validates the real write on a Meta test campaign (un-gated in a follow-up PR).
+// Money safety: the convert dialog is the approval card (decision 3, Ramiro
+// 2026-11-01). Opening it asks the convert edge for a dryRun PREVIEW of the
+// per-ad-set budgets, zero writes. Only Apply, clicked inside the dialog while a
+// preview with budgets is on screen, asks for the real Meta write, and it carries
+// exactly the previewed budgets: the edge writes those, or answers preview_changed
+// with the new split and writes nothing.
 
-import type { AdSetSnapshot, CycleItemRow } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  AdsetBudget,
+  ConvertCboRequest,
+  ConvertCboResponse,
+  CycleItemRow,
+} from '@continuum/contracts';
 import {
+  CheckCircle2Icon,
   ChevronDownIcon,
   Loader2Icon,
   MegaphoneIcon,
@@ -38,6 +47,7 @@ import { formatCurrency } from '../format';
 import type { CampaignSection } from '../picker/campaignGroups';
 import {
   type ConvertBudget,
+  type ConvertPreviewRow,
   convertPreviewRows,
   convertPreviewTotals,
   resolvePreviewObjective,
@@ -68,9 +78,55 @@ function softFailMessage(
       return 'This campaign has no ad sets to convert yet.';
     case 'no_token':
       return 'Reconnect Meta to preview the conversion.';
+    case 'preview_changed':
+      return 'The budgets changed since this preview, so nothing was written. The new budgets are below — Apply again to approve them.';
     default:
       return error?.trim() || "Couldn't compute the conversion preview. Try again in a moment.";
   }
+}
+
+/** The convert mutation as the approval card reads it. `variables` is the last request
+ *  sent: a preview (dryRun:true) or the real convert Apply asked for (dryRun:false). */
+type ConvertState = {
+  data: ConvertCboResponse | null | undefined;
+  isPending: boolean;
+  isError: boolean;
+  variables: ConvertCboRequest | undefined;
+};
+
+/** Where the approval card stands. `working`/`failed` say whether it was the real convert
+ *  (`applying`) or a preview; `changed` is the edge refusing a stale approval with the split
+ *  it computes now. */
+type ConvertStage =
+  | { kind: 'working'; applying: boolean }
+  | { kind: 'failed'; applying: boolean }
+  | { kind: 'refused'; reason: string | undefined; error: string | undefined }
+  | { kind: 'preview'; budgets: AdsetBudget[] }
+  | { kind: 'changed'; budgets: AdsetBudget[] }
+  | { kind: 'converted'; response: ConvertCboResponse };
+
+function convertStage(convert: ConvertState): ConvertStage {
+  const applying = convert.variables?.dryRun === false;
+  if (convert.isPending) return { kind: 'working', applying };
+  const response = convert.data;
+  if (convert.isError || response == null) return { kind: 'failed', applying };
+  if (response.ok) {
+    // The convert ledger's "already converted today" answer carries no dryRun flag.
+    return response.dryRun === false || response.deduped === true
+      ? { kind: 'converted', response }
+      : { kind: 'preview', budgets: response.adset_budgets };
+  }
+  if (response.reason === 'preview_changed' && response.adset_budgets.length > 0) {
+    return { kind: 'changed', budgets: response.adset_budgets };
+  }
+  return { kind: 'refused', reason: response.reason, error: response.error };
+}
+
+/** The budgets on screen the person can approve: an ok preview's, or the new split a changed
+ *  preview came back with. Null when there is nothing to approve. */
+function approvableBudgets(stage: ConvertStage): AdsetBudget[] | null {
+  if (stage.kind !== 'preview' && stage.kind !== 'changed') return null;
+  return stage.budgets.length > 0 ? stage.budgets : null;
 }
 
 export function CboCampaigns({
@@ -132,9 +188,25 @@ function CboCampaignRow({
     convert.mutate({ brandId, accountId, campaignId: section.campaignId, dryRun: true });
   };
 
-  const preview = convert.data;
-  const previewCurrency = preview?.currency ?? currency;
-  const budgets = preview?.ok ? preview.adset_budgets : [];
+  const stage = convertStage(convert);
+  const approvable = approvableBudgets(stage);
+  const stageCurrency = convert.data?.currency ?? currency;
+
+  // Apply is the approval: the real convert, bound to exactly the budgets on screen. The edge
+  // writes those or answers preview_changed with the split it computes now.
+  const apply = () => {
+    if (!approvable) return;
+    convert.mutate({
+      brandId,
+      accountId,
+      campaignId: section.campaignId,
+      dryRun: false,
+      expectedAdsetBudgets: approvable.map(({ adset_id, daily_budget }) => ({
+        adset_id,
+        daily_budget,
+      })),
+    });
+  };
 
   // The held CBO ad sets of THIS campaign, from the raw account snapshots — the input to
   // synthesizing their post-convert (ABO) state for the "Preview as converted" expander.
@@ -179,50 +251,39 @@ function CboCampaignRow({
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <ConvertPreviewBody
-            isPending={convert.isPending}
-            isError={convert.isError}
-            preview={preview}
-            budgets={budgets}
-            currency={previewCurrency}
-            section={section}
-          />
+          <ConvertDialogBody stage={stage} currency={stageCurrency} section={section} />
 
-          {preview?.ok && budgets.length > 0 ? (
+          {stage.kind === 'preview' && stage.budgets.length > 0 ? (
             <ConvertedPreview
               brandId={brandId}
               accountId={accountId}
               campaignSnapshots={campaignSnapshots}
-              budgets={budgets}
-              currency={previewCurrency}
+              budgets={stage.budgets}
+              currency={stageCurrency}
             />
           ) : null}
 
-          {/* ONE statement of why Apply is off, and it names the move the user can
-              make today. This used to be said twice — once here and once in the
-              dialog description — while neither offered an alternative, so the
-              flow diagnosed the problem, simulated the fix, and then refused.
-              Bound to the button by aria-describedby rather than a `title`: a
-              native tooltip on a disabled button is unreliable and unreachable by
-              keyboard. */}
-          <p className="text-xs text-muted-foreground" id={applyNoteId}>
-            One-click convert is still being validated against a Meta test campaign, so Apply is
-            off. You can make this change yourself in Meta Ads Manager now — remove the campaign
-            budget, set a daily budget per ad set, and the optimizer picks them up on its next
-            cycle.
-          </p>
+          {/* What clicking Apply does, bound to the button by aria-describedby rather than
+              a `title` (a native tooltip is unreliable and unreachable by keyboard). */}
+          {approvable ? (
+            <p className="text-xs text-muted-foreground" id={applyNoteId}>
+              Nothing changes on Meta until you click Apply, and Apply writes exactly these budgets.
+            </p>
+          ) : null}
 
           <AlertDialogFooter>
             <AlertDialogCancel>Close</AlertDialogCancel>
-            <Button
-              aria-describedby={applyNoteId}
-              aria-disabled="true"
-              className="gap-1.5"
-              disabled
-              type="button"
-            >
-              Apply
-            </Button>
+            {stage.kind === 'converted' ? null : (
+              <Button
+                aria-describedby={approvable ? applyNoteId : undefined}
+                className="gap-1.5"
+                disabled={!approvable}
+                onClick={apply}
+                type="button"
+              >
+                Apply
+              </Button>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -369,46 +430,68 @@ function ConvertedPreviewBody({
   );
 }
 
-function ConvertPreviewBody({
-  isPending,
-  isError,
-  preview,
+function ConvertDialogBody({
+  stage,
+  currency,
+  section,
+}: {
+  stage: ConvertStage;
+  currency: string | null;
+  section: CampaignSection;
+}) {
+  switch (stage.kind) {
+    case 'working':
+      return (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
+          {stage.applying ? 'Converting the campaign on Meta…' : 'Computing per-ad-set budgets…'}
+        </p>
+      );
+    case 'failed':
+      // A real convert that did not come back may still have reached Meta. The convert
+      // ledger allows one convert per campaign per UTC day, so a second Apply cannot write
+      // twice.
+      return stage.applying ? (
+        <InlineError>
+          Couldn&rsquo;t confirm the conversion. Check the campaign in Meta Ads Manager before
+          trying again.
+        </InlineError>
+      ) : (
+        <InlineError>
+          Couldn&rsquo;t compute the conversion preview. Try again in a moment.
+        </InlineError>
+      );
+    case 'refused':
+      return <InlineError>{softFailMessage(stage.reason, stage.error)}</InlineError>;
+    case 'changed':
+      return (
+        <div className="space-y-2">
+          <InlineError>{softFailMessage('preview_changed', undefined)}</InlineError>
+          <BudgetPreview budgets={stage.budgets} currency={currency} section={section} />
+        </div>
+      );
+    case 'preview':
+      return stage.budgets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No ad sets to convert in this campaign.</p>
+      ) : (
+        <BudgetPreview budgets={stage.budgets} currency={currency} section={section} />
+      );
+    case 'converted':
+      return <ConvertOutcome currency={currency} response={stage.response} section={section} />;
+  }
+}
+
+/** The changeover the card asks to approve: the campaign-held budget today against the
+ *  per-ad-set daily budgets that would replace it. */
+function BudgetPreview({
   budgets,
   currency,
   section,
 }: {
-  isPending: boolean;
-  isError: boolean;
-  preview: ReturnType<typeof useConvertCbo>['data'];
-  budgets: { adset_id: string; adset_name?: string | null; daily_major: number }[];
+  budgets: ConvertBudget[];
   currency: string | null;
   section: CampaignSection;
 }) {
-  if (isPending) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
-        Computing per-ad-set budgets…
-      </p>
-    );
-  }
-
-  if (isError || preview == null) {
-    return (
-      <InlineError>
-        Couldn&rsquo;t compute the conversion preview. Try again in a moment.
-      </InlineError>
-    );
-  }
-
-  if (!preview.ok) {
-    return <InlineError>{softFailMessage(preview.reason, preview.error)}</InlineError>;
-  }
-
-  if (budgets.length === 0) {
-    return <p className="text-sm text-muted-foreground">No ad sets to convert in this campaign.</p>;
-  }
-
   const rows = convertPreviewRows(section, budgets);
   const totals = convertPreviewTotals(section, rows);
 
@@ -424,29 +507,86 @@ function ConvertPreviewBody({
           {formatCurrency(totals.newDailyTotal, currency)}/d
         </span>
       </p>
-      <ul className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/70">
-        {rows.map((row) => (
-          <li key={row.adsetId} className="flex items-center justify-between gap-3 px-3 py-2">
-            <span className="min-w-0">
-              <span className="block truncate text-sm">{row.name}</span>
-              <span className="block text-xs text-muted-foreground tabular-nums">
-                {row.spend14 == null
-                  ? 'no trailing-14d read'
-                  : `${formatCurrency(row.spend14, currency)} spend · ${
-                      row.cpa == null
-                        ? 'no tracked results'
-                        : `${formatCurrency(row.cpa, currency)} CPA`
-                    } · 14d`}
-              </span>
-            </span>
-            <span className="shrink-0 text-sm font-medium tabular-nums">
-              {formatCurrency(row.newDailyBudget, currency)}/d
-            </span>
-          </li>
-        ))}
-      </ul>
+      <BudgetList currency={currency} rows={rows} />
     </div>
   );
+}
+
+function BudgetList({ rows, currency }: { rows: ConvertPreviewRow[]; currency: string | null }) {
+  return (
+    <ul className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/70">
+      {rows.map((row) => (
+        <li key={row.adsetId} className="flex items-center justify-between gap-3 px-3 py-2">
+          <span className="min-w-0">
+            <span className="block truncate text-sm">{row.name}</span>
+            <span className="block text-xs text-muted-foreground tabular-nums">
+              {row.spend14 == null
+                ? 'no trailing-14d read'
+                : `${formatCurrency(row.spend14, currency)} spend · ${
+                    row.cpa == null
+                      ? 'no tracked results'
+                      : `${formatCurrency(row.cpa, currency)} CPA`
+                  } · 14d`}
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-medium tabular-nums">
+            {formatCurrency(row.newDailyBudget, currency)}/d
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** What Apply did on Meta: the change in plain words, the daily budget each ad set now holds,
+ *  and whether reading the campaign back confirmed it. */
+function ConvertOutcome({
+  response,
+  currency,
+  section,
+}: {
+  response: ConvertCboResponse;
+  currency: string | null;
+  section: CampaignSection;
+}) {
+  const rows = convertPreviewRows(section, response.adset_budgets);
+
+  return (
+    <div className="space-y-2">
+      <p className="flex items-start gap-2 text-sm text-foreground" role="status">
+        <CheckCircle2Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
+        <span>
+          {response.deduped
+            ? 'This campaign was already converted today, so nothing was written again. The optimizer picks its ad sets up on its next cycle.'
+            : 'Converted. The campaign budget was removed and each ad set now holds its own daily budget. The optimizer picks them up on its next cycle.'}
+        </span>
+      </p>
+      {rows.length > 0 ? <BudgetList currency={currency} rows={rows} /> : null}
+      <ReadBackNote response={response} />
+    </div>
+  );
+}
+
+/** The edge reads the campaign and its ad sets back after the write (PP-DT-A-convert-edge-no-
+ *  readback); Meta's own answer only says the request was accepted. */
+function ReadBackNote({ response }: { response: ConvertCboResponse }) {
+  if (response.verified === true) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Read back from Meta: the campaign holds no budget and every ad set holds its new one.
+      </p>
+    );
+  }
+  if (response.verified === false) {
+    return (
+      <InlineError>
+        {response.read_back?.verdict === 'mismatch'
+          ? 'Meta accepted the change, but reading the campaign back shows other budgets than these. Check it in Meta Ads Manager.'
+          : 'Meta accepted the change, but the campaign could not be read back to confirm it. Check it in Meta Ads Manager.'}
+      </InlineError>
+    );
+  }
+  return null;
 }
 
 function InlineError({ children }: { children: React.ReactNode }) {

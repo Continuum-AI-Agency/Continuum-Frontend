@@ -131,7 +131,7 @@ describe('CboCampaigns', () => {
     expect(convert.tagName).toBe('BUTTON');
   });
 
-  it('previews the per-ad-set budgets (real text) and disables Apply', () => {
+  it('previews the per-ad-set budgets (real text) and offers Apply', () => {
     convertState.data = {
       ok: true,
       dryRun: true,
@@ -157,7 +157,7 @@ describe('CboCampaigns', () => {
     // The changeover headline: campaign-held budget today vs the sum of new budgets.
     expect(getByText('$57.00 USD/d')).toBeTruthy();
     const apply = getByRole('button', { name: 'Apply' }) as HTMLButtonElement;
-    expect(apply.disabled).toBe(true);
+    expect(apply.disabled).toBe(false);
   });
 
   it('requests a dryRun preview when the convert button is clicked', () => {
@@ -343,14 +343,12 @@ describe('CboCampaigns', () => {
   });
 });
 
-// The worst moment in the whole surface: SignalReadiness diagnoses "nothing
-// movable", instructs the user to convert a campaign to ad-set budgets, shows a
-// working preview of exactly that — and then refuses. It stayed refused (the real
-// write is still unvalidated), but a refusal has to be stated ONCE and has to name
-// the move the user can make today.
-describe('CboCampaigns — the disabled Apply', () => {
-  const renderRow = () =>
-    render(
+// The dialog is the convert's approval card (decision 3, Ramiro 2026-11-01): Apply
+// asks for the real convert, bound to the previewed budgets, and every outcome is
+// pinned in CboCampaigns.apply.render.test.tsx. Leaving the card is not a decision.
+describe('CboCampaigns — leaving the card', () => {
+  it('leaves the dialog by a neutral Close rather than implying a cancelled action', () => {
+    const { getByRole } = render(
       <CboCampaigns
         accountId="act_1"
         brandId="b1"
@@ -359,37 +357,6 @@ describe('CboCampaigns — the disabled Apply', () => {
         snapshots={[]}
       />,
     );
-
-  it('names the manual path the user can take right now', () => {
-    const text = renderRow().container.textContent ?? '';
-    expect(text).toContain('Meta Ads Manager');
-    expect(text).toContain('optimizer picks them up on its next cycle');
-  });
-
-  it('says why Apply is off exactly once', () => {
-    const text = renderRow().container.textContent ?? '';
-    const mentions = text.match(/validated/gi) ?? [];
-    expect(mentions).toHaveLength(1);
-  });
-
-  // A `title` on a disabled button is unreliable across browsers and unreachable
-  // by keyboard, so the reason is bound with aria-describedby instead.
-  it('binds the reason to the button for assistive tech', () => {
-    const { getByRole } = renderRow();
-    const apply = getByRole('button', { name: 'Apply' }) as HTMLButtonElement;
-
-    expect(apply.disabled).toBe(true);
-    const describedBy = apply.getAttribute('aria-describedby');
-    expect(describedBy).toBeTruthy();
-
-    // getElementById, not querySelector: React's useId emits colons, which are
-    // not valid in a CSS selector without escaping.
-    const note = document.getElementById(describedBy as string);
-    expect(note?.textContent).toContain('Apply is off');
-    expect(apply.getAttribute('title')).toBeNull();
-  });
-
-  it('leaves the dialog by a neutral Close rather than implying a cancelled action', () => {
-    expect(renderRow().getByRole('button', { name: 'Close' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Close' })).toBeTruthy();
   });
 });

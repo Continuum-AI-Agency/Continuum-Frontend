@@ -900,8 +900,10 @@ function cachedLatestRunId(queryClient: QueryClient, portfolioId: string): strin
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
  *  the optimizer-convert-cbo edge. `dryRun` (default true) returns the per-ad-set
- *  budgets that WOULD be set with ZERO writes to Meta — the FE previews them before
- *  the real convert is un-gated. Returns null when the response is malformed. */
+ *  budgets that WOULD be set with ZERO writes to Meta. A real convert (`dryRun:false`)
+ *  carries the budgets the person approved in that preview (`expectedAdsetBudgets`), so
+ *  the edge writes exactly those or answers `preview_changed`. Returns null when the
+ *  response is malformed. */
 async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboResponse | null> {
   const { data, error } = await getClient().functions.invoke('optimizer-convert-cbo', {
     body: {
@@ -909,6 +911,9 @@ async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboRespons
       accountId: request.accountId,
       campaignId: request.campaignId,
       dryRun: request.dryRun ?? true,
+      ...(request.expectedAdsetBudgets
+        ? { expectedAdsetBudgets: request.expectedAdsetBudgets }
+        : {}),
     },
   });
   if (error) throw new Error('optimizer-convert-cbo unreachable');
@@ -2843,11 +2848,11 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
 }
 
 /** Preview or apply a CBO→ABO conversion for one campaign. Instantiated PER CBO
- *  campaign row so each keeps its own pending/preview/error state. The FE only ever
- *  calls it with `dryRun:true` today (a working preview); a real conversion
- *  (`dryRun:false`, un-gated after the sandbox bench) makes the campaign's ad sets
- *  ABO — so a real success marks the account snapshots + suggestions stale so the
- *  now-optimizable ad sets reappear. A dry-run preview writes nothing and skips it. */
+ *  campaign row so each keeps its own pending/preview/error state. The convert dialog
+ *  previews with `dryRun:true`; its Apply sends the real conversion (`dryRun:false`, bound
+ *  to the previewed budgets), which makes the campaign's ad sets ABO — so a real success
+ *  marks the account snapshots + suggestions stale so the now-optimizable ad sets
+ *  reappear. A dry-run preview writes nothing and skips it. */
 export function useConvertCbo(_brandId: string) {
   const queryClient = useQueryClient();
   return useMutation({
