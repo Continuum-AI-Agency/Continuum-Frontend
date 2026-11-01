@@ -140,6 +140,7 @@ async function readHomeAccounts(client: SupabaseClient, brandId: string): Promis
 type EdgeRead = {
   currency?: string | null;
   metrics?: Record<string, number | null | undefined>;
+  comparison?: Record<string, { previous?: number | null } | null>;
   trends?: { conversions?: number | null }[];
 };
 
@@ -170,7 +171,13 @@ async function readOverview(
 const sumOf = (values: (number | null | undefined)[]): number =>
   values.reduce<number>((sum, value) => sum + (typeof value === 'number' ? value : 0), 0);
 
-type EdgeTotals = Partial<Record<HomeObjectiveMetric, number>> & { currency: string | null };
+type Figures = Partial<Record<HomeObjectiveMetric, number>>;
+type AccountFigures = { currency: string | null; spent: boolean; figures: Figures };
+
+/** Whether the account spent in the window or the one before: an account that spent in neither
+ *  has nothing for the Home to show. */
+const spentIn = (read: EdgeRead): boolean =>
+  Number(read.metrics?.spend ?? 0) > 0 || Number(read.comparison?.spend?.previous ?? 0) > 0;
 
 /** One account's figures in the Home's words. Meta names its results; a Google read counts the
  *  one business result it was asked for, day by day, as `conversions`. */
@@ -178,42 +185,70 @@ async function readAccountFigures(
   client: SupabaseClient,
   brandId: string,
   account: HomeAccount,
-): Promise<EdgeTotals> {
+): Promise<AccountFigures> {
   if (account.platform === 'meta') {
     const read = await readOverview(client, brandId, account);
     const metrics = read.metrics ?? {};
-    const figures: EdgeTotals = { currency: read.currency ?? null };
+    const figures: Figures = {};
     for (const metric of Object.keys(HOME_OBJECTIVE_METRICS) as HomeObjectiveMetric[]) {
       const value = metrics[metric];
       if (typeof value === 'number') figures[metric] = value;
     }
-    return figures;
+    return { currency: read.currency ?? null, spent: spentIn(read), figures };
   }
   const [leads, purchases] = await Promise.all([
     readOverview(client, brandId, account, 'leads'),
     readOverview(client, brandId, account, 'purchases'),
   ]);
   const metrics = leads.metrics ?? {};
-  const spend = Number(metrics.spend ?? 0);
   return {
     currency: leads.currency ?? null,
-    spend,
-    clicks: Number(metrics.clicks ?? 0),
-    impressions: Number(metrics.impressions ?? 0),
-    leads: sumOf((leads.trends ?? []).map((day) => day.conversions)),
-    purchases: sumOf((purchases.trends ?? []).map((day) => day.conversions)),
-    purchase_value: Number(purchases.metrics?.roas ?? 0) * Number(purchases.metrics?.spend ?? 0),
+    spent: spentIn(leads),
+    figures: {
+      spend: Number(metrics.spend ?? 0),
+      clicks: Number(metrics.clicks ?? 0),
+      impressions: Number(metrics.impressions ?? 0),
+      leads: sumOf((leads.trends ?? []).map((day) => day.conversions)),
+      purchases: sumOf((purchases.trends ?? []).map((day) => day.conversions)),
+      purchase_value: Number(purchases.metrics?.roas ?? 0) * Number(purchases.metrics?.spend ?? 0),
+    },
   };
 }
 
-/** What the Home's tiles should print: every account the Home reads, read as the member, summed
- *  — a metric only over the accounts that report it, as the Home sums it. An account whose read
- *  fails is left out, as the Home leaves it out, and named in the notes. One currency only: the
- *  brands here report in one, and a second would mean the bench compares unlike money. */
+type CurrencyFigures = {
+  currency: string | null;
+  accounts: number;
+  spending: number;
+  totals: Figures;
+};
+
+/** Sums a metric only over the accounts that report it, as the Home sums it. */
+function sumFigures(list: Figures[]): Figures {
+  const totals: Figures = {};
+  for (const metric of Object.keys(HOME_OBJECTIVE_METRICS) as HomeObjectiveMetric[]) {
+    const values = list.map((figures) => figures[metric]).filter((v) => v !== undefined);
+    if (values.length > 0) totals[metric] = sumOf(values);
+  }
+  return totals;
+}
+
+/**
+ * What the Home should print, from every account it reads, read as the member. Money is never
+ * added across currencies, so the accounts are grouped by currency and the Home leads with the
+ * currency its spending accounts report in (then the one most accounts do; then the first). A
+ * currency where no account spent in either week has no strip of its own. Results are counted
+ * across currencies for the goal inference; money comes from the lead currency only. An account
+ * whose read fails is left out, as the Home leaves it out, and named in the notes.
+ */
 async function readEdgeTotals(
   client: SupabaseClient,
   brandId: string,
-): Promise<{ totals: EdgeTotals; accounts: HomeAccount[] }> {
+): Promise<{
+  lead: CurrencyFigures;
+  idle: CurrencyFigures[];
+  results: Figures;
+  accounts: HomeAccount[];
+}> {
   const accounts = await readHomeAccounts(client, brandId);
   const settled = await Promise.allSettled(
     accounts.map((account) => readAccountFigures(client, brandId, account)),
@@ -228,14 +263,36 @@ async function readEdgeTotals(
     );
   }
   expect(perAccount.length, 'at least one account answered').toBeGreaterThan(0);
-  const currencies = new Set(perAccount.map((figures) => figures.currency).filter(Boolean));
-  expect(currencies.size, 'the bench brands report money in one currency').toBeLessThanOrEqual(1);
-  const totals: EdgeTotals = { currency: [...currencies][0] ?? null };
-  for (const metric of Object.keys(HOME_OBJECTIVE_METRICS) as HomeObjectiveMetric[]) {
-    const values = perAccount.map((figures) => figures[metric]).filter((v) => v !== undefined);
-    if (values.length > 0) totals[metric] = sumOf(values);
+  const byCurrency = new Map<string | null, AccountFigures[]>();
+  for (const account of perAccount) {
+    byCurrency.set(account.currency, [...(byCurrency.get(account.currency) ?? []), account]);
   }
-  return { totals, accounts };
+  const groups = [...byCurrency.entries()]
+    .map(([currency, list], order) => ({
+      order,
+      currency,
+      accounts: list.length,
+      spending: list.filter((account) => account.spent).length,
+      totals: sumFigures(list.map((account) => account.figures)),
+    }))
+    .sort((a, b) => b.spending - a.spending || b.accounts - a.accounts || a.order - b.order);
+  const [lead, ...rest] = groups;
+  if (!lead) throw new Error('[home-bench] no currency group');
+  const results: Figures = {};
+  for (const metric of Object.keys(HOME_OBJECTIVE_METRICS) as HomeObjectiveMetric[]) {
+    if (HOME_OBJECTIVE_METRICS[metric].unit === 'currency') {
+      if (lead.totals[metric] !== undefined) results[metric] = lead.totals[metric];
+      continue;
+    }
+    const values = groups.map((group) => group.totals[metric]).filter((v) => v !== undefined);
+    if (values.length > 0) results[metric] = sumOf(values);
+  }
+  return {
+    lead,
+    idle: rest.filter((group) => group.spending === 0),
+    results,
+    accounts,
+  };
 }
 
 async function readSavedObjectives(brandId: string): Promise<{
@@ -317,15 +374,15 @@ async function readExpectedReading(
 }
 
 /** The goals the Home should show: the saved row, else the ones its results suggest. */
-function expectedObjectives(saved: HomeObjective[] | null, totals: EdgeTotals): HomeObjective[] {
+function expectedObjectives(saved: HomeObjective[] | null, results: Figures): HomeObjective[] {
   return saved && saved.length > 0
     ? saved
     : inferHomeObjectives({
-        purchases: totals.purchases,
-        purchase_value: totals.purchase_value,
-        leads: totals.leads,
-        conversations: totals.conversations,
-        clicks: totals.clicks,
+        purchases: results.purchases,
+        purchase_value: results.purchase_value,
+        leads: results.leads,
+        conversations: results.conversations,
+        clicks: results.clicks,
       });
 }
 
@@ -360,22 +417,29 @@ async function expectModuleOrder(page: Page, reading: HomeBrandReading): Promise
 async function expectTiles(
   page: Page,
   objectives: HomeObjective[],
-  totals: EdgeTotals,
+  lead: CurrencyFigures,
 ): Promise<void> {
   for (const objective of objectives) {
     const tile = page.locator(`[data-home-objective="${objective.metric}"]`).first();
     await expect(tile).toBeVisible();
     await expect(tile).toContainText(objective.label);
-    const value = totals[objective.metric];
+    const value = lead.totals[objective.metric];
     if (typeof value === 'number' && HOME_OBJECTIVE_METRICS[objective.metric].unit === 'count') {
       await expect(tile.locator('[data-home-value]')).toHaveText(formatCount(value));
     } else if (typeof value === 'number') {
-      await expect(tile.locator('[data-home-value]')).toHaveText(
-        formatMoney(value, totals.currency),
-      );
+      await expect(tile.locator('[data-home-value]')).toHaveText(formatMoney(value, lead.currency));
     } else {
       await expect(tile).toContainText('Not counted for this account yet');
     }
+  }
+}
+
+/** A currency where no account spent in either week gets no strip; the Home names it instead. */
+async function expectIdleCurrencies(page: Page, idle: CurrencyFigures[]): Promise<void> {
+  for (const group of idle) {
+    await expect(page.locator('[data-home-overview]')).toContainText(
+      `${group.accounts} ad account${group.accounts === 1 ? '' : 's'} in ${group.currency ?? 'an unknown currency'}`,
+    );
   }
 }
 
@@ -451,16 +515,21 @@ test.describe('Home overview — Easy Fit, live', () => {
     const context = await browser.newContext({ storageState });
     const page = await context.newPage();
 
-    const { totals, accounts } = await recorder.step('edge totals read independently', () =>
-      readEdgeTotals(memberClient(), EASYFIT_BRAND_ID),
+    const { lead, idle, results, accounts } = await recorder.step(
+      'edge totals read independently',
+      () => readEdgeTotals(memberClient(), EASYFIT_BRAND_ID),
     );
+    const totals = lead.totals;
     const saved = await readSavedObjectives(EASYFIT_BRAND_ID);
     const conversationsCounted = typeof totals.conversations === 'number';
     notes.push(
       `Easy Fit: ${accounts.filter((a) => a.platform === 'meta').length} Meta + ${accounts.filter((a) => a.platform === 'google_ads').length} Google account(s); edge purchases=${totals.purchases ?? 'missing'} leads=${totals.leads ?? 'missing'} conversations=${totals.conversations ?? 'missing'} spend=${totals.spend ?? 'missing'}`,
     );
 
-    const expected = expectedObjectives(saved.objectives, totals);
+    notes.push(
+      `Easy Fit leads in ${lead.currency} (${lead.spending} of ${lead.accounts} accounts spent); idle: ${idle.map((group) => `${group.accounts} in ${group.currency}`).join(', ') || 'none'}`,
+    );
+    const expected = expectedObjectives(saved.objectives, results);
     notes.push(
       saved.tableLive
         ? `home_profiles live; goals ${saved.objectives ? 'from the saved row' : 'inferred (no row)'}`
@@ -494,7 +563,10 @@ test.describe('Home overview — Easy Fit, live', () => {
       expectModuleOrder(page, reading),
     );
     await recorder.step('each goal tile shows the edge figure', () =>
-      expectTiles(page, expected, totals),
+      expectTiles(page, expected, lead),
+    );
+    await recorder.step('money is never added across currencies: idle ones are named', () =>
+      expectIdleCurrencies(page, idle),
     );
     await recorder.step('three module blocks render without an error state', () =>
       expectModulesWithoutError(page),
@@ -541,15 +613,17 @@ test.describe('Home overview — Pink Elephant, Google Ads only, live', () => {
     const page = await context.newPage();
     const client = clientFor(session.accessToken);
 
-    const { totals, accounts } = await recorder.step('Pink: edge totals read independently', () =>
-      readEdgeTotals(client, PINK_BRAND_ID),
+    const { lead, results, accounts } = await recorder.step(
+      'Pink: edge totals read independently',
+      () => readEdgeTotals(client, PINK_BRAND_ID),
     );
+    const totals = lead.totals;
     expect(accounts.map((account) => account.platform)).toEqual(['google_ads']);
     const saved = await readSavedObjectives(PINK_BRAND_ID);
-    const expected = expectedObjectives(saved.objectives, totals);
+    const expected = expectedObjectives(saved.objectives, results);
     const primary = expected.find((objective) => objective.role === 'primary') ?? expected[0];
     notes.push(
-      `Pink: Google ${accounts[0]?.id}; edge spend=${totals.spend} ${totals.currency} leads=${totals.leads} purchases=${totals.purchases} clicks=${totals.clicks}; goals ${expected.map((o) => o.metric).join(', ')}`,
+      `Pink: Google ${accounts[0]?.id}; edge spend=${totals.spend} ${lead.currency} leads=${totals.leads} purchases=${totals.purchases} clicks=${totals.clicks}; goals ${expected.map((o) => o.metric).join(', ')}`,
     );
 
     await recorder.step('Pink: the dashboard opens on the Overview', () => openHome(page));
@@ -572,7 +646,7 @@ test.describe('Home overview — Pink Elephant, Google Ads only, live', () => {
     });
 
     await recorder.step('Pink: each goal tile shows the Google figure', () =>
-      expectTiles(page, expected, totals),
+      expectTiles(page, expected, lead),
     );
 
     await recorder.step('Pink: the spend tile prints Google’s spend in its currency', async () => {
@@ -581,7 +655,7 @@ test.describe('Home overview — Pink Elephant, Google Ads only, live', () => {
       }
       const tile = page.locator('[data-home-objective="spend"]').first();
       await expect(tile.locator('[data-home-value]')).toHaveText(
-        formatMoney(totals.spend ?? 0, totals.currency),
+        formatMoney(totals.spend ?? 0, lead.currency),
       );
     });
 

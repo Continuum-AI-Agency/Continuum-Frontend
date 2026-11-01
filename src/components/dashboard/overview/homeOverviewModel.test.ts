@@ -221,6 +221,28 @@ describe('money by currency', () => {
     expect(groups.map((group) => group.currency)).toEqual(['MXN', 'USD']);
   });
 
+  // Easy Fit (deep test 2026-10-31, lane K): one live MXN account and a Google customer beside six
+  // read-only USD accounts that spent nothing. A currency with more accounts but no spend never
+  // leads; it is the MXN money the Home should open on.
+  it('never leads with a currency whose accounts spent nothing in either week', () => {
+    const idle: PaidAccountOverview = {
+      currency: 'USD',
+      metrics: { spend: 0, roas: 0, ctr: 0, purchases: 0 },
+      comparison: { spend: { current: 0, previous: 0 } },
+    };
+    const groups = totalsByCurrency([
+      { currency: 'USD', overview: idle },
+      { currency: 'USD', overview: idle },
+      { currency: 'USD', overview: idle },
+      { currency: 'MXN', overview: easyFit },
+      { currency: 'MXN', overview: { ...idle, currency: 'MXN' } },
+    ]);
+    expect(groups.map((group) => [group.currency, group.spending])).toEqual([
+      ['MXN', 1],
+      ['USD', 0],
+    ]);
+  });
+
   it('counts results across currencies for the goal, and takes money from the lead currency only', () => {
     const groups = totalsByCurrency([
       { currency: 'MXN', overview: easyFit },
