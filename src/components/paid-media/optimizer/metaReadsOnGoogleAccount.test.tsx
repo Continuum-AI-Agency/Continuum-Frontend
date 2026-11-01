@@ -16,7 +16,13 @@ const UNLISTED = 'act_999';
 const BRAND = '8e5b7185-e43f-4150-b763-b86c4f5297a0';
 
 const ACCOUNTS = [
-  { platform: 'google_ads', account_id: GOOGLE, name: 'Pink Elephant', status: null, currency: 'MXN' },
+  {
+    platform: 'google_ads',
+    account_id: GOOGLE,
+    name: 'Pink Elephant',
+    status: null,
+    currency: 'MXN',
+  },
   { platform: 'meta_ads', account_id: META, name: 'VIVO47 MKT', status: null, currency: 'MXN' },
 ];
 

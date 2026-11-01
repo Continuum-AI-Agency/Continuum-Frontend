@@ -15,9 +15,7 @@ describe('suggestEmptyMessage', () => {
   });
 
   it('never tells a Google account it groups ad sets', () => {
-    expect(suggestEmptyMessage(null, 'adset', { platform: 'google_ads' })).not.toMatch(
-      /ad sets?/i,
-    );
+    expect(suggestEmptyMessage(null, 'adset', { platform: 'google_ads' })).not.toMatch(/ad sets?/i);
     expect(suggestEmptyMessage('not_permitted', 'adset', { platform: 'google_ads' })).not.toMatch(
       /ad sets?/i,
     );
