@@ -50,6 +50,11 @@ function ChecklistRow({ step }: { step: DashboardSetupStep }) {
 }
 
 export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
+  // The count heads the steps it counts. The guidance steps are never counted (nothing records
+  // them as done), so under the same count and checkbox "2 of 3 done" headed five steps
+  // (PP-DT-C-setup-checklist-2-of-3-over-5-steps): they are set apart as optional.
+  const tracked = setup.steps.filter((step) => step.tracked);
+  const optional = setup.steps.filter((step) => !step.tracked);
   return (
     <section
       aria-label="Guided setup checklist"
@@ -62,11 +67,21 @@ export function SetupChecklist({ setup }: { setup: DashboardSetupState }) {
           {setup.completedCount} of {setup.trackedCount} done
         </span>
       </header>
-      <ul className="mt-2 divide-y divide-border/60">
-        {setup.steps.map((step) => (
+      <ul className="mt-2 divide-y divide-border/60" data-testid="setup-tracked-steps">
+        {tracked.map((step) => (
           <ChecklistRow key={step.id} step={step} />
         ))}
       </ul>
+      {optional.length > 0 ? (
+        <div className="mt-3" data-testid="setup-optional-steps">
+          <h3 className="text-xs font-medium text-muted-foreground">Optional next steps</h3>
+          <ul className="mt-1 divide-y divide-border/60">
+            {optional.map((step) => (
+              <ChecklistRow key={step.id} step={step} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
