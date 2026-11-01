@@ -64,6 +64,9 @@ type OptimizerActionFeedProps = {
   windowDays?: OptimizerFeedWindowDays;
   /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
   controls?: ReactNode;
+  /** Drawn under the feed once it has answered — never under the loading skeleton, which the
+   *  timeline replaces at another height and would push it down (CLS on a phone). */
+  footer?: ReactNode;
 };
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -337,6 +340,7 @@ export function OptimizerActionFeed({
   brandId,
   windowDays = 7,
   controls,
+  footer,
 }: OptimizerActionFeedProps) {
   const actionsQuery = useOptimizerActions(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
@@ -361,6 +365,7 @@ export function OptimizerActionFeed({
           onRetry={() => void actionsQuery.refetch()}
           subject="the action feed"
         />
+        {footer}
       </div>
     );
   }
@@ -375,6 +380,7 @@ export function OptimizerActionFeed({
           media={<ListChecksIcon aria-hidden="true" />}
           description="Budget writes, pauses, setting edits and recommendation decisions appear here with their before, their after, and a one-click undo."
         />
+        {footer}
       </div>
     );
   }
@@ -411,6 +417,7 @@ export function OptimizerActionFeed({
         onLoadMore={() => void actionsQuery.fetchNextPage()}
         noun="actions"
       />
+      {footer}
     </div>
   );
 }

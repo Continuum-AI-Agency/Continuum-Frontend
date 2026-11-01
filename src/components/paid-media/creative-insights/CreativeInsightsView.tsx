@@ -19,6 +19,7 @@ import { WhatsWorkingSynopsis } from '@/components/paid-media/dashboard/whats-wo
 import type { VerdictsByKind } from '@/components/paid-media/dashboard/whats-working/whatsWorkingModel';
 import { AdsetAngleStanding } from '@/components/paid-media/optimizer/charts/AdsetAngleStanding';
 import type { AdsetAngleRow } from '@/components/paid-media/optimizer/charts/angleStanding';
+import { SkeletonText } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import type {
@@ -231,7 +232,6 @@ function AngleTableRow({ row }: { row: AccountAngleRow }) {
 function CommunicationAngles({
   rows,
   neverTested,
-  loading,
   error,
   lookback,
   funnel,
@@ -239,7 +239,6 @@ function CommunicationAngles({
 }: {
   rows: AccountAngleRow[];
   neverTested: Array<{ angleId: string; label: string }>;
-  loading: boolean;
   error: boolean;
   lookback: InsightsWindow;
   funnel: FunnelTab;
@@ -256,9 +255,7 @@ function CommunicationAngles({
   return (
     <section className="space-y-2" data-testid="creative-insights-angles">
       <SectionHeading sub={notes.join(' · ')} title="Communication angles" />
-      {loading ? (
-        <p className="text-muted-foreground text-xs">Loading angles…</p>
-      ) : error ? (
+      {error ? (
         <p className="text-muted-foreground text-xs">
           The angle read did not answer. Try again in a moment.
         </p>
@@ -344,6 +341,46 @@ function AdsSection({ ads, currency }: { ads: CreativeInsightsAdsState; currency
   );
 }
 
+/**
+ * The page body while the angle reads load. Every section below the header grows when those
+ * reads land — the read is inserted above the angle table, and the table, the per-ad-set list and
+ * the ads grow under it — so none of them is laid out yet: this block is replaced whole, and
+ * nothing that was on screen moves (PP-DT-C-creative-insights-layout-shift-0.955, CLS 0.955 on a
+ * phone). Borderless bars, never a card.
+ */
+function CreativeInsightsLoading() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex flex-col gap-8"
+      data-testid="creative-insights-loading"
+      role="status"
+    >
+      <span className="sr-only">Loading Creative Insights…</span>
+      <div aria-hidden="true" className="max-w-[64ch] space-y-1.5">
+        <p className="text-xs">
+          <SkeletonText>This week's read · 12 ads with enough delivery</SkeletonText>
+        </p>
+        <p className="text-base leading-snug">
+          <SkeletonText wrap>
+            Proof by someone like you wins most often. Discount offer carries 72% of the spend.
+          </SkeletonText>
+        </p>
+      </div>
+      <div aria-hidden="true" className="space-y-2">
+        <p className="text-sm">
+          <SkeletonText>Communication angles</SkeletonText>
+        </p>
+        {['a1', 'a2', 'a3', 'a4'].map((key) => (
+          <p className="border-border/60 border-t py-2.5 text-xs" key={key}>
+            <SkeletonText>Proof by someone like you · 6 ads · 24% · 83%</SkeletonText>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CreativeInsightsView(props: CreativeInsightsViewProps) {
   const eligibleAds = props.angleRows.reduce((sum, row) => sum + row.ads, 0);
   return (
@@ -365,37 +402,37 @@ export function CreativeInsightsView(props: CreativeInsightsViewProps) {
         {props.explorer}
       </header>
 
-      {props.anglesLoading ? null : (
-        <TheRead eligibleAds={eligibleAds} lookback={props.lookback} read={props.read} />
-      )}
+      {props.anglesLoading ? (
+        <CreativeInsightsLoading />
+      ) : (
+        <>
+          <TheRead eligibleAds={eligibleAds} lookback={props.lookback} read={props.read} />
 
-      <CommunicationAngles
-        error={props.anglesError}
-        funnel={props.funnel}
-        loading={props.anglesLoading}
-        neverTested={props.neverTested}
-        rows={props.angleRows}
-        lookback={props.lookback}
-        scope={props.scope}
-      />
-
-      <section className="space-y-2" data-testid="creative-insights-next">
-        <SectionHeading
-          sub="what each ad set's own ads have proven"
-          title="Angle to run next, per ad set"
-        />
-        {props.anglesLoading ? (
-          <p className="text-muted-foreground text-xs">Loading ad sets…</p>
-        ) : (
-          <AdsetAngleStanding
-            currency={props.currency}
-            emptyMessage="Appears once this account's ad sets have analyzed creatives."
-            rows={props.nextRows}
+          <CommunicationAngles
+            error={props.anglesError}
+            funnel={props.funnel}
+            neverTested={props.neverTested}
+            rows={props.angleRows}
+            lookback={props.lookback}
+            scope={props.scope}
           />
-        )}
-      </section>
 
-      <AdsSection ads={props.ads} currency={props.currency} />
+          <section className="space-y-2" data-testid="creative-insights-next">
+            <SectionHeading
+              sub="what each ad set's own ads have proven"
+              title="Angle to run next, per ad set"
+            />
+            <AdsetAngleStanding
+              currency={props.currency}
+              emptyMessage="Appears once this account's ad sets have analyzed creatives."
+              rows={props.nextRows}
+            />
+          </section>
+
+          {/* Last on the page, so its own read landing later grows nothing above it. */}
+          <AdsSection ads={props.ads} currency={props.currency} />
+        </>
+      )}
     </div>
   );
 }

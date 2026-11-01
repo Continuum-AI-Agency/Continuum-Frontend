@@ -13,6 +13,8 @@
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
 import { useState } from 'react';
+import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 import { cn } from '@/lib/utils';
 import { OptimizerActionFeed } from './OptimizerActionFeed';
 import { OptimizerLogs } from './OptimizerLogs';
@@ -63,6 +65,23 @@ function Segmented<TValue extends string | number>({
   );
 }
 
+/** Where the optimizer's moves can be sent instead of read here. The feed draws it once it has
+ *  answered: under the loading skeleton, the timeline that replaced the skeleton pushed it down
+ *  (PP-DT-C-creative-insights-layout-shift-0.955, Activity CLS 0.151 on a phone). */
+function ActivityNotifications({ brandId }: { brandId: string }) {
+  return (
+    <div className="mt-4 border-t border-border/60 pt-4">
+      <SectionHeader title="Notifications" />
+      <p className="mt-2 text-xs text-muted-foreground">
+        Get a Slack message when the optimizer moves budget, instead of checking this log.
+      </p>
+      <div className="mt-3">
+        <OptimizerNotificationsSection brandId={brandId} />
+      </div>
+    </div>
+  );
+}
+
 export function OptimizerActivity({ brandId }: { brandId: string }) {
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
@@ -81,9 +100,16 @@ export function OptimizerActivity({ brandId }: { brandId: string }) {
     </>
   );
 
+  const footer = <ActivityNotifications brandId={brandId} />;
+
   return feed === 'actions' ? (
-    <OptimizerActionFeed brandId={brandId} controls={controls} windowDays={windowDays} />
+    <OptimizerActionFeed
+      brandId={brandId}
+      controls={controls}
+      footer={footer}
+      windowDays={windowDays}
+    />
   ) : (
-    <OptimizerLogs brandId={brandId} controls={controls} windowDays={windowDays} />
+    <OptimizerLogs brandId={brandId} controls={controls} footer={footer} windowDays={windowDays} />
   );
 }
