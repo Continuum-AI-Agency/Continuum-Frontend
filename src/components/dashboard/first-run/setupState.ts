@@ -48,7 +48,8 @@ export interface DashboardSetupState {
   brandBookStatus: BrandBookStatus | null;
   // Every tracked step complete → drop the first-run surface entirely.
   isComplete: boolean;
-  readiness: ReadinessSummary;
+  /** Null while the brand's readiness has never been scored. */
+  readiness: ReadinessSummary | null;
 }
 
 export interface DashboardSetupSignals {
