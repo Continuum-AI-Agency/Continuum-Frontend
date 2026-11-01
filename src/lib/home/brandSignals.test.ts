@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   accountCountsFrom,
   businessFrom,
+  hasReadableAccount,
   portfolioSignalsFrom,
   savedGoalFrom,
 } from './brandSignals';
@@ -24,6 +25,33 @@ describe('accountCountsFrom', () => {
 
   it('counts nothing for an empty summary', () => {
     expect(accountCountsFrom({})).toEqual({ ads: 0, organic: 0 });
+  });
+});
+
+// PP-DT-E-home-setup-mode-mcc-mismatch (deep test 2026-10-31): The Sound Vault's only assignment
+// is a Google Ads manager (MCC). The setup gate (hasAnyAccount) counted it, so the Home rendered
+// the data overview with no checklist, while the reading (accountCountsFrom) did not and said
+// "Setting up · Opens with Setup". One notion of an account the Home reads, for both.
+describe('hasReadableAccount — the one notion of an assigned account', () => {
+  const mccOnly = { googleAds: { accounts: [account('ads_customer', 'manager')] } };
+
+  it('does not count a Google Ads manager, as the reading does not', () => {
+    expect(hasReadableAccount(mccOnly)).toBe(false);
+    expect(accountCountsFrom(mccOnly)).toEqual({ ads: 0, organic: 0 });
+  });
+
+  it('counts an ad account or an organic profile', () => {
+    expect(hasReadableAccount({ googleAds: { accounts: [account('ads_customer')] } })).toBe(true);
+    expect(
+      hasReadableAccount({ instagram: { accounts: [account('meta_instagram_account')] } }),
+    ).toBe(true);
+  });
+
+  it('reads nothing from a missing summary or Google Analytics alone', () => {
+    expect(hasReadableAccount(null)).toBe(false);
+    expect(hasReadableAccount({ googleAnalytics: { accounts: [account('ga4_property')] } })).toBe(
+      false,
+    );
   });
 });
 
