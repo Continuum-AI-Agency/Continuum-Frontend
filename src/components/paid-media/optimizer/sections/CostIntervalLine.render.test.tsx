@@ -35,6 +35,20 @@ describe('CostIntervalLine', () => {
     expect(figure(container, 'queue.a2.detail.cost')).toBeNull();
   });
 
+  // PP-DT-E-google-portfolio-money-without-currency: Google's data-driven credit is fractional,
+  // and the line read "from 420.588645 events" on Easy Fit 2026's Google portfolio.
+  it('rounds a fractional event count to one decimal', () => {
+    const { container } = render(
+      <CostIntervalLine
+        adsetId="a4"
+        ci={{ cpa: 36.73, lo: 33.4, hi: 40.4, events: 420.588645 }}
+        currency="MXN"
+      />,
+    );
+    expect(container.textContent).toContain('from 420.6 events');
+    expect(container.textContent).not.toContain('420.588645');
+  });
+
   it('renders nothing when there is no interval at all', () => {
     const { container } = render(<CostIntervalLine adsetId="a3" ci={null} currency="USD" />);
     expect(container.innerHTML).toBe('');
