@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { type BrandEntitlements, brandEntitlementsSchema, type ProductCode } from '@continuum/contracts';
+import {
+  type BrandEntitlements,
+  brandEntitlementsSchema,
+  type ProductCode,
+} from '@continuum/contracts';
 import {
   type BrandAccess,
   billingHref,
@@ -94,6 +98,25 @@ describe('decideProductGate — billing live (the product matrix)', () => {
   test('a brand with no product is sent to Billing everywhere — a high tier grants nothing', () => {
     const decisions = decide({ ...live([]), legacyTier: 3 });
     expect(Object.values(decisions).every((decision) => decision.kind === 'billing')).toBe(true);
+  });
+});
+
+describe('decideProductGate — Campaign Canvas (PP-DT-C-campaign-canvas-skips-product-gate)', () => {
+  test('needs Performance Plus like every /scale page, and offers the way back to the Canvas', () => {
+    expect(decideProductGate('campaign-canvas' as GatedSurface, live(['organic_agent']))).toEqual({
+      kind: 'billing',
+      href: '/settings?section=billing&need=paid_media&from=%2Fscale%2Fcampaign-canvas',
+    });
+    expect(decideProductGate('campaign-canvas' as GatedSurface, live(['paid_media']))).toEqual({
+      kind: 'allow',
+    });
+  });
+
+  test('keeps the tier gate of the other /scale pages while billing is not live', () => {
+    expect(decideProductGate('campaign-canvas' as GatedSurface, notLive(0)).kind).toBe('legacy');
+    expect(decideProductGate('campaign-canvas' as GatedSurface, notLive(1))).toEqual({
+      kind: 'allow',
+    });
   });
 });
 
