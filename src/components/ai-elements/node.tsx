@@ -64,11 +64,12 @@ export const Node = ({ handles, extraHandles, className, selected, ...props }: N
 
 export type NodeHeaderProps = ComponentProps<typeof CardHeader>;
 
+// A quiet neutral strip, the surface the headers' muted labels and tinted icon chips are drawn for.
+// It was bg-secondary, the upstream default, and this theme's --secondary is the sky-500 brand cyan:
+// every Campaign canvas header label read 2.34:1 in light and 1.08:1 in dark
+// (PP-DT-E-canvas-map-node-contrast). The other canvases already paint their own.
 export const NodeHeader = ({ className, ...props }: NodeHeaderProps) => (
-  <CardHeader
-    className={cn('gap-0.5 rounded-t-md border-b bg-secondary p-3!', className)}
-    {...props}
-  />
+  <CardHeader className={cn('gap-0.5 rounded-t-md border-b bg-muted p-3!', className)} {...props} />
 );
 
 export type NodeTitleProps = ComponentProps<typeof CardTitle>;
