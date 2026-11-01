@@ -39,6 +39,8 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // ---------------------------------------------------------------------------
 
 const EASYFIT_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+/** Pink Elephant: one recommend portfolio, Google writes off — the client executes. */
+const PINK_BRAND_ID = '8e5b7185-e43f-4150-b763-b86c4f5297a0';
 const CONCURRENCY = 6;
 
 const { serviceRoleKey } = loadProdSupabaseEnv();
@@ -268,6 +270,31 @@ async function main() {
     'every waiting queue shows up as an opportunity',
     missedQueues.length === 0 ? 'PASS' : 'FAIL',
     missedQueues.map((read) => read.name).join(', ') || undefined,
+  );
+
+  // PP-DT-E-home-approve-client-executes (product default 2026-10-31): a brand whose acting
+  // portfolios all have their platform writes off is read as Continuum recommends — the client
+  // applies the changes — never as "You approve" an OK that applies nothing.
+  const clientExecutes = reads.filter((read) => {
+    const acting = read.portfolios.filter(
+      (portfolio) => portfolio.status === 'active' && portfolio.applyMode !== 'observe',
+    );
+    return (
+      acting.length > 0 &&
+      acting.every((portfolio) => portfolio.canWrite === false) &&
+      read.reading.issues.length === 0
+    );
+  });
+  const misread = clientExecutes.filter(
+    (read) =>
+      read.reading.mode !== 'recommend' ||
+      read.reading.modeReason !== 'Continuum recommends; your team or client applies the changes.',
+  );
+  const pink = reads.find((read) => read.brandId === PINK_BRAND_ID);
+  recorder.record(
+    'a brand Continuum cannot write for reads as Continuum recommends (Pink Elephant)',
+    misread.length === 0 && pink?.reading.mode === 'recommend' ? 'PASS' : 'FAIL',
+    `${clientExecutes.length} such brands (${clientExecutes.map((read) => read.name).join(', ')}); Pink reads ${pink?.reading.mode ?? 'nothing'} — "${pink?.reading.modeReason ?? ''}"${misread.length ? `; misread: ${misread.map((read) => `${read.name} ${read.reading.mode}`).join(', ')}` : ''}`,
   );
 
   const easyFit = reads.find((read) => read.brandId === EASYFIT_BRAND_ID);
