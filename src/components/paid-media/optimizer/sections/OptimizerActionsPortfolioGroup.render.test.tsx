@@ -617,6 +617,42 @@ describe("queueWaitingCount — the list read's definition", () => {
   });
 });
 
+// PP-DT-C-actions-search-leaves-budget-table-and-counts: the search filtered the item rows only.
+// A query that matched nothing left the reallocation story ("Moving … from 7 ad sets") and the
+// budget moves on screen, shrank the list with no word, and never said nothing matched.
+describe('OptimizerActionsPortfolioGroup — searching the queue', () => {
+  const search = (value: string) =>
+    fireEvent.change(screen.getByPlaceholderText('Search name, id, kind, reason'), {
+      target: { value },
+    });
+
+  it('a search that matches nothing says so, and shows nothing it did not search', () => {
+    renderGroup();
+    expect(screen.getAllByText(/Budget Set/).length).toBeGreaterThan(0);
+
+    search('zzzz-nothing');
+
+    expect(screen.getByTestId('queue-search-status').textContent).toBe(
+      'No actions match “zzzz-nothing”.',
+    );
+    expect(screen.queryAllByText(/Budget Set/)).toHaveLength(0);
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(0);
+  });
+
+  it('a search that matches says how many actions it shows', () => {
+    renderGroup();
+    search('Budget Set');
+    expect(screen.getByTestId('queue-search-status').textContent).toMatch(
+      /^\d+ actions? match(es)? “Budget Set”\.$/,
+    );
+  });
+
+  it('says nothing about a search before one is typed', () => {
+    renderGroup();
+    expect(screen.queryByTestId('queue-search-status')).toBeNull();
+  });
+});
+
 describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
   it('renders the budget move, the pause rec, and the ad-level danger affordance', () => {
     renderGroup();
