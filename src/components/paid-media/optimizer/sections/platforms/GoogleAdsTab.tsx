@@ -301,6 +301,24 @@ export function GoogleAdsTabView({
           title="No Google Ads account granted to this brand"
         />
       );
+    case 'no-role':
+      return (
+        <EmptyState
+          body="Reading Google Ads needs the Operator, Admin or Owner role on this brand, and yours is Viewer. Ask an owner or admin of the brand to change it."
+          connect={false}
+          testId="google-empty-no-role"
+          title="Your role on this brand can’t read Google Ads"
+        />
+      );
+    case 'no-access':
+      return (
+        <EmptyState
+          body="This brand lists the account, but no live Google connection grants it to the brand. Grant it again in Settings → Integrations."
+          connect
+          testId="google-empty-no-access"
+          title={`No live Google grant reaches ${state.account.name ?? state.account.account_id}`}
+        />
+      );
     case 'error':
       return (
         <EmptyState
@@ -361,10 +379,16 @@ export function GoogleCampaignTypeBreakdown({ state }: { state: GoogleAdsOvervie
       </p>
     );
   }
-  if (state.status === 'error') {
+  if (state.status === 'error' || state.status === 'no-role' || state.status === 'no-access') {
+    const why =
+      state.status === 'error'
+        ? state.message
+        : state.status === 'no-role'
+          ? 'reading Google Ads needs the Operator, Admin or Owner role on this brand.'
+          : `no live Google grant reaches ${state.account.name ?? state.account.account_id}.`;
     return (
       <p className="px-1 text-muted-foreground text-xs" data-testid="google-breakdown-error">
-        The split by campaign type could not be read: {state.message}
+        The split by campaign type could not be read: {why}
       </p>
     );
   }

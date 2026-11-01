@@ -50,17 +50,22 @@ export async function invokeGoogleMetrics(body: Record<string, unknown>): Promis
     { body: { platform: 'google-ads', ...body } },
   );
   if (error) {
-    const { message, code } = await readEdgeError(error, 'The Google Ads read did not answer.');
-    throw new GoogleReadError(message, code);
+    const { message, code, status } = await readEdgeError(
+      error,
+      'The Google Ads read did not answer.',
+    );
+    throw new GoogleReadError(message, code, status);
   }
   return data;
 }
 
-/** A failed Google read, with the edge's typed code (`TOKEN_EXPIRED`: Google refused the login). */
+/** A failed Google read, with the edge's typed code (`TOKEN_EXPIRED`: Google refused the login)
+ *  and its HTTP status (404: no access for this caller — see googleReadFailure). */
 export class GoogleReadError extends Error {
   constructor(
     message: string,
     readonly code: string | null,
+    readonly status: number | null = null,
   ) {
     super(message);
     this.name = 'GoogleReadError';

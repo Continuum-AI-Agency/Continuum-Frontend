@@ -13,27 +13,31 @@ export async function readEdgeErrorMessage(error: unknown, fallback: string): Pr
 }
 
 /**
- * The message AND the typed `errorCode` an edge function wrote (`IntegrationErrorCode`), when it
- * wrote one: a refused Google login answers TOKEN_EXPIRED so the page can offer to reconnect
- * instead of printing a dead end (PP-DT-B-google-error-states-conflated).
+ * The message, the typed `errorCode` (`IntegrationErrorCode`) and the HTTP status an edge
+ * function answered, when it did: a refused Google login answers TOKEN_EXPIRED so the page can
+ * offer to reconnect, and a 404 from a Google read is "no access", whose cause the page tells
+ * apart (PP-DT-B-google-error-states-conflated).
  */
 export async function readEdgeError(
   error: unknown,
   fallback: string,
-): Promise<{ message: string; code: string | null }> {
+): Promise<{ message: string; code: string | null; status: number | null }> {
   if (!(error instanceof FunctionsHttpError)) {
     return {
       message: error instanceof Error && error.message ? error.message : fallback,
       code: null,
+      status: null,
     };
   }
 
   const context = error.context as unknown;
   if (!context || typeof context !== 'object')
-    return { message: error.message || fallback, code: null };
+    return { message: error.message || fallback, code: null, status: null };
 
+  const answered = Reflect.get(context, 'status');
+  const status = typeof answered === 'number' ? answered : null;
   const json = Reflect.get(context, 'json');
-  if (typeof json !== 'function') return { message: error.message || fallback, code: null };
+  if (typeof json !== 'function') return { message: error.message || fallback, code: null, status };
 
   try {
     const body = await json.call(context);
@@ -41,11 +45,11 @@ export async function readEdgeError(
       const message = Reflect.get(body, 'error');
       const code = Reflect.get(body, 'errorCode');
       if (typeof message === 'string' && message.trim())
-        return { message, code: typeof code === 'string' ? code : null };
+        return { message, code: typeof code === 'string' ? code : null, status };
     }
   } catch {
     // Body already consumed or not JSON: fall through to the generic message.
   }
 
-  return { message: error.message || fallback, code: null };
+  return { message: error.message || fallback, code: null, status };
 }

@@ -355,4 +355,18 @@ describe('GoogleAdsTabView — no access, told apart', () => {
     expect(empty.textContent).toContain('Grant it again in Settings → Integrations');
     expect(empty.querySelector('a')?.textContent).toBe('Connect Google Ads');
   });
+
+  it('says under the multi-platform frame why the split is missing', () => {
+    const viewer = render(
+      <GoogleCampaignTypeBreakdown state={{ status: 'no-role', account: VIVO_47 }} />,
+    );
+    expect(viewer.getByTestId('google-breakdown-error').textContent).toContain('Operator');
+    cleanup();
+    const ungranted = render(
+      <GoogleCampaignTypeBreakdown state={{ status: 'no-access', account: VIVO_47 }} />,
+    );
+    expect(ungranted.getByTestId('google-breakdown-error').textContent).toContain(
+      'no live Google grant reaches Vivo 47',
+    );
+  });
 });
