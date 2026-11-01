@@ -113,7 +113,7 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
                   className={cn(
                     'rounded-full border px-2 py-0.5 font-mono font-medium tabular-nums focus-visible:outline-2 focus-visible:outline-primary',
                     selected
-                      ? 'border-primary bg-primary/12 text-primary-ink'
+                      ? 'border-primary bg-primary/12 text-foreground'
                       : 'border-border bg-card text-muted-foreground hover:text-foreground',
                     version.status === 'denied' && !selected && 'line-through',
                   )}
@@ -157,7 +157,7 @@ export function VersionLineBar({ state }: { state: VersionLineState }) {
           className={cn(
             'ml-auto inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
             state.compare
-              ? 'border-primary bg-primary/12 text-primary-ink'
+              ? 'border-primary bg-primary/12 text-foreground'
               : 'border-border bg-card text-muted-foreground hover:text-foreground',
           )}
           data-testid="version-compare"

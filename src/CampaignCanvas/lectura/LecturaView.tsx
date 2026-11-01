@@ -815,7 +815,7 @@ function LecturaPane({
                 onClick={() => setLayout(value)}
                 className={cn(
                   'rounded-md px-2.5 py-1 font-medium focus-visible:outline-2 focus-visible:outline-primary',
-                  layout === value ? 'bg-primary/12 text-primary-ink' : 'text-muted-foreground',
+                  layout === value ? 'bg-primary/12 text-foreground' : 'text-muted-foreground',
                 )}
               >
                 {value === 'cards' ? 'Cards' : 'Table'}

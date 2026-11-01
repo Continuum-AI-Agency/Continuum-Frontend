@@ -173,7 +173,7 @@ export function CanvasViewToggle({
             onClick={() => onChange(value)}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40',
-              view === value ? 'bg-primary/12 text-primary-ink' : 'text-muted-foreground',
+              view === value ? 'bg-primary/12 text-foreground' : 'text-muted-foreground',
             )}
             data-view={value}
           >
