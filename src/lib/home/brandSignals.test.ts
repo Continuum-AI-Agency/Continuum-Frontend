@@ -58,6 +58,38 @@ describe('portfolioSignalsFrom', () => {
     ]);
   });
 
+  // PP-DT-E-home-approve-client-executes: Pink Elephant's portfolio (platforms google_ads,
+  // platform_writes {google_ads: false}) is one Continuum cannot write for.
+  it('reads whether Continuum may write any platform the portfolio is on', () => {
+    const canWrite = (row: Record<string, unknown>) =>
+      portfolioSignalsFrom([
+        {
+          id: 'p',
+          name: 'P',
+          apply_mode: 'recommend',
+          status: 'active',
+          ...row,
+        },
+      ])[0]?.canWrite;
+    expect(canWrite({ platforms: ['google_ads'], platform_writes: { google_ads: false } })).toBe(
+      false,
+    );
+    expect(canWrite({ platforms: ['google_ads'], platform_writes: {} })).toBe(false);
+    expect(canWrite({ platforms: ['google_ads'], platform_writes: { google_ads: true } })).toBe(
+      true,
+    );
+    expect(canWrite({ platforms: ['meta'], platform_writes: {} })).toBe(true);
+    expect(
+      canWrite({
+        platforms: ['meta', 'google_ads'],
+        platform_writes: { meta: false, google_ads: false },
+      }),
+    ).toBe(false);
+    // A row from before the projection: every such portfolio is Meta, which writes unless
+    // its row is switched off.
+    expect(canWrite({})).toBe(true);
+  });
+
   it('drops a row it cannot read instead of failing the Home', () => {
     expect(portfolioSignalsFrom([{ id: 'x', apply_mode: 'mystery' }, null])).toEqual([]);
     expect(portfolioSignalsFrom({ error: 'nope' })).toEqual([]);

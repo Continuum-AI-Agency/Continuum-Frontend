@@ -171,6 +171,55 @@ describe('readBrand — the mode', () => {
   });
 });
 
+// PP-DT-E-home-approve-client-executes (deep test 2026-10-31; product default taken that day):
+// Pink Elephant's one portfolio recommends with its Google writes off — the client executes — and
+// the Home read "You approve — 1 portfolio proposes changes for your OK", an OK that applies
+// nothing. When Continuum cannot write for the brand, the Home reads it as Continuum recommends.
+describe('readBrand — a brand Continuum cannot write for', () => {
+  it('recommends where every acting portfolio has its platform writes off', () => {
+    const reading = readBrand(
+      brand({ portfolios: [portfolio({ canWrite: false, pendingRecommendations: 6 })] }),
+    );
+    expect(reading.mode).toBe('recommend');
+    expect(reading.modeLabel).toBe('Continuum recommends');
+    expect(reading.modeReason).toBe(
+      'Continuum recommends; your team or client applies the changes.',
+    );
+    expect(reading.opportunities[0]?.title).toBe('6 recommendations waiting in Leads');
+  });
+
+  it('reads an approval chain as nothing to approve when Continuum can write nothing', () => {
+    const reading = readBrand(
+      brand({ approvalRequired: true, portfolios: [portfolio({ canWrite: false })] }),
+    );
+    expect(reading.mode).toBe('recommend');
+  });
+
+  it('never operates a brand whose autopilot cannot write', () => {
+    const reading = readBrand(
+      brand({ portfolios: [portfolio({ applyMode: 'autopilot', canWrite: false })] }),
+    );
+    expect(reading.mode).toBe('recommend');
+  });
+
+  it('still asks for approval for the portfolios Continuum can write', () => {
+    const reading = readBrand(
+      brand({
+        portfolios: [
+          portfolio({ id: 'p1', canWrite: false }),
+          portfolio({ id: 'p2', name: 'Tours', canWrite: true }),
+        ],
+      }),
+    );
+    expect(reading.mode).toBe('approve');
+    expect(reading.modeReason).toBe('1 portfolio proposes changes for your OK.');
+  });
+
+  it('reads a portfolio that says nothing about its writes as one Continuum can write', () => {
+    expect(readBrand(brand({ portfolios: [portfolio()] })).mode).toBe('approve');
+  });
+});
+
 describe('readBrand — the order of the modules', () => {
   it('opens an organic-only brand with Organic +', () => {
     const reading = readBrand(brand({ accounts: { ads: 0, organic: 2 } }));
