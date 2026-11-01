@@ -80,11 +80,13 @@ describe('AdAccountSelector', () => {
     );
 
     await waitFor(() => {
+      // The read carries the client time limit's signal (routeFetch, appRouteTimeoutPolicy).
       expect(global.fetch).toHaveBeenCalledWith('/api/paid-media/timeline/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId: 'brand_123' }),
         cache: 'no-store',
+        signal: expect.any(AbortSignal),
       });
     });
 

@@ -223,3 +223,32 @@ export const RENDER_TIMEOUT_MS = 300_000;
 /** The Backend client's bound: a GET is a read; anything else may be a job. */
 export const backendTimeoutPolicy: TimeoutPolicy = (_url, method) =>
   method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+
+/**
+ * The app's own Next routes that read an ad platform through the reporting edges: each answers a
+ * POST that reads, and a cold one goes live to Meta or Google — "well past the 8 s read bound"
+ * when the Explorer's skeletons hung (PP-DT-C-unfinished-dashboard-hang-and-raw-error). A route is
+ * named here with every route under it.
+ */
+const PLATFORM_READ_ROUTES: readonly string[] = [
+  '/api/paid-media/account-insights',
+  '/api/paid-media/campaign-insights',
+  '/api/paid-media/budget-pacing',
+  '/api/paid-media/timeline',
+];
+
+/** The bound for the app's own /api routes, by URL: a platform read gets the platform-read
+ *  budget, any other GET is a read, and anything else may be a job. Relative URLs are the
+ *  browser's own origin. */
+export const appRouteTimeoutPolicy: TimeoutPolicy = (url, method) => {
+  let path: string;
+  try {
+    path = new URL(url, 'http://app.local').pathname;
+  } catch {
+    return method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+  }
+  if (PLATFORM_READ_ROUTES.some((route) => path === route || path.startsWith(`${route}/`))) {
+    return PLATFORM_READ_TIMEOUT_MS;
+  }
+  return method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+};

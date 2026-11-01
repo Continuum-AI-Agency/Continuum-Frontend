@@ -24,6 +24,7 @@ import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandPro
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from './paid-setup-diagnostics';
 
@@ -279,7 +280,7 @@ export function AdAccountSelector({
 
     const fetchAccounts = async () => {
       try {
-        const response = await fetch('/api/paid-media/timeline/accounts', {
+        const response = await paidMediaRouteFetch('/api/paid-media/timeline/accounts', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
