@@ -66,6 +66,7 @@ import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { platformName } from '../entityNoun';
 import { figureProps, formatCurrency } from '../format';
 import { itemWritable, proposalsOnlyNote } from '../platformWrites';
+import { portfolioCurrency } from '../portfolioCurrency';
 import {
   actionRoute,
   applyModeExplainer,
@@ -915,9 +916,11 @@ export function OptimizerActionsPortfolioGroup({
   const [generatingIds, setGeneratingIds] = React.useState<ReadonlySet<string>>(new Set());
   const [generateNotes, setGenerateNotes] = React.useState<ReadonlyMap<string, string>>(new Map());
   const [implementingKey, setImplementingKey] = React.useState<string | null>(null);
-  // The portfolio's own account names its money: a Google portfolio listed beside the selected
-  // Meta account is in its Google customer's currency.
-  const currency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
+  // The portfolio names its own money: a Google portfolio listed beside the selected Meta account
+  // is in its Google customer's currency, which only the portfolio carries (the customer's asset
+  // row has none). Its own account's code is the fallback.
+  const accountCurrency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
+  const currency = portfolioCurrency(portfolio, accountCurrency);
   const noteFor = React.useCallback((recId: string, note: string | null) => {
     setGenerateNotes((prev) => {
       const next = new Map(prev);

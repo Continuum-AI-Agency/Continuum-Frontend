@@ -532,7 +532,6 @@ export function OptimizerTab({
         <PortfolioDetailWorkspace
           adAccountId={adAccountId}
           brandId={brandId}
-          currency={currency}
           chartMetric={metric}
           onClose={closePortfolio}
           onMetricChange={setMetric}

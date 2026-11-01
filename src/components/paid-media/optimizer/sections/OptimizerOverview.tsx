@@ -49,6 +49,7 @@ import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
 import { KpiDelta, KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
 import {
@@ -675,7 +676,7 @@ export function OptimizerOverview({
           onSelectPortfolio={onSelectPortfolio}
           pacingById={pacingById}
           portfolios={portfolios}
-          rowCurrency={() => currency}
+          rowCurrency={(portfolio) => portfolioCurrency(portfolio, currency)}
           rowPlatforms={(portfolio) =>
             memberPlatforms(memberStates.get(portfolio.id), OPTIMIZER_MANAGED_PLATFORM)
           }

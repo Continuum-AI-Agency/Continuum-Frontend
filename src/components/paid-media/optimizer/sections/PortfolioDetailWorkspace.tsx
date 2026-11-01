@@ -59,9 +59,11 @@ import { DateRangeControl } from '../components/DateRangeControl';
 import { TEXT_DISCLOSURE } from '../components/disclosure';
 import { costCiLegend, kpiColumns } from '../kpiColumns';
 import { itemWritable } from '../platformWrites';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
+  useAdAccountCurrency,
   useCurrentMoves,
   useHeroBriefWatch,
   useOptimizerAccountSnapshots,
@@ -132,7 +134,6 @@ type PortfolioDetailWorkspaceProps = {
   portfolio: PortfolioListItem;
   brandId: string;
   adAccountId: string;
-  currency?: string | null;
   onClose: () => void;
   selectedAdsetId: string | null;
   onSelectAdset: (adsetId: string | null) => void;
@@ -149,7 +150,6 @@ export function PortfolioDetailWorkspace({
   portfolio,
   brandId,
   adAccountId,
-  currency,
   onClose,
   selectedAdsetId,
   onSelectAdset,
@@ -164,6 +164,11 @@ export function PortfolioDetailWorkspace({
   // conversion-funnel sum (keyed by the enrolled entity id) resolves. The cycle
   // charts are entity-agnostic (keyed by entity id) and need no level.
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
+  // The portfolio names its own money. A Google portfolio opened beside a selected Meta account
+  // printed its hero, tiles and findings bare: the screen handed it the Meta account's code, and
+  // a Google customer's asset row carries none (deep test 2026-10-31).
+  const accountCurrency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
+  const currency = portfolioCurrency(portfolio, accountCurrency);
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const timelineEventsQuery = useOptimizerTimelineEvents(portfolio.id);
   // ONE reporting range for every panel. Presets trail today; 'flight' is the portfolio's
@@ -351,10 +356,9 @@ export function PortfolioDetailWorkspace({
           metrics: metricsState.status === 'ready' ? metricsState.metrics : null,
         })
       : null;
-  // A figure from the metrics read is in the portfolio's currency, not the Meta account's (null
-  // there prints the figure without a symbol, never another account's code).
-  const heroCurrency =
-    headlineFigure?.currency !== undefined ? headlineFigure.currency : (currency ?? null);
+  // A figure from the metrics read is in the portfolio's currency; a read that names none is in
+  // the portfolio's all the same, never another account's.
+  const heroCurrency = headlineFigure?.currency ?? currency;
   const heroView = buildHeroView({
     report: currentReport,
     recap,
@@ -612,7 +616,7 @@ export function PortfolioDetailWorkspace({
         brandId={brandId}
         busy={audienceCard.busy}
         cboPreviewByCampaign={audienceCard.cboPreviewByCampaign}
-        currency={currency ?? null}
+        currency={currency}
         portfolioSpecs={portfolioSpecs}
         rec={rec}
         resultWord={resultWord}
@@ -756,12 +760,12 @@ export function PortfolioDetailWorkspace({
         <PortfolioHero
           beforeAfter={{
             model: beforeAfter,
-            currency: currency ?? null,
+            currency: heroCurrency,
             words: resultWords(metric.kpiField, metric.resultLabel),
             window: resolvedRange.window,
             target: targetDisplay ?? null,
           }}
-          currency={currency ?? null}
+          currency={heroCurrency}
           dailyTotal={plan}
           explainHref={jainaPromptHref(
             `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
@@ -995,7 +999,7 @@ export function PortfolioDetailWorkspace({
                   <ApplyReallocationDialog
                     accountId={adAccountId}
                     brandId={brandId}
-                    currency={currency ?? null}
+                    currency={currency}
                     portfolioId={portfolio.id}
                     runId={latestRunId}
                   />
