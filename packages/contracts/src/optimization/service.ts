@@ -1503,6 +1503,28 @@ export const ConvertCboRequestSchema = z.object({
 });
 export type ConvertCboRequest = z.infer<typeof ConvertCboRequestSchema>;
 
+/** What a real convert left on Meta, read back after the write: the campaign holds no budget
+ *  and every ad set holds the daily budget written (MINOR units). Meta's {success:true} only
+ *  says the request was accepted; this is the verdict. Mirrored by the edge's readback.ts. */
+export const ConvertReadBackSchema = z.object({
+  verdict: z.enum(['verified', 'mismatch', 'unreadable']),
+  campaign: z
+    .object({
+      daily_budget: z.number().nullable(),
+      lifetime_budget: z.number().nullable(),
+    })
+    .nullable(),
+  adsets: z.array(
+    z.object({
+      adset_id: z.string(),
+      expected: z.number(),
+      observed: z.number().nullable(),
+    }),
+  ),
+  problems: z.array(z.string()),
+});
+export type ConvertReadBack = z.infer<typeof ConvertReadBackSchema>;
+
 /** optimizer-convert-cbo response — the per-ad-set budgets that would be (dryRun) or were
  *  set. `reason` is present on a soft failure (not_permitted / no_adsets / no_token). */
 export const ConvertCboResponseSchema = z.object({
@@ -1515,6 +1537,9 @@ export const ConvertCboResponseSchema = z.object({
   /** A real convert (dryRun:false) skipped because this campaign was already converted
    *  today — the per-(campaign, utc_day) convert_ledger deduped the second write. */
   deduped: z.boolean().optional(),
+  /** A real convert only: true when the read-back found exactly what was written. */
+  verified: z.boolean().optional(),
+  read_back: ConvertReadBackSchema.optional(),
   reason: z.string().optional(),
   error: z.string().optional(),
 });
