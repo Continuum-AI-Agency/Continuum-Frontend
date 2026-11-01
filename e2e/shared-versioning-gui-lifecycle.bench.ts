@@ -186,7 +186,7 @@ async function editor(family: Family, target: Page, actor: Actor, revisionId: st
 }
 async function uiResponse(target: Page, suffix: string, action: () => Promise<void>, expected = 200) {
   const response = target.waitForResponse(value => new URL(value.url()).pathname.endsWith(suffix) && value.request().method() === 'POST', { timeout: 120_000 });
-  await action(); const received = await response; const body: unknown = await received.json();
+  const [, received] = await Promise.all([action(), response]); const body: unknown = await received.json();
   assert(received.status() === expected || expected === 200 && received.status() === 201, `Actual GUI action ${suffix}: HTTP${received.status()}`); return body;
 }
 async function branch(family: Family, target: Page, actor: Actor, base: string, suffix: string): Promise<Branch> {
@@ -411,12 +411,29 @@ try {
       // Keep one real reviewed preview open while the other authenticated browser advances its destination.
       await inspect(family, page, a, overlapping.revision.id); await panel(page).getByRole('button', { name: 'Merge', exact: true }).click();
       await pick(page, 'Source variant head', savedB);
-      await uiResponse(page, '/merges/preview', () => panel(page!).getByRole('button', { name: 'Preview merge', exact: true }).click());
+      const stalePreview = templateVersionMergePreviewSchema.parse(await uiResponse(page, '/merges/preview',
+        () => panel(page!).getByRole('button', { name: 'Preview merge', exact: true }).click()));
+      result.stalePreview = stalePreview;
+      if (stalePreview.conflicts.length) {
+        const choices = panel(page).getByRole('button', { name: new RegExp(`^(Keep ${escaped(overlapping.name)}|Use complete ${escaped(overlapping.name)} state)$`) });
+        assert(await choices.count() > 0, 'Every source/field conflict is reviewed before exercising stale refusal.');
+        for (let index = 0; index < await choices.count(); index++) await choices.nth(index).click();
+      }
+      const staleCommit = panel(page).getByRole('button', { name: 'Commit reviewed merge', exact: true });
+      assert(await staleCommit.isEnabled(), 'The reviewed preview is initially committable before the other actor moves its head.');
       await open(family, otherPage, overlapping.revision.id); await editor(family, otherPage, b, overlapping.revision.id);
       const later = family.family === 'after_effects' ? String(Number(initial) + 63) : `GUI later ${runId.slice(0, 8)}`;
       await fill(family, otherPage, later); const advanced = await save(family, otherPage, b, overlapping);
-      await uiResponse(page, '/merges', () => panel(page!).getByRole('button', { name: 'Commit reviewed merge', exact: true }).click(), 409);
-      await panel(page).getByRole('button', { name: 'Stop retrying', exact: true }).click();
+      if (await staleCommit.isDisabled()) {
+        await panel(page).getByText('A branch head changed. Preview the merge again.', { exact: true }).waitFor();
+        result.staleRefusal = 'Client invalidated the previously enabled preview after observing the changed head.';
+      } else {
+        await uiResponse(page, '/merges', () => staleCommit.click(), 409);
+        await panel(page).getByRole('button', { name: 'Stop retrying', exact: true }).click();
+        result.staleRefusal = 'Backend rejected the reviewed old heads with HTTP409.';
+      }
+      const unchanged = (await catalog(a, family)).find(value => value.variantId === advanced.variant.variantId);
+      assert.equal(unchanged?.draftHeadRevisionId, advanced.revision.id, 'Stale refusal never appends a destination commit.');
       await panel(page).getByRole('button', { name: 'Refresh heads', exact: true }).click();
       await inspect(family, page, a, advanced.revision.id); await panel(page).getByRole('button', { name: 'Compare / restore', exact: true }).click();
       await pick(page, 'Revision to compare', savedA);
