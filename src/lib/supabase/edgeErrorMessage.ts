@@ -53,3 +53,22 @@ export async function readEdgeError(
 
   return { message: error.message || fallback, code: null, status };
 }
+
+/** A failed edge read that keeps what the function answered — its words, its typed code and
+ *  its HTTP status — so a page can name the cause (googleReadFailure reads the last two). */
+export class EdgeReadError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+    readonly status: number | null,
+  ) {
+    super(message);
+    this.name = 'EdgeReadError';
+  }
+}
+
+/** The edge's own answer to a failed `functions.invoke`, as an error to throw. */
+export async function edgeReadError(error: unknown, fallback: string): Promise<EdgeReadError> {
+  const { message, code, status } = await readEdgeError(error, fallback);
+  return new EdgeReadError(message, code, status);
+}

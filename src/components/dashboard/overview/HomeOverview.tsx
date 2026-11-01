@@ -26,6 +26,7 @@ import {
   resetHomeObjectivesAction,
   saveHomeObjectivesAction,
 } from '@/app/(post-auth)/dashboard/actions';
+import { GoogleReadNotice } from '@/components/paid-media/optimizer/sections/platforms/GoogleReadNotice';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +49,7 @@ import {
   type RankedWithAccount,
   useAccountTotals,
   useCreativeExtremes,
+  useGoogleRefusal,
   useOrganicSnapshot,
   useTopCampaigns,
 } from './useHomeOverviewData';
@@ -300,6 +302,9 @@ export function HomeOverview({
   const [attempt, setAttempt] = useState(0);
   const retry = () => setAttempt((count) => count + 1);
   const totalsState = useAccountTotals(brandId, scopedAccounts, attempt);
+  // Google refused every read (a role, a grant, a refused login): the Google tab's words, not
+  // "didn't answer" — the edge did answer, and Retry cannot change any of the three.
+  const googleRefusal = useGoogleRefusal(brandId, totalsState);
   const totals = totalsState.status === 'ready' ? totalsState.data : null;
   // One strip per currency its accounts spent in (the lead one first); a currency where none
   // spent in either week is named instead, unless it is all there is.
@@ -660,12 +665,14 @@ export function HomeOverview({
         <Unavailable>
           Connect a Meta or Google Ads account to see paid results and goals here.
         </Unavailable>
-      ) : totalsState.status === 'loading' ? (
+      ) : totalsState.status === 'loading' || googleRefusal?.status === 'loading' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((index) => (
             <Skeleton key={index} className="h-28 rounded-lg bg-muted/70" />
           ))}
         </div>
+      ) : googleRefusal ? (
+        <GoogleReadNotice state={googleRefusal} />
       ) : totalsState.status === 'error' ? (
         <Unavailable onRetry={retry}>
           Couldn't load paid results — the ad platform didn't answer. Try again in a minute.

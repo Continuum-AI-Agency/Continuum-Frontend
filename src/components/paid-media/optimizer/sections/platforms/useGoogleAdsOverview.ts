@@ -138,7 +138,7 @@ export function useGoogleAdsOverview(
   });
   // The caller's role is read only when a read was refused for no access: it is what tells a
   // role that cannot read Google from an account no grant reaches.
-  const role = useBrandRole(overview.isError && isNoAccess(overview.error) ? brandId : null);
+  const role = useBrandRole(overview.isError && isGoogleNoAccess(overview.error) ? brandId : null);
   const login = useQuery({
     queryKey: googleAdsQueryKeys.connection(),
     queryFn: fetchHasGoogleLogin,
@@ -177,10 +177,24 @@ export function useGoogleAdsOverview(
 const READS_GOOGLE: ReadonlySet<BrandRole> = new Set(['owner', 'admin', 'operator']);
 
 /** The edge refused the read for no access: its 404, typed INTEGRATION_NOT_LINKED once deployed. */
-function isNoAccess(error: unknown): boolean {
+export function isGoogleNoAccess(error: unknown): boolean {
   const { code, status } = (error ?? {}) as { code?: unknown; status?: unknown };
   return code === 'INTEGRATION_NOT_LINKED' || (code !== 'TOKEN_EXPIRED' && status === 404);
 }
+
+/** The edge answered why it would not read — no access, or a login Google refused — so asking
+ *  again changes nothing until a role, a grant or the login does. */
+export function isGoogleRefusal(error: unknown): boolean {
+  const { code } = (error ?? {}) as { code?: unknown };
+  return code === 'TOKEN_EXPIRED' || isGoogleNoAccess(error);
+}
+
+/** What a failed Google read is: waiting for the caller's role, a role or a grant missing, or an
+ *  error (a refused login among them, which offers to reconnect). */
+export type GoogleReadFailureState = Extract<
+  GoogleAdsOverviewState,
+  { status: 'loading' | 'no-role' | 'no-access' | 'error' }
+>;
 
 /**
  * What a failed Google read means for the person reading. Google refused the login: reconnect.
@@ -194,11 +208,11 @@ export function googleReadFailure(
   error: unknown,
   account: AdAccount,
   role: BrandRole | null | undefined,
-): GoogleAdsOverviewState {
+): GoogleReadFailureState {
   const message = error instanceof Error ? error.message : 'Unknown error';
   const { code } = (error ?? {}) as { code?: unknown };
   if (code === 'TOKEN_EXPIRED') return { status: 'error', account, message, reconnect: true };
-  if (isNoAccess(error)) {
+  if (isGoogleNoAccess(error)) {
     if (role === undefined) return { status: 'loading' };
     if (role !== null) {
       return READS_GOOGLE.has(role)

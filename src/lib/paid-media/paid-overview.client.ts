@@ -9,12 +9,14 @@ import { reportingMetricsRoute } from '@/lib/paid-media/paid-ranking.client';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { edgeReadError } from '@/lib/supabase/edgeErrorMessage';
 
 // Account-level totals + period-over-period comparison + daily series from the
 // paid-media reporting edge function. The missing wrapper for the account_overview
 // scope (the leaderboards only had the ranking scopes wrapped). Both producers (Meta,
 // Google) answer the one envelope in @continuum/contracts. Google counts one business
-// result per read: `resultBucket` names it (leads | purchases | signups).
+// result per read: `resultBucket` names it (leads | purchases | signups). A refused read
+// throws the edge's own words, code and HTTP status (EdgeReadError), so the page can say why.
 export async function fetchPaidAccountOverview(params: {
   brandId: string;
   adAccountId: string;
@@ -36,7 +38,7 @@ export async function fetchPaidAccountOverview(params: {
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw await edgeReadError(error, 'The ad platform did not answer.');
   }
 
   return paidAccountOverviewSchema.parse(data);

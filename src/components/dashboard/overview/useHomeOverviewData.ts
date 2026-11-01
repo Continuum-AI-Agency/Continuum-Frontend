@@ -4,16 +4,25 @@
 // Ads customers: account totals (the last 7 complete days vs the 7 before), campaigns ranked by
 // the primary objective, the best and worst Meta ad with a fresh image, and the brand's organic
 // rollups. Each read fails on its own; a block whose read failed says so and the rest of the
-// Home still renders.
+// Home still renders. When the totals fail because Google refused every read, the Home says
+// why, in the Google tab's own words (useGoogleRefusal).
 
 import {
+  type AdAccount,
   datasetCreativeRefSchema,
   type HomeObjectiveMetric,
   type PaidEntityKpi,
   type PaidRankedEntity,
 } from '@continuum/contracts';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  type GoogleReadFailureState,
+  googleReadFailure,
+  isGoogleNoAccess,
+  isGoogleRefusal,
+} from '@/components/paid-media/optimizer/sections/platforms/useGoogleAdsOverview';
 import { fetchJainaCreativePreview } from '@/lib/api/jainaCreativePreview.client';
+import { useBrandRole } from '@/lib/library/useBrandRole';
 import {
   type BrandOrganicSnapshot,
   loadBrandOrganicSnapshot,
@@ -74,6 +83,16 @@ export type HomeTotals = {
   currencyOf: Record<string, string | null>;
 };
 
+/** An account whose read failed, and what the read threw: the edge's own answer when it gave one
+ *  (EdgeReadError keeps its words, its typed code and its HTTP status). */
+export type AccountReadFailure = { account: HomeAdAccount; error: unknown };
+
+/** The totals fail only when no account answered; each failure is kept, so the Home can say why. */
+export type TotalsLoad =
+  | { status: 'loading' }
+  | { status: 'error'; failures: AccountReadFailure[] }
+  | { status: 'ready'; data: HomeTotals };
+
 /** The accounts as a stable value: a new array holding the same accounts does not read again. */
 function useStableAccounts(accounts: HomeAdAccount[]): HomeAdAccount[] {
   const key = JSON.stringify(
@@ -111,8 +130,12 @@ async function readAccount(brandId: string, account: HomeAdAccount): Promise<Hom
 
 /** `attempt` is Retry's counter: bumping it re-runs the read with the same inputs. An account
  *  whose read fails is left out; the totals fail only when no account answers. */
-export function useAccountTotals(brandId: string, accounts: HomeAdAccount[], attempt = 0) {
-  const [state, setState] = useState<Load<HomeTotals>>({ status: 'loading' });
+export function useAccountTotals(
+  brandId: string,
+  accounts: HomeAdAccount[],
+  attempt = 0,
+): TotalsLoad {
+  const [state, setState] = useState<TotalsLoad>({ status: 'loading' });
   const stable = useStableAccounts(accounts);
 
   useEffect(() => {
@@ -127,7 +150,13 @@ export function useAccountTotals(brandId: string, accounts: HomeAdAccount[], att
           : [];
       });
       if (reads.length === 0 && stable.length > 0) {
-        setState({ status: 'error' });
+        const failures = results.flatMap((result, index) => {
+          const account = stable[index];
+          return result.status === 'rejected' && account
+            ? [{ account, error: result.reason as unknown }]
+            : [];
+        });
+        setState({ status: 'error', failures });
         return;
       }
       const currencyOf: Record<string, string | null> = {};
@@ -153,6 +182,44 @@ export function useAccountTotals(brandId: string, accounts: HomeAdAccount[], att
   }, [brandId, stable, attempt]);
 
   return state;
+}
+
+/**
+ * The failure that explains why no account answered, when every read that failed is a Google
+ * account the edge refused (no access, or a login Google refused); null otherwise — any other
+ * failure is one Retry can fix, and "the ad platform didn't answer" stays true.
+ */
+export function googleRefusalOf(failures: AccountReadFailure[]): AccountReadFailure | null {
+  const [first] = failures;
+  const allRefused = failures.every(
+    ({ account, error }) => account.platform === 'google_ads' && isGoogleRefusal(error),
+  );
+  return first && allRefused ? first : null;
+}
+
+function googleAdAccountOf(account: HomeAdAccount): AdAccount {
+  return {
+    platform: account.platform,
+    account_id: account.id,
+    name: account.name,
+    status: null,
+    currency: account.currency,
+  };
+}
+
+/**
+ * What the Home says when Google refused every read it made: the Google tab's own state for the
+ * first refused account (googleReadFailure), the caller's role read only after a no-access
+ * refusal, as the tab does. Null when the totals did not fail that way.
+ */
+export function useGoogleRefusal(
+  brandId: string,
+  totals: TotalsLoad,
+): GoogleReadFailureState | null {
+  const refusal = totals.status === 'error' ? googleRefusalOf(totals.failures) : null;
+  const role = useBrandRole(refusal && isGoogleNoAccess(refusal.error) ? brandId : null);
+  if (!refusal) return null;
+  return googleReadFailure(refusal.error, googleAdAccountOf(refusal.account), role);
 }
 
 type RankingRequest = {
