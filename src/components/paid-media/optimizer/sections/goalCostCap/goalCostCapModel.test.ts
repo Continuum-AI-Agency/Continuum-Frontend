@@ -13,16 +13,16 @@ import {
 describe('bidSettingsPhrase', () => {
   it('names the bid setting of every platform the checkbox acts on, from the contracts constant', () => {
     expect(bidSettingsPhrase(GOAL_AS_COST_CAP_PLATFORMS)).toBe(
-      'Google Ads target CPA (bid setting)',
+      'Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap',
     );
   });
 
-  it('joins two platforms with "or" and three with a list, so Meta landing changes the copy', () => {
-    expect(bidSettingsPhrase(['google_ads', 'meta'])).toBe(
-      'Google Ads target CPA (bid setting) or Meta cost cap (bid setting)',
+  it('names one platform alone, and lists three', () => {
+    expect(bidSettingsPhrase(['google_ads'])).toBe(
+      'Google Ads target CPA (bid setting) of each campaign',
     );
     expect(bidSettingsPhrase(['google_ads', 'meta', 'tiktok_ads'])).toBe(
-      'Google Ads target CPA (bid setting), Meta cost cap (bid setting) or TikTok cost cap (bid setting)',
+      'Google Ads target CPA (bid setting) of each campaign, the Meta cost cap (bid setting) of each ad set already bidding with a cost cap and the TikTok cost cap (bid setting) of each ad group',
     );
   });
 });
@@ -36,7 +36,7 @@ describe('goalCostCapHelp', () => {
 
   it("checked: names the platforms' bid settings and the portfolio's per-cycle step", () => {
     expect(goalCostCapHelp({ enabled: true, maxChangePctPerCycle: 0.1 })).toBe(
-      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 10% a day.',
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 10% a day.',
     );
   });
 
@@ -66,7 +66,7 @@ describe('goalCostCapHelp', () => {
         platforms: ['google_ads', 'meta'],
       }),
     ).toBe(
-      'The Optimizer proposes setting the Google Ads target CPA (bid setting) or Meta cost cap (bid setting) of each campaign to this goal, in steps of up to 20% a day.',
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 20% a day.',
     );
   });
 });

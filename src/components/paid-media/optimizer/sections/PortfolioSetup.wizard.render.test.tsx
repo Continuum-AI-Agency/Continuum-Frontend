@@ -259,7 +259,7 @@ describe('PortfolioSetup — the four-step wizard', () => {
     next();
     fireEvent.click(screen.getByRole('checkbox', { name: /cost cap on the ad platforms/ }));
     expect(document.body.textContent).toContain(
-      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 20% a day.',
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 20% a day.',
     );
     next();
     fireEvent.click(screen.getByRole('button', { name: /Create & enroll 2 ad sets/ }));

@@ -22,10 +22,12 @@ export const GOAL_COST_CAP_LABEL = 'Use this goal as the cost cap on the ad plat
  *  (BID_TARGET_MAX_CHANGE_PER_CYCLE in the optimization engine's signalRules). */
 export const DEFAULT_BID_STEP_FRACTION = 0.2;
 
-const BID_SETTING_NAME: Record<PlatformId, string> = {
-  google_ads: 'Google Ads target CPA',
-  meta: 'Meta cost cap',
-  tiktok_ads: 'TikTok cost cap',
+/** Each platform's bid setting and the entities it is set on. Meta only touches an ad set
+ *  that already bids with a cost cap: switching a bid strategy stays a person's call. */
+const BID_SETTING_SCOPE: Record<PlatformId, string> = {
+  google_ads: 'Google Ads target CPA (bid setting) of each campaign',
+  meta: 'Meta cost cap (bid setting) of each ad set already bidding with a cost cap',
+  tiktok_ads: 'TikTok cost cap (bid setting) of each ad group',
 };
 
 /** Goals priced per conversion. A CPM, a cost per click or per view is not a cost a platform
@@ -40,9 +42,9 @@ const CPA_GOAL_METRICS: ReadonlySet<OptimizationObjective> = new Set<Optimizatio
 ]);
 
 export function bidSettingsPhrase(platforms: readonly PlatformId[]): string {
-  const names = platforms.map((platform) => `${BID_SETTING_NAME[platform]} (bid setting)`);
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+  const scopes = platforms.map((platform) => BID_SETTING_SCOPE[platform]);
+  if (scopes.length <= 1) return scopes.join('');
+  return `${scopes.slice(0, -1).join(', the ')} and the ${scopes[scopes.length - 1]}`;
 }
 
 function stepPercent(maxChangePctPerCycle: number | null | undefined): string {
@@ -65,7 +67,7 @@ export function goalCostCapHelp({
   if (!enabled) {
     return 'The Optimizer measures the portfolio against this goal and never changes bid settings on the platforms.';
   }
-  return `The Optimizer proposes setting the ${bidSettingsPhrase(platforms)} of each campaign to this goal, in steps of up to ${stepPercent(maxChangePctPerCycle)} a day.`;
+  return `The Optimizer proposes setting the ${bidSettingsPhrase(platforms)} to this goal, in steps of up to ${stepPercent(maxChangePctPerCycle)} a day.`;
 }
 
 export function isCpaGoalMetric(metric: string | null | undefined): boolean {

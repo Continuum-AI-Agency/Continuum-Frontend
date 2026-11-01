@@ -87,3 +87,35 @@ export const ADD_GOOGLE_KEYWORD = parse({
   ref: GOOGLE_AD_GROUP,
   keyword: { text: '24 hour gym guadalajara', matchType: 'EXACT' },
 });
+
+const META_AD_SET = {
+  platform: 'meta',
+  level: 'group',
+  nativeLevel: 'adset',
+  id: '120200000000000901',
+  accountId: 'act_521903353286118',
+  name: 'Leads | Prospecting',
+} as const;
+
+/** The Meta cost cap (bid setting) 400 → 320 MXN, in minor units: a 20% step toward the goal. */
+export const LOWER_META_COST_CAP = parse({
+  kind: 'set_bid_target',
+  ref: META_AD_SET,
+  field: 'bid_amount_minor',
+  expected: 40_000,
+  target: 32_000,
+});
+
+export const RAISE_META_BUDGET = parse({
+  kind: 'set_budget',
+  ref: META_AD_SET,
+  budget: {
+    kind: 'daily',
+    minor: 50_000,
+    currency: 'MXN',
+    shared: false,
+    ownerRef: META_AD_SET,
+  },
+  expectedMinor: 50_000,
+  targetMinor: 55_000,
+});

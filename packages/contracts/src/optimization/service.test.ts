@@ -1192,7 +1192,15 @@ describe("the portfolio CPA goal as the platforms' cost cap (migration 202610311
     expect(PortfolioGoalAsCostCapResultSchema.safeParse(malformed).success).toBe(false);
   });
 
-  test('the checkbox acts on Google Ads today, and only there', () => {
-    expect([...GOAL_AS_COST_CAP_PLATFORMS]).toEqual(['google_ads']);
+  test('the checkbox acts on Google Ads and Meta (20261031130000), not TikTok', () => {
+    expect([...GOAL_AS_COST_CAP_PLATFORMS]).toEqual(['google_ads', 'meta']);
+  });
+
+  test('the setter answer carries the Meta allowed_actions it changed', () => {
+    const on = PortfolioGoalAsCostCapResultSchema.parse({
+      goal_as_platform_cost_cap: true,
+      allowed_actions: { meta: ['set_bid_target', 'set_budget', 'set_status'] },
+    });
+    expect(on.allowed_actions.meta).toContain('set_bid_target');
   });
 });

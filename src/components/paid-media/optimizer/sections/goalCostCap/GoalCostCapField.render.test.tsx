@@ -19,7 +19,7 @@ const PORTFOLIO = '0be73981-6287-44ff-8b57-0d083e3e6625';
 const UNCHECKED_HELP =
   'The Optimizer measures the portfolio against this goal and never changes bid settings on the platforms.';
 const CHECKED_HELP =
-  'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 10% a day.';
+  'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 10% a day.';
 
 function mount(
   props: Partial<Parameters<typeof GoalCostCapField>[0]> = {},

@@ -44,6 +44,7 @@ export function platformsOf(card: PlatformCard): AdPlatform[] {
     case 'tiktok_delivery_issue':
       return ['tiktok_ads'];
     case 'meta_creative_fatigue':
+    case 'meta_cost_cap':
       return ['meta'];
     case 'cross_platform_move': {
       const ordered = [...givingLegs(card.legs), ...takingLegs(card.legs)].map(
@@ -78,6 +79,7 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
   google_audience_saturation: 'Audience',
   google_pmax_assets: 'Assets',
   google_account_finding: 'Account finding',
+  meta_cost_cap: 'Cost cap',
 };
 
 /** The variants whose body carries the platform's mark beside the title. The wave-6/7
@@ -85,6 +87,7 @@ export const PLATFORM_CARD_TYPE: Record<PlatformCard['variant'], string> = {
  *  it renders inside the Meta creative card, where no chip says whose ad set it is. */
 const MARKED_VARIANTS: ReadonlySet<PlatformCard['variant']> = new Set([
   'meta_creative_fatigue',
+  'meta_cost_cap',
   'google_negative_terms',
   'google_promote_term',
   'google_bid_target',
@@ -165,6 +168,10 @@ export function platformCardActionLabel(card: PlatformCard): string | null {
       const name = card.strategy === 'target_cpa' ? 'tCPA' : 'tROAS';
       return `${direction} the Google Ads bid target (${name}) to ${bidTargetLabel(card.proposed_target, card.strategy, card.currency)}`;
     }
+    case 'meta_cost_cap': {
+      const direction = card.proposed_cap < card.current_cap ? 'Lower' : 'Raise';
+      return `${direction} the Meta cost cap (bid setting) to ${formatCurrency(card.proposed_cap, card.currency)}`;
+    }
     case 'google_low_quality_keyword':
       return 'Pause keyword';
     case 'google_ad_drag':
@@ -195,6 +202,35 @@ export function bidCooldownNote(daysSinceLastChange: number | null): string {
   }
   return `The target last changed ${ago}, past Google's ${BID_RELEARNING_DAYS}-day relearning period.`;
 }
+
+/** The Optimizer waits this long between two changes to one ad set's Meta cost cap. */
+export const COST_CAP_COOLDOWN_DAYS = 7;
+
+/** The Meta cost cap's cooldown in plain words, from the days since this service last changed it. */
+export function costCapCooldownNote(daysSinceLastChange: number | null): string {
+  if (daysSinceLastChange == null) {
+    return `Continuum has not changed this cost cap before. It waits ${COST_CAP_COOLDOWN_DAYS} days between changes.`;
+  }
+  const ago =
+    daysSinceLastChange === 0
+      ? 'today'
+      : `${daysSinceLastChange} ${daysSinceLastChange === 1 ? 'day' : 'days'} ago`;
+  return `Continuum last changed this cost cap ${ago}. It waits ${COST_CAP_COOLDOWN_DAYS} days between changes.`;
+}
+
+type MetaCostCapCard = Extract<PlatformCard, { variant: 'meta_cost_cap' }>;
+
+/** Whether the proposal reaches the portfolio CPA goal now or is a capped step toward it. */
+export function costCapStepNote(card: MetaCostCapCard): string {
+  if (card.proposed_cap === card.portfolio_goal) {
+    return 'The proposed cost cap is the portfolio CPA goal.';
+  }
+  return `The gap to the portfolio CPA goal is larger than this portfolio's ${percentLabel(card.max_change_pct)} limit per cycle, so this is one step toward it.`;
+}
+
+/** Under Advantage campaign budget the campaign holds the bid strategy; the cap stays on the ad set. */
+export const COST_CAP_CBO_NOTE =
+  'This campaign uses Advantage campaign budget: the campaign holds the bid strategy, and each ad set keeps its own cost cap, which is what changes here.';
 
 type BudgetLimitedCard = Extract<PlatformCard, { variant: 'google_budget_limited' }>;
 
@@ -472,6 +508,8 @@ export function platformCardTitle(card: PlatformCard): string {
     }
     case 'google_account_finding':
       return card.headline;
+    case 'meta_cost_cap':
+      return `${card.ad_set_name}: Meta cost cap (bid setting) ${formatCurrency(card.current_cap, card.currency)}, portfolio CPA goal ${formatCurrency(card.portfolio_goal, card.currency)}`;
   }
 }
 

@@ -798,7 +798,7 @@ describe('the cost-cap checkbox under the CPA goal', () => {
     renderPanel({ goal_as_platform_cost_cap: true, max_change_pct_per_cycle: 0.15 });
     expect(box().getAttribute('aria-checked')).toBe('true');
     expect(document.body.textContent).toContain(
-      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign to this goal, in steps of up to 15% a day.',
+      'The Optimizer proposes setting the Google Ads target CPA (bid setting) of each campaign and the Meta cost cap (bid setting) of each ad set already bidding with a cost cap to this goal, in steps of up to 15% a day.',
     );
   });
 });

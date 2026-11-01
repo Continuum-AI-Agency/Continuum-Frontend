@@ -25,7 +25,10 @@ import {
   bidCooldownNote,
   bidTargetLabel,
   budgetProjectionLabel,
+  COST_CAP_CBO_NOTE,
   CROSS_PLATFORM_APPROVAL_NOTE,
+  costCapCooldownNote,
+  costCapStepNote,
   codeLabel,
   countLabel,
   GOOGLE_ADS_CAMPAIGNS_HREF,
@@ -549,6 +552,45 @@ function VariantEvidence({
       );
     case 'google_account_finding':
       return <AccountFindingEvidence card={card} />;
+    case 'meta_cost_cap':
+      return (
+        <div className="space-y-1">
+          <dl
+            className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
+            data-testid="platform-card-cost-cap"
+          >
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Meta cost cap (bid setting)</dt>
+              <dd className="font-medium tabular-nums">
+                {formatCurrency(card.current_cap, card.currency)}
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Proposed</dt>
+              <dd className="font-medium tabular-nums">
+                {formatCurrency(card.proposed_cap, card.currency)}
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-muted-foreground">Portfolio CPA goal</dt>
+              <dd className="font-medium tabular-nums">
+                {formatCurrency(card.portfolio_goal, card.currency)}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-muted-foreground text-xs" data-testid="platform-card-cost-cap-step">
+            {costCapStepNote(card)}
+          </p>
+          {card.strategy_owner === 'campaign' ? (
+            <p className="text-muted-foreground text-xs" data-testid="platform-card-cost-cap-cbo">
+              {COST_CAP_CBO_NOTE}
+            </p>
+          ) : null}
+          <p className="text-muted-foreground text-xs" data-testid="platform-card-cooldown">
+            {costCapCooldownNote(card.days_since_last_change)}
+          </p>
+        </div>
+      );
   }
 }
 

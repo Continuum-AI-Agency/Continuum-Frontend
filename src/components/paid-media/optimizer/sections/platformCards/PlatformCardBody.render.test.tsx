@@ -21,6 +21,7 @@ import {
   GOOGLE_PMAX_ASSETS,
   GOOGLE_PROMOTE_TERM,
   GOOGLE_VIDEO,
+  META_COST_CAP,
   META_FATIGUE,
   TIKTOK_ATTRIBUTION_WINDOW,
   TIKTOK_BUDGET_BELOW_LEARNING,
@@ -34,6 +35,7 @@ import { PlatformCardBody } from './PlatformCardBody';
 import {
   accountBarGeometry,
   bidCooldownNote,
+  costCapCooldownNote,
   googleReasonInWords,
   isReadOnly,
   legChangeLabel,
@@ -461,6 +463,7 @@ describe('every variant', () => {
       'google_audience_saturation',
       'google_pmax_assets',
       'google_account_finding',
+      'meta_cost_cap',
     ]);
   });
 });
@@ -849,5 +852,61 @@ describe('the P8 bench document', () => {
       if (card.recommend_only) expect(queryByTestId('account-finding-recommend-only')).not.toBeNull();
       unmount();
     }
+  });
+});
+
+describe('Meta cost cap', () => {
+  it("names the Meta cost cap (bid setting) apart from the portfolio CPA goal, with the step and cooldown in words", () => {
+    const { getByRole, getByTestId, queryByTestId } = render(
+      <PlatformCardBody card={META_COST_CAP} />,
+    );
+    expect(getByRole('heading').textContent).toBe(
+      'Leads | Prospecting: Meta cost cap (bid setting) $400 MXN, portfolio CPA goal $300 MXN',
+    );
+    expect(getByTestId('platform-card-cost-cap').textContent).toBe(
+      'Meta cost cap (bid setting)$400 MXNProposed$320 MXNPortfolio CPA goal$300 MXN',
+    );
+    expect(getByTestId('platform-card-cost-cap-step').textContent).toBe(
+      "The gap to the portfolio CPA goal is larger than this portfolio's 20% limit per cycle, so this is one step toward it.",
+    );
+    expect(queryByTestId('platform-card-cost-cap-cbo')).toBeNull();
+    expect(getByTestId('platform-card-cooldown').textContent).toBe(
+      'Continuum has not changed this cost cap before. It waits 7 days between changes.',
+    );
+    expect(platformCardActionLabel(META_COST_CAP)).toBe(
+      'Lower the Meta cost cap (bid setting) to $320 MXN',
+    );
+    expect(platformsOf(META_COST_CAP)).toEqual(['meta']);
+    expect(markedPlatformOf(META_COST_CAP)).toBe('meta');
+    expect(PLATFORM_CARD_TYPE.meta_cost_cap).toBe('Cost cap');
+    expect(isReadOnly(META_COST_CAP)).toBe(false);
+  });
+
+  it('says when the proposal is the goal itself, and where the strategy lives under CBO', () => {
+    const cbo = PlatformCardSchema.parse({
+      ...META_COST_CAP,
+      strategy_owner: 'campaign',
+      current_cap: 330,
+      proposed_cap: 300,
+      days_since_last_change: 9,
+    });
+    const { getByTestId } = render(<PlatformCardBody card={cbo} />);
+    expect(getByTestId('platform-card-cost-cap-step').textContent).toBe(
+      'The proposed cost cap is the portfolio CPA goal.',
+    );
+    expect(getByTestId('platform-card-cost-cap-cbo').textContent).toStartWith(
+      'This campaign uses Advantage campaign budget',
+    );
+    expect(platformCardActionLabel(cbo)).toBe('Lower the Meta cost cap (bid setting) to $300 MXN');
+    expect(costCapCooldownNote(0)).toBe(
+      'Continuum last changed this cost cap today. It waits 7 days between changes.',
+    );
+    expect(costCapCooldownNote(1)).toStartWith('Continuum last changed this cost cap 1 day ago.');
+  });
+
+  it('drops a meta_cost_cap card whose figures are missing, rather than half-render it', () => {
+    expect(
+      PlatformCardSchema.safeParse({ ...META_COST_CAP, portfolio_goal: undefined }).success,
+    ).toBe(false);
   });
 });

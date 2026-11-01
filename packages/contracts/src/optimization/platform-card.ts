@@ -250,6 +250,37 @@ export const GoogleBidTargetCardSchema = z.object({
   portfolio_goal: z.number().positive().nullable().optional(),
 });
 
+/** Setting the portfolio CPA goal as a Meta ad set's cost cap (engine rule meta_cost_cap), only
+ *  on a portfolio whose "use this goal as the cost cap on the ad platforms" checkbox is on, and
+ *  only on an ad set ALREADY bidding COST_CAP. Two numbers that are never the same thing:
+ *  `current_cap`/`proposed_cap` are the Meta cost cap (bid setting) — the ad set's `bid_amount`
+ *  — and `portfolio_goal` is the portfolio CPA goal. `proposed_cap` equals `portfolio_goal` when
+ *  the gap fits the per-cycle limit, and is a capped step toward it otherwise. Money is MAJOR
+ *  units of `currency`; the action carries the same amounts in minor units.
+ *
+ *  `strategy_owner`: where Meta keeps the bid strategy. 'adset' under ABO (each ad set bids on
+ *  its own); 'campaign' under CBO (Advantage campaign budget), where the campaign holds
+ *  bid_strategy and each ad set still holds its own bid_amount — the write is on the ad set in
+ *  both cases. */
+export const MetaCostCapCardSchema = z.object({
+  variant: z.literal('meta_cost_cap'),
+  ad_set_name: z.string().min(1),
+  campaign_name: z.string().min(1).nullable(),
+  currency: CurrencyCodeSchema,
+  strategy_owner: z.enum(['adset', 'campaign']),
+  /** The Meta cost cap (bid setting) as it stands on the ad set. */
+  current_cap: z.number().positive(),
+  /** The Meta cost cap (bid setting) the card proposes. */
+  proposed_cap: z.number().positive(),
+  /** The portfolio CPA goal in `currency`: the cost cap the move sets, or steps toward. */
+  portfolio_goal: z.number().positive(),
+  /** The per-cycle limit the step honoured, a fraction (0.2 = 20%). */
+  max_change_pct: z.number().positive(),
+  /** Days since this service last changed the ad set's cost cap; null when it never has. */
+  days_since_last_change: z.number().int().nonnegative().nullable(),
+});
+export type MetaCostCapCard = z.infer<typeof MetaCostCapCardSchema>;
+
 /** A keyword with a very low Quality Score that spends without results (G11). */
 export const GoogleLowQualityKeywordCardSchema = z.object({
   variant: z.literal('google_low_quality_keyword'),
@@ -522,6 +553,7 @@ export const PlatformCardSchema = z.union([
   GoogleNegativeTermsCardSchema,
   GooglePromoteTermCardSchema,
   GoogleBidTargetCardSchema,
+  MetaCostCapCardSchema,
   GoogleLowQualityKeywordCardSchema,
   TikTokHookRetentionCardSchema,
   TikTokSparkCandidateCardSchema,
