@@ -1468,7 +1468,13 @@ export function JainaChatSurface({
         { method: 'GET', cache: 'no-store' },
       );
       if (!response.ok) {
-        throw new Error('Failed to search conversations.');
+        // The status decides what the sidebar says (a 401 is an ended session); the server's
+        // own words ride along and are shown only when they read as a sentence.
+        const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        throw Object.assign(
+          new Error(typeof body?.error === 'string' ? body.error : `HTTP ${response.status}`),
+          { status: response.status },
+        );
       }
       const parsed = jainaConversationListResponseSchema.safeParse(
         await response.json().catch(() => null),

@@ -8,6 +8,7 @@ import {
   CollapseConversationsButton,
   CollapsedConversationsRail,
 } from '@/components/chat/collapsibleConversations';
+import { SessionSearchFailureNotice } from '@/components/chat/SessionSearchFailureNotice';
 import { SessionTagEditor } from '@/components/chat/SessionTagEditor';
 import { useSessionSearch } from '@/components/chat/useSessionSearch';
 import { CreateCampaignGoalDialog } from '@/components/goals/CreateCampaignGoalDialog';
@@ -237,7 +238,14 @@ export function JainaConversationSidebar({
                 </span>
               ) : null}
 
-              {search.isActive && !search.isSearching && visibleSessions.length === 0 ? (
+              {search.isActive && !search.isSearching && search.failure ? (
+                <SessionSearchFailureNotice failure={search.failure} onRetry={search.retry} />
+              ) : null}
+
+              {search.isActive &&
+              !search.isSearching &&
+              !search.failure &&
+              visibleSessions.length === 0 ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
                   No conversations match these filters.
                 </span>
