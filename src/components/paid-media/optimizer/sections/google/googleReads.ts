@@ -44,9 +44,11 @@ export type GoogleReadTarget = {
   resultBucket?: GoogleResultBucket | null;
 };
 
+/** The platform rides in the URL as well as the body: the client time limit chooses by URL, and a
+ *  cold Google read needs the platform-read budget (supabaseTimeoutPolicy). */
 export async function invokeGoogleMetrics(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await createSupabaseBrowserClient().functions.invoke(
-    'paid-media-metrics',
+    'paid-media-metrics?platform=google-ads',
     { body: { platform: 'google-ads', ...body } },
   );
   if (error) {

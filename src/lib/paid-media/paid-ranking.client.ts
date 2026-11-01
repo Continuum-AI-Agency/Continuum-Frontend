@@ -17,6 +17,15 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 // side; this validates each row against the shared contract and drops malformed
 // rows so one bad entity never blanks the whole leaderboard. Google counts one
 // business result per read as `conversions`: `resultBucket` names it.
+/** The reporting edge's metrics route. A Google Ads read names its platform in the URL too: the
+ *  client time limit chooses by URL, and a cold Google read needs the platform-read budget
+ *  (supabaseTimeoutPolicy). The edge reads the platform from the URL and the body alike. */
+export function reportingMetricsRoute(platform: PaidMediaPlatform): string {
+  return platform === 'google-ads'
+    ? 'paid-media-reporting/metrics?platform=google-ads'
+    : 'paid-media-reporting/metrics';
+}
+
 export async function fetchPaidRanking(params: {
   brandId: string;
   adAccountId: string;
@@ -29,7 +38,7 @@ export async function fetchPaidRanking(params: {
   resultBucket?: GoogleResultBucket;
 }): Promise<PaidRankedEntity[]> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke('paid-media-reporting/metrics', {
+  const { data, error } = await supabase.functions.invoke(reportingMetricsRoute(params.platform), {
     method: 'POST',
     body: {
       platform: params.platform,

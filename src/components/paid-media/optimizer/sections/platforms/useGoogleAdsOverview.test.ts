@@ -42,9 +42,10 @@ describe('fetchGoogleAdsOverview', () => {
       since: '2026-09-30',
       until: '2026-10-06',
     });
+    // The platform rides in the URL too: the client time limit chooses by URL.
     expect(calls.map((call) => [call.name, call.body.platform, call.body.scope])).toEqual([
-      ['paid-media-metrics', 'google-ads', 'account_overview'],
-      ['paid-media-metrics', 'google-ads', 'top_campaigns'],
+      ['paid-media-metrics?platform=google-ads', 'google-ads', 'account_overview'],
+      ['paid-media-metrics?platform=google-ads', 'google-ads', 'top_campaigns'],
     ]);
     expect(calls[0]?.body).toMatchObject({ brandId: 'brand-1', accountId: '3710693645' });
     expect(calls[1]?.body).toMatchObject({ kpi: 'spend', limit: 50 });

@@ -5,6 +5,7 @@ import {
   type PaidAccountOverview,
   paidAccountOverviewSchema,
 } from '@continuum/contracts';
+import { reportingMetricsRoute } from '@/lib/paid-media/paid-ranking.client';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -22,7 +23,7 @@ export async function fetchPaidAccountOverview(params: {
   resultBucket?: GoogleResultBucket;
 }): Promise<PaidAccountOverview> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke('paid-media-reporting/metrics', {
+  const { data, error } = await supabase.functions.invoke(reportingMetricsRoute(params.platform), {
     method: 'POST',
     body: {
       platform: params.platform,
