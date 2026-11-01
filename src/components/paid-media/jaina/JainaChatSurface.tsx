@@ -109,7 +109,7 @@ import type {
 } from '@/lib/agent-references';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { loadFailureMessage, loadFailureWhy } from '@/lib/api/loadFailure';
 import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 import {
   campaignCanvasActionsEnvelopeSchema,
@@ -181,6 +181,7 @@ import { JainaConversationSidebar } from './components/JainaConversationSidebar'
 import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
+import { JainaOutboxTurn } from './components/JainaOutboxTurn';
 
 /**
  * Tool name to database gate. The database enforces gate ORDER, so a wrong mapping
@@ -211,6 +212,52 @@ import { isRepeatSubmission, type SubmissionStamp, submissionKey } from './sendG
 import type { JainaChatMessage } from './types';
 
 const HISTORY_TIMEOUT_MS = READ_TIMEOUT_MS * 3;
+
+/** One turn as the surface hands it to `dispatchMessage`. */
+type JainaDispatchInput = {
+  query: string;
+  canvas: boolean;
+  clarificationId?: string;
+  images?: Array<{ url: string; name?: string; mediaType?: string }>;
+  // Kept separate from `images` on purpose — that field is the pixels path, where
+  // Jaina's media resolver warns on anything that is not an image.
+  documents?: AgentDocumentAttachment[];
+  documentScopeKey?: string;
+  inlineTextContext?: string;
+  references?: AgentMentionReference[];
+  planAction?: JainaPlanAction;
+  scaffoldAction?: JainaScaffoldAction;
+  toolAction?: JainaToolAction;
+  operatorAction?: JainaOperatorAction;
+  forceReportArtifact?: boolean;
+  silentUserMessage?: boolean;
+  /**
+   * The caller shows a failed conversation setup itself, where the question was asked, so the
+   * toast would say it a second time — and for five seconds only.
+   */
+  setupFailureShownInline?: boolean;
+  onDispatchError?: (message: string) => void;
+};
+
+/** A queued message as the turn it becomes when it leaves the queue. */
+const dispatchInputOfQueued = (message: QueuedJainaMessage): JainaDispatchInput => ({
+  query: message.content,
+  canvas: message.canvas,
+  clarificationId: message.clarificationId,
+  images: message.images,
+  inlineTextContext: message.inlineTextContext,
+  references: message.references,
+  forceReportArtifact: message.forceReportArtifact,
+});
+
+/**
+ * A question on its way out that is not in the transcript yet: `sending` while its conversation
+ * is set up, `failed` when that setup failed — kept, with the reason, until it is retried or
+ * discarded (PP-DT-C-jaina-send-failure-is-silent).
+ */
+type OutboxTurn =
+  | { input: JainaDispatchInput; status: 'sending' }
+  | { input: JainaDispatchInput; status: 'failed'; reason: string };
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 
@@ -1032,6 +1079,7 @@ export function JainaChatSurface({
     () => new Set(),
   );
   const [queuedMessages, setQueuedMessages] = React.useState<QueuedJainaMessage[]>([]);
+  const [outboxTurn, setOutboxTurn] = React.useState<OutboxTurn | null>(null);
   const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(null);
   const [queueEditDraft, setQueueEditDraft] = React.useState('');
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
@@ -1854,6 +1902,7 @@ export function JainaChatSurface({
 
       setUiMessagesRef.current([]);
       setQueuedMessages([]);
+      setOutboxTurn(null);
       setEditingQueueMessageId(null);
       setQueueEditDraft('');
       setIsJainaProMode(false);
@@ -2004,25 +2053,7 @@ export function JainaChatSurface({
   ]);
 
   const dispatchMessage = React.useCallback(
-    async (input: {
-      query: string;
-      canvas: boolean;
-      clarificationId?: string;
-      images?: Array<{ url: string; name?: string; mediaType?: string }>;
-      // Kept separate from `images` on purpose — that field is the pixels path, where
-      // Jaina's media resolver warns on anything that is not an image.
-      documents?: AgentDocumentAttachment[];
-      documentScopeKey?: string;
-      inlineTextContext?: string;
-      references?: AgentMentionReference[];
-      planAction?: JainaPlanAction;
-      scaffoldAction?: JainaScaffoldAction;
-      toolAction?: JainaToolAction;
-      operatorAction?: JainaOperatorAction;
-      forceReportArtifact?: boolean;
-      silentUserMessage?: boolean;
-      onDispatchError?: (message: string) => void;
-    }) => {
+    async (input: JainaDispatchInput) => {
       const query = input.query.trim();
       if (!query) return false;
 
@@ -2052,14 +2083,12 @@ export function JainaChatSurface({
           }
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to initialize conversation session.';
-        show({
-          title: 'Conversation setup failed',
-          description: message,
-          variant: 'error',
-        });
-        input.onDispatchError?.(message);
+        // In the product's words: the library's "Failed to fetch" is not a sentence for a person.
+        const why = loadFailureWhy(error) ?? "Jaina couldn't be reached.";
+        if (!input.setupFailureShownInline) {
+          show({ title: 'Not sent', description: `Not sent — ${why}`, variant: 'error' });
+        }
+        input.onDispatchError?.(why);
         return false;
       }
 
@@ -2219,6 +2248,33 @@ export function JainaChatSurface({
     [],
   );
 
+  /**
+   * Sends a turn the reader is waiting on. It shows as sending while its conversation is set up,
+   * and a setup that fails keeps it on screen as not sent, with the reason and Retry.
+   */
+  const dispatchFromOutbox = React.useCallback(
+    async (input: JainaDispatchInput): Promise<boolean> => {
+      setOutboxTurn({ input, status: 'sending' });
+      const failure: { reason: string | null } = { reason: null };
+      const started = await dispatchMessage({
+        ...input,
+        setupFailureShownInline: true,
+        onDispatchError: (reason) => {
+          failure.reason = reason;
+          input.onDispatchError?.(reason);
+        },
+      });
+      setOutboxTurn((current) => {
+        if (current?.input !== input) return current;
+        return started
+          ? null
+          : { input, status: 'failed', reason: failure.reason ?? "Jaina couldn't be reached." };
+      });
+      return started;
+    },
+    [dispatchMessage],
+  );
+
   const handleSubmit = React.useCallback(
     async (query: string, attachments?: Attachment[], references: AgentMentionReference[] = []) => {
       const normalizedQuery = query.trim();
@@ -2296,17 +2352,19 @@ export function JainaChatSurface({
 
       inFlightSubmissionKeysRef.current.add(submission.key);
       try {
-        const started = await dispatchMessage(input);
+        const started = await dispatchFromOutbox(input);
         if (started && isJainaProMode) {
           setIsJainaProMode(false);
         }
+        // A send that never left was not a send: the same click may be made again at once.
+        if (!started) lastSubmissionRef.current = null;
       } finally {
         inFlightSubmissionKeysRef.current.delete(submission.key);
       }
     },
     [
       activeResponseId,
-      dispatchMessage,
+      dispatchFromOutbox,
       queueMessageForLater,
       isConversationSwitching,
       isHistoryLoading,
@@ -2357,37 +2415,30 @@ export function JainaChatSurface({
     if (isViewedStreaming || activeResponseId) return;
     if (queuedMessages.length === 0) return;
     if (queueDispatchInFlightRef.current) return;
+    // A question being sent, or one that failed, goes first; the rest wait behind it.
+    if (outboxTurn) return;
 
     const nextQueuedMessage = queuedMessages[0];
     if (!nextQueuedMessage) return;
 
     queueDispatchInFlightRef.current = true;
+    // It leaves the queue as it leaves: if the send fails it is said as not sent with Retry,
+    // instead of sitting under "next will send now" for a send that already failed.
+    setQueuedMessages((previous) => removeQueuedMessage(previous, nextQueuedMessage.id));
+    if (editingQueueMessageId === nextQueuedMessage.id) {
+      setEditingQueueMessageId(null);
+      setQueueEditDraft('');
+    }
 
     void (async () => {
-      const started = await dispatchMessage({
-        query: nextQueuedMessage.content,
-        canvas: nextQueuedMessage.canvas,
-        clarificationId: nextQueuedMessage.clarificationId,
-        images: nextQueuedMessage.images,
-        inlineTextContext: nextQueuedMessage.inlineTextContext,
-        references: nextQueuedMessage.references,
-        forceReportArtifact: nextQueuedMessage.forceReportArtifact,
-      });
-
-      if (started) {
-        setQueuedMessages((previous) => removeQueuedMessage(previous, nextQueuedMessage.id));
-        if (editingQueueMessageId === nextQueuedMessage.id) {
-          setEditingQueueMessageId(null);
-          setQueueEditDraft('');
-        }
-      }
-
+      await dispatchFromOutbox(dispatchInputOfQueued(nextQueuedMessage));
       queueDispatchInFlightRef.current = false;
     })();
   }, [
     activeResponseId,
-    dispatchMessage,
+    dispatchFromOutbox,
     editingQueueMessageId,
+    outboxTurn,
     isConversationSwitching,
     isHistoryLoading,
     isViewedStreaming,
@@ -2403,6 +2454,7 @@ export function JainaChatSurface({
     if (isStreaming) stopChat();
     setUiMessages([]);
     setQueuedMessages([]);
+    setOutboxTurn(null);
     setEditingQueueMessageId(null);
     setQueueEditDraft('');
     setIsJainaProMode(false);
@@ -2432,6 +2484,8 @@ export function JainaChatSurface({
       // Release the local reader before switching — the run keeps executing (Backend + store)
       // and the run row hydrates the completed result when the user returns.
       stopChat();
+      // A question not sent here belongs to the conversation being left.
+      setOutboxTurn(null);
       await loadConversationSession(targetSessionId);
     },
     [loadConversationSession, sessionId, stopChat],
@@ -3058,7 +3112,10 @@ export function JainaChatSurface({
 
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
   const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
-  const canStartQueuedNow = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
+  const canStartQueuedNow =
+    !isQueueStreaming && !isHistoryLoading && !isConversationSwitching && !outboxTurn;
+  // Retry waits for whatever holds the conversation, exactly as the queue does.
+  const canRetryOutboxTurn = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
   const hasPendingReportArtifactRequest =
     Boolean(pendingReportArtifactResponseId) &&
     Boolean(activeResponseId) &&
@@ -3206,7 +3263,7 @@ export function JainaChatSurface({
                     />
                   ) : null}
 
-                  {!isConversationSwitching && messages.length === 0 && (
+                  {!isConversationSwitching && messages.length === 0 && !outboxTurn && (
                     <JainaEmptyState
                       adAccountId={adAccountId}
                       onExampleClick={(q) => handleSubmit(q)}
@@ -3247,6 +3304,17 @@ export function JainaChatSurface({
                       ))}
                     </React.Fragment>
                   ))}
+
+                  {outboxTurn ? (
+                    <JainaOutboxTurn
+                      text={outboxTurn.input.query}
+                      status={outboxTurn.status}
+                      reason={outboxTurn.status === 'failed' ? outboxTurn.reason : undefined}
+                      canRetry={canRetryOutboxTurn}
+                      onRetry={() => void dispatchFromOutbox(outboxTurn.input)}
+                      onDiscard={() => setOutboxTurn(null)}
+                    />
+                  ) : null}
                 </ChatTranscript>
               </div>
 
@@ -3321,24 +3389,13 @@ export function JainaChatSurface({
                                                 onClick={() => {
                                                   if (queueDispatchInFlightRef.current) return;
                                                   queueDispatchInFlightRef.current = true;
+                                                  setQueuedMessages((previous) =>
+                                                    removeQueuedMessage(previous, queuedMessage.id),
+                                                  );
                                                   void (async () => {
-                                                    const started = await dispatchMessage({
-                                                      query: queuedMessage.content,
-                                                      canvas: queuedMessage.canvas,
-                                                      clarificationId:
-                                                        queuedMessage.clarificationId,
-                                                      references: queuedMessage.references,
-                                                      forceReportArtifact:
-                                                        queuedMessage.forceReportArtifact,
-                                                    });
-                                                    if (started) {
-                                                      setQueuedMessages((previous) =>
-                                                        removeQueuedMessage(
-                                                          previous,
-                                                          queuedMessage.id,
-                                                        ),
-                                                      );
-                                                    }
+                                                    await dispatchFromOutbox(
+                                                      dispatchInputOfQueued(queuedMessage),
+                                                    );
                                                     queueDispatchInFlightRef.current = false;
                                                   })();
                                                 }}
