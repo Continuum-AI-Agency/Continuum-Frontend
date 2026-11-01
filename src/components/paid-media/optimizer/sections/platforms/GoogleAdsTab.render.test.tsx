@@ -331,3 +331,28 @@ describe('no portfolio goal: each result type apart', () => {
     expect(values).toEqual(['34 leads · 2 sign-ups', '88 leads · 0 sign-ups']);
   });
 });
+
+// PP-DT-B-google-error-states-conflated, residual: a role that cannot read Google Ads and a brand
+// account no live grant reaches read differently, each with its own fix.
+describe('GoogleAdsTabView — no access, told apart', () => {
+  it('tells a viewer their role cannot read Google Ads, and to ask an owner', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView state={{ status: 'no-role', account: VIVO_47 }} />,
+    );
+    const empty = getByTestId('google-empty-no-role');
+    expect(empty.textContent).toContain('Your role on this brand can’t read Google Ads');
+    expect(empty.textContent).toContain('Ask an owner or admin');
+    expect(empty.textContent).not.toContain('not configured or access token missing');
+    expect(empty.querySelector('a')).toBeNull();
+  });
+
+  it('tells an operator no live Google grant reaches the account, and offers to grant it', () => {
+    const { getByTestId } = render(
+      <GoogleAdsTabView state={{ status: 'no-access', account: VIVO_47 }} />,
+    );
+    const empty = getByTestId('google-empty-no-access');
+    expect(empty.textContent).toContain('Vivo 47');
+    expect(empty.textContent).toContain('Grant it again in Settings → Integrations');
+    expect(empty.querySelector('a')?.textContent).toBe('Connect Google Ads');
+  });
+});
