@@ -143,12 +143,26 @@ async function inspect(family: Family, target: Page, actor: Actor, revisionId: s
   await until(() => panel(target).textContent(), text => !!text?.includes(revisionId.slice(0, 8)), 'exact revision inspection');
   return { variant, revision };
 }
+async function aeLayers(target: Page, revisionId: string, readOnly = false) {
+  const tab = target.getByRole('tab', { name: 'Edit layers', exact: true });
+  const notice = target.locator('p:visible').filter({ hasText: /^This revision is read-only\. Branch it in Variants before editing\.$/ }).first();
+  const copy = target.locator(`[data-working-copy-id][data-base-revision-id="${revisionId}"]:visible`);
+  const layers = target.getByRole('list', { name: 'Layers', exact: true });
+  // Opening a revision schedules a keyed React transition. A click on the outgoing panel
+  // can be replaced by its incoming Variants panel; admit only the requested visible editor.
+  await until(async () => {
+    if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
+    return await tab.getAttribute('aria-selected') === 'true' && (readOnly
+      ? await notice.isVisible() : await copy.count() > 0 && await layers.isVisible());
+  }, Boolean, readOnly ? 'requested Original read-only layer panel after revision transition'
+    : `requested exact ${revisionId} layer editor after revision transition`, 120_000);
+}
 async function editor(family: Family, target: Page, actor: Actor, revisionId: string) {
   await inspect(family, target, actor, revisionId);
   await panel(target).getByRole('button', { name: 'Open exact revision', exact: true }).click();
   if (family.family === 'after_effects') {
-    await target.getByRole('tab', { name: 'Edit layers', exact: true }).click();
-    const layers = target.getByRole('list', { name: 'Layers', exact: true }); await layers.waitFor({ timeout: 120_000 });
+    await aeLayers(target, revisionId);
+    const layers = target.getByRole('list', { name: 'Layers', exact: true });
     assert(family.layer); await layers.getByRole('button', { name: new RegExp(escaped(family.layer.name)) }).first().click();
   }
 }
@@ -316,8 +330,7 @@ try {
       const base = original.revisions.find(value => value.id === original.draftHeadRevisionId); assert(base);
       await open(family, page, base.id); await inspect(family, page, a, base.id);
       await panel(page).getByRole('button', { name: 'Open exact revision', exact: true }).click();
-      if (family.family === 'after_effects') { await page.getByRole('tab', { name: 'Edit layers', exact: true }).click();
-        await page.locator('p:visible').filter({ hasText: /^This revision is read-only\. Branch it in Variants before editing\.$/ }).first().waitFor(); }
+      if (family.family === 'after_effects') await aeLayers(page, base.id, true);
       else { const control = family.family === 'hyperframes' ? page.getByLabel('Text 1', { exact: true })
         : page.locator(`[data-field="${family.textField}"]`).locator('input,textarea').first();
         await control.waitFor(); assert(await control.isDisabled(), 'Original is read-only until a real explicit branch.'); }
