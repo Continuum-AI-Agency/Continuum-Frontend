@@ -30,7 +30,6 @@ import {
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
   type AdsetTargeting,
-  type InactiveAdsetWindows,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -66,6 +65,7 @@ import {
   type EnrollResult,
   EnrollResultSchema,
   flightOf,
+  type InactiveAdsetWindows,
   type InsightState,
   OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
@@ -119,7 +119,7 @@ import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
 import { hasPendingWork } from './reportModel';
 import { isMissingRpcError, MissingRpcError } from './sections/platforms/multiplatformRead';
-import { accountsOn } from './sections/platforms/platformTabsModel';
+import { accountPlatform, accountsOn } from './sections/platforms/platformTabsModel';
 import { type CurrentMoves, currentMoves } from './sections/portfolioStaleness';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
@@ -1304,6 +1304,42 @@ export function useOptimizerAdAccounts(brandId: string) {
   });
 }
 
+/**
+ * The account a Meta-only read (ad-set or campaign snapshots, the ad-set inventory) may post, or
+ * null. paid-media-metrics reads whatever id it is handed as a Meta ad account, and Scale selects
+ * a Google customer on its Google platform: every Optimizer view under it posted that id to the
+ * Meta reader, two or three 404s on each Pink Elephant and Tangassi page
+ * (PP-DT-E-optimizer-meta-reads-on-google-account). The brand's account list names each account's
+ * platform, so an account it names on any other platform is never posted. An account it does not
+ * name (one a portfolio still holds after it was unassigned) is read as before, and so is every
+ * account when the list could not be read: `accounts` null.
+ */
+export function metaReadAccountId(
+  adAccountId: string | null,
+  accounts: readonly AdAccount[] | null,
+): string | null {
+  if (!adAccountId) return null;
+  const wanted = bareAccountId(adAccountId);
+  const listed = accounts?.find((account) => bareAccountId(account.account_id) === wanted);
+  return listed && accountPlatform(listed) !== 'meta' ? null : adAccountId;
+}
+
+/** `metaReadAccountId` for a hook: nothing is posted until the brand's account list has answered
+ *  (`settled`), so a Google customer is never read as Meta on the first render either. */
+export function useMetaReadAccount(
+  brandId: string,
+  adAccountId: string | null,
+): { accountId: string | null; settled: boolean } {
+  const accounts = useOptimizerAdAccounts(brandId);
+  const settled = accounts.isSuccess || accounts.isError;
+  return {
+    accountId: settled
+      ? metaReadAccountId(adAccountId, accounts.isSuccess ? accounts.data : null)
+      : null,
+    settled,
+  };
+}
+
 const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
 
 /** One platform's portfolios for that platform's tab: brand-wide, from the same cached read as
@@ -2228,7 +2264,10 @@ export function useOptimizerAccountSnapshots(
     () => optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
     [brandId, adAccountId, level],
   );
-  const enabled = Boolean(brandId && adAccountId);
+  // A Google customer selected on Scale's Google platform has no Meta snapshots to read.
+  const target = useMetaReadAccount(brandId, adAccountId);
+  const enabled = Boolean(brandId && target.accountId);
+  const awaitingAccounts = Boolean(brandId && adAccountId) && !target.settled;
 
   const query = useQuery({
     ...accountSnapshotsQuery(brandId, adAccountId as string, level),
@@ -2251,7 +2290,7 @@ export function useOptimizerAccountSnapshots(
   const canRefresh = enabled && !inCooldown && !query.isFetching;
 
   const refresh = useCallback(() => {
-    if (!brandId || !adAccountId || Date.now() < cooldownUntil) return;
+    if (!enabled || !adAccountId || Date.now() < cooldownUntil) return;
     setCooldownUntil(Date.now() + SNAPSHOTS_REFRESH_COOLDOWN_MS);
     // fetchQuery on the shared key forces a fresh (forceRefresh:true) edge read and
     // writes the result into the same cache both observers render from.
@@ -2260,10 +2299,12 @@ export function useOptimizerAccountSnapshots(
       queryFn: () => withReadTimeout(fetchAccountSnapshots(brandId, adAccountId, scope, true)),
       staleTime: 0,
     });
-  }, [brandId, adAccountId, scope, cooldownUntil, queryClient, queryKey]);
+  }, [enabled, brandId, adAccountId, scope, cooldownUntil, queryClient, queryKey]);
 
   return {
     ...query,
+    // Still deciding whether this account has Meta snapshots at all is still loading them.
+    isLoading: query.isLoading || awaitingAccounts,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
     targeting: query.data?.targeting ?? EMPTY_TARGETING,
     inactiveWindows: query.data?.inactiveWindows ?? EMPTY_INACTIVE_WINDOWS,
@@ -2288,7 +2329,10 @@ export function useOptimizerAdsetInventory(
     () => optimizerQueryKeys.adsetInventory(brandId, adAccountId),
     [brandId, adAccountId],
   );
-  const canQuery = enabled && Boolean(brandId && adAccountId);
+  // A Google customer selected on Scale's Google platform has no Meta ad sets to list.
+  const target = useMetaReadAccount(brandId, adAccountId);
+  const canQuery = enabled && Boolean(brandId && target.accountId);
+  const awaitingAccounts = enabled && Boolean(brandId && adAccountId) && !target.settled;
   const query = useQuery({
     queryKey,
     queryFn: () => withReadTimeout(fetchAdsetInventory(brandId, adAccountId as string, false)),
@@ -2324,6 +2368,7 @@ export function useOptimizerAdsetInventory(
 
   return {
     ...query,
+    isLoading: query.isLoading || awaitingAccounts,
     data: (query.data?.adsets ?? []) as OptimizerAdsetInventoryItem[],
     fetchedAt: query.data?.fetchedAt ?? null,
     partial: query.data?.partial ?? false,
