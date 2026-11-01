@@ -38,7 +38,7 @@ mkdirSync(path.join(run, 'private'), { recursive: true, mode: 0o700 });
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 writeFileSync(path.join(run, 'bench-source.ts'), readFileSync(import.meta.path), { flag: 'wx' });
 const observed: Record<string, unknown> = { runId, startedAt: new Date().toISOString(), sourceSha256: sha(readFileSync(import.meta.path)),
-  calls: [], checkpoints: [], families: [], crashes: [], unrun: ['Rendering and callbacks', 'Hosted/deployed production', 'Human physical gesture authentication', 'Presentation shared-registry bridge'] };
+  calls: [], checkpoints: [], families: [], crashes: [], releaseReviews: [], unrun: ['Rendering and callbacks', 'Hosted/deployed production', 'Human physical gesture authentication', 'Presentation shared-registry bridge'] };
 const list = (name: string) => observed[name] as object[];
 const sanitize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(sanitize);
@@ -275,22 +275,35 @@ async function merge(family: Family, target: Page, actor: Actor, ours: Branch, t
   return { ...ours, revision: accepted.revision, variant: { ...ours.variant, draftHeadRevisionId: accepted.revision.id } };
 }
 async function releaseReview(family: Family, target: Page, actor: Actor, ours: Branch, theirs: Branch) {
+  const evidence: Record<string, unknown> = { family: family.family, selectedRevisionId: ours.revision.id };
+  list('releaseReviews').push(evidence);
   await inspect(family, target, actor, ours.revision.id); await panel(target).getByRole('button', { name: 'Releases', exact: true }).click();
   const before = templateReleaseListResponseSchema.parse(await read(actor, family, `releases?brandId=${config.brandId}&includeTargets=true`));
+  evidence.before = before;
   const buttons = panel(target).getByRole('button', { name: 'Review release', exact: true });
   await until(() => buttons.count(), value => value > 0, 'verified production binding in GUI');
   await buttons.first().click();
   const first = templateReleaseResultSchema.parse(await uiResponse(target, '/releases', () => panel(target).getByRole('button', { name: 'Confirm production release', exact: true }).click()));
+  evidence.first = first; assert.equal(first.release.revisionId, ours.revision.id);
   await inspect(family, target, actor, theirs.revision.id); await panel(target).getByRole('button', { name: 'Releases', exact: true }).click();
   await panel(target).getByRole('button', { name: 'Review release', exact: true }).first().click();
   const second = templateReleaseResultSchema.parse(await uiResponse(target, '/releases', () => panel(target).getByRole('button', { name: 'Confirm production release', exact: true }).click()));
+  evidence.second = second; assert.equal(second.release.revisionId, theirs.revision.id);
   const releaseList = panel(target).getByRole('list', { name: 'Immutable releases', exact: true });
   const row = releaseList.locator('li').filter({ hasText: `Release ${first.release.id.slice(0, 8)}` });
   await row.getByText('Verified release pins', { exact: true }).click();
-  assert((await row.locator('pre').textContent())?.includes(ours.revision.id), 'Actual GUI exposes immutable revision pins.');
+  const displayed = JSON.parse(await row.locator('pre').textContent() ?? 'null');
+  assert.deepEqual(displayed, first.release.manifest, 'Actual GUI exposes the exact immutable artifact manifest.');
+  assert((await row.textContent())?.includes(`revision ${ours.revision.id.slice(0, 8)}`), 'Release revision identity is separate from source byte identity.');
+  const pinnedSource = z.object({ assetId: z.string().uuid(), versionId: z.string().uuid(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })
+    .parse(first.release.manifest.source);
+  assert.equal(pinnedSource.assetId, ours.revision.sourceAssetId);
+  assert.equal(pinnedSource.versionId, ours.revision.sourceVersionId);
+  assert.equal(pinnedSource.sha256, ours.revision.source.sourceChecksum ?? ours.revision.source.aepSha256);
+  evidence.displayedManifest = displayed;
   await row.getByRole('button', { name: 'Review rollback', exact: true }).click();
   const rollback = templateReleaseResultSchema.parse(await uiResponse(target, '/releases/rollback', () => panel(target).getByRole('button', { name: 'Confirm release rollback', exact: true }).click()));
-  assert.equal(rollback.release.id, first.release.id);
+  evidence.rollback = rollback; assert.equal(rollback.release.id, first.release.id);
   const after = templateReleaseListResponseSchema.parse(await read(actor, family, `releases?brandId=${config.brandId}`));
   assert.equal(after.heads.find(value => value.bindingId === first.release.bindingId && value.templateKey === first.release.templateKey)?.releaseId, first.release.id);
   return { before, first, second, after, scope: 'Actual GUI release/rollback and pin inspection. No new renders or callback execution.' };
@@ -383,6 +396,7 @@ try {
       const independent = await field(family, page, true), initialIndependent = await independent.inputValue();
       const independentValue = String(Math.round((Number(initialIndependent) + (family.family === 'blender' ? 0.5 : 7)) * 100) / 100);
       const copyB = await fill(family, page, independentValue, true);
+      result.workingCopyIds = [copyA, copyB];
       await editor(family, page, a, branchA.revision.id); assert.equal(await (await field(family, page)).inputValue(), valueA);
       await checkpoint(`${family.family}-dirty-branches`);
       await forceOwnChrome(profile); await context.close().catch(() => undefined);
