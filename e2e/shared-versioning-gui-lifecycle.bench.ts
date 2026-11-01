@@ -7,7 +7,7 @@ import { type TemplateRevision, type TemplateRevisionVariant, templateRevisionVa
   templateVersionResultSchema, templateVersionDiffResponseSchema, templateVersionMergePreviewSchema,
   templateVersionHistoryResponseSchema, templateReleaseListResponseSchema, templateReleaseResultSchema } from '@continuum/contracts';
 import { createChunks, stringToBase64URL } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session } from '@supabase/supabase-js';
 import { chromium, type BrowserContext, type Locator, type Page } from 'playwright';
 import { z } from 'zod';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
@@ -47,7 +47,7 @@ const sanitize = (value: unknown): unknown => {
 };
 type Family = typeof config.families[number];
 type Branch = { name: string; revision: TemplateRevision; variant: TemplateRevisionVariant };
-type Actor = { token: string; principalId: string; label: string; session: typeof config.authSession };
+type Actor = { token: string; principalId: string; label: string; session: Session };
 let context: BrowserContext | undefined, secondContext: BrowserContext | undefined, page: Page | undefined, otherPage: Page | undefined;
 let stopped = false, screenshots = 0;
 const used = (directory: string): number => { try { return readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => {
@@ -284,8 +284,25 @@ try {
   const member = createClient(config.supabaseUrl, config.anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const aUser = await member.auth.getUser(config.authSession.access_token), bUser = await member.auth.getUser(config.authSessionB.access_token);
   assert.ifError(aUser.error); assert.ifError(bUser.error); assert(aUser.data.user && bUser.data.user);
-  const a: Actor = { token: config.authSession.access_token, principalId: aUser.data.user.id, label: 'A', session: config.authSession };
-  const b: Actor = { token: config.authSessionB.access_token, principalId: bUser.data.user.id, label: 'B', session: config.authSessionB };
+  for (const pair of [config.authSession, config.authSessionB]) {
+    const claims = JSON.parse(Buffer.from(pair.access_token.split('.')[1]!, 'base64url').toString()) as { exp: number };
+    assert(claims.exp > Date.now() / 1000 + 300, 'The coordinator must provide unexpired actors; this driver never refreshes them.');
+  }
+  // Match the existing real-browser harness: cookies contain complete genuine SDK Sessions.
+  const sessions = await Promise.all([config.authSession, config.authSessionB].map(pair =>
+    createClient(config.supabaseUrl, config.anonKey, { auth: { persistSession: false, autoRefreshToken: false } }).auth.setSession(pair)));
+  for (const [index, result] of sessions.entries()) {
+    assert.ifError(result.error); assert(result.data.session);
+    const original = index === 0 ? config.authSession : config.authSessionB;
+    assert.equal(result.data.session.access_token, original.access_token, 'No actor refresh is permitted.');
+    assert.equal(result.data.session.refresh_token, original.refresh_token, 'No actor refresh is permitted.');
+  }
+  const sessionA = sessions[0]!.data.session!, sessionB = sessions[1]!.data.session!;
+  assert.equal(sessionA.user.id, aUser.data.user.id); assert.equal(sessionB.user.id, bUser.data.user.id);
+  observed.sessionPackaging = { source: 'Actual SDK setSession on genuine unexpired token pairs', tokensUnchanged: true,
+    expiresAt: [sessionA.expires_at, sessionB.expires_at] };
+  const a: Actor = { token: config.authSession.access_token, principalId: aUser.data.user.id, label: 'A', session: sessionA };
+  const b: Actor = { token: config.authSessionB.access_token, principalId: bUser.data.user.id, label: 'B', session: sessionB };
   assert.notEqual(a.principalId, b.principalId); observed.actors = [a, b].map(({ label, principalId }) => ({ label, principalId }));
   const profile = path.join(run, 'private', 'chrome-a');
   context = await launch(profile, a); secondContext = await launch(path.join(run, 'private', 'chrome-b'), b);
