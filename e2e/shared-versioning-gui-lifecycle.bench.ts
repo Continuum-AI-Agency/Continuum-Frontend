@@ -307,7 +307,7 @@ try {
   const profile = path.join(run, 'private', 'chrome-a');
   context = await launch(profile, a); secondContext = await launch(path.join(run, 'private', 'chrome-b'), b);
   page = await context.newPage(); otherPage = await secondContext.newPage(); attach(page, a); attach(otherPage, b);
-  rec.record('Two real authenticated Chrome contexts use only the isolated stack', 'PASS');
+  rec.record('Genuine actors verified and Chrome contexts launched on the isolated stack', 'PASS');
   for (const family of config.families) {
     const result: Record<string, unknown> = { family: family.family, templateId: family.templateId, steps: [] }; list('families').push(result);
     const steps = result.steps as string[];
