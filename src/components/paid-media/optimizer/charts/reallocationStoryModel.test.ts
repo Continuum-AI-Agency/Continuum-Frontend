@@ -252,3 +252,37 @@ describe('buildReallocationStory — a cycle that only cuts', () => {
     expect(story.moved).toBe(60);
   });
 });
+
+describe('buildReallocationStory — the cost axis ceiling (UX-chart-scale-one-event-interval)', () => {
+  // The story sizes its own cost axis. A cost per result is spend ÷ a count of at least one,
+  // so a 1-event interval may reach 39.5× its estimate but the axis stops at the spend behind
+  // it (cpa × events); the whisker keeps its real upper bound and is clipped at the edge.
+  const spend = 339.7;
+  const oneEvent = item('one', 100, 100, {
+    diagnostics: { ci: { cpa: spend, lo: 8.6, hi: spend * 39.5, events: 1 } },
+  });
+  const measured = item('measured', 100, 100, {
+    diagnostics: { ci: { cpa: 50, lo: 32, hi: 75, events: 25 } },
+  });
+
+  it('a 1-event interval does not stretch the cost axis past the spend behind it', () => {
+    const story = buildReallocationStory({
+      items: [oneEvent, measured],
+      metric: lead,
+      lookback: 14,
+      target: null,
+    });
+    expect(story.costMax).toBeLessThanOrEqual(spend * 1.08);
+    expect(story.rows.find((row) => row.adsetId === 'one')?.ci?.hi).toBeCloseTo(spend * 39.5, 6);
+  });
+
+  it('a well-measured interval still sets the axis', () => {
+    const story = buildReallocationStory({
+      items: [measured],
+      metric: lead,
+      lookback: 14,
+      target: null,
+    });
+    expect(story.costMax).toBeCloseTo(75 * 1.08, 6);
+  });
+});
