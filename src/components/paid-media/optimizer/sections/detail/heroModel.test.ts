@@ -945,3 +945,81 @@ describe('heroMetricsWindow', () => {
     expect(at({ kind: 'custom', from: '2026-10-08', to: '2026-10-21' })).toBeNull();
   });
 });
+
+// PP-DT-E-portfolio-p8-findings-labelled-creative (deep test 2026-10-31). Vivo 47's Google
+// portfolio e642c737 listed its P8 account findings (acct_quality_score_by_service,
+// acct_brand_vs_nonbrand) as "CREATIVE · Creative on 20775796216" with "Open the creative
+// recommendation": the fallback hero turned every kind it did not name into a creative candidate.
+// The brief worker (Continuum-Backend portfolio-briefs/packet.ts) names three modules and leaves
+// every other kind out; the hero composed here does what the worker would have done.
+describe('the fallback hero names only the modules the brief worker names', () => {
+  const platformSignal = (id: string, trigger: string) => ({
+    id,
+    adset_id: '20775796216',
+    kind: 'platform_signal',
+    trigger,
+    severity: 'medium',
+    reason: '8 keywords with Quality Score 3 or less spent $19,372 MXN.',
+    status: 'pending',
+    evidence: null,
+    seed: { platform_card: { headline: 'Low Quality Score by service' } },
+  });
+  const creative = {
+    ...rec,
+    id: '2f1c1c1e-0000-4000-8000-000000000009',
+    adset_id: 'as-9',
+    adset_name: 'Winner',
+    kind: 'variate_creative',
+    trigger: 'C2_creative_winner',
+  };
+  const view = buildHeroView({
+    report: {
+      portfolio: null,
+      latest_run: { id: 'run1', cycle_ts: '2026-10-31T16:44:00Z' } as never,
+      latest_items: [],
+      recommendations: [
+        platformSignal(
+          '2f1c1c1e-0000-4000-8000-0000000000a1',
+          'signal:acct_quality_score_by_service',
+        ) as never,
+        platformSignal(
+          '2f1c1c1e-0000-4000-8000-0000000000a2',
+          'signal:acct_brand_vs_nonbrand',
+        ) as never,
+        creative as never,
+        rec as never,
+      ],
+      history: [],
+    },
+    recap,
+    flightPacing: { kind: 'no_flight' },
+    metric,
+    currency: 'MXN',
+    portfolio,
+    target: 70,
+    window: 'd7',
+    firstCycle: false,
+  });
+
+  it('leaves a platform finding out of the candidates — it is no creative', () => {
+    const ids = view.brief.candidates.map((candidate) => candidate.id);
+    expect(ids).not.toContain('rec:2f1c1c1e-0000-4000-8000-0000000000a1');
+    expect(ids).not.toContain('rec:2f1c1c1e-0000-4000-8000-0000000000a2');
+    expect(view.brief.candidates.every((candidate) => candidate.kind !== 'platform_signal')).toBe(
+      true,
+    );
+  });
+
+  it('keeps the kinds the worker names, each in its own module', () => {
+    const modules = Object.fromEntries(
+      view.brief.candidates.map((candidate) => [candidate.kind, candidate.module]),
+    );
+    expect(modules).toMatchObject({ pause: 'pause', variate_creative: 'creative' });
+  });
+
+  it('prints no "Creative on <campaign id>" in the findings', () => {
+    const news = buildPortfolioNews({ view, items: [], target: 70 });
+    const text = JSON.stringify(news.cards);
+    expect(text).not.toContain('20775796216');
+  });
+});
