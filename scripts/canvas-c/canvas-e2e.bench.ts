@@ -60,6 +60,7 @@ import {
   liveChangeVersionsOf,
   scaffoldVersionsOf,
 } from '@/lib/campaign-canvas/versions';
+import { benchBrowserChannel } from '../../e2e/support/prodEnv';
 import {
   composedLiveVersionThread,
   composedPortfolioTurn,
@@ -402,7 +403,11 @@ const googlePreview = (channel: 'SEARCH' | 'PERFORMANCE_MAX'): LiveChangePreview
 
 const buildBundle = async (dist: string, data: unknown): Promise<void> => {
   mkdirSync(dist, { recursive: true });
-  // Next resolves `server-only` to nothing in a client graph; the bundle does the same.
+  // Next resolves `server-only` to nothing in a client graph; the bundle does the same. A
+  // 'use server' module reaches a client graph in Next only as references to its actions, never
+  // as code: without the same boundary here, a client import of a server action
+  // (switch-brand.ts → settings/actions.ts) bundles its server dependencies — posthog-node and
+  // node:zlib — and the browser build fails on code no page ever ships.
   const serverOnly: import('bun').BunPlugin = {
     name: 'server-only',
     setup(build) {
@@ -414,6 +419,21 @@ const buildBundle = async (dist: string, data: unknown): Promise<void> => {
         contents: 'export {};',
         loader: 'js',
       }));
+      build.onLoad({ filter: /\.(ts|tsx)$/ }, async (args) => {
+        if (args.path.includes('/node_modules/')) return undefined;
+        const source = await Bun.file(args.path).text();
+        if (!/^\s*(['"])use server\1/.test(source)) return undefined;
+        const names = [
+          ...source.matchAll(/export\s+(?:async\s+)?(?:function|const|let)\s+([A-Za-z0-9_$]+)/g),
+        ].map((match) => match[1]);
+        const contents = names
+          .map(
+            (name) =>
+              `export const ${name} = async () => { throw new Error('server action ${name} runs on the server only'); };`,
+          )
+          .join('\n');
+        return { contents: contents || 'export {};', loader: 'js' };
+      });
     },
   };
   const built = await Bun.build({
@@ -809,7 +829,9 @@ const main = async () => {
   record('bundle: the real components, the app’s Tailwind', 'PASS', dist);
   const server = serve(dist);
   const base = `http://127.0.0.1:${server.port}`;
-  const browser = await chromium.launch();
+  // The installed Chrome, like every other Frontend bench (OPTIMIZER_E2E_BROWSER_CHANNEL=bundled
+  // for Playwright's own build).
+  const browser = await chromium.launch(benchBrowserChannel());
   try {
     for (const key of LIVE_KEYS) {
       const preview = previews[key];
