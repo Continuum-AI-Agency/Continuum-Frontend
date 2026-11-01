@@ -29,19 +29,27 @@ export function ciUpperBound(item: CiItem): number | null {
 }
 
 /**
- * The farthest an item may stretch a row's axis: its upper bound, but never past the spend
- * behind the interval. A cost per result is spend ÷ a count of at least one, so cpa × events
- * is the ceiling — and since costInterval became Garwood's exact interval, ONE event already
- * carries a finite hi at 39.5× the estimate, which squeezed every other bar in the row to a
- * fortieth of its width (UX-chart-scale-one-event-interval). Under one event there is no such
- * ceiling, so the bound stands.
+ * The spend behind an interval — cpa × events — once it holds at least one event; null under
+ * one. A cost per result is spend ÷ a count of at least one, so no axis needs to reach past
+ * it: since costInterval became Garwood's exact interval, ONE event already carries a finite
+ * hi at 39.5× the estimate, which squeezed every other bar in the row to a fortieth of its
+ * width (UX-chart-scale-one-event-interval). An axis stops here; the whisker keeps its real
+ * upper bound and is clipped at the edge.
  */
+export function intervalSpendCeiling(
+  ci: { cpa?: number | null; events?: number | null } | null | undefined,
+): number | null {
+  const cpa = ci?.cpa;
+  const events = ci?.events;
+  if (cpa == null || events == null || !(cpa > 0) || !(events >= 1)) return null;
+  return cpa * events;
+}
+
+/** The farthest an item may stretch a row's axis: its upper bound, capped at its spend. */
 function plausibleUpperBound(item: CiItem): number | null {
   const hi = ciUpperBound(item);
-  const cpa = item.diagnostics?.ci?.cpa;
-  const events = item.diagnostics?.ci?.events;
-  if (hi == null || cpa == null || events == null || !(cpa > 0) || !(events >= 1)) return hi;
-  return Math.min(hi, cpa * events);
+  const ceiling = intervalSpendCeiling(item.diagnostics?.ci);
+  return hi == null || ceiling == null ? hi : Math.min(hi, ceiling);
 }
 
 /** Largest plausible CI upper bound across scored items, in display units. Never 0 (would

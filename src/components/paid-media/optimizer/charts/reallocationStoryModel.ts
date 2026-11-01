@@ -18,6 +18,7 @@ import { resolveAdsetName } from '../adsetName';
 import { type EntityNounSource, entityOf } from '../entityNoun';
 import { deriveEfficiency, formatCurrency } from '../format';
 import { measuredCpa } from '../reportModel';
+import { intervalSpendCeiling } from './chartScale';
 
 export type StoryLookback = 3 | 7 | 14;
 export const STORY_LOOKBACKS: readonly StoryLookback[] = [3, 7, 14];
@@ -103,6 +104,8 @@ export function buildReallocationStory(args: {
   const target = args.target != null && args.target > 0 ? args.target : null;
   const window = WINDOW_BY_LOOKBACK[lookback];
   const mult = metric.denominatorMultiplier;
+  // Where each row's interval may stretch the cost axis: its spend, not a 1-event upper bound.
+  const axisCeilingById = new Map<string, number>();
 
   const rows: StoryRow[] = items.map((item) => {
     const snapshot = snapshotById?.get(item.adset_id) ?? null;
@@ -119,6 +122,8 @@ export function buildReallocationStory(args: {
       lookback === 14 && num(ciRaw?.lo) != null && num(ciRaw?.hi) != null
         ? { lo: (ciRaw?.lo as number) * mult, hi: (ciRaw?.hi as number) * mult }
         : null;
+    const ceiling = ci ? intervalSpendCeiling(ciRaw) : null;
+    if (ceiling != null) axisCeilingById.set(item.adset_id, ceiling * mult);
     const current = item.current_budget ?? 0;
     const proposed = item.final_budget ?? current;
     const freezeReason = item.diagnostics?.freezeReason ?? null;
@@ -153,7 +158,10 @@ export function buildReallocationStory(args: {
     return a.cost - b.cost;
   });
 
-  const costValues = rows.flatMap((row) => [row.cost ?? 0, row.ci?.hi ?? 0]);
+  const costValues = rows.flatMap((row) => [
+    row.cost ?? 0,
+    row.ci ? Math.min(row.ci.hi, axisCeilingById.get(row.adsetId) ?? row.ci.hi) : 0,
+  ]);
   const costMax = Math.max(target ?? 0, ...costValues, 1) * 1.08;
   const budgetMax = Math.max(...rows.flatMap((row) => [row.current, row.proposed]), 1) * 1.05;
 
