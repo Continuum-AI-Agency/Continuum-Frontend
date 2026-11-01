@@ -182,6 +182,7 @@ import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
 import { JainaOutboxTurn } from './components/JainaOutboxTurn';
+import { JainaUnansweredNotice } from './components/JainaUnansweredNotice';
 
 /**
  * Tool name to database gate. The database enforces gate ORDER, so a wrong mapping
@@ -975,6 +976,7 @@ export function JainaChatSurface({
     setMessages: setUiMessages,
     resumeStream,
     clearError: clearChatError,
+    resumeSettledSessionId,
   } = useJainaChat({
     sessionId,
     initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
@@ -3111,6 +3113,19 @@ export function JainaChatSurface({
   }, [messages]);
 
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
+  // A stored question with no answer and no run answering it — checked with the Backend, not
+  // assumed from a quiet stream (PP-DT-C-jaina-unanswered-run-blank-transcript).
+  const unansweredQuestion =
+    liveChatMessage?.role === 'user' &&
+    resumeSettledSessionId === sessionId &&
+    !isViewedStreaming &&
+    !chatError &&
+    !paymentRequired &&
+    !isInputDisabled &&
+    !outboxTurn &&
+    queuedMessages.length === 0
+      ? liveChatMessage.content
+      : null;
   const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const canStartQueuedNow =
     !isQueueStreaming && !isHistoryLoading && !isConversationSwitching && !outboxTurn;
@@ -3304,6 +3319,12 @@ export function JainaChatSurface({
                       ))}
                     </React.Fragment>
                   ))}
+
+                  {unansweredQuestion ? (
+                    <JainaUnansweredNotice
+                      onAskAgain={() => void handleSubmit(unansweredQuestion)}
+                    />
+                  ) : null}
 
                   {outboxTurn ? (
                     <JainaOutboxTurn
