@@ -24,10 +24,13 @@ const invoke = mock(async (_name: string, _options: { body: Record<string, unkno
   data: { snapshots: [], adsets: [], fetchedAt: null },
   error: null,
 }));
-const rpc = mock(async (name: string) => ({
-  data: name === 'list_brand_ad_accounts' ? ACCOUNTS : [],
-  error: null,
-}));
+// The Google portfolio's own metrics read answers as a server that does not have the RPC yet
+// (PGRST202): settled at once, so the row's pending state is the Meta read's alone.
+const rpc = mock(async (name: string) =>
+  name === 'optimizer_get_portfolio_metrics'
+    ? { data: null, error: { code: 'PGRST202', message: 'not in the schema cache' } }
+    : { data: name === 'list_brand_ad_accounts' ? ACCOUNTS : [], error: null },
+);
 
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
