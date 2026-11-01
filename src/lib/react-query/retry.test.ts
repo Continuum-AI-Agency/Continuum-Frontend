@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { FunctionsFetchError } from '@supabase/supabase-js';
-import { markRetried } from '@/lib/api/errors';
+import { ApiError, markRetried } from '@/lib/api/errors';
 import { RequestTimeoutError } from '@/lib/api/timeout';
 import { retryUnlessTimeout } from './retry';
 
@@ -19,6 +19,12 @@ describe('retryUnlessTimeout', () => {
     expect(retry(0, new FunctionsFetchError(timeout))).toBe(false);
     expect(retry(0, { message: timeout.message, details: '', hint: '', code: '' })).toBe(false);
     expect(retry(0, { name: 'TimeoutError' })).toBe(false);
+  });
+
+  it('never retries a payment refusal: the plan answers the same way twice', () => {
+    // PP-DT-C-unpaid-brand-polls-402-on-every-page: a brand without the plan got every 402 twice.
+    expect(retry(0, new ApiError('Organic Plus is required', 402, 'product_required'))).toBe(false);
+    expect(retry(0, Object.assign(new Error('Payment Required'), { status: 402 }))).toBe(false);
   });
 
   it('never retries an error the call already retried itself: one retry layer, not two', () => {
