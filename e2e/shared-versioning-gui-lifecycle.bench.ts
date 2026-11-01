@@ -71,7 +71,16 @@ async function checkpoint(label: string, target = page) {
   await target.screenshot({ path: path.join(run, `${file}.png`), fullPage: false });
   const text = (await target.locator('body').innerText()).slice(0, 60_000);
   writeFileSync(path.join(run, `${file}.txt`), text, { flag: 'wx' });
-  const members = [`${file}.png`, `${file}.txt`].map(name => { const bytes = readFileSync(path.join(run, name)); return { file: name, bytes: bytes.length, sha256: sha(bytes) }; });
+  const state = await target.evaluate(() => {
+    const visible = (node: Element) => !!node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden';
+    return { workingCopies: [...document.querySelectorAll('[data-working-copy-id]')].map(node => ({
+      id: node.getAttribute('data-working-copy-id'), baseRevisionId: node.getAttribute('data-base-revision-id'), visible: visible(node) })),
+      tabs: [...document.querySelectorAll('[role=tab]')].map(node => ({ label: node.textContent, selected: node.getAttribute('aria-selected'), visible: visible(node) })),
+      layerLists: [...document.querySelectorAll('aside[aria-label="Layer workspace"] ol')].map(node => ({ label: node.getAttribute('aria-label'), visible: visible(node) })),
+      selectedLayerButtons: [...document.querySelectorAll('aside[aria-label="Layer workspace"] button[aria-pressed=true]')].map(node => ({ label: node.textContent, visible: visible(node) })) };
+  });
+  writeFileSync(path.join(run, `${file}.state.json`), JSON.stringify(state, null, 2), { flag: 'wx' });
+  const members = [`${file}.png`, `${file}.txt`, `${file}.state.json`].map(name => { const bytes = readFileSync(path.join(run, name)); return { file: name, bytes: bytes.length, sha256: sha(bytes) }; });
   writeFileSync(path.join(run, `${file}.sealed.json`), JSON.stringify({ runId, label, members }), { flag: 'wx' });
   list('checkpoints').push({ label, screenshot: `${file}.png`, dom: `${file}.txt` });
 }
@@ -128,10 +137,16 @@ async function open(family: Family, target: Page, revisionId?: string) {
   await showPanel(family, target);
 }
 async function showPanel(family: Family, target: Page) {
-  if (family.family === 'after_effects') await target.getByRole('tab', { name: /^Variants/ }).click();
-  else { const details = target.locator('details').filter({ has: target.locator('summary', { hasText: 'Variant control and releases' }) }).first();
-    await details.waitFor(); if ((await details.getAttribute('open')) === null) await details.locator('summary').click(); }
-  await panel(target).waitFor({ timeout: 120_000 });
+  await until(async () => {
+    if (family.family === 'after_effects') {
+      const tab = target.getByRole('tab', { name: /^Variants/ });
+      if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
+    } else {
+      const details = target.locator('details').filter({ has: target.locator('summary', { hasText: 'Variant control and releases' }) }).first();
+      if ((await details.getAttribute('open')) === null) await details.locator('summary').click();
+    }
+    return panel(target).isVisible();
+  }, Boolean, 'version controls on the settled revision panel', 120_000);
 }
 async function inspect(family: Family, target: Page, actor: Actor, revisionId: string) {
   await showPanel(family, target); const variants = await catalog(actor, family);
@@ -147,13 +162,13 @@ async function aeLayers(target: Page, revisionId: string, readOnly = false) {
   const tab = target.getByRole('tab', { name: 'Edit layers', exact: true });
   const notice = target.locator('p:visible').filter({ hasText: /^This revision is read-only\. Branch it in Variants before editing\.$/ }).first();
   const copy = target.locator(`[data-working-copy-id][data-base-revision-id="${revisionId}"]:visible`);
-  const layers = target.getByRole('list', { name: 'Layers', exact: true });
+  const workspace = target.locator('section[aria-label="Template layer editor"]:visible aside[aria-label="Layer workspace"]:visible');
   // Opening a revision schedules a keyed React transition. A click on the outgoing panel
   // can be replaced by its incoming Variants panel; admit only the requested visible editor.
   await until(async () => {
     if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
     return await tab.getAttribute('aria-selected') === 'true' && (readOnly
-      ? await notice.isVisible() : await copy.count() > 0 && await layers.isVisible());
+      ? await notice.isVisible() : await copy.count() > 0 && await workspace.isVisible());
   }, Boolean, readOnly ? 'requested Original read-only layer panel after revision transition'
     : `requested exact ${revisionId} layer editor after revision transition`, 120_000);
 }
@@ -162,8 +177,11 @@ async function editor(family: Family, target: Page, actor: Actor, revisionId: st
   await panel(target).getByRole('button', { name: 'Open exact revision', exact: true }).click();
   if (family.family === 'after_effects') {
     await aeLayers(target, revisionId);
-    const layers = target.getByRole('list', { name: 'Layers', exact: true });
-    assert(family.layer); await layers.getByRole('button', { name: new RegExp(escaped(family.layer.name)) }).first().click();
+    assert(family.layer);
+    const workspace = target.getByRole('complementary', { name: 'Layer workspace', exact: true });
+    const selected = workspace.getByRole('button', { name: family.layer.name, exact: true });
+    await selected.click();
+    await until(() => selected.getAttribute('aria-pressed'), value => value === 'true', 'exact requested layer selection; drag handles are not selection');
   }
 }
 async function uiResponse(target: Page, suffix: string, action: () => Promise<void>, expected = 200) {
@@ -191,7 +209,7 @@ async function fill(family: Family, target: Page, value: string, independent = f
   await until(() => control.inputValue(), actual => actual === value, 'actual edited field value');
   const marker = target.locator('[data-working-copy-id][data-base-revision-id]:visible').first(); await marker.waitFor();
   const copyId = await marker.getAttribute('data-working-copy-id'); assert(copyId);
-  await target.waitForFunction(({ id, value, family, independent, fieldId }) => new Promise<boolean>((resolve, reject) => {
+  await target.waitForFunction(({ id, value, family, independent, fieldId, layer }) => new Promise<boolean>((resolve, reject) => {
     const opening = indexedDB.open('continuum-forge-private-drafts'); opening.onerror = () => reject(opening.error);
     opening.onsuccess = () => { const db = opening.result, tx = db.transaction('drafts', 'readonly'), request = tx.objectStore('drafts').getAll();
       request.onsuccess = () => resolve(request.result.some((row: { scope?: { workingCopyId?: string }; commands?: unknown;
@@ -203,12 +221,17 @@ async function fill(family: Family, target: Page, value: string, independent = f
         }
         if (row.scope?.workingCopyId !== id || !Array.isArray(row.commands)) return false;
         const property = independent ? 'y' : 'x';
-        const includes = (input: unknown): boolean => !!input && typeof input === 'object' &&
-          (Object.entries(input).some(([key, item]) => key === property && item === Number(value) || includes(item)));
+        const includes = (input: unknown): boolean => {
+          if (!input || typeof input !== 'object') return false;
+          const command = input as { type?: string; nodeId?: string; edit?: Record<string, unknown> };
+          return !!layer && command.type === 'layer.edit' && command.nodeId === `aep:${layer.compId}:${layer.layerId}`
+            && command.edit?.[property] === Number(value) || Object.values(input).some(includes);
+        };
         return row.commands.some(includes);
       }));
       request.onerror = () => reject(request.error); tx.oncomplete = () => db.close(); };
-  }), { id: copyId, value, family: family.family, independent, fieldId: independent ? family.independentField : family.textField }, { timeout: 30_000 });
+  }), { id: copyId, value, family: family.family, independent, fieldId: independent ? family.independentField : family.textField,
+    layer: family.layer ?? null }, { timeout: 30_000 });
   return copyId;
 }
 async function save(family: Family, target: Page, actor: Actor, branch: Branch) {
@@ -218,7 +241,17 @@ async function save(family: Family, target: Page, actor: Actor, branch: Branch) 
     'GUI save appends a new branch revision', 120_000);
   const variant = variants.find(value => value.variantId === branch.variant.variantId)!;
   const revision = variant.revisions.find(value => value.id === variant.draftHeadRevisionId)!;
-  assert.equal(revision.parentRevisionId, branch.revision.id); return { ...branch, variant, revision };
+  assert.equal(revision.parentRevisionId, branch.revision.id);
+  // A remote head precedes local acknowledgement and the editor's onSaved remount.
+  // Wait for that actual incoming revision before selecting another branch.
+  await until(async () => {
+    await showPanel(family, target);
+    return panel(target).locator(`span[title="${revision.id}"]:visible`).count().then(count => count > 0);
+  }, Boolean, 'saved revision acknowledgement and incoming version panel', 120_000);
+  await editor(family, target, actor, revision.id);
+  await until(async () => await target.locator(`[data-working-copy-id][data-base-revision-id="${revision.id}"]:visible`).count() > 0
+    && await button.isDisabled(), Boolean, 'exact acknowledged clean editor after save remount', 120_000);
+  return { ...branch, variant, revision };
 }
 async function pick(target: Page, title: string, branch: Branch) {
   await panel(target).getByRole('combobox', { name: title, exact: true }).click();

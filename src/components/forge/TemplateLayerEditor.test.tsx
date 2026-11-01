@@ -511,7 +511,7 @@ mock.module('@/components/library/editor/LibraryMediaPickerDialog', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { LayerDraftState } from './layerDraft';
+import { TemplateAuthoringDraftError, type LayerDraftState } from './layerDraft';
 import { projectTemplateAuthoringCommands } from './templateAuthoringProjection';
 import { templateAuthoringWorkspaceIdentity } from './useTemplateAuthoringDraft';
 import { readTemplateAuthoringViewState } from './templateDraftRecovery';
@@ -2583,6 +2583,52 @@ describe('TemplateLayerEditor', () => {
     });
     expect(nativeRenders).not.toHaveBeenCalled();
     expect(saves).not.toHaveBeenCalled();
+  });
+
+  test('an inactive layer editor parks its exact draft and cannot replace a newer remote projection', async () => {
+    let draft: LayerDraftState | null = null;
+    const onDraftChange = (next: LayerDraftState | null) => { draft = next; };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const stage = (active: boolean) => <QueryClientProvider client={client}>
+      <TemplateLayerEditor brandId={BRAND} assetId="a" versionId={VERSION}
+        revisionId="00000000-0000-4000-8000-000000000203" name="Card B" parse={AUTHORING_PARSE}
+        active={active} onSaved={async () => {}} onDraftChange={onDraftChange} />
+    </QueryClientProvider>;
+    authoringDraftWrites.mockImplementation(async (_assetId, request) => {
+      if (request.expectedRevision !== (authoringDraft?.revision ?? 0))
+        throw new TemplateAuthoringDraftError(409, 'revision_conflict', 'Another editor advanced this private draft.');
+      authoringDraft = persistedDraftForTest(request.expectedRevision + 1, request.commands);
+      return authoringDraft;
+    });
+    const view = render(stage(true));
+    const x = await screen.findByLabelText('Position X');
+    fireEvent.change(x, { target: { value: '140' } }); fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    let saved = false;
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(true);
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    const accepted = structuredClone(authoringDraft!);
+    authoringDraft = persistedDraftForTest(accepted.revision + 1, [{
+      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, x: 170 },
+    }]);
+    const newer = structuredClone(authoringDraft);
+    const writes = authoringDraftWrites.mock.calls.length;
+    view.rerender(stage(false));
+    let parked = false;
+    await act(async () => { parked = await draft!.park!(); });
+    expect(parked).toBe(true);
+    expect(authoringDraftWrites.mock.calls).toHaveLength(writes);
+    expect(authoringDraft).toEqual(newer);
+    expect((screen.getByLabelText('Position X') as HTMLInputElement).value).toBe('140');
+    view.rerender(stage(true));
+    fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '180' } });
+    fireEvent.blur(screen.getByLabelText('Position X'));
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(false);
+    expect(authoringDraft).toEqual(newer);
+    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].expectedRevision).toBe(accepted.revision);
   });
 
   test('guard save writes a private draft and never creates a variant or version', async () => {

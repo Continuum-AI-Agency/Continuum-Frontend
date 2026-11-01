@@ -559,6 +559,8 @@ export function TemplateLayerEditor({
   }, [changes]);
 
   const ready = active && !!effectiveVersionId;
+  const [draftSessionOpened, setDraftSessionOpened] = useState(active);
+  useEffect(() => { if (active) setDraftSessionOpened(true); }, [active]);
   const restoreDraft = useCallback(
     (snapshot: LayerDraftSnapshot) => {
       const restored: LayerHistory = {
@@ -594,7 +596,8 @@ export function TemplateLayerEditor({
   const authoringDraft = useTemplateAuthoringDraft({
     scope: authoringScope,
     baseRevisionId: workingCopy?.baseRevisionId,
-    enabled: ready,
+    // Keep private saving and the exit guard available after switching inner tabs.
+    enabled: (active || draftSessionOpened) && !!effectiveVersionId,
     commands: authoringCommands,
     onRestore: restoreDraft,
   });
