@@ -836,7 +836,7 @@ export default function PaidMediaClientPage({
               chip={accountChip}
             />
           </div>
-          <div className="ms-auto flex shrink-0 items-center gap-1 @[30rem]/scale-bar:gap-2">
+          <div className="ms-auto flex shrink-0 items-center gap-1 hit-area-row [--hit-area-gap:calc(var(--spacing)*1)] @[30rem]/scale-bar:gap-2 @[30rem]/scale-bar:[--hit-area-gap:calc(var(--spacing)*2)]">
             {/* The canvas sits BESIDE the chat and full screen only drops the app chrome; in a
              *  bar too narrow for the tabs' names neither has room to give, so both wait for
              *  a wider bar rather than push the tabs out of it. */}
@@ -881,7 +881,7 @@ export default function PaidMediaClientPage({
                 aria-current={activeTab === 'creative-insights' ? 'page' : undefined}
                 data-testid="whats-working-link"
                 className={cn(
-                  'inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary-ink transition-colors',
+                  'hit-area inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary-ink transition-colors',
                   'hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   activeTab === 'creative-insights' && 'bg-primary/10',
                 )}

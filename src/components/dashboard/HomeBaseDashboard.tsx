@@ -112,8 +112,10 @@ export function HomeBaseDashboard({
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Dashboard view
               </span>
+              {/* The segments touch, so the row caps each pad at its own edge: under a coarse
+                  pointer a 44 px pad reached into the next segment's drawn box. */}
               <nav
-                className="inline-flex rounded-md border border-border bg-background p-0.5"
+                className="hit-area-row inline-flex rounded-md border border-border bg-background p-0.5"
                 aria-label="Dashboard view options"
               >
                 {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
