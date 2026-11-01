@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import type {
   CampaignInsightsResponse,
   ComputedInsight,
 } from '@/lib/paid-media/account-insights.types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import type { BudgetPacingEntry } from '@/lib/schemas/budgetPacing';
 
 type UseCampaignInsightsParams = {
@@ -138,7 +140,7 @@ export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampa
     const insightsController = new AbortController();
     const pacingController = new AbortController();
 
-    const insightsFetch = fetch('/api/paid-media/campaign-insights', {
+    const insightsFetch = paidMediaRouteFetch('/api/paid-media/campaign-insights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildRequestBody({ brandId, adAccountId, campaignId, timeRange })),
@@ -146,14 +148,18 @@ export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampa
     }).then(async (response) => {
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(
-          (body as Record<string, string>).error ?? `Request failed with status ${response.status}`,
+        throw Object.assign(
+          new Error(
+            (body as Record<string, string>).error ??
+              `Request failed with status ${response.status}`,
+          ),
+          { status: response.status },
         );
       }
       return response.json() as Promise<CampaignInsightsResponse>;
     });
 
-    const pacingFetch = fetch('/api/paid-media/budget-pacing', {
+    const pacingFetch = paidMediaRouteFetch('/api/paid-media/budget-pacing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, adAccountId }),
@@ -189,7 +195,7 @@ export function useCampaignInsights(params: UseCampaignInsightsParams): UseCampa
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Failed to load campaign insights');
+        setError(loadFailureMessage('campaign insights', err));
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {

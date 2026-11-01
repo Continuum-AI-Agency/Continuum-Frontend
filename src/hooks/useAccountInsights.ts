@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import type { PaidMediaTimeRange } from '@/components/paid-media/dashboard/timeRange';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
 import type {
   AccountInsightsResponse,
   ComputedInsight,
 } from '@/lib/paid-media/account-insights.types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import type { BudgetPacingResponse } from '@/lib/schemas/budgetPacing';
 
 type UseAccountInsightsParams = {
@@ -133,7 +135,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
     const insightsController = new AbortController();
     const pacingController = new AbortController();
 
-    const insightsFetch = fetch('/api/paid-media/account-insights', {
+    const insightsFetch = paidMediaRouteFetch('/api/paid-media/account-insights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(buildRequestBody({ brandId, adAccountId, timeRange })),
@@ -141,14 +143,18 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
     }).then(async (response) => {
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(
-          (body as Record<string, string>).error ?? `Request failed with status ${response.status}`,
+        throw Object.assign(
+          new Error(
+            (body as Record<string, string>).error ??
+              `Request failed with status ${response.status}`,
+          ),
+          { status: response.status },
         );
       }
       return response.json() as Promise<AccountInsightsResponse>;
     });
 
-    const pacingFetch = fetch('/api/paid-media/budget-pacing', {
+    const pacingFetch = paidMediaRouteFetch('/api/paid-media/budget-pacing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, adAccountId }),
@@ -173,7 +179,7 @@ export function useAccountInsights(params: UseAccountInsightsParams): UseAccount
       .catch((err: unknown) => {
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Failed to load insights');
+        setError(loadFailureMessage('account insights', err));
       })
       .finally(() => {
         if (requestId === requestIdRef.current) {

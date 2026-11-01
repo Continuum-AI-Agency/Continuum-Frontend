@@ -313,9 +313,7 @@ export function TimelineContainer({
                 Loading blocks...
               </span>
             ) : null}
-            {error ? (
-              <span className="ml-2 text-sm text-destructive">Error: {error.message}</span>
-            ) : null}
+            {error ? <span className="ml-2 text-sm text-destructive">{error.message}</span> : null}
           </div>
 
           <div className="flex items-center gap-2">
