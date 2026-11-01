@@ -863,6 +863,18 @@ export function OptimizerActionsPortfolioGroup({
   const selectableVisible = visibleRows.filter(isSelectableRow);
   const rowByKey = React.useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
 
+  // The search scopes everything under it, not the item rows alone: the budget moves are searched
+  // the same way, and the blocks that describe the whole queue (the reallocation story, the
+  // platform cards) step aside while a query narrows it — a query that matched nothing left them
+  // on screen and shrank the list without a word (PP-DT-C-actions-search-leaves-budget-table-and-counts).
+  const searchTerm = search.trim();
+  const searching = searchTerm.length > 0;
+  const visibleMoveRows = React.useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return term ? moveRows.filter((row) => moveSearchText(row).includes(term)) : moveRows;
+  }, [moveRows, searchTerm]);
+  const shownCount = visibleRows.length + visibleMoveRows.length;
+
   const approvedBudgetCount = rows.filter((row) => row.route === 'budget' && row.approved).length;
   const approvedPauseCount = rows.filter((row) => row.route === 'pause' && row.approved).length;
 
@@ -1284,6 +1296,18 @@ export function OptimizerActionsPortfolioGroup({
         </p>
       ) : null}
 
+      {searching ? (
+        <p
+          className="text-muted-foreground text-xs"
+          data-testid="queue-search-status"
+          role="status"
+        >
+          {shownCount === 0
+            ? `No actions match “${searchTerm}”.`
+            : `${shownCount} ${shownCount === 1 ? 'action matches' : 'actions match'} “${searchTerm}”.`}
+        </p>
+      ) : null}
+
       <QueueToolbar
         activeFilters={routeFilters}
         allSelected={allSelected}
@@ -1327,7 +1351,7 @@ export function OptimizerActionsPortfolioGroup({
 
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
           against the target beside its budget going from now to proposed. */}
-      {(hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
+      {!searching && (hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
         <ReallocationStory
           className="border-border/60 border-t pt-3"
           currency={currency}
@@ -1350,12 +1374,12 @@ export function OptimizerActionsPortfolioGroup({
       ) : null}
       {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
           should take even when autopilot could (decision 18). */}
-      {moveRows.length > 0 ? (
+      {visibleMoveRows.length > 0 ? (
         <ul
           className="divide-y divide-border/60 border-border/60 border-t"
           data-testid="budget-move-queue"
         >
-          {moveRows.map(({ key, rec, move }) => (
+          {visibleMoveRows.map(({ key, rec, move }) => (
             <BudgetMoveQueueRow
               busy={dismissingMove === rec.id}
               key={key}
@@ -1370,7 +1394,7 @@ export function OptimizerActionsPortfolioGroup({
           ))}
         </ul>
       ) : null}
-      {platformCards.length > 0 ? (
+      {!searching && platformCards.length > 0 ? (
         <div data-testid="queue-platform-cards">
           <AccountRead
             candidates={[...platformCards]}
@@ -1570,6 +1594,13 @@ function SelectionSweeper({
     }
   }, [keySet, selected, onSweep]);
   return null;
+}
+
+/** A budget move as the search reads it: what it is, and the names and ids on its legs. */
+function moveSearchText(row: MoveQueueRow): string {
+  return [row.rec.kind, row.rec.reason ?? '', 'budget move', JSON.stringify(row.move)]
+    .join(' ')
+    .toLowerCase();
 }
 
 function rowSearchText(row: QueueRow): string {
