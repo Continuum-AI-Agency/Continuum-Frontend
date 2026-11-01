@@ -1256,4 +1256,88 @@ describe('JainaChatSurface integration', () => {
       expect(sendTurnMock).toHaveBeenCalledTimes(1);
     });
   });
+  describe('a send that fails says so where it was asked (PP-DT-C-jaina-send-failure-is-silent)', () => {
+    /** History answers at once (or when released); the conversation create fails until `heal`. */
+    const failingCreateFetch = (options: { holdHistory?: Promise<void> } = {}) => {
+      const state = { failing: true };
+      const answer = emptyHistoryFetch();
+      const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = init?.method ?? 'GET';
+        if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+          return (options.holdHistory ?? Promise.resolve()).then(() => answer(input, init));
+        }
+        if (
+          method === 'POST' &&
+          url.endsWith('/api/agents/jaina/chat/conversations') &&
+          state.failing
+        ) {
+          // What a dropped connection looks like to the page.
+          return Promise.reject(new TypeError('Failed to fetch'));
+        }
+        return answer(input, init);
+      }) as typeof fetch;
+      return { fetchMock, heal: () => (state.failing = false) };
+    };
+
+    const unsentNotice = () =>
+      screen.queryAllByRole('alert').find((node) => node.textContent?.includes(STARTER_PROMPT)) ??
+      null;
+
+    it('keeps the question on screen as not sent, in words, and Retry sends it', async () => {
+      const { fetchMock, heal } = failingCreateFetch();
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+      await waitFor(() =>
+        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+      );
+
+      fireEvent.click(screen.getByTestId('jaina-starter'));
+
+      await waitFor(() => expect(unsentNotice()).not.toBeNull());
+      const notice = unsentNotice() as HTMLElement;
+      expect(notice.textContent).toMatch(/not sent/i);
+      expect(notice.textContent).toContain('no connection to the server');
+      expect(notice.textContent).not.toContain('Failed to fetch');
+      // The grid is not offered again as if nothing had been clicked, and the failure is said
+      // once, here — not also in a toast that leaves after five seconds.
+      expect(screen.queryByTestId('jaina-empty-state')).toBeNull();
+      expect(toastShowMock).not.toHaveBeenCalled();
+      expect(sendTurnMock).not.toHaveBeenCalled();
+
+      heal();
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+      await waitFor(() => expect(unsentNotice()).toBeNull());
+    });
+
+    it('a queued question whose send fails stops waiting and says so with Retry', async () => {
+      let releaseHistory: () => void = () => {};
+      const holdHistory = new Promise<void>((resolve) => {
+        releaseHistory = resolve;
+      });
+      const { fetchMock, heal } = failingCreateFetch({ holdHistory });
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+
+      // Clicked while the conversation still loads: the question waits in the queue.
+      fireEvent.click(await screen.findByTestId('jaina-starter'));
+      await screen.findByText(STARTER_PROMPT);
+
+      releaseHistory();
+
+      await waitFor(() => expect(unsentNotice()).not.toBeNull());
+      expect(unsentNotice()?.textContent).toContain('no connection to the server');
+      // Not left in a queue that reads "next will send now" for a send that already failed.
+      expect(screen.queryByText('next will send now')).toBeNull();
+      expect(screen.getAllByText(STARTER_PROMPT)).toHaveLength(1);
+
+      heal();
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+    });
+  });
 });
