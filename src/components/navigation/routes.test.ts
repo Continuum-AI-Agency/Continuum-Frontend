@@ -5,6 +5,7 @@ import {
   APP_NAVIGATION_FOOTER,
   APP_NAVIGATION_GROUPS,
   getContextualSuggestions,
+  headerRouteFor,
   isRouteActive,
 } from './routes';
 
@@ -229,5 +230,23 @@ describe('getContextualSuggestions', () => {
     for (const href of hrefs) {
       expect(href.startsWith('/')).toBe(true);
     }
+  });
+});
+
+// PP-DT-C-header-pill-says-home-on-scale-subroutes: the header matched the pathname exactly and
+// fell back to "Home", so /scale/approvals and /scale/campaign-canvas said "Home" with a house.
+describe('headerRouteFor', () => {
+  it('names the module of every route under it', () => {
+    expect(headerRouteFor('/scale')?.label).toBe('Performance +');
+    expect(headerRouteFor('/scale/approvals')?.label).toBe('Performance +');
+    expect(headerRouteFor('/scale/campaign-canvas')?.label).toBe('Performance +');
+    expect(headerRouteFor('/organic/primitives')?.label).toBe('Organic +');
+    expect(headerRouteFor('/forge/scene/abc')?.label).toBe('Forge');
+  });
+
+  it('keeps Home for Home and for a path no module owns', () => {
+    expect(headerRouteFor('/dashboard')?.label).toBe('Home');
+    expect(headerRouteFor('/scalewise')).toBeNull();
+    expect(headerRouteFor('/nowhere')).toBeNull();
   });
 });
