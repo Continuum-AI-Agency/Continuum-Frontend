@@ -278,3 +278,36 @@ describe('JainaConversationSidebar when a filter fails', () => {
     expect(await screen.findByText('No conversations match these filters.')).toBeTruthy();
   });
 });
+
+// PP-DT-C-jaina-delete-conversation-target-21px: the row's tag and Delete buttons are size-6
+// icon buttons (21.75 px at the 14.5 px root) without the shared 24 px hit pad, side by side —
+// past the edge of the 21 px Delete target a tap opened the conversation instead.
+describe('JainaConversationSidebar row actions', () => {
+  it('give Delete and the tag editor the 24 px hit pad, in a row that keeps the pads apart', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[
+          {
+            sessionId: 'session-2',
+            brandId: null,
+            adAccountId: null,
+            title: 'Weekly recap',
+            lastMessageRole: 'assistant',
+            lastMessagePreview: 'Spend held steady.',
+            lastMessageAt: '2026-10-31T12:00:00.000Z',
+            createdAt: '2026-10-31T11:00:00.000Z',
+            updatedAt: '2026-10-31T12:00:00.000Z',
+          },
+        ]}
+        onUpdateConversationTags={async (_sessionId: string, tags: string[]) => tags}
+      />,
+    );
+    const remove = screen.getByRole('button', { name: /^Delete conversation/ });
+    const tag = screen.getByRole('button', { name: /^Edit tags for conversation/ });
+    expect(remove.className.split(/\s+/)).toContain('hit-area');
+    expect(tag.className.split(/\s+/)).toContain('hit-area');
+    expect(remove.parentElement?.className.split(/\s+/)).toContain('hit-area-row');
+  });
+});
