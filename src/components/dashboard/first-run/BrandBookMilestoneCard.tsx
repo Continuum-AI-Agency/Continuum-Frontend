@@ -127,7 +127,7 @@ export function BrandBookMilestoneCard({
                 // Never scored is not a 0: said as onboarding says it, in a muted badge.
                 <Badge variant="muted" className="gap-1.5" data-testid="readiness-not-scored">
                   <span className="font-medium">Readiness</span>
-                  <span className="opacity-80">· not scored yet</span>
+                  <span>· not scored yet</span>
                 </Badge>
               )}
             </div>
@@ -141,7 +141,9 @@ export function BrandBookMilestoneCard({
                 Voice, creative, trends, and reporting are grounded in your brand.
               </p>
             )}
-            {age ? <p className="mt-0.5 text-xs text-muted-foreground/80">Updated {age}</p> : null}
+            {/* The ink token at full strength: at 80% it measured 4.03:1 on the page
+                (PP-DT-H-first-run-checklist-contrast). */}
+            {age ? <p className="mt-0.5 text-xs text-muted-foreground">Updated {age}</p> : null}
           </div>
         </div>
         <ViewButton />
