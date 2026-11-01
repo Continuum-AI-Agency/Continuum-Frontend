@@ -77,6 +77,20 @@ describe('FirstRunSetup checklist', () => {
 
     expect(container.textContent).toContain('0 of 3 done');
   });
+
+  it('heads only the steps it counts, and sets the guidance steps apart as optional', () => {
+    // PP-DT-C-setup-checklist-2-of-3-over-5-steps: "2 of 3 done" headed a list of five steps,
+    // two of which are never counted and have the same checkbox as the three that are.
+    const { container } = render(<FirstRunSetup setup={emptySetup} brandBookRefreshedAt={null} />);
+
+    const counted = container.querySelectorAll('[data-testid="setup-tracked-steps"] > li');
+    expect(counted).toHaveLength(3);
+    const optional = container.querySelector('[data-testid="setup-optional-steps"]');
+    expect(optional?.textContent).toMatch(/optional/i);
+    expect(optional?.textContent).toContain('Add competitors');
+    expect(optional?.textContent).toContain('Create your first plan');
+    expect(optional?.querySelectorAll('li')).toHaveLength(2);
+  });
 });
 
 describe('FirstRunSetup workflow map', () => {
