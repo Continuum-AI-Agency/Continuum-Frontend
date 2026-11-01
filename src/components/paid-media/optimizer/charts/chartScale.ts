@@ -17,22 +17,39 @@ export function pct(value: number, max: number): number {
  * most certain-looking one. An interval that gets truncated is worse than no
  * interval, because it still claims to be one.
  */
-export function ciUpperBound(item: {
-  diagnostics?: { ci?: { cpa?: number | null; hi?: number | null } | null } | null;
-}): number | null {
+type CiItem = {
+  diagnostics?: {
+    ci?: { cpa?: number | null; hi?: number | null; events?: number | null } | null;
+  } | null;
+};
+
+export function ciUpperBound(item: CiItem): number | null {
   const ci = item.diagnostics?.ci;
   return ci?.hi ?? ci?.cpa ?? null;
 }
 
-/** Largest CI upper bound across scored items, in display units. Never 0 (would
+/**
+ * The farthest an item may stretch a row's axis: its upper bound, but never past the spend
+ * behind the interval. A cost per result is spend ÷ a count of at least one, so cpa × events
+ * is the ceiling — and since costInterval became Garwood's exact interval, ONE event already
+ * carries a finite hi at 39.5× the estimate, which squeezed every other bar in the row to a
+ * fortieth of its width (UX-chart-scale-one-event-interval). Under one event there is no such
+ * ceiling, so the bound stands.
+ */
+function plausibleUpperBound(item: CiItem): number | null {
+  const hi = ciUpperBound(item);
+  const cpa = item.diagnostics?.ci?.cpa;
+  const events = item.diagnostics?.ci?.events;
+  if (hi == null || cpa == null || events == null || !(cpa > 0) || !(events >= 1)) return hi;
+  return Math.min(hi, cpa * events);
+}
+
+/** Largest plausible CI upper bound across scored items, in display units. Never 0 (would
  *  divide the whole row to nothing), so callers can use it as a denominator. */
-export function maxCiUpperBound(
-  items: { diagnostics?: { ci?: { cpa?: number | null; hi?: number | null } | null } | null }[],
-  denominatorMultiplier = 1,
-): number {
+export function maxCiUpperBound(items: CiItem[], denominatorMultiplier = 1): number {
   return (
     items.reduce(
-      (max, item) => Math.max(max, (ciUpperBound(item) ?? 0) * denominatorMultiplier),
+      (max, item) => Math.max(max, (plausibleUpperBound(item) ?? 0) * denominatorMultiplier),
       0,
     ) || 1
   );
