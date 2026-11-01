@@ -45,7 +45,8 @@ describe('deriveDashboardSetup', () => {
     expect(setup.hasConnectedData).toBe(false);
     expect(setup.brandBookReady).toBe(false);
     expect(setup.brandBookStatus).toBeNull();
-    expect(setup.readiness.score).toBe(0);
+    // Never scored is not a 0 (PP-DT-C-unscored-readiness-shows-zero).
+    expect(setup.readiness).toBeNull();
     expect(stepById(setup, 'connect').status).toBe('todo');
     expect(stepById(setup, 'connect').href).toBe(SETTINGS_INTEGRATIONS_HREF);
   });
@@ -77,7 +78,7 @@ describe('deriveDashboardSetup', () => {
     expect(setup.hasConnectedData).toBe(true);
     expect(setup.brandBookReady).toBe(true);
     expect(setup.brandBookStatus).toBe('ready');
-    expect(setup.readiness.score).toBe(82);
+    expect(setup.readiness?.score).toBe(82);
     expect(stepById(setup, 'brand_book').cta).toBe('View Brand Book');
     expect(stepById(setup, 'brand_book').href).toBe(SETTINGS_BRAND_BOOK_HREF);
   });
