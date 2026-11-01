@@ -1,4 +1,7 @@
+import { redirect } from 'next/navigation';
 import CampaignFlowCanvasPage from '@/CampaignCanvas';
+import { ProductGate } from '@/components/billing/ProductGate';
+import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
@@ -18,6 +21,16 @@ type CampaignCanvasPageProps = {
 };
 
 export default async function Page({ searchParams }: CampaignCanvasPageProps) {
+  const { activeBrandId } = await getActiveBrandContext();
+  if (!activeBrandId) {
+    redirect('/onboarding');
+  }
+
+  // A Performance+ surface, behind the same gate as every /scale page: a brand without the plan
+  // landed on a working canvas here (PP-DT-C-campaign-canvas-skips-product-gate).
+  const denied = await ProductGate('campaign-canvas');
+  if (denied) return denied;
+
   const { scaffold, session } = await searchParams;
   return (
     <CampaignFlowCanvasPage
