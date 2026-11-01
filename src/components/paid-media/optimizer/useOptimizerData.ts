@@ -113,6 +113,7 @@ import { z } from 'zod';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { PLATFORM_READ_TIMEOUT_MS, READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
 import { retryUnlessTimeout } from '@/lib/react-query/retry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
@@ -379,10 +380,14 @@ async function fetchAdAccounts(brandId: string): Promise<AdAccount[]> {
     p_brand_id: brandId,
   });
   if (error) throw new Error('list_brand_ad_accounts unreachable');
+  // A Google Ads manager is listed beside the brand's accounts and is none of them: Scale opened
+  // The Sound Vault on its MCC and the portfolio wizard offered it
+  // (PP-DT-E-home-setup-mode-mcc-mismatch). Every reader of this list gets ad accounts only.
   return z
     .array(AdAccountSchema)
     .catch([])
-    .parse(data ?? []);
+    .parse(data ?? [])
+    .filter((account) => !isAdsManagerAccount(account));
 }
 
 async function fetchPerformance(portfolioId: string): Promise<CycleRunReport | null> {

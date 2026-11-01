@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandProfile';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from './paid-setup-diagnostics';
@@ -203,6 +204,9 @@ export function AdAccountSelector({
     };
     const pushIntegrationAccounts = (accounts: BrandIntegrationAccountSummary[] | undefined) => {
       (accounts ?? []).forEach((account) => {
+        // A Google Ads manager runs no campaigns: never an account to pick
+        // (PP-DT-E-home-setup-mode-mcc-mismatch).
+        if (isAdsManagerAccount(account)) return;
         const id = account.externalAccountId ?? account.integrationAccountId;
         if (id) pushAccount({ id, name: account.name });
       });
