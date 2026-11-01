@@ -6,6 +6,7 @@
 // the organic side resolved. Reach (people) and spend (money) are different measures, so
 // they sit side by side and are never added or plotted on one axis.
 
+import type { PaidAccountOverview } from '@continuum/contracts';
 import * as React from 'react';
 import { formatNumber } from '@/components/organic/organic-format';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
@@ -17,10 +18,7 @@ import {
 } from '@/lib/organic/brandOrganicSnapshot';
 import { organicPlatformLabel } from '@/lib/organic/platforms';
 import { formatKpiValue } from '@/lib/paid-media/paid-leaderboard-rows';
-import {
-  fetchPaidAccountOverview,
-  type PaidAccountOverview,
-} from '@/lib/paid-media/paid-overview.client';
+import { fetchPaidAccountOverview } from '@/lib/paid-media/paid-overview.client';
 import { cn } from '@/lib/utils';
 import { organicPeriod, organicReachByPlatform } from './organicPaidRows';
 

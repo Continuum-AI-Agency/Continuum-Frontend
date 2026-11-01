@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type GoogleResultBucket,
   type PaidEntityKpi,
   type PaidRankedEntity,
   type PaidRankingDirection,
@@ -14,7 +15,8 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 // Calls the server-ranked paid-media reporting edge function for a given scope
 // (top_campaigns / top_adsets / top_ads) and KPI. Ranking + KPI math run edge-
 // side; this validates each row against the shared contract and drops malformed
-// rows so one bad entity never blanks the whole leaderboard.
+// rows so one bad entity never blanks the whole leaderboard. Google counts one
+// business result per read as `conversions`: `resultBucket` names it.
 export async function fetchPaidRanking(params: {
   brandId: string;
   adAccountId: string;
@@ -24,6 +26,7 @@ export async function fetchPaidRanking(params: {
   direction?: PaidRankingDirection;
   limit?: number;
   range: PaidMetricsRange;
+  resultBucket?: GoogleResultBucket;
 }): Promise<PaidRankedEntity[]> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.functions.invoke('paid-media-reporting/metrics', {
@@ -37,6 +40,7 @@ export async function fetchPaidRanking(params: {
       direction: params.direction ?? 'top',
       limit: params.limit ?? 5,
       range: params.range,
+      ...(params.resultBucket ? { resultBucket: params.resultBucket } : {}),
     },
   });
 

@@ -1,13 +1,11 @@
 'use client';
 
+import type { PaidAccountOverview } from '@continuum/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { figureProps } from '@/components/paid-media/optimizer/format';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  fetchPaidAccountOverview,
-  type PaidAccountOverview,
-} from '@/lib/paid-media/paid-overview.client';
+import { fetchPaidAccountOverview } from '@/lib/paid-media/paid-overview.client';
 import { buildPaidStatCards } from '@/lib/paid-media/paid-stat-cards';
 import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 

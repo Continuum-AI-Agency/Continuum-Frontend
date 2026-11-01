@@ -4,7 +4,9 @@
 // module. Performance + shows where the main goal's results came from, Organic + the week's
 // reach and engagement, Creative + the best and the worst ad by cost per main-goal result.
 // Goals come from the saved profile for the scope on screen, else the brand's, else they are
-// inferred from the account's own results, so the Home always has something to show.
+// inferred from the account's own results, so the Home always has something to show. It reads
+// Meta ad accounts and Google Ads customers alike; money is never added across currencies, so a
+// brand whose accounts spend in two currencies gets a strip per currency.
 
 import {
   HOME_OBJECTIVE_METRICS,
@@ -33,9 +35,15 @@ import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrg
 import { cn } from '@/lib/utils';
 import { formatCount, formatFigure, formatMoney, formatRatio } from './format';
 import { HomeReadingStrip } from './HomeReadingStrip';
-import { objectiveFigure, paidModuleState, resultTotalsOf } from './homeOverviewModel';
+import {
+  type CurrencyGroup,
+  objectiveFigure,
+  paidModuleState,
+  resultTotalsAcross,
+} from './homeOverviewModel';
 import { costLabelFor, ObjectiveStrip } from './ObjectiveStrip';
 import {
+  campaignRankableCount,
   type HomeAdAccount,
   type RankedWithAccount,
   useAccountTotals,
@@ -182,6 +190,22 @@ export function CreativeSlot({
 
 const RESULT_MODULES = new Set<HomeModuleId>(['performance', 'organic', 'creative']);
 
+const PLATFORM_LABELS: Record<HomeAdAccount['platform'], string> = {
+  meta: 'Meta',
+  google_ads: 'Google Ads',
+};
+
+const accountsIn = (count: number, currency: string | null) =>
+  `${count} ad account${count === 1 ? '' : 's'} in ${currency ?? 'an unknown currency'}`;
+
+/** The currencies whose accounts spent nothing in either week: named, never a strip of zeros. */
+function idleCurrenciesNote(idle: CurrencyGroup[]): string {
+  const named = idle.map((group) => accountsIn(group.totals.accountCount, group.currency));
+  const list =
+    named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named.at(-1)}` : (named[0] ?? '');
+  return `Not shown: ${list}, which spent nothing in either week.`;
+}
+
 /** A column of one-line text links. Each link's `hit-area` pad grows toward the 24 px floor and
  *  the column caps that growth at the gap the rows share, so two rows' pads never meet. A capped
  *  pad reaches only the link's box plus the gap, so the row pitch has to reach 24 px: gap-3 and
@@ -272,19 +296,24 @@ export function HomeOverview({
       scope === HOME_PROFILE_BRAND_SCOPE ? adAccounts : adAccounts.filter((a) => a.id === scope),
     [adAccounts, scope],
   );
-  const currencies = new Set(scopedAccounts.map((account) => account.currency).filter(Boolean));
-  const currency = currencies.size === 1 ? ([...currencies][0] ?? null) : null;
-
   // Retry re-runs every block's read; a hung read ends at the client bound as an error.
   const [attempt, setAttempt] = useState(0);
   const retry = () => setAttempt((count) => count + 1);
   const totalsState = useAccountTotals(brandId, scopedAccounts, attempt);
   const totals = totalsState.status === 'ready' ? totalsState.data : null;
+  // One strip per currency its accounts spent in (the lead one first); a currency where none
+  // spent in either week is named instead, unless it is all there is.
+  const groups = totals?.groups ?? [];
+  const spending = groups.filter((group) => group.spending > 0);
+  const strips = spending.length > 0 ? spending : groups.slice(0, 1);
+  const idle = groups.filter((group) => !strips.includes(group));
+  const lead = strips[0] ?? null;
+  const currency = lead?.currency ?? null;
 
   const resolved = resolveHomeObjectives({
     scope,
     rows,
-    totals: totals ? resultTotalsOf(totals) : {},
+    totals: totals ? resultTotalsAcross(groups) : {},
     // Only once the totals are in: while they load, the goals stay what they always were, so the
     // campaign and creative reads never start on a suggestion and restart on the real result.
     suggested: totals ? reading.goal.suggested : undefined,
@@ -292,24 +321,45 @@ export function HomeOverview({
   const objectives = resolved.objectives;
   const primary =
     objectives.find((objective) => objective.role === 'primary') ?? objectives[0] ?? null;
-  const figures = totals ? objectives.map((objective) => objectiveFigure(objective, totals)) : [];
-  const spendFigure = totals
-    ? objectiveFigure({ id: 'spend', label: 'Spend', metric: 'spend', role: 'secondary' }, totals)
-    : null;
+  const figuresOf = (group: CurrencyGroup) => {
+    const figures = objectives.map((objective) => objectiveFigure(objective, group.totals));
+    const spend = objectiveFigure(
+      { id: 'spend', label: 'Spend', metric: 'spend', role: 'secondary' },
+      group.totals,
+    );
+    return objectives.every((o) => o.metric !== 'spend') && objectives.length < 3
+      ? [...figures, spend]
+      : figures;
+  };
 
-  const campaigns = useTopCampaigns(brandId, scopedAccounts, primary?.metric ?? null, attempt);
-  const creatives = useCreativeExtremes(brandId, scopedAccounts, primary?.metric ?? null, attempt);
+  // The rankings wait for the totals: those name the goal they rank by and the currency a money
+  // KPI ranks in, and each account's currency when its row stores none.
+  const rankable = useMemo(
+    () =>
+      scopedAccounts.map((account) => ({
+        ...account,
+        currency: account.currency ?? totals?.currencyOf[account.id] ?? null,
+      })),
+    [scopedAccounts, totals],
+  );
+  const rankMetric = totalsState.status === 'loading' ? null : (primary?.metric ?? null);
+  const leadCurrency = totals ? currency : undefined;
+  const campaigns = useTopCampaigns(brandId, rankable, rankMetric, attempt, leadCurrency);
+  const creatives = useCreativeExtremes(brandId, rankable, rankMetric, attempt, leadCurrency);
   const organic = useOrganicSnapshot(brandId, organicAccounts, attempt);
+  const metaAccounts = scopedAccounts.filter((account) => account.platform === 'meta');
   const campaignsShown = paidModuleState(
-    scopedAccounts.length,
+    campaignRankableCount(scopedAccounts, primary?.metric ?? null),
     campaigns,
     campaigns.status === 'ready' && campaigns.data.length === 0,
   );
   const creativesShown = paidModuleState(
-    scopedAccounts.length,
+    metaAccounts.length,
     creatives,
     creatives.status === 'ready' && !creatives.data.best,
   );
+  const rowCurrency = (row: RankedWithAccount) =>
+    rankable.find((account) => account.id === row.adAccountId)?.currency ?? currency;
 
   const saveObjectives = (next: HomeObjective[]) => {
     const previous = rows;
@@ -342,6 +392,7 @@ export function HomeOverview({
   };
 
   const scopeHasOwnRow = rows.some((row) => row.scope === scope);
+  const mixedPlatforms = new Set(adAccounts.map((account) => account.platform)).size > 1;
   const sourceNote = resolved.fromSuggestion
     ? 'Goals suggested from your Brand Book until results come in'
     : resolved.source === 'inferred'
@@ -350,7 +401,7 @@ export function HomeOverview({
         ? 'Goals set by your team'
         : 'Using the brand goals';
 
-  const primaryFigure = figures.find((figure) => figure.objective.id === primary?.id) ?? null;
+  const primaryFigure = lead && primary ? objectiveFigure(primary, lead.totals) : null;
   const reach =
     organic.status === 'ready'
       ? summableRollups(organic.data.accounts, ['reach', 'totalInteractions', 'newFollowers'])
@@ -390,7 +441,7 @@ export function HomeOverview({
 
   const creativeValueLabel = (row: RankedWithAccount) =>
     row.kpi_unit === 'currency'
-      ? formatMoney(row.kpi_value, currency)
+      ? formatMoney(row.kpi_value, rowCurrency(row))
       : row.kpi_unit === 'multiplier'
         ? formatRatio(row.kpi_value)
         : formatCount(row.kpi_value);
@@ -413,7 +464,11 @@ export function HomeOverview({
           Campaigns that brought the most {primary?.label.toLowerCase() ?? 'results'}
         </span>
         {campaignsShown === 'no-meta-account' ? (
-          <Unavailable>Connect a Meta ad account to rank campaigns here.</Unavailable>
+          <Unavailable>
+            {scopedAccounts.length === 0
+              ? 'Connect a Meta or Google Ads account to rank campaigns here.'
+              : `Google Ads doesn’t count ${primary?.label.toLowerCase() ?? 'this result'}, so no campaign ranks by it here.`}
+          </Unavailable>
         ) : campaignsShown === 'loading' ? (
           <Skeleton className="h-24 bg-muted/70" />
         ) : campaignsShown === 'error' ? (
@@ -429,7 +484,7 @@ export function HomeOverview({
               value: row.kpi_value,
               label:
                 row.kpi_unit === 'currency'
-                  ? formatMoney(row.kpi_value, currency)
+                  ? formatMoney(row.kpi_value, rowCurrency(row))
                   : formatCount(row.kpi_value),
             }))}
           />
@@ -510,7 +565,11 @@ export function HomeOverview({
           Ads ranked by {creativeRankLabel}
         </span>
         {creativesShown === 'no-meta-account' ? (
-          <Unavailable>Connect a Meta ad account to rank ads here.</Unavailable>
+          <Unavailable>
+            {scopedAccounts.length > 0
+              ? 'Creative + ranks Meta image ads. Google ads have no image to rank here.'
+              : 'Connect a Meta ad account to rank ads here.'}
+          </Unavailable>
         ) : creativesShown === 'loading' ? (
           <Skeleton className="h-40 bg-muted/70" />
         ) : creativesShown === 'error' ? (
@@ -581,7 +640,12 @@ export function HomeOverview({
             >
               <option value={HOME_PROFILE_BRAND_SCOPE}>All ad accounts</option>
               {withDistinctAccountLabels(
-                adAccounts.map((account) => ({ id: account.id, label: account.name })),
+                adAccounts.map((account) => ({
+                  id: account.id,
+                  label: mixedPlatforms
+                    ? `${account.name} · ${PLATFORM_LABELS[account.platform]}`
+                    : account.name,
+                })),
               ).map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.label}
@@ -593,7 +657,9 @@ export function HomeOverview({
       </div>
 
       {adAccounts.length === 0 ? (
-        <Unavailable>Connect a Meta ad account to see paid results and goals here.</Unavailable>
+        <Unavailable>
+          Connect a Meta or Google Ads account to see paid results and goals here.
+        </Unavailable>
       ) : totalsState.status === 'loading' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((index) => (
@@ -605,16 +671,31 @@ export function HomeOverview({
           Couldn't load paid results — the ad platform didn't answer. Try again in a minute.
         </Unavailable>
       ) : (
-        <ObjectiveStrip
-          figures={
-            spendFigure && objectives.every((o) => o.metric !== 'spend') && objectives.length < 3
-              ? [...figures, spendFigure]
-              : figures
-          }
-          objectives={objectives}
-          currency={currency}
-          onChange={saveObjectives}
-        />
+        <div className="flex flex-col gap-3">
+          {strips.map((group, index) => (
+            <div
+              key={group.currency ?? 'unknown'}
+              data-home-currency={group.currency ?? ''}
+              className="flex flex-col gap-1.5"
+            >
+              {strips.length > 1 ? (
+                <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {accountsIn(group.totals.accountCount, group.currency)}
+                </span>
+              ) : null}
+              <ObjectiveStrip
+                figures={figuresOf(group)}
+                objectives={objectives}
+                currency={group.currency}
+                onChange={saveObjectives}
+                editable={index === 0}
+              />
+            </div>
+          ))}
+          {idle.length > 0 ? (
+            <p className="text-2xs text-muted-foreground">{idleCurrenciesNote(idle)}</p>
+          ) : null}
+        </div>
       )}
 
       {leading.length > 0 ? (

@@ -3,6 +3,8 @@
 // The Home's goal tiles. Each tile shows one objective's figure for the week; a small pencil
 // opens a popover to rename it, measure something else, make it the main goal or remove it.
 // Every change is saved for the scope on screen, so the Home becomes the one the client wants.
+// A brand that spends in two currencies gets a strip per currency over the same goals; only the
+// first one carries the edit controls.
 
 import {
   HOME_OBJECTIVE_METRICS,
@@ -157,11 +159,13 @@ function ObjectiveTile({
   objectives,
   currency,
   onChange,
+  editable,
 }: {
   figure: ObjectiveFigure;
   objectives: HomeObjective[];
   currency: string | null;
   onChange: (next: HomeObjective[]) => void;
+  editable: boolean;
 }) {
   const { objective } = figure;
   const isPrimary = objective.role === 'primary';
@@ -186,7 +190,9 @@ function ObjectiveTile({
         <span className="truncate text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           {objective.label}
         </span>
-        <ObjectiveEditor objective={objective} objectives={objectives} onChange={onChange} />
+        {editable ? (
+          <ObjectiveEditor objective={objective} objectives={objectives} onChange={onChange} />
+        ) : null}
       </div>
       {figure.available && figure.value !== null ? (
         <>
@@ -231,7 +237,9 @@ function ObjectiveTile({
         </>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Not counted for this account yet. It appears after the next data update.
+          {figure.unreported
+            ? 'Google Ads doesn’t count this result.'
+            : 'Not counted for this account yet. It appears after the next data update.'}
         </p>
       )}
     </div>
@@ -243,11 +251,14 @@ export function ObjectiveStrip({
   objectives,
   currency,
   onChange,
+  editable = true,
 }: {
   figures: ObjectiveFigure[];
   objectives: HomeObjective[];
   currency: string | null;
   onChange: (next: HomeObjective[]) => void;
+  /** False on every strip but the first: one set of goals, one set of controls. */
+  editable?: boolean;
 }) {
   const used = new Set(objectives.map((objective) => objective.metric));
   const nextMetric: HomeObjectiveMetric | undefined = METRICS.find((metric) => !used.has(metric));
@@ -261,9 +272,10 @@ export function ObjectiveStrip({
           objectives={objectives}
           currency={currency}
           onChange={onChange}
+          editable={editable}
         />
       ))}
-      {objectives.length < 3 && nextMetric ? (
+      {editable && objectives.length < 3 && nextMetric ? (
         <button
           type="button"
           onClick={() =>
