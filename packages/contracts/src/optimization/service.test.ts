@@ -894,6 +894,48 @@ describe('ConvertCboRequestSchema / ConvertCboResponseSchema', () => {
     });
     expect(r.adset_budgets[0].daily_budget).toBe(1000);
   });
+  test('a real convert keeps its read-back verdict through the parse', () => {
+    const r = ConvertCboResponseSchema.parse({
+      ok: true,
+      dryRun: false,
+      verified: false,
+      read_back: {
+        verdict: 'mismatch',
+        campaign: { daily_budget: 3718, lifetime_budget: null },
+        adsets: [{ adset_id: 'as1', expected: 1859, observed: 1859 }],
+        problems: ['the campaign still holds a daily budget of 3718'],
+      },
+    });
+    expect(r.verified).toBe(false);
+    expect(r.read_back?.verdict).toBe('mismatch');
+    expect(r.read_back?.campaign?.daily_budget).toBe(3718);
+  });
+  test('a real convert carries the budgets the person approved in the preview', () => {
+    const approved = [
+      { adset_id: 'as1', daily_budget: 4200 },
+      { adset_id: 'as2', daily_budget: 1500 },
+    ];
+    const r = ConvertCboRequestSchema.parse({
+      brandId: UUID,
+      accountId: 'act_1',
+      campaignId: 'c1',
+      dryRun: false,
+      expectedAdsetBudgets: approved,
+    });
+    expect(r.expectedAdsetBudgets).toEqual(approved);
+  });
+  test('an approved budget is a whole, non-negative number of minor units', () => {
+    for (const daily_budget of [-1, 42.5]) {
+      const request = {
+        brandId: UUID,
+        accountId: 'act_1',
+        campaignId: 'c1',
+        dryRun: false,
+        expectedAdsetBudgets: [{ adset_id: 'as1', daily_budget }],
+      };
+      expect(ConvertCboRequestSchema.safeParse(request).success).toBe(false);
+    }
+  });
 });
 
 describe('SetAutopilotPausedRequestSchema — the kill-switch', () => {

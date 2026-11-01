@@ -15,6 +15,7 @@ mock.module('@/lib/supabase/client', () => ({
 
 const {
   optimizerQueryKeys,
+  useConvertCbo,
   useCurrentMoves,
   useOptimizerMutations,
   useOptimizerPortfolios,
@@ -599,5 +600,68 @@ describe('useCurrentMoves fails closed on the roster read', () => {
     );
     await waitFor(() => expect(result.current.notes.get('b')).toBe('no longer in this portfolio'));
     expect(result.current.current.map((item) => item.adset_id)).toEqual(['a']);
+  });
+});
+
+// Decision 3 (Ramiro, 2026-11-01): the convert dialog's Apply asks for the real CBO→ABO convert,
+// bound to the preview the person approved. The dialog's tests stub this hook, so the body the
+// edge receives — and the read-back verdict it answers with — is pinned here.
+describe('useConvertCbo — the real convert carries the approved preview', () => {
+  const approved = [
+    { adset_id: 'as1', daily_budget: 4200 },
+    { adset_id: 'as2', daily_budget: 1500 },
+  ];
+  const convertOnce = async (request: Record<string, unknown>, answer: unknown) => {
+    rpc.mockResolvedValueOnce({ data: answer, error: null } as never);
+    const { result } = renderHook(() => useConvertCbo(BRAND), { wrapper: createWrapper() });
+    act(() => {
+      result.current.mutate({ brandId: BRAND, accountId: 'act_1', campaignId: 'c1', ...request });
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [fn, options] = rpc.mock.calls.at(-1) as unknown as [string, { body: object }];
+    return { fn, body: options.body, data: result.current.data };
+  };
+
+  it('sends the approved budgets with the real convert and keeps the read-back verdict', async () => {
+    const { fn, body, data } = await convertOnce(
+      { dryRun: false, expectedAdsetBudgets: approved },
+      {
+        ok: true,
+        dryRun: false,
+        campaignId: 'c1',
+        currency: 'USD',
+        converted: 2,
+        adset_budgets: approved.map((budget) => ({
+          ...budget,
+          daily_major: budget.daily_budget / 100,
+        })),
+        verified: false,
+        read_back: {
+          verdict: 'unreadable',
+          campaign: null,
+          adsets: [],
+          problems: ['the campaign read answered 500'],
+        },
+      },
+    );
+    expect(fn).toBe('optimizer-convert-cbo');
+    expect(body).toEqual({
+      brandId: BRAND,
+      accountId: 'act_1',
+      campaignId: 'c1',
+      dryRun: false,
+      expectedAdsetBudgets: approved,
+    });
+    expect(data?.verified).toBe(false);
+    expect(data?.read_back?.verdict).toBe('unreadable');
+  });
+
+  it('a preview carries no approval', async () => {
+    const { body } = await convertOnce(
+      { dryRun: true },
+      { ok: true, dryRun: true, adset_budgets: [] },
+    );
+    expect(body).toEqual({ brandId: BRAND, accountId: 'act_1', campaignId: 'c1', dryRun: true });
+    expect('expectedAdsetBudgets' in body).toBe(false);
   });
 });
