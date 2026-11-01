@@ -16,11 +16,7 @@ import {
   shouldShowDashboardWelcomeToast,
 } from '@/lib/ui/dashboardWelcomeToast';
 import { cn } from '@/lib/utils';
-import {
-  APP_HEADER_MODULE_SLOT_ID,
-  APP_NAVIGATION,
-  APP_NAVIGATION_FOOTER,
-} from './navigation/routes';
+import { APP_HEADER_MODULE_SLOT_ID, headerRouteFor } from './navigation/routes';
 
 // On a phone-width header that also carries a page's own bar (the Scale account chip and
 // module tabs), the module pill and its separator step aside: the page bar already says where
@@ -32,11 +28,8 @@ function DashboardHeaderInner({ changelogEntries }: { changelogEntries: Changelo
   useInviteToast();
   const pathname = usePathname();
 
-  // Find current route label for breadcrumb
-  const allRoutes = [...APP_NAVIGATION, ...APP_NAVIGATION_FOOTER];
-  const currentRoute =
-    allRoutes.find((r) => r.href === pathname) ||
-    allRoutes.flatMap((r) => r.items || []).find((sub) => sub.href === pathname);
+  // The area that owns this path, sub-routes included (/scale/approvals is Performance +).
+  const currentRoute = headerRouteFor(pathname);
 
   const breadcrumbLabel = currentRoute?.label || 'Home';
   const CurrentIcon = currentRoute?.icon;
