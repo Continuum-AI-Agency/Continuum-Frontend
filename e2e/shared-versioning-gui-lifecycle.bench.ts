@@ -317,7 +317,7 @@ try {
       await open(family, page, base.id); await inspect(family, page, a, base.id);
       await panel(page).getByRole('button', { name: 'Open exact revision', exact: true }).click();
       if (family.family === 'after_effects') { await page.getByRole('tab', { name: 'Edit layers', exact: true }).click();
-        await page.getByText('This revision is read-only. Branch it in Variants before editing.', { exact: true }).waitFor(); }
+        await page.locator('p:visible').filter({ hasText: /^This revision is read-only\. Branch it in Variants before editing\.$/ }).first().waitFor(); }
       else { const control = family.family === 'hyperframes' ? page.getByLabel('Text 1', { exact: true })
         : page.locator(`[data-field="${family.textField}"]`).locator('input,textarea').first();
         await control.waitFor(); assert(await control.isDisabled(), 'Original is read-only until a real explicit branch.'); }
