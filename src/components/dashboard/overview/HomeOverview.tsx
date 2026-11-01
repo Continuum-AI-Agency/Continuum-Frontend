@@ -28,6 +28,7 @@ import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
+import { withDistinctAccountLabels } from '@/lib/integrations/distinctAccountLabels';
 import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrganicSnapshot';
 import { cn } from '@/lib/utils';
 import { formatCount, formatFigure, formatMoney, formatRatio } from './format';
@@ -579,9 +580,11 @@ export function HomeOverview({
               className="h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground"
             >
               <option value={HOME_PROFILE_BRAND_SCOPE}>All ad accounts</option>
-              {adAccounts.map((account) => (
+              {withDistinctAccountLabels(
+                adAccounts.map((account) => ({ id: account.id, label: account.name })),
+              ).map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name}
+                  {account.label}
                 </option>
               ))}
             </select>
