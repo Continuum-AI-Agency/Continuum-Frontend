@@ -12,7 +12,9 @@ mock.module('@/hooks/useAuth', () => ({
   useAuth: () => ({ logoutEverywhere, isPending: false, error: authError }),
 }));
 
-import { SignOutEverywhereSection } from './SignOutEverywhereSection';
+// Imported after the mock, so the real hook (and the next/navigation it links) never loads; a
+// static import is hoisted above mock.module and breaks when another file mocked next/navigation.
+const { SignOutEverywhereSection } = await import('./SignOutEverywhereSection');
 
 beforeEach(() => {
   logoutEverywhere.mockClear();
@@ -39,9 +41,12 @@ describe('SignOutEverywhereSection', () => {
     render(<SignOutEverywhereSection impersonating={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out of all devices' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText('Sign out of all devices?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() => expect(screen.queryByText('Sign out of all devices?')).toBeNull());
+    // A count, not toBeNull(element): Bun formats a happy-dom element for every failed retry,
+    // which stalls waitFor for seconds while the dialog is still closing.
+    await waitFor(() => expect(screen.queryAllByRole('alertdialog')).toHaveLength(0));
     expect(logoutEverywhere).not.toHaveBeenCalled();
   });
 
