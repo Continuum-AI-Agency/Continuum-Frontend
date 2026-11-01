@@ -33,6 +33,16 @@ describe('createSessionLossGuard', () => {
     expect(d.leave).not.toHaveBeenCalled();
   });
 
+  it('a session the client could not check (a refresh lost to the network) is not a lost session', async () => {
+    // getSession answers no session AND an error when the access token is due and the refresh
+    // could not reach the server: that is the network, and the read failed for the same reason.
+    const d = deps(undefined);
+    const guard = createSessionLossGuard(d);
+    await guard.onReadFailed();
+    expect(d.clearClientData).not.toHaveBeenCalled();
+    expect(d.leave).not.toHaveBeenCalled();
+  });
+
   it('checks once for a burst of failed reads, and leaves once', async () => {
     const d = deps(null);
     const guard = createSessionLossGuard(d);
