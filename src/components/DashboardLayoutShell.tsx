@@ -58,6 +58,7 @@ const BrandWelcomeBanner = dynamic(
 
 import type { AuthIdentity } from '@/lib/auth/identity';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
+import { LockedProductsProvider } from '@/lib/billing/lockedProducts';
 import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
 
@@ -122,41 +123,43 @@ export default function DashboardLayoutShell({
       <ActiveProjectProvider>
         {/* Above the route tree but inside the tenant boundary: detached runs survive
             navigation without ever leaking across an active-brand change. */}
-        <AgentRunsProvider>
-          <ClientRenderProvider>
-            <CommandPaletteProvider>
-              <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
-              <StrategicAnalysisStatusPill brandId={activeBrandId} />
-              <div className="relative">
-                <div className="particle-layer top" aria-hidden="true" />
-                <div className="particle-layer bottom" aria-hidden="true" />
+        <LockedProductsProvider products={lockedProducts}>
+          <AgentRunsProvider>
+            <ClientRenderProvider>
+              <CommandPaletteProvider>
+                <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
+                <StrategicAnalysisStatusPill brandId={activeBrandId} />
+                <div className="relative">
+                  <div className="particle-layer top" aria-hidden="true" />
+                  <div className="particle-layer bottom" aria-hidden="true" />
 
-                <SidebarProvider defaultOpen={false}>
-                  <AppSidebar
-                    automationEnvironment={automationEnvironment}
-                    lockedProducts={lockedProducts}
-                    billing={billing}
-                  />
-                  <SidebarInset
-                    ref={insetRef}
-                    className="flex h-dvh flex-col overflow-hidden bg-transparent"
-                  >
-                    <DashboardHeader changelogEntries={changelogEntries} />
-                    {/* No inline gutter: surfaces are full-bleed panes and the
+                  <SidebarProvider defaultOpen={false}>
+                    <AppSidebar
+                      automationEnvironment={automationEnvironment}
+                      lockedProducts={lockedProducts}
+                      billing={billing}
+                    />
+                    <SidebarInset
+                      ref={insetRef}
+                      className="flex h-dvh flex-col overflow-hidden bg-transparent"
+                    >
+                      <DashboardHeader changelogEntries={changelogEntries} />
+                      {/* No inline gutter: surfaces are full-bleed panes and the
                         sidebar's own border-r is the separation. */}
-                    <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
-                      <ClientOnly>
-                        <BrandWelcomeBanner />
-                      </ClientOnly>
-                      {children}
-                    </main>
-                  </SidebarInset>
-                </SidebarProvider>
-              </div>
-              <CommandPalette automationEnvironment={automationEnvironment} />
-            </CommandPaletteProvider>
-          </ClientRenderProvider>
-        </AgentRunsProvider>
+                      <main className="@container/app-main min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pb-[var(--shell-stack-gap)]">
+                        <ClientOnly>
+                          <BrandWelcomeBanner />
+                        </ClientOnly>
+                        {children}
+                      </main>
+                    </SidebarInset>
+                  </SidebarProvider>
+                </div>
+                <CommandPalette automationEnvironment={automationEnvironment} />
+              </CommandPaletteProvider>
+            </ClientRenderProvider>
+          </AgentRunsProvider>
+        </LockedProductsProvider>
       </ActiveProjectProvider>
     </ActiveBrandProvider>
   );
