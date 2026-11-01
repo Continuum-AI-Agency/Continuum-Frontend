@@ -825,6 +825,9 @@ export const CycleItemDiagnosticsSchema = z
     // When present, the ad set was HELD (budget unchanged on purpose) — the FE
     // renders a labeled "Held" state instead of a $0.00 change.
     freezeReason: FreezeReasonSchema.optional(),
+    // True when the item was held this cycle for ANY reason — with no freezeReason it was an
+    // operator or rule hold, or an entity not being served (its `delivery` read says so).
+    freeze: z.boolean().optional(),
     ci: z
       .object({
         cpa: z.number().optional(),
