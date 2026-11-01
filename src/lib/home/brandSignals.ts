@@ -43,6 +43,18 @@ export function accountCountsFrom(summary: AccountBuckets): HomeBrandSignals['ac
   return { ads, organic };
 }
 
+/**
+ * Whether the brand has an account the Home reads — the ONE notion the dashboard's setup gate and
+ * the reading share. A Google Ads manager (MCC) runs no ads and Google Analytics is no channel, so
+ * a brand holding only those is still setting up (The Sound Vault, deep test 2026-10-31: the gate
+ * counted its MCC and hid the checklist while the reading said "Setting up").
+ */
+export function hasReadableAccount(summary: AccountBuckets | null | undefined): boolean {
+  if (!summary) return false;
+  const { ads, organic } = accountCountsFrom(summary);
+  return ads + organic > 0;
+}
+
 const finiteOrNull = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 

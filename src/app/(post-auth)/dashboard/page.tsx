@@ -13,6 +13,7 @@ import { PaidDashboardView } from '@/components/dashboard/views/PaidDashboardVie
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
 import { loadBrandReading } from '@/lib/home/brandReading.server';
+import { hasReadableAccount } from '@/lib/home/brandSignals';
 import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { fetchUserIntegrationSummary } from '@/lib/integrations/userIntegrations';
@@ -44,7 +45,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const setup = deriveDashboardSetup({
     hasConnectedProviders: hasAnyAccount(userIntegrations),
-    hasAssignedAccounts: hasAnyAccount(brandIntegrations),
+    // The reading's own notion: an MCC or a GA4 property alone is not an account the Home reads.
+    hasAssignedAccounts: hasReadableAccount(brandIntegrations),
     brandBook,
   });
 
