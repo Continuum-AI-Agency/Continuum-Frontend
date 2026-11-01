@@ -33,7 +33,10 @@ mock.module('next/cache', () => ({
   },
 }));
 
+// Spread the real module: a mock that drops exports breaks every later file that imports them.
+const navigation = await import('next/navigation');
 mock.module('next/navigation', () => ({
+  ...navigation,
   redirect: (path: string) => {
     state.redirects.push(path);
     throw new Error('NEXT_REDIRECT');
