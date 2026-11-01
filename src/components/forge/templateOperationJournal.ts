@@ -18,6 +18,7 @@ export type OperationJournalState = {
   acknowledged: string[];
   outbox: TemplateOperationInput[] | null;
   draftIntent?: TemplateAuthoringDraftPut;
+  projection?: unknown;
 };
 
 export type OperationJournalStorage = {
@@ -54,7 +55,8 @@ export const indexedDbOperationJournal: OperationJournalStorage = {
   },
 };
 
-type Captured = { id: string; action: ForgeDraftAction; draftRevision: number };
+export type OperationContext = { baseRevisionId: string; baseVersionId: string; sourceChecksum: string };
+type Captured = { id: string; action: ForgeDraftAction; draftRevision: number; context?: OperationContext };
 
 /** Capture precedes projection; UI stays optimistic until IndexedDB commits. Autosave awaits durable history. */
 export class TemplateOperationJournal {
@@ -62,9 +64,12 @@ export class TemplateOperationJournal {
   private pending: Captured[] = [];
   private writes: Promise<void> = Promise.resolve();
   private sending: Promise<void> | null = null;
+  private projections: Promise<void> = Promise.resolve();
+  private projectionFailure: unknown;
 
   constructor(private readonly options: {
     userId: string;
+    storageKey?: string;
     scope: TemplateAuthoringScope;
     workspaceIdentity: string;
     sourceChecksum: string;
@@ -74,7 +79,7 @@ export class TemplateOperationJournal {
     onError?: (error: unknown) => void;
     onSaved?: () => void;
   }) {
-    this.key = `operation-history:${options.userId}:${options.scope.brandId}:${options.scope.assetId}:${options.scope.baseVersionId}:${options.workspaceIdentity}${options.scope.workingCopyId ? `:working-copy:${options.scope.workingCopyId}` : ''}`;
+    this.key = options.storageKey ?? `operation-history:${options.userId}:${options.scope.brandId}:${options.scope.assetId}:${options.scope.baseVersionId}:${options.workspaceIdentity}${options.scope.workingCopyId ? `:working-copy:${options.scope.workingCopyId}` : ''}`;
   }
 
   get busy(): boolean { return this.pending.length > 0 || this.sending !== null; }
@@ -88,26 +93,54 @@ export class TemplateOperationJournal {
     return id;
   }
 
-  private preserve(): Promise<void> {
-    const storage = this.options.storage ?? indexedDbOperationJournal;
-    this.writes = this.writes.catch(() => undefined).then(async () => {
-      while (this.pending.length) {
-        const captured = this.pending[0]!;
-        await storage.change(this.key, (state) => {
+  private appendCaptured(state: OperationJournalState, captured: Captured) {
           if (state.events.some((event) => event.id === captured.id)) return;
           const { action } = captured;
           const prior = state.events.at(-1)?.id;
           const causedBy = [...new Set([...(action.causedBy ?? []), ...(prior ? [prior] : [])])].slice(-100);
           state.events.push({
             id: captured.id, workingCopyId: state.workingCopyId, sequence: ++state.sequence,
-            command: action.command, baseRevisionId: this.options.baseRevisionId ?? null, channel: 'forge', outcome: action.outcome ?? 'succeeded',
+            command: action.command, baseRevisionId: captured.context?.baseRevisionId ?? this.options.baseRevisionId ?? null, channel: 'forge', outcome: action.outcome ?? 'succeeded',
             affectedObjects: action.affectedObjects ?? [], causedBy, evidence: action.evidence ?? 'recorded',
-            changes: { ...action.changes, baseVersionId: this.options.scope.baseVersionId,
+            changes: { ...action.changes, baseVersionId: captured.context?.baseVersionId ?? this.options.scope.baseVersionId,
               ...(this.options.scope.workingCopyId ? { authoringWorkingCopyId: this.options.scope.workingCopyId } : {}),
-              draftRevision: captured.draftRevision, sourceChecksum: this.options.sourceChecksum,
+              draftRevision: captured.draftRevision, sourceChecksum: captured.context?.sourceChecksum ?? this.options.sourceChecksum,
               workspaceIdentity: this.options.workspaceIdentity },
             ...(action.origin ? { origin: action.origin } : {}),
           });
+  }
+
+  /** Native inspectors reuse the journal transaction: evidence and its undo projection land together. */
+  changeProjection<T>(initial: T, change: (projection: T, coverage: { workingCopyId: string; throughSequence: number; eventId: string }) => {
+    projection: T; action?: ForgeDraftAction; context?: OperationContext; revision?: number;
+  }): Promise<T> {
+    const write = async () => {
+    await this.preserve();
+    const storage = this.options.storage ?? indexedDbOperationJournal;
+    const projection = await storage.change(this.key, (state) => {
+      const eventId = crypto.randomUUID();
+      const next = change(structuredClone((state.projection as T | undefined) ?? initial),
+        { workingCopyId: state.workingCopyId, throughSequence: state.sequence, eventId });
+      if (next.action) this.appendCaptured(state, { id: eventId, action: next.action,
+        draftRevision: next.revision ?? state.sequence + 1, context: next.context });
+      state.projection = structuredClone(next.projection);
+      return structuredClone(next.projection);
+    });
+    void this.flush().catch((error: unknown) => this.options.onError?.(error));
+    return projection;
+    };
+    const result = this.projections.catch(() => undefined).then(write);
+    this.projections = result.then(() => { this.projectionFailure = undefined; }, error => { this.projectionFailure = error; });
+    return result;
+  }
+
+  private preserve(): Promise<void> {
+    const storage = this.options.storage ?? indexedDbOperationJournal;
+    this.writes = this.writes.catch(() => undefined).then(async () => {
+      while (this.pending.length) {
+        const captured = this.pending[0]!;
+        await storage.change(this.key, (state) => {
+          this.appendCaptured(state, captured);
         });
         this.pending.shift();
       }
@@ -116,10 +149,10 @@ export class TemplateOperationJournal {
   }
 
   /** Parking waits for IndexedDB, without requiring a network save or changing the base. */
-  preserveLocal(): Promise<void> { return this.preserve(); }
+  async preserveLocal(): Promise<void> { await this.projections; if (this.projectionFailure) throw this.projectionFailure; await this.preserve(); }
 
   flush(): Promise<void> {
-    if (this.sending) return this.sending.then(() => this.pending.length ? this.flush() : undefined);
+    if (this.sending) return this.sending.then(() => this.flush());
     const storage = this.options.storage ?? indexedDbOperationJournal;
     this.sending = (async () => {
       while (true) {

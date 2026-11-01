@@ -11,27 +11,27 @@ export type LayerDraftSnapshot = {
   operations: TemplateAuthoringCommand[];
 };
 
-export type LayerHistory = {
-  past: LayerDraftSnapshot[];
-  present: LayerDraftSnapshot;
-  future: LayerDraftSnapshot[];
-  baseline: LayerDraftSnapshot;
+export type LayerHistory<Snapshot = LayerDraftSnapshot> = {
+  past: Snapshot[];
+  present: Snapshot;
+  future: Snapshot[];
+  baseline: Snapshot;
   group: string | null;
 };
 
 const copy = <T>(value: T): T => structuredClone(value);
 const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-export function createLayerHistory(snapshot: LayerDraftSnapshot): LayerHistory {
+export function createLayerHistory<Snapshot>(snapshot: Snapshot): LayerHistory<Snapshot> {
   const initial = copy(snapshot);
   return { past: [], present: initial, future: [], baseline: copy(initial), group: null };
 }
 
-export function updateLayerHistory(
-  history: LayerHistory,
-  snapshot: LayerDraftSnapshot,
+export function updateLayerHistory<Snapshot>(
+  history: LayerHistory<Snapshot>,
+  snapshot: Snapshot,
   group: string | null = null,
-): LayerHistory {
+): LayerHistory<Snapshot> {
   const next = copy(snapshot);
   if (equal(next, history.present)) return history;
   if (group && group === history.group) {
@@ -40,11 +40,11 @@ export function updateLayerHistory(
   return { ...history, past: [...history.past, history.present], present: next, future: [], group };
 }
 
-export function endLayerHistoryGroup(history: LayerHistory): LayerHistory {
+export function endLayerHistoryGroup<Snapshot>(history: LayerHistory<Snapshot>): LayerHistory<Snapshot> {
   return history.group ? { ...history, group: null } : history;
 }
 
-export function undoLayerHistory(history: LayerHistory): LayerHistory {
+export function undoLayerHistory<Snapshot>(history: LayerHistory<Snapshot>): LayerHistory<Snapshot> {
   if (!history.past.length) return history;
   const present = history.past.at(-1)!;
   return {
@@ -56,7 +56,7 @@ export function undoLayerHistory(history: LayerHistory): LayerHistory {
   };
 }
 
-export function redoLayerHistory(history: LayerHistory): LayerHistory {
+export function redoLayerHistory<Snapshot>(history: LayerHistory<Snapshot>): LayerHistory<Snapshot> {
   if (!history.future.length) return history;
   const [present, ...future] = history.future;
   return {
@@ -69,10 +69,10 @@ export function redoLayerHistory(history: LayerHistory): LayerHistory {
 }
 
 /** Make a successful save the new dirty baseline while retaining edits made during the request. */
-export function markLayerHistorySaved(
-  history: LayerHistory,
-  saved: LayerDraftSnapshot,
-): LayerHistory {
+export function markLayerHistorySaved<Snapshot>(
+  history: LayerHistory<Snapshot>,
+  saved: Snapshot,
+): LayerHistory<Snapshot> {
   const baseline = copy(saved);
   if (equal(history.present, saved))
     return { past: [], present: baseline, future: [], baseline: copy(baseline), group: null };
@@ -85,6 +85,6 @@ export function markLayerHistorySaved(
   };
 }
 
-export function isLayerHistoryDirty(history: LayerHistory): boolean {
+export function isLayerHistoryDirty<Snapshot>(history: LayerHistory<Snapshot>): boolean {
   return !equal(history.present, history.baseline);
 }

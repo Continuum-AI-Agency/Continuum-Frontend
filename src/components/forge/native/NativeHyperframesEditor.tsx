@@ -35,12 +35,12 @@ import {
   fetchNativeHyperframesVariants,
   saveNativeHyperframesRevision,
 } from '@/lib/library/hyperframesNative';
-import { confirmForgeExit } from '../useForgeExitGuard';
 import { VersionControlPanel } from '../VersionControlPanel';
 import { HyperframesFilmPanel } from './HyperframesFilmPanel';
 import { NativeHyperframesJobs } from './NativeHyperframesJobs';
 import { NativeHyperframesOrder } from './NativeHyperframesOrder';
 import { NativeUploadedVariants } from './NativeUploadedVariants';
+import { useNativeWorkingCopy } from './useNativeWorkingCopy';
 import {
   type NativeEditorForm,
   nativeEditorDefaults,
@@ -147,7 +147,7 @@ function NativeHyperframesSession({
 }
 
 function NativeEditorBody({
-  view,
+  view: requestedView,
   variants,
   historyError,
   reloadHistory,
@@ -170,16 +170,24 @@ function NativeEditorBody({
   onSelectRevision: (revisionId: string) => void;
 }) {
   const client = useQueryClient();
-  const variant = variants.find((item) => item.variantId === view.revision.variantId);
-  // Defaults belong to the saved scene; a catalog refresh must never reset unsaved copy.
-  const [defaults] = useState(() => nativeEditorDefaults(view, variant));
-  const fields = useMemo(() => nativeTextFields(view), [view]);
+  const variant = variants.find((item) => item.variantId === requestedView.revision.variantId);
+  const selectedRevision = variant?.revisions.find(item => item.id === requestedView.revision.revisionId);
+  const [defaults] = useState(() => nativeEditorDefaults(requestedView, variant));
   const [textPage, setTextPage] = useState(0);
   const firstText = textPage * 20;
-  const form = useForm<NativeEditorForm>({
-    resolver: zodResolver(nativeEditorFormSchema),
-    defaultValues: defaults,
+  const form = useForm<NativeEditorForm>({ resolver: zodResolver(nativeEditorFormSchema), defaultValues: defaults });
+  const copy = useNativeWorkingCopy({ brandId: requestedView.brandId, family: 'hyperframes',
+    selection: variant && selectedRevision ? { variant, revision: selectedRevision } : undefined,
+    initial: defaults, restore: snapshot => form.reset(snapshot) });
+  const capturedBase = copy.state?.base.baseRevisionId;
+  const retained = useQuery({
+    queryKey: forgeQueryKeys.nativeScene(requestedView.brandId, requestedView.assetId, capturedBase),
+    queryFn: ({ signal }) => fetchNativeHyperframesScene(requestedView.brandId, requestedView.assetId, capturedBase, signal),
+    enabled: !!capturedBase && capturedBase !== requestedView.revision.revisionId,
+    staleTime: Infinity, retry: false,
   });
+  const view = capturedBase && capturedBase !== requestedView.revision.revisionId ? retained.data ?? requestedView : requestedView;
+  const fields = useMemo(() => nativeTextFields(view), [view]);
   const order = useQuery({
     queryKey: [
       ...forgeQueryKeys.nativeScene(view.brandId, view.assetId, view.revision.revisionId),
@@ -193,70 +201,54 @@ function NativeEditorBody({
     retry: false,
   });
   useEffect(() => {
-    if (order.data) form.resetField('orders', { defaultValue: nativeOrderDefaults(order.data) });
-  }, [form, order.data]);
+    if (order.data) {
+      const orders = nativeOrderDefaults(order.data);
+      form.resetField('orders', { defaultValue: orders });
+      void copy.hydrate(snapshot => snapshot.orders.length ? snapshot : { ...snapshot, orders });
+    }
+  }, [order.data, copy.ready]);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const saving = copy.saving;
   const [uploading, setUploading] = useState(false);
   const busy = useRef(false);
   const uploadBusy = useCallback((value: boolean) => {
     busy.current = value;
     setUploading(value);
   }, []);
-  const replay = useRef<{ fingerprint: string; body: SaveHyperframesRevisionRequest } | null>(null);
-  const dirty = form.formState.isDirty;
-  const canEdit = view.sourceSceneSha256 !== null;
+  const dirty = copy.dirty || form.formState.isDirty;
+  const canEdit = view.sourceSceneSha256 !== null && copy.ready && !copy.readOnly &&
+    (!capturedBase || capturedBase === requestedView.revision.revisionId || !!retained.data);
   const canUpdate =
-    !!variant && !variant.original && variant.draftHeadRevisionId === view.revision.revisionId;
+    !!variant && !variant.original && !copy.readOnly;
   const target = form.watch('target');
 
+  useEffect(() => {
+    const subscription = form.watch((_value, event) => {
+      if (event.type !== 'change' || !event.name || !canEdit) return;
+      const control = event.name === 'width' ? 'Width' : event.name === 'height' ? 'Height'
+        : event.name.startsWith('texts.') ? `Text ${Number(event.name.split('.')[1]) + 1}`
+        : event.name === 'orders' ? 'Source element order' : event.name === 'name' ? 'Variant name' : 'Save to';
+      copy.change(form.getValues(), { tool: 'Forge native inspector', control },
+        [`hyperframes:${event.name}`], event.name);
+    });
+    return () => subscription.unsubscribe();
+  }, [canEdit, copy.change, form]);
   const save = useCallback(async () => {
     if (busy.current || !canEdit) return false;
-    busy.current = true;
-    setSaving(true);
+    if (!(await form.trigger())) { setError('Check the highlighted fields before saving.'); return false; }
     setError(null);
-    try {
-      if (!(await form.trigger())) {
-        const invalidText = fields.findIndex(
-          (_, index) => form.getFieldState(`texts.${index}.value`).invalid,
-        );
-        if (invalidText >= 0) setTextPage(Math.floor(invalidText / 20));
-        setError('Check the highlighted fields before saving.');
-        return false;
-      }
-      const candidate = nativeSaveRequest(
-        view,
-        variant,
-        form.getValues(),
-        'pending-intent',
-        order.data,
-      );
-      const fingerprint = JSON.stringify(candidate);
-      if (replay.current?.fingerprint !== fingerprint)
-        replay.current = {
-          fingerprint,
-          body: { ...candidate, idempotencyKey: crypto.randomUUID() },
-        };
-      const saved = await saveNativeHyperframesRevision(view.assetId, replay.current.body);
-      form.reset(form.getValues());
-      replay.current = null;
-      void client.invalidateQueries({
-        queryKey: forgeQueryKeys.revisionVariants(view.brandId, view.assetId),
-      });
-      onSelectRevision(saved.id);
-      return true;
-    } catch (cause) {
-      setError(problem(cause));
-      return false;
-    } finally {
-      busy.current = false;
-      setSaving(false);
-    }
-  }, [canEdit, client, fields, form, onSelectRevision, order.data, variant, view]);
-  const discard = useCallback(() => {
-    form.reset({ ...defaults, orders: nativeOrderDefaults(order.data) });
-    setError(null);
-  }, [defaults, form, order.data]);
+    const result = await copy.save((base, snapshot, id) => {
+      if (base.baseRevisionId !== view.revision.revisionId) throw new Error('The captured source revision is still loading. Your edits are preserved.');
+      return { ...nativeSaveRequest(view, variant && { ...variant, draftHeadRevisionId: base.baseRevisionId }, snapshot, id, order.data),
+        origin: { tool: 'Forge native editor', button: 'Save variant' } };
+    }, intent => saveNativeHyperframesRevision(intent.assetId, intent.body as SaveHyperframesRevisionRequest, undefined, intent.userId),
+    { tool: 'Forge native editor', button: 'Save variant' });
+    if (!result) return false;
+    await client.invalidateQueries({ queryKey: forgeQueryKeys.revisionVariants(view.brandId, view.assetId) });
+    onSelectRevision(result.revision.id);
+    return !result.state.pending && JSON.stringify(result.state.history.present) === JSON.stringify(result.state.history.baseline);
+  }, [canEdit, client, copy.save, form, onSelectRevision, order.data, variant, view]);
+  const discard = useCallback(() => { void copy.history('discard', { tool: 'Forge native editor', button: 'Discard changes' }); setError(null); }, [copy.history]);
   useEffect(() => {
     onDraftChange?.({
       dirty,
@@ -268,6 +260,7 @@ function NativeEditorBody({
   }, [dirty, discard, onDraftChange, save, saving, uploading]);
   useEffect(() => () => onDraftChange?.(null), [onDraftChange]);
 
+  if (!copy.ready) return <div role="status" className="space-y-2 p-3 text-sm">Opening private native copy… {copy.error && <p role="alert">{copy.error}</p>}</div>;
   const blocked = view.capabilities.filter(
     (capability) =>
       capability.state !== 'editable' || (capability.operation === 'text' && !capability.text),
@@ -297,6 +290,12 @@ function NativeEditorBody({
           </>
         }
       />
+      <div data-working-copy-id={copy.state?.workingCopyId} data-base-revision-id={copy.state?.base.baseRevisionId} className="space-y-1 text-xs">
+        {copy.readOnly ? <p>This revision is read-only. Branch it in Variant control before editing.</p> : !copy.ready ? <p role="status">Opening private native copy…</p> : <p>Private browser copy · base {capturedBase?.slice(0, 8)}. Saved revisions and releases remain separate.</p>}
+        {capturedBase && variant && capturedBase !== variant.draftHeadRevisionId && <p role="alert">The branch advanced. Your private edits remain on their captured base; save will require conflict review.</p>}
+        {(copy.error || retained.error) && <p role="alert">{copy.error ?? problem(retained.error)} <Button size="xs" onClick={() => void copy.retry()}>Retry native history</Button></p>}
+        {copy.state?.pending && <p role="status">The exact native save is retained. <Button size="xs" disabled={saving} onClick={() => void copy.dismissSave()}>Stop retrying native request</Button></p>}
+      </div>
       <details className="border-b border-border p-[var(--card-pad)]">
         <summary className="cursor-pointer text-sm font-medium">
           Variant control and releases
@@ -309,7 +308,7 @@ function NativeEditorBody({
             variants={variants}
             revisionId={view.revision.revisionId}
             onOpenRevision={(revision) => {
-              void confirmForgeExit().then((allowed) => { if (allowed) onSelectRevision(revision.id); });
+              void copy.park().then(() => onSelectRevision(revision.id)).catch(cause => setError(problem(cause)));
             }}
           />
         </div>
@@ -329,7 +328,7 @@ function NativeEditorBody({
               void save();
             }}
           >
-            <fieldset disabled={saving || uploading || !canEdit}>
+            <fieldset disabled={uploading || !canEdit}>
               <FieldGroup>
                 <Controller
                   control={form.control}
@@ -472,7 +471,9 @@ function NativeEditorBody({
                   overwrites an edit must be resolved before it can be saved.
                 </FieldDescription>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit">{saving ? 'Compiling and saving…' : 'Save variant'}</Button>
+                  <Button type="button" variant="outline" disabled={!copy.state?.history.past.length} onClick={() => void copy.history('undo', { tool: 'Forge native editor', button: 'Undo native change' })}>Undo native change</Button>
+                  <Button type="button" variant="outline" disabled={!copy.state?.history.future.length} onClick={() => void copy.history('redo', { tool: 'Forge native editor', button: 'Redo native change' })}>Redo native change</Button>
+                  <Button type="submit" disabled={saving || !dirty && !copy.state?.pending}>{saving ? 'Compiling and saving…' : 'Save variant'}</Button>
                   <Button type="button" variant="outline" disabled={!dirty} onClick={discard}>
                     Discard changes
                   </Button>
@@ -480,10 +481,10 @@ function NativeEditorBody({
               </FieldGroup>
             </fieldset>
           </form>
-          {error ? (
+          {error || copy.error ? (
             <Alert variant="destructive">
               <AlertTitle>Variant was not saved</AlertTitle>
-              <AlertDescription>{error} Your changes are still here.</AlertDescription>
+              <AlertDescription>{error ?? copy.error} Your changes are still here.</AlertDescription>
             </Alert>
           ) : null}
           {blocked.length ? (

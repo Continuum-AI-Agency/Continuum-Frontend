@@ -1249,6 +1249,13 @@ export async function previewTemplateLayers(assetId: string, request: TemplateLa
   );
 }
 
+/** Send the frozen native intent with the exact account token checked by authorizedFetch. */
+export async function savePinnedTemplateRevision(assetId: string, body: unknown, expectedUserId: string, signal?: AbortSignal) {
+  return templateRevisionSchema.parse(await unwrap(await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions`,
+    { method: 'POST', body: JSON.stringify(body), signal }, expectedUserId), 'Save template revision'));
+}
+
 export async function saveTemplateRevision(assetId: string, request: SaveTemplateRevisionRequest) {
   return templateRevisionSchema.parse(
     await unwrap(

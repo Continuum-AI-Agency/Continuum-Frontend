@@ -28,6 +28,7 @@ export type SceneEditorState = {
 };
 
 export type SceneEditorAction =
+  | { type: 'restore'; changes: SceneChanges; outputId: string | null }
   | { type: 'set'; key: string; value: SceneValue }
   | { type: 'resetField'; key: string }
   | { type: 'resetAll' }
@@ -80,6 +81,7 @@ export function sceneEditorReducer(
   action: SceneEditorAction,
 ): SceneEditorState {
   switch (action.type) {
+    case 'restore': return { ...state, changes: action.changes, outputId: action.outputId, past: [], future: [], editing: null };
     case 'set': {
       const rest = without(state.changes, action.key);
       const changes = sameValue(action.value, state.defaults[action.key])
