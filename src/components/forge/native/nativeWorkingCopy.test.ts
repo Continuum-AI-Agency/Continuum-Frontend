@@ -126,3 +126,99 @@ test('a failed native edit refuses parking and can retry its exact visible snaps
   await copy.edit({ width: 40, height: 24 }, change); await copy.flush(); await copy.park();
   expect((await copy.read()).history.present.width).toBe(40);
 });
+
+
+test('another tab cannot capture a new save after the shared copy was acknowledged clean', async () => {
+  const h = harness(); const a = await h.open(); const b = await h.open();
+  await a.edit({ width: 40, height: 24 }, change);
+  await a.save(request, async () => accepted, async () => identity.userId);
+  let sends = 0;
+  await expect(b.save(request, async () => { sends++; return accepted; }, async () => identity.userId))
+    .rejects.toThrow(/unsaved/);
+  expect(sends).toBe(0); expect((await b.read()).pending).toBeNull();
+});
+
+test('duplicate native acknowledgements preserve later edits and a newer pending intent across tabs', async () => {
+  const h = harness(); const a = await h.open(); const b = await h.open();
+  await a.edit({ width: 40, height: 24 }, change);
+  let sentA!: object; let sentB!: object;
+  let resolveA!: (value: NativeCopyIdentity) => void; let resolveB!: (value: NativeCopyIdentity) => void;
+  const pa = new Promise<NativeCopyIdentity>(resolve => { resolveA = resolve; });
+  const pb = new Promise<NativeCopyIdentity>(resolve => { resolveB = resolve; });
+  const first = a.save(request, async intent => { sentA = intent; return pa; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !sentA; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  const duplicate = b.save(request, async intent => { sentB = intent; return pb; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !sentB; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  expect(sentA).toEqual(sentB); resolveA(accepted); await first;
+  await a.edit({ width: 48, height: 24 }, change);
+  let newerIntent!: object; let resolveNew!: (value: NativeCopyIdentity) => void;
+  const pn = new Promise<NativeCopyIdentity>(resolve => { resolveNew = resolve; });
+  const newer = a.save(request, async intent => { newerIntent = intent; return pn; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !newerIntent; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  resolveB(accepted); await duplicate;
+  expect((await b.read()).pending).toEqual(newerIntent);
+  expect((await b.read()).history.present.width).toBe(48);
+  resolveNew({ ...accepted, baseRevisionId: 'revision-newer' }); await newer;
+  expect((await b.read()).history.baseline.width).toBe(48);
+  await b.flush();
+  expect(h.events.filter(event => event.command === 'forge_native_save' && event.outcome === 'succeeded')).toHaveLength(2);
+});
+
+test('an accepted native receipt is frozen before acknowledgement and cannot alias its sender', async () => {
+  const h = harness(); const copy = await h.open(); await copy.edit({ width: 40, height: 24 }, change);
+  const receipt = structuredClone(accepted);
+  const result = await copy.save(request, async () => receipt, async () => identity.userId);
+  receipt.userId = 'different-owner'; receipt.baseRevisionId = 'mutated-after-return';
+  expect(result.accepted.userId).toBe(identity.userId);
+  expect(result.accepted.baseRevisionId).toBe('revision-saved');
+  expect((await copy.read()).base.baseRevisionId).toBe('revision-saved');
+});
+
+test('an old identical acknowledgement cannot rewind a newer accepted base', async () => {
+  const h = harness(); const a = await h.open(); const b = await h.open(); await a.edit({ width: 40, height: 24 }, change);
+  let sent = false; let resume!: (value: NativeCopyIdentity) => void;
+  const waiting = new Promise<NativeCopyIdentity>(resolve => { resume = resolve; });
+  let firstResume!: (value: NativeCopyIdentity) => void;
+  const firstWait = new Promise<NativeCopyIdentity>(resolve => { firstResume = resolve; });
+  const first = a.save(request, async () => { sent = true; return firstWait; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !sent; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  let duplicateSent = false;
+  const duplicate = b.save(request, async () => { duplicateSent = true; return waiting; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !duplicateSent; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  firstResume(accepted); await first; await a.edit({ width: 48, height: 24 }, change);
+  await a.save(request, async () => ({ ...accepted, baseRevisionId: 'revision-newer' }), async () => identity.userId);
+  resume(accepted); await duplicate;
+  expect((await b.read()).base.baseRevisionId).toBe('revision-newer');
+  expect((await b.read()).history.baseline.width).toBe(48);
+});
+
+test('explicit native save-as-variant retains its original private branch projection', async () => {
+  const h = harness(); const copy = await h.open(); await copy.edit({ width: 40, height: 24 }, change);
+  const result = await copy.save((base, value, key) => ({ ...request(base, value, key), variantId: undefined, name: 'Explicit new variant', expectedHeadRevisionId: null }),
+    async () => ({ ...accepted, variantId: 'explicit-new-branch' }), async () => identity.userId);
+  expect(result.accepted.variantId).toBe('explicit-new-branch');
+  expect(result.state.base.variantId).toBe('branch-a'); expect(result.state.pending).toBeNull();
+  expect(result.state.history.present.width).toBe(40); expect(result.state.history.baseline.width).toBe(32);
+});
+
+test('a contradictory duplicate receipt is refused without changing acknowledged work', async () => {
+  const h = harness(); const a = await h.open(); const b = await h.open();
+  await a.edit({ width: 40, height: 24 }, change);
+  let firstSent = false; let duplicateSent = false;
+  let resumeFirst!: (value: NativeCopyIdentity) => void; let resumeDuplicate!: (value: NativeCopyIdentity) => void;
+  const firstReceipt = new Promise<NativeCopyIdentity>(resolve => { resumeFirst = resolve; });
+  const duplicateReceipt = new Promise<NativeCopyIdentity>(resolve => { resumeDuplicate = resolve; });
+  const first = a.save(request, async () => { firstSent = true; return firstReceipt; }, async () => identity.userId);
+  for (let i = 0; i < 100 && !firstSent; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  const duplicate = b.save(request, async () => { duplicateSent = true; return duplicateReceipt; }, async () => identity.userId)
+    .catch(error => error as Error);
+  for (let i = 0; i < 100 && !duplicateSent; i++) await new Promise(resolve => setTimeout(resolve, 0));
+  expect(firstSent && duplicateSent).toBe(true);
+  resumeFirst(accepted); await first; await a.edit({ width: 48, height: 24 }, change);
+  const before = await a.read();
+  resumeDuplicate({ ...accepted, baseRevisionId: 'contradictory-revision' });
+  const refusal = await duplicate; expect(refusal).toBeInstanceOf(Error);
+  expect((refusal as Error).message).toContain('changed an acknowledged native save identity');
+  expect(await b.read()).toEqual(before); await b.flush();
+  expect(h.events.filter(event => event.command === 'forge_native_save' && event.outcome === 'succeeded')).toHaveLength(1);
+});

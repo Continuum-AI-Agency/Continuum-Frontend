@@ -7,7 +7,7 @@ export type NativeCopyIdentity = { userId: string; brandId: string; templateId: 
 export type NativeSaveIntent<T> = { id: string; userId: string; assetId: string; body: Record<string, unknown>;
   snapshot: T; base: NativeCopyIdentity; throughSequence: number };
 export type NativeCopyState<T> = { workingCopyId: string; base: NativeCopyIdentity; history: LayerHistory<T>;
-  sequence: number; editIds: string[]; pending: NativeSaveIntent<T> | null };
+  sequence: number; editIds: string[]; pending: NativeSaveIntent<T> | null; acceptedSaves?: Record<string, NativeCopyIdentity> };
 type Options<T> = { identity: NativeCopyIdentity; initial: T; storage?: OperationJournalStorage;
   append: (events: TemplateOperationInput[]) => Promise<void>; onError?: (error: unknown) => void };
 
@@ -37,9 +37,11 @@ export class NativeWorkingCopy<T> {
       return { projection: state };
     });
   }
-  private transition(update: (state: NativeCopyState<T>, eventId: string) => { state: NativeCopyState<T>; action: ForgeDraftAction }) {
+  private transition(update: (state: NativeCopyState<T>, eventId: string) => { state: NativeCopyState<T>; action?: ForgeDraftAction }) {
     return this.journal.changeProjection(this.initial, (current, coverage) => {
-      const { state, action } = update(current, coverage.eventId); state.sequence = current.sequence + 1;
+      const { state, action } = update(current, coverage.eventId);
+      if (!action) return { projection: state };
+      state.sequence = current.sequence + 1;
       return { projection: state, action: { ...action, changes: { ...action.changes, nativeWorkingCopyId: current.workingCopyId } },
         revision: state.sequence, context: { baseRevisionId: current.base.baseRevisionId,
           baseVersionId: current.base.sourceVersionId, sourceChecksum: current.base.sourceChecksum } };
@@ -82,6 +84,7 @@ export class NativeWorkingCopy<T> {
       throw new Error('This save belongs to another signed-in account. Its private copy is preserved.');
     const captured = await this.journal.changeProjection(this.initial, (state, coverage) => {
       if (state.pending) return { projection: state };
+      if (!isLayerHistoryDirty(state.history)) throw new Error('There are no unsaved native changes to capture.');
       const id = crypto.randomUUID();
       const intent: NativeSaveIntent<T> = { id, userId: state.base.userId, assetId: state.base.templateId,
         base: structuredClone(state.base), snapshot: structuredClone(state.history.present), throughSequence: coverage.throughSequence,
@@ -96,13 +99,20 @@ export class NativeWorkingCopy<T> {
     await this.journal.flush();
     if (await currentPrincipal() !== intent.userId) throw new Error('Switch back to the account that owns this retained save.');
     // The sender must bind this principal to the token captured by its HTTP helper.
-    const accepted = await send(structuredClone(intent));
+    const accepted = structuredClone(await send(structuredClone(intent)));
     if (accepted.userId !== intent.userId || accepted.brandId !== intent.base.brandId || accepted.templateId !== intent.base.templateId)
       throw new Error('The server accepted a different native template identity. The save intent is preserved.');
     const state = await this.transition((current) => {
+      const prior = current.acceptedSaves?.[intent.id];
+      if (prior) {
+        if ((Object.keys(prior) as Array<keyof NativeCopyIdentity>).some(key => prior[key] !== accepted[key]))
+          throw new Error('The server changed an acknowledged native save identity.');
+        return { state: current };
+      }
       if (current.pending?.id !== intent.id) throw new Error('A different save owns this acknowledgement.');
       const sameBranch = accepted.variantId === current.base.variantId;
-      return { state: { ...current, pending: null, ...(sameBranch ? { base: accepted, history: markLayerHistorySaved(current.history, intent.snapshot) } : {}) },
+      return { state: { ...current, pending: null, acceptedSaves: { ...current.acceptedSaves, [intent.id]: structuredClone(accepted) },
+        ...(sameBranch ? { base: accepted, history: markLayerHistorySaved(current.history, intent.snapshot) } : {}) },
         action: { command: 'forge_native_save', outcome: 'succeeded', origin,
           changes: { intentId: intent.id, revisionId: accepted.baseRevisionId, nativeWorkingCopyId: current.workingCopyId,
             throughSequence: intent.throughSequence, savedToAnotherBranch: !sameBranch } } };

@@ -62,6 +62,7 @@ export class VersioningIntentJournal {
     );
   }
   capture(assetId: string, action: VersioningIntent['action'], body: Record<string, unknown>) {
+    const reviewedBody = structuredClone(body);
     return this.storage.change(this.key, (record) => {
       if (record.attempts.some((attempt) => attempt.state === 'pending'))
         throw new Error('Resolve the pending versioning request before starting another.');
@@ -71,7 +72,7 @@ export class VersioningIntentJournal {
         brandId: this.brandId,
         assetId,
         action,
-        body: structuredClone(body),
+        body: reviewedBody,
         createdAt: new Date().toISOString(),
         state: 'pending',
       };
@@ -82,6 +83,7 @@ export class VersioningIntentJournal {
   finish(id: string, state: 'acknowledged' | 'dismissed') {
     return this.storage.change(this.key, (record) => {
       const intent = record.attempts.find((attempt) => attempt.id === id);
+      if (intent?.state === state) return;
       if (!intent || intent.state !== 'pending')
         throw new Error('The pending request changed. Reload its recovery record.');
       intent.state = state;

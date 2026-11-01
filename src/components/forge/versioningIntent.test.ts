@@ -56,3 +56,31 @@ test('a failed durable capture cannot expose a sendable intent', async () => {
   });
   await expect(journal.capture('asset', 'merge', {})).rejects.toThrow('disk full');
 });
+
+
+test('duplicate acknowledgement from another tab is idempotent and cannot finish a newer intent', async () => {
+  const { store, rows } = storage();
+  const first = new VersioningIntentJournal('actor', 'brand', 'family', store);
+  const second = new VersioningIntentJournal('actor', 'brand', 'family', store);
+  const old = await first.capture('asset', 'branch', { name: 'one' });
+  await first.finish(old.id, 'acknowledged');
+  const newer = await first.capture('asset', 'merge', { message: 'two' });
+  await second.finish(old.id, 'acknowledged');
+  expect(await second.pending()).toEqual(newer);
+  expect(rows.get(first.key)?.attempts.filter(attempt => attempt.id === old.id)).toHaveLength(1);
+  await expect(second.finish(old.id, 'dismissed')).rejects.toThrow('changed');
+});
+
+test('capture freezes caller input before the asynchronous IndexedDB read can run', async () => {
+  const { store } = storage();
+  let resume!: () => void;
+  const gate = new Promise<void>(resolve => { resume = resolve; });
+  const journal = new VersioningIntentJournal('actor', 'brand', 'family', {
+    async change(key, update) { await gate; return store.change(key, update); },
+  });
+  const body = { name: 'reviewed', resolutions: [{ path: '/width', choice: 'ours' }] };
+  const capture = journal.capture('asset', 'merge', body);
+  body.name = 'edited later'; body.resolutions[0]!.choice = 'theirs'; resume();
+  const frozen = await capture;
+  expect(frozen.body).toEqual({ name: 'reviewed', resolutions: [{ path: '/width', choice: 'ours' }] });
+});
