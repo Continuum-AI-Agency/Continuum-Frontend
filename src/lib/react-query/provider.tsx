@@ -31,7 +31,11 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
     // A tab learns its session is gone from a failed read or the client's own event, and then
     // leaves for sign-in with nothing of the brand left on screen (sessionLoss.ts).
     const sessionLoss = createSessionLossGuard({
-      getSession: async () => (await supabase.auth.getSession()).data.session,
+      getSession: async () => {
+        const { data, error } = await supabase.auth.getSession();
+        // No session WITH an error is a refresh that could not reach the server: unknown.
+        return error ? undefined : data.session;
+      },
       clearClientData: () => queryClient.clear(),
       leave: (href) => window.location.assign(href),
       currentPath: () => `${window.location.pathname}${window.location.search}`,

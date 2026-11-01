@@ -7,7 +7,8 @@
 // to the page it was on. A read that failed with a live session is only a failed read.
 
 export type SessionLossDeps = {
-  /** The browser client's current session, or null when there is none to use. */
+  /** The browser client's current session; null when there is none; undefined when the client
+   *  could not tell (a refresh that failed to reach the server is the network, not a sign-out). */
   getSession: () => Promise<unknown>;
   /** Drop every cached read, so nothing of the brand stays on screen. */
   clearClientData: () => void;
@@ -40,7 +41,7 @@ export function createSessionLossGuard(deps: SessionLossDeps) {
       check ??= deps
         .getSession()
         .then((session) => {
-          if (!session) leaveForSignIn();
+          if (session === null) leaveForSignIn();
         })
         .catch(() => {})
         .finally(() => {
