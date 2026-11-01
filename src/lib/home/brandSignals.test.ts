@@ -54,6 +54,8 @@ describe('portfolioSignalsFrom', () => {
         pendingBudgetMoves: 0,
         staleForDays: null,
         rosterAbsent: false,
+        // A row that names no platform predates the projection: a Meta portfolio, writable.
+        canWrite: true,
       },
     ]);
   });

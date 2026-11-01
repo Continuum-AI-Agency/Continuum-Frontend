@@ -39,6 +39,10 @@ export const homePortfolioSignalSchema = z.object({
   staleForDays: z.number().nullable(),
   /** The ad sets or campaigns it manages are no longer in the account. */
   rosterAbsent: z.boolean(),
+  /** Continuum may write budgets on at least one platform the portfolio is on
+   *  (optimizer_list_portfolios platform_writes). False where every one is switched off and the
+   *  client applies the changes (Pink Elephant). Absent reads as true. */
+  canWrite: z.boolean().optional(),
 });
 export type HomePortfolioSignal = z.infer<typeof homePortfolioSignalSchema>;
 
@@ -382,21 +386,30 @@ function modeOf(
   const acting = portfolios.filter(
     (portfolio) => portfolio.status === 'active' && portfolio.applyMode !== 'observe',
   );
-  const autopilot = acting.filter((portfolio) => portfolio.applyMode === 'autopilot');
+  // Only a portfolio Continuum may write can apply on its own or ask for an OK: where every
+  // platform's writes are off, the client applies the changes (product default 2026-10-31).
+  const writable = acting.filter((portfolio) => portfolio.canWrite !== false);
+  const autopilot = writable.filter((portfolio) => portfolio.applyMode === 'autopilot');
   if (autopilot.length > 0) {
     return {
       mode: 'operate',
       reason: `Continuum moves budget on its own in ${plural(autopilot.length, 'portfolio', 'portfolios')}.`,
     };
   }
-  if (acting.length > 0 || approvalRequired) {
+  if (writable.length > 0) {
     return {
       mode: 'approve',
-      reason:
-        acting.length > 0
-          ? `${plural(acting.length, 'portfolio proposes', 'portfolios propose')} changes for your OK.`
-          : 'Every change goes through your approval chain first.',
+      reason: `${plural(writable.length, 'portfolio proposes', 'portfolios propose')} changes for your OK.`,
     };
+  }
+  if (acting.length > 0) {
+    return {
+      mode: 'recommend',
+      reason: 'Continuum recommends; your team or client applies the changes.',
+    };
+  }
+  if (approvalRequired) {
+    return { mode: 'approve', reason: 'Every change goes through your approval chain first.' };
   }
   return {
     mode: 'recommend',

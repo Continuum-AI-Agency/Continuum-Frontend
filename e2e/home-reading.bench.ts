@@ -227,17 +227,22 @@ async function main() {
     wrongSetup.map((read) => read.name).join(', ') || undefined,
   );
 
-  // Recommend has no lead of its own: the strongest channel opens — Organic + without ads or for
-  // an audience business, Creative + for a store, Performance + otherwise.
+  // Recommend has no lead of its own: what waits opens when something does (a brand whose client
+  // applies the changes still has recommendations to hand over — product default 2026-10-31),
+  // else the strongest channel — Organic + without ads or for an audience business, Creative +
+  // for a store, Performance + otherwise.
   const wrongFirst = reads.filter((read) => {
     const model = read.reading.businessModel;
+    const waiting = read.reading.opportunities.some((opportunity) => opportunity.count > 0);
     const expected =
       FIRST_FOR[read.reading.mode] ??
-      (read.accounts.ads === 0 || model === 'audience'
-        ? 'organic'
-        : model === 'store'
-          ? 'creative'
-          : 'performance');
+      (waiting
+        ? 'opportunities'
+        : read.accounts.ads === 0 || model === 'audience'
+          ? 'organic'
+          : model === 'store'
+            ? 'creative'
+            : 'performance');
     return read.reading.modules[0]?.id !== expected;
   });
   recorder.record(

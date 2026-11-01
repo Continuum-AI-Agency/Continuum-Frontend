@@ -11,6 +11,7 @@ import {
   homePortfolioSignalSchema,
 } from '@continuum/contracts';
 import type { PlatformKey } from '@/components/onboarding/platforms';
+import { platformWritable } from '@/components/paid-media/optimizer/platformWrites';
 
 /** The part of a brand's integration summary the counts read; BrandIntegrationSummary fits it. */
 export type AccountBuckets = Partial<
@@ -47,6 +48,24 @@ const finiteOrNull = (value: unknown): number | null =>
 
 const count = (value: unknown): number => Math.max(0, Math.trunc(finiteOrNull(value) ?? 0));
 
+/** Whether Continuum may write any platform the portfolio is on: the Optimizer's own rule
+ *  (platformWritable: Meta unless switched off, any other platform only when switched on). A row
+ *  that lists no platform predates the projection, and every such portfolio is Meta. */
+function canWriteFrom(raw: Record<string, unknown>): boolean {
+  const writes =
+    raw.platform_writes &&
+    typeof raw.platform_writes === 'object' &&
+    !Array.isArray(raw.platform_writes)
+      ? (raw.platform_writes as Record<string, boolean>)
+      : {};
+  const platforms = Array.isArray(raw.platforms)
+    ? raw.platforms.filter((platform): platform is string => typeof platform === 'string')
+    : [];
+  return (platforms.length > 0 ? platforms : ['meta']).some((platform) =>
+    platformWritable({ platform_writes: writes }, platform),
+  );
+}
+
 /** optimizer_list_portfolios rows, keeping the ones that parse. */
 export function portfolioSignalsFrom(rows: unknown): HomePortfolioSignal[] {
   if (!Array.isArray(rows)) return [];
@@ -64,6 +83,7 @@ export function portfolioSignalsFrom(rows: unknown): HomePortfolioSignal[] {
       pendingBudgetMoves: count(raw.pending_budget_moves),
       staleForDays: finiteOrNull(raw.stale_for_days),
       rosterAbsent: raw.roster_state === 'absent',
+      canWrite: canWriteFrom(raw),
     });
     if (parsed.success) portfolios.push(parsed.data);
   }
