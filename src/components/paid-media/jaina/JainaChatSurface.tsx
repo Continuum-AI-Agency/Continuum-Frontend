@@ -207,6 +207,7 @@ import {
   shouldQueueSubmission,
   updateQueuedMessageContent,
 } from './queueing';
+import { isRepeatSubmission, type SubmissionStamp, submissionKey } from './sendGuard';
 import type { JainaChatMessage } from './types';
 
 const HISTORY_TIMEOUT_MS = READ_TIMEOUT_MS * 3;
@@ -1048,6 +1049,9 @@ export function JainaChatSurface({
   const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
   const queueDispatchInFlightRef = React.useRef(false);
+  // One click is one send (sendGuard.ts): the last submission and the ones still being set up.
+  const lastSubmissionRef = React.useRef<SubmissionStamp | null>(null);
+  const inFlightSubmissionKeysRef = React.useRef<Set<string>>(new Set());
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
   const mentionAdSetsCacheRef = React.useRef<Map<string, JainaMentionAdSet[]>>(new Map());
 
@@ -2221,6 +2225,26 @@ export function JainaChatSurface({
       if (!normalizedQuery) return;
 
       const submittedAttachments = attachments ?? [];
+      // Stamped before anything awaits: the second click of a double click arrives while the
+      // first is still creating its conversation, and has to find it already counted.
+      const submission = {
+        key: submissionKey(
+          normalizedQuery,
+          submittedAttachments.map((attachment) => attachment.id),
+          references,
+        ),
+        at: Date.now(),
+      };
+      if (
+        isRepeatSubmission({
+          next: submission,
+          previous: lastSubmissionRef.current,
+          inFlightKeys: inFlightSubmissionKeysRef.current,
+        })
+      ) {
+        return;
+      }
+      lastSubmissionRef.current = submission;
       const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'jaina');
       const resolvedReferences = mergeAttachmentReferences(
         references,
@@ -2270,9 +2294,14 @@ export function JainaChatSurface({
         return;
       }
 
-      const started = await dispatchMessage(input);
-      if (started && isJainaProMode) {
-        setIsJainaProMode(false);
+      inFlightSubmissionKeysRef.current.add(submission.key);
+      try {
+        const started = await dispatchMessage(input);
+        if (started && isJainaProMode) {
+          setIsJainaProMode(false);
+        }
+      } finally {
+        inFlightSubmissionKeysRef.current.delete(submission.key);
       }
     },
     [
