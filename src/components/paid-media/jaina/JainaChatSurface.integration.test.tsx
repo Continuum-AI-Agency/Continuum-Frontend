@@ -314,8 +314,26 @@ mock.module('./components/JainaHeader', () => ({
   JainaHeader: () => <div data-testid="jaina-header" />,
 }));
 
+/** The "Weekly Recap" starter's prompt, as the real grid sends it. */
+const STARTER_PROMPT =
+  'Create a client-ready weekly recap for the current ad account with results, changes, and next steps.';
+
 mock.module('./components/JainaEmptyState', () => ({
-  JainaEmptyState: () => <div data-testid="jaina-empty-state" />,
+  JainaEmptyState: ({
+    onExampleClick,
+  }: {
+    onExampleClick?: (query: string, attachments: unknown[]) => void;
+  }) => (
+    <div data-testid="jaina-empty-state">
+      <button
+        type="button"
+        data-testid="jaina-starter"
+        onClick={() => onExampleClick?.(STARTER_PROMPT, [])}
+      >
+        Weekly Recap
+      </button>
+    </div>
+  ),
 }));
 
 mock.module('./components/JainaConversationSidebar', () => ({
@@ -1179,5 +1197,63 @@ describe('JainaChatSurface integration', () => {
     });
     // A user turn has no report and no delivery to acknowledge.
     expect(screen.getAllByTestId('user-delivery-source').at(-1)?.textContent).toBe('');
+  });
+  describe('a send is one send per click (PP-DT-C-jaina-starter-double-click-sends-twice)', () => {
+    const conversationCreates = (fetchMock: typeof fetch) =>
+      (fetchMock as unknown as ReturnType<typeof mock>).mock.calls.filter((call) => {
+        const [input, init] = call as [RequestInfo | URL, RequestInit | undefined];
+        const url = typeof input === 'string' ? input : input.toString();
+        return init?.method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations');
+      });
+
+    it('sends a double-clicked starter once: one conversation, one turn', async () => {
+      const fetchMock = emptyHistoryFetch();
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+      await waitFor(() =>
+        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+      );
+
+      const starter = screen.getByTestId('jaina-starter');
+      // A double click is two clicks before the first send has had time to answer.
+      fireEvent.click(starter);
+      fireEvent.click(starter);
+
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+      expect(conversationCreates(fetchMock)).toHaveLength(1);
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+    });
+
+    it('queues a starter double-clicked while the conversation loads once, and sends it once', async () => {
+      let releaseHistory: () => void = () => {};
+      const historyHeld = new Promise<void>((resolve) => {
+        releaseHistory = resolve;
+      });
+      const answer = emptyHistoryFetch();
+      global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (
+          (init?.method ?? 'GET') === 'GET' &&
+          url.includes('/api/agents/jaina/chat/conversations?')
+        ) {
+          return historyHeld.then(() => answer(input, init));
+        }
+        return answer(input, init);
+      }) as typeof fetch;
+
+      render(surface, { wrapper: withQueryClient });
+      const starter = await screen.findByTestId('jaina-starter');
+      fireEvent.click(starter);
+      fireEvent.click(starter);
+
+      await waitFor(() => expect(screen.getAllByText(STARTER_PROMPT)).toHaveLength(1));
+
+      releaseHistory();
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+    });
   });
 });
