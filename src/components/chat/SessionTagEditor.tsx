@@ -57,7 +57,7 @@ export function SessionTagEditor({
             disabled={disabled}
             aria-label={`Edit tags for conversation ${sessionId}`}
             className={cn(
-              'inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
+              'hit-area inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
               className,
             )}
           >

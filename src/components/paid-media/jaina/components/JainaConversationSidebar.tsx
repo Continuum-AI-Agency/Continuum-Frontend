@@ -270,8 +270,11 @@ export function JainaConversationSidebar({
                 return (
                   <div
                     key={session.sessionId}
+                    // A row of controls: the tag and Delete buttons carry the 24 px hit pad, and
+                    // `hit-area-row` keeps each pad inside half the gap it shares, so neither
+                    // takes the other's taps (PP-DT-C-jaina-delete-conversation-target-21px).
                     className={cn(
-                      'group/conversation flex min-w-[220px] items-start gap-0.5 rounded-md text-left transition-colors @3xl/jaina:min-w-0',
+                      'group/conversation hit-area-row flex min-w-[220px] items-start gap-1 rounded-md text-left transition-colors [--hit-area-gap:calc(var(--spacing)*1)] @3xl/jaina:min-w-0',
                       isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
                       isInteractionDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                     )}
@@ -343,7 +346,7 @@ export function JainaConversationSidebar({
                       disabled={isInteractionDisabled || isDeleting}
                       aria-label={`Delete conversation ${getSessionTitle(session, sessionTitleById)}`}
                       className={cn(
-                        'mt-1.5 mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                        'hit-area mt-1.5 mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
                         isDeleting ? 'opacity-100' : ROW_ACTION_REVEAL,
                         isInteractionDisabled || isDeleting
                           ? 'cursor-not-allowed'
