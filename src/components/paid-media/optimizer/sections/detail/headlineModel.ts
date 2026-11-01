@@ -208,14 +208,25 @@ export function outcomeOf(items: readonly CycleItemRow[]): Outcome {
   return out;
 }
 
-/** Pending recommendations, plus the budget moves waiting for approval in Recommend mode. */
-export function decisionsWaiting(
-  report: ParsedCycleRunReport | null,
-  applyMode: string | null | undefined,
-): number {
+/**
+ * What waits for a decision: the pending recommendations and every budget move the Actions queue
+ * lists — held over a cap, approved and waiting for its write, or scored and not yet written — in
+ * any apply mode. It is the queue's count (OptimizerActionsPortfolioGroup's buildActionQueue rule,
+ * cross-checked by headlineModel.test.ts), because the tile's Review opens that queue: counting
+ * the held moves only in Recommend put "Decisions 8" on the page of an autopilot portfolio whose
+ * queue said 15 (PP-DT-C-decisions-count-15-vs-8-same-portfolio).
+ */
+export function decisionsWaiting(report: ParsedCycleRunReport | null): number {
   const recs = report?.recommendations.filter((r) => r.status === 'pending').length ?? 0;
-  const held = applyMode === 'recommend' ? outcomeOf(report?.latest_items ?? []).held : 0;
-  return recs + held;
+  const moves = (report?.latest_items ?? []).filter((item) => {
+    const status = item.apply_status ?? null;
+    return (
+      status === 'held' ||
+      status === 'approved_pending' ||
+      (status == null && (item.change_abs ?? 0) !== 0)
+    );
+  }).length;
+  return recs + moves;
 }
 
 /** Whole percent over (+) or under (−) the target. Null without a cost or a target. */
@@ -628,7 +639,7 @@ export function buildPortfolioHeadline(args: {
   const unread = view.unread ?? null;
   const status = statusSentence(growth, words, currency, days, unread);
   const items = report?.latest_items ?? [];
-  const waiting = decisionsWaiting(report, args.portfolio.apply_mode);
+  const waiting = decisionsWaiting(report);
   const atStakePerDay =
     Math.round(view.brief.candidates.reduce((sum, c) => sum + c.impact_per_day, 0) * 100) / 100;
   const now = args.now ?? Date.now();
