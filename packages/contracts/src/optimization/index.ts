@@ -7,6 +7,8 @@ export * from './account-chart';
 // Account-level metrics across platforms for the Optimizer Overview (MP1).
 export * from './account-platform-metrics';
 export * from './account-strategy';
+// How the Optimizer reads one ad account: mode, result that counts, board modules and why.
+export * from './accountReading';
 // The platform-neutral optimizer action (set_status, set_budget, set_bid_target,
 // add_negatives, budget_move) and the applier's preflight refusal.
 export * from './action';
