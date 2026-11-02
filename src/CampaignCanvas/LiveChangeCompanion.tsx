@@ -6,12 +6,14 @@
 // When the thread proposed this campaign more than once, the version line sits under the
 // header: an older version, or a version compared with the one before, is drawn in its place.
 
-import type { LiveChangePreviewPayload } from '@continuum/contracts';
+import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
 import * as React from 'react';
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
 import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { LiveChangeCanvas, LiveChangeDecisionPill } from './LiveChangeCanvas';
+import { type ConfirmVariantOption, LiveChangeConfirmBar } from './LiveChangeConfirmBar';
+import { ProjectionPanel } from './ProjectionPanel';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
 import { LecturaView, PlatformChip } from './lectura/LecturaView';
 import { CampaignModelBody, useVersionLine, VersionLineBar } from './versions/VersionLine';
@@ -20,11 +22,23 @@ export function LiveChangeCompanion({
   preview,
   decision,
   versions = null,
+  onDecide,
+  onImplement,
+  pendingDecision = null,
+  variants = null,
 }: {
   preview: LiveChangePreviewPayload;
   decision: LiveChangeDecision;
   /** Every proposal the thread made for this campaign, oldest first. */
   versions?: VersionLine | null;
+  /** Answers the pending approval with the chat card's own decision (and its choice). */
+  onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+  /** The decision already sent for this approval, from the card or the canvas. */
+  pendingDecision?: 'approve' | 'deny' | null;
+  /** The choices the gated tool's card offers. */
+  variants?: readonly ConfirmVariantOption[] | null;
+  /** Asks Jaina to run a proposal's changes through the approval cards. */
+  onImplement?: () => void;
 }) {
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
@@ -35,7 +49,7 @@ export function LiveChangeCompanion({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <span className="flex min-w-[12rem] flex-1 items-baseline gap-2 text-[13px] text-muted-foreground">
           <PlatformChip platform={model.platform} />
-          <span className="min-w-0">{preview.subject ?? 'Pending change'}</span>
+          <span className="min-w-0">{preview.subject ?? (decision === 'proposal' ? 'Proposed change' : 'Pending change')}</span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <LiveChangeDecisionPill decision={decision} />
@@ -62,6 +76,22 @@ export function LiveChangeCompanion({
           <LiveChangeCanvas preview={preview} decision={decision} showHeader={false} />
         )}
       </div>
+      {preview.projection && !shown ? (
+        <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-border bg-card">
+          <ProjectionPanel projection={preview.projection} />
+        </div>
+      ) : null}
+      {!shown ? (
+        <LiveChangeConfirmBar
+          key={preview.partId}
+          preview={preview}
+          decision={decision}
+          pendingDecision={pendingDecision}
+          variants={variants}
+          {...(onDecide ? { onDecide } : {})}
+          {...(onImplement ? { onImplement } : {})}
+        />
+      ) : null}
     </div>
   );
 }

@@ -4,12 +4,15 @@
 
 import {
   formatMoney,
+  isProposalApprovalId,
   type LiveChangeNode,
   type LiveChangePreviewPayload,
   type LiveChangeRow,
 } from '@continuum/contracts';
 
-export type LiveChangeDecision = 'pending' | 'approved' | 'denied';
+// `proposal`: Jaina proposed the change in her answer; no gated edit was called, so there is
+// nothing to approve on the canvas.
+export type LiveChangeDecision = 'pending' | 'approved' | 'denied' | 'proposal';
 
 export type LiveChangeAdSet = {
   node: LiveChangeNode;
@@ -54,12 +57,14 @@ export const liveChangeSummaryOf = (payload: LiveChangePreviewPayload): string =
   return parts.length > 0 ? parts.join(' · ') : 'No change on this campaign';
 };
 
-const MONEY_FIELDS = new Set(['daily_budget', 'lifetime_budget', 'bid_amount']);
+const MONEY_FIELDS = new Set(['daily_budget', 'daily_spend', 'lifetime_budget', 'bid_amount']);
 
 const FIELD_LABELS: Record<string, string> = {
   status: 'Status',
   name: 'Name',
   daily_budget: 'Daily budget',
+  daily_spend: 'Daily spend (run-rate)',
+  results: 'Results',
   lifetime_budget: 'Lifetime budget',
   bid_amount: 'Bid',
   bid_strategy: 'Bid strategy',
@@ -106,7 +111,7 @@ export const liveChangeDecisionOf = (
   messages: readonly LiveChangeThreadMessage[],
   approvalId: string,
 ): LiveChangeDecision => {
-  let decision: LiveChangeDecision = 'pending';
+  let decision: LiveChangeDecision = isProposalApprovalId(approvalId) ? 'proposal' : 'pending';
   for (const message of messages) {
     const resolved = message.resolvedApprovals?.[approvalId];
     if (resolved) decision = resolved.decision;
@@ -138,3 +143,36 @@ export const liveChangeByPartIdOf = (
   }
   return null;
 };
+
+export type LiveChangeConfirmBar =
+  | { kind: 'confirm' }
+  | { kind: 'implement' }
+  | { kind: 'google_note' }
+  | { kind: 'none' };
+
+/**
+ * What the canvas offers to do with the change it shows. A pending gated edit is confirmed or
+ * declined with the approval card's own decision; a proposal made in the answer has no approval
+ * yet, so the canvas offers to ask Jaina to run its changes through the approval cards. A
+ * Google proposal cannot be implemented from here: Jaina has no Google write tool with an
+ * approval yet. A decided edit offers nothing.
+ */
+export const liveChangeConfirmBarOf = (params: {
+  preview: Pick<LiveChangePreviewPayload, 'origin' | 'platform'>;
+  decision: LiveChangeDecision;
+  canDecide: boolean;
+  canImplement: boolean;
+}): LiveChangeConfirmBar => {
+  if (params.decision === 'pending' && params.canDecide && params.preview.origin !== 'proposal') {
+    return { kind: 'confirm' };
+  }
+  if (params.decision === 'proposal' && params.preview.platform === 'google') {
+    return { kind: 'google_note' };
+  }
+  if (params.decision === 'proposal' && params.canImplement) return { kind: 'implement' };
+  return { kind: 'none' };
+};
+
+/** The turn the canvas sends to implement a proposal: through the approval cards, nothing else. */
+export const LIVE_CHANGE_IMPLEMENT_TURN =
+  'Implement the changes you proposed. Run each one through its approval card so I can confirm it; do not apply anything without one. Answer in the language of this conversation.';
