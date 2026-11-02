@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { BudgetPacingResponseSchema } from '@/lib/schemas/budgetPacing';
+import { readEdgeError } from '@/lib/supabase/edgeErrorMessage';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const requestSchema = z.object({
@@ -30,9 +31,20 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Error invoking paid-media-reporting/budget-pacing:', error);
+      // A refusal the edge answered (Meta's #200 → 403 PERMISSIONS_MISSING) keeps its status
+      // and its typed code, so the page can say what to reconnect; anything without a status
+      // of its own is the edge failing us, a gateway error rather than this route's 500.
+      const failure = await readEdgeError(
+        error,
+        'Failed to fetch budget pacing from edge function',
+      );
+      const refused = failure.status !== null && failure.status >= 400 && failure.status < 500;
       return NextResponse.json(
-        { error: 'Failed to fetch budget pacing from edge function' },
-        { status: 500 },
+        {
+          error: refused ? failure.message : 'Failed to fetch budget pacing from edge function',
+          ...(failure.code ? { errorCode: failure.code } : {}),
+        },
+        { status: refused ? (failure.status as number) : 502 },
       );
     }
 
