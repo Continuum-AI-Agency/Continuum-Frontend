@@ -12,7 +12,11 @@ import type {
 } from '@continuum/contracts';
 import { useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { accountSnapshotsQuery, enrolledAdsetsQuery } from '../useOptimizerData';
+import {
+  accountSnapshotsQuery,
+  enrolledAdsetsQuery,
+  useMetaReadAccount,
+} from '../useOptimizerData';
 import { usePortfolioMemberStates } from './platforms/portfolioPlatforms';
 import {
   holdsOtherPlatforms,
@@ -39,10 +43,12 @@ export function usePortfolioFigures(args: {
 }): PortfolioFigures {
   const { brandId, adAccountId, portfolios, series } = args;
   const levels = useMemo(() => [...new Set(portfolios.map(levelOf))], [portfolios]);
+  // A Google customer selected on Scale's Google platform has no Meta snapshots to read.
+  const meta = useMetaReadAccount(brandId, adAccountId);
   const snapshotReads = useQueries({
     queries: levels.map((level) => ({
       ...accountSnapshotsQuery(brandId, adAccountId ?? '', level),
-      enabled: Boolean(brandId && adAccountId),
+      enabled: Boolean(brandId && meta.accountId),
     })),
   });
   const rosterReads = useQueries({
@@ -56,9 +62,11 @@ export function usePortfolioFigures(args: {
   );
   const metricsById = usePortfolioMemberStates(otherPlatformIds);
 
+  const reading = Boolean(brandId && adAccountId);
   const pending =
-    (Boolean(brandId && adAccountId) &&
-      (snapshotReads.some((read) => read.isPending) ||
+    (reading &&
+      (!meta.settled ||
+        (meta.accountId != null && snapshotReads.some((read) => read.isPending)) ||
         rosterReads.some((read) => read.isPending))) ||
     otherPlatformIds.some((id) => metricsById.get(id)?.status === 'loading');
 

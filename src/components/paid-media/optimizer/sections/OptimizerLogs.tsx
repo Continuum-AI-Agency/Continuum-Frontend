@@ -43,6 +43,9 @@ type OptimizerLogsProps = {
   windowDays?: OptimizerFeedWindowDays;
   /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
   controls?: ReactNode;
+  /** Drawn under the feed once it has answered — never under the loading skeleton, which the
+   *  timeline replaces at another height and would push it down (CLS on a phone). */
+  footer?: ReactNode;
 };
 
 // An error is red on the dot; a warning keeps a muted dot but names itself, so a skip or a
@@ -117,7 +120,7 @@ export function LifecycleLogRow({ row }: { row: OptimizerLogRow }) {
   );
 }
 
-export function OptimizerLogs({ brandId, windowDays = 7, controls }: OptimizerLogsProps) {
+export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: OptimizerLogsProps) {
   const logsQuery = useOptimizerLogs(brandId, windowDays);
   const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
   const [archiveRequested, setArchiveRequested] = useState(false);
@@ -150,6 +153,7 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls }: OptimizerLo
           onRetry={() => void logsQuery.refetch()}
           subject="the server log"
         />
+        {footer}
       </div>
     );
   }
@@ -171,6 +175,7 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls }: OptimizerLo
           media={<ScrollTextIcon aria-hidden="true" />}
           description="Cycle results, skips and failures appear here. Anything the optimizer changed on the ad account is in Actions."
         />
+        {footer}
       </div>
     );
   }
@@ -245,6 +250,7 @@ export function OptimizerLogs({ brandId, windowDays = 7, controls }: OptimizerLo
       !archiveQuery.hasNextPage ? (
         <p className="text-xs text-muted-foreground">No events older than 30 days.</p>
       ) : null}
+      {footer}
     </div>
   );
 }

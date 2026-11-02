@@ -1,70 +1,31 @@
 'use client';
 
-import { z } from 'zod';
+import {
+  type GoogleResultBucket,
+  type PaidAccountOverview,
+  paidAccountOverviewSchema,
+} from '@continuum/contracts';
+import { reportingMetricsRoute } from '@/lib/paid-media/paid-ranking.client';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-
-const metricComparisonSchema = z.object({
-  current: z.number().nullable().optional(),
-  previous: z.number().nullable().optional(),
-  percentageChange: z.number().nullable().optional(),
-});
-
-// Lenient on purpose: the edge emits more metric keys than the dashboard reads,
-// and Meta/Google diverge. Require only the three headline KPIs; everything else
-// is optional and passthrough.
-const paidAccountOverviewSchema = z.object({
-  // The account's own currency and timezone, labelled by the edge (daily-scope response).
-  // Null when the edge could not read the profile: a null currency never prints as a label.
-  currency: z.string().nullable().optional(),
-  timezone: z.string().nullable().optional(),
-  metrics: z.object({
-    spend: z.number(),
-    roas: z.number(),
-    ctr: z.number(),
-    impressions: z.number().optional(),
-    clicks: z.number().optional(),
-    cpc: z.number().optional(),
-    cpa: z.number().optional(),
-    purchases: z.number().optional(),
-    purchase_value: z.number().optional(),
-    conversations: z.number().optional(),
-    leads: z.number().optional(),
-    cost_per_conversation: z.number().optional(),
-    cost_per_lead: z.number().optional(),
-  }),
-  comparison: z.record(z.string(), metricComparisonSchema).optional(),
-  trends: z
-    .array(
-      z.object({
-        date: z.string().optional(),
-        spend: z.number().optional(),
-        roas: z.number().optional(),
-        ctr: z.number().optional(),
-        clicks: z.number().optional(),
-        impressions: z.number().optional(),
-        purchases: z.number().optional(),
-        conversations: z.number().optional(),
-        leads: z.number().optional(),
-      }),
-    )
-    .optional(),
-});
-
-export type PaidAccountOverview = z.infer<typeof paidAccountOverviewSchema>;
+import { edgeReadError } from '@/lib/supabase/edgeErrorMessage';
 
 // Account-level totals + period-over-period comparison + daily series from the
 // paid-media reporting edge function. The missing wrapper for the account_overview
-// scope (the leaderboards only had the ranking scopes wrapped).
+// scope (the leaderboards only had the ranking scopes wrapped). Both producers (Meta,
+// Google) answer the one envelope in @continuum/contracts. Google counts one business
+// result per read: `resultBucket` names it (leads | purchases | signups). A refused read
+// throws the edge's own words, code and HTTP status (EdgeReadError), so the page can say why.
 export async function fetchPaidAccountOverview(params: {
   brandId: string;
   adAccountId: string;
   platform: PaidMediaPlatform;
   range: PaidMetricsRange;
+  resultBucket?: GoogleResultBucket;
 }): Promise<PaidAccountOverview> {
   const supabase = createSupabaseBrowserClient();
-  const { data, error } = await supabase.functions.invoke('paid-media-reporting/metrics', {
+  const { data, error } = await supabase.functions.invoke(reportingMetricsRoute(params.platform), {
     method: 'POST',
     body: {
       platform: params.platform,
@@ -72,11 +33,12 @@ export async function fetchPaidAccountOverview(params: {
       adAccountId: params.adAccountId,
       scope: 'account_overview',
       range: params.range,
+      ...(params.resultBucket ? { resultBucket: params.resultBucket } : {}),
     },
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw await edgeReadError(error, 'The ad platform did not answer.');
   }
 
   return paidAccountOverviewSchema.parse(data);

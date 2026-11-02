@@ -69,9 +69,11 @@ export function parseGoogleInventory(
   };
 }
 
+// The platform rides in the URL as well as the body: a cold Google read needs the platform-read
+// budget, and the client time limit chooses by URL (supabaseTimeoutPolicy).
 async function invokeRanking(brandId: string, customerId: string, scope: string) {
   const { data, error } = await createSupabaseBrowserClient().functions.invoke(
-    'paid-media-metrics',
+    'paid-media-metrics?platform=google-ads',
     {
       body: {
         platform: 'google-ads',

@@ -15,6 +15,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { http } from '@/lib/api/http';
+import { useProductLocked } from '@/lib/billing/lockedProducts';
 
 // Rolling window the ticker reports over ("made/completed in the last hour").
 export const GENERATION_WINDOW_MINUTES = 60;
@@ -64,6 +65,9 @@ async function fetchGenerationSummaries(brandId: string): Promise<GenerationSumm
  * against a row the server already reports as terminal (running: 0).
  */
 export function useGenerationSummaries(brandId?: string | null, localInflight = false) {
+  // The ticker is mounted in the app header, so it runs on every page of every brand. A brand
+  // without Organic Plus is refused 402 by the organic agent every time; it is never asked.
+  const organicLocked = useProductLocked('organic_agent');
   const query = useQuery({
     queryKey: generationSummariesQueryKey(brandId),
     queryFn: () =>
@@ -73,7 +77,7 @@ export function useGenerationSummaries(brandId?: string | null, localInflight = 
             summaries: [],
             window: emptyWindow(),
           } satisfies GenerationSummariesResponse),
-    enabled: Boolean(brandId),
+    enabled: Boolean(brandId) && !organicLocked,
     staleTime: 5_000,
     refetchInterval: (q) =>
       (q.state.data?.window.running ?? 0) > 0 || localInflight ? 15_000 : false,

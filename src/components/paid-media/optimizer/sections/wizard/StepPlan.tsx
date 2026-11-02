@@ -16,7 +16,12 @@ import { currencyFieldSuffix, formatCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { TierCards } from '../fields/TierCards';
 import { questionHeading } from './OptionRow';
-import { planReadout, suggestedGuardrails, type WizardDraft } from './wizardModel';
+import {
+  parseTypedAmount,
+  planReadout,
+  suggestedGuardrails,
+  type WizardDraft,
+} from './wizardModel';
 
 const GRANULARITY_LABEL: Record<BudgetGranularity, string> = {
   daily: 'Per day',
@@ -52,7 +57,8 @@ export function StepPlan({
   // its own kind of wrong — the hint disappears with the unit.
   const unit = currencyFieldSuffix(currency);
   const readout = planReadout(draft);
-  const typedDaily = Number.parseFloat(draft.dailyTotal);
+  // The model's reading, so this hint never prints 1 for a typed "1,500".
+  const typedDaily = parseTypedAmount(draft.dailyTotal) ?? Number.NaN;
   const effectiveDaily =
     Number.isFinite(typedDaily) && typedDaily > 0
       ? typedDaily

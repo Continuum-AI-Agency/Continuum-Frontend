@@ -16,6 +16,7 @@ import {
   channelTypeSummary,
   effectiveTargetMetric,
   MODE_COPY,
+  parseTypedAmount,
   planReadout,
   selectedMembers,
   selectionByPlatform,
@@ -79,8 +80,9 @@ export function WizardSummary({
   reached,
 }: WizardSummaryProps) {
   const metric = getOptimizationMetricDefinition(effectiveTargetMetric(draft));
-  const target = Number.parseFloat(draft.target);
-  const typedDaily = Number.parseFloat(draft.dailyTotal);
+  // The model's reading of each amount: the summary shows what Create will send.
+  const target = parseTypedAmount(draft.target) ?? Number.NaN;
+  const typedDaily = parseTypedAmount(draft.dailyTotal) ?? Number.NaN;
   const readout = planReadout(draft);
   const daily =
     Number.isFinite(typedDaily) && typedDaily > 0

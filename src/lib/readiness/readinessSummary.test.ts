@@ -101,12 +101,25 @@ describe('selectReadinessSummary', () => {
     });
   });
 
-  it('returns a not_started summary when the book has no readiness', () => {
-    expect(selectReadinessSummary(book({}))).toEqual({
-      score: 0,
-      band: 'not_started',
-      top_blocker: null,
-      next_action: null,
-    });
+  // PP-DT-C-unscored-readiness-shows-zero: a readiness that was never scored is not a score of 0.
+  // Coerced to 0, the Home printed "Brand Book ready · Readiness · 0" with a red pip while the
+  // brand's onboarding page said "Not scored yet".
+  it('has no summary for a book whose readiness was never scored', () => {
+    expect(selectReadinessSummary(book({}))).toBeNull();
+  });
+
+  it('has no summary for a readiness that could not be assessed', () => {
+    const unassessable: ReadinessAnalysis = {
+      ...readiness,
+      overall_score: 0,
+      dimensions: Object.fromEntries(
+        Object.entries(readiness.dimensions).map(([key, dimension]) => [
+          key,
+          { ...dimension, score: 0, coverage: 0 },
+        ]),
+      ) as ReadinessAnalysis['dimensions'],
+    };
+    const b = book({ composite: { readiness: unassessable } as BrandBookResponse['composite'] });
+    expect(selectReadinessSummary(b)).toBeNull();
   });
 });

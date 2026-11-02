@@ -49,6 +49,7 @@ import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
 import { KpiDelta, KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
 import {
@@ -106,6 +107,7 @@ import {
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
 import { readComparisonHidden } from './platforms/comparisonPreference';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { GoogleDeliveryStatus } from './platforms/GoogleDeliveryStatus';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
 import { PlatformTabs } from './platforms/PlatformTabs';
@@ -123,6 +125,7 @@ import {
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
 import { type PortfolioFigure, portfolioFigureFromReads } from './portfolioFigure';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { underManagement } from './portfolioStaleness';
 import { usePortfolioFigures } from './usePortfolioFigures';
 
@@ -279,7 +282,10 @@ export function OptimizerOverview({
   const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
   const autopilot = autopilotSummary(portfolios);
   const book = underManagement(portfolios);
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
   const portfoliosWithDecisions = portfolios.filter(
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
@@ -670,7 +676,7 @@ export function OptimizerOverview({
           onSelectPortfolio={onSelectPortfolio}
           pacingById={pacingById}
           portfolios={portfolios}
-          rowCurrency={() => currency}
+          rowCurrency={(portfolio) => portfolioCurrency(portfolio, currency)}
           rowPlatforms={(portfolio) =>
             memberPlatforms(memberStates.get(portfolio.id), OPTIMIZER_MANAGED_PLATFORM)
           }
@@ -904,7 +910,10 @@ function PlatformPortfolioSections({
         bareAccountId(account.account_id) === bareAccountId(portfolio.ad_account_id),
     )?.currency ??
     null;
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
 
   // One paint once every read below has settled: a skeleton that collapses to nothing, or
   // rows that land before the cards, pushed what was already on screen (CLS 0.25 at 375).
@@ -988,6 +997,20 @@ function PlatformTab({
    *  read landing above it never pushes it down. */
   children?: ReactNode;
 }) {
+  // When Google shows no ad anywhere in the account, that leads the tab — before any figure,
+  // every one of which assumes the account serves. The same cards read the sections below hold
+  // (one query); nothing renders while they load or when the account serves.
+  const cards = useOptimizerPlatformCards(brandId, platform);
+  const status =
+    platform === 'google_ads' && cards.status === 'ready' ? (
+      <GoogleDeliveryStatus cards={cards.cards} />
+    ) : null;
+  const withStatus = (body: ReactNode) => (
+    <>
+      {status}
+      {body}
+    </>
+  );
   // One window on the tab: the producer's when it answered, nothing while it is answering, else
   // the same 7 complete days ending yesterday the producer would read.
   const window =
@@ -1005,7 +1028,7 @@ function PlatformTab({
       <TikTokAdsTab advertiserId={null} brandId={brandId} />
     );
   if (metrics.status === 'unavailable') {
-    return (
+    return withStatus(
       <>
         <MultiPlatformUnavailable
           detail={
@@ -1013,7 +1036,7 @@ function PlatformTab({
           }
         />
         {fallback}
-      </>
+      </>,
     );
   }
   const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
@@ -1021,7 +1044,7 @@ function PlatformTab({
     // Google connected but not yet read by the Optimizer: Google's own read leads in full,
     // under a note that says what it is.
     const googleUnread = platform === 'google_ads' && row.spend == null;
-    return (
+    return withStatus(
       <>
         <PlatformMetricsSection
           liveBelow={googleUnread}
@@ -1040,11 +1063,11 @@ function PlatformTab({
         ) : (
           <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
         )}
-      </>
+      </>,
     );
   }
   if (metrics.status === 'error') {
-    return (
+    return withStatus(
       <>
         <p
           className="px-1 text-muted-foreground text-xs"
@@ -1054,8 +1077,8 @@ function PlatformTab({
           {metrics.message}
         </p>
         {fallback}
-      </>
+      </>,
     );
   }
-  return fallback;
+  return withStatus(fallback);
 }

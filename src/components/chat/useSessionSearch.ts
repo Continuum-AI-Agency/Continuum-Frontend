@@ -8,6 +8,7 @@ import {
   type SessionFilterState,
   toSessionListFilters,
 } from '@/lib/agents/session-filters';
+import { loadFailureWhy } from '@/lib/api/loadFailure';
 
 // Server-side chat-history search for a conversation sidebar.
 //
@@ -17,6 +18,13 @@ import {
 // (trgm over title+preview, `tags @>` containment), never over the truncated
 // page the sidebar happens to hold.
 
+/** Why the last search failed, as the sidebar says it. */
+export type SessionSearchFailure = {
+  /** The bearer was refused (401): the session ended, and only signing in again helps. */
+  sessionEnded: boolean;
+  message: string;
+};
+
 export type UseSessionSearchResult<TSession> = {
   filters: SessionFilterState;
   setFilters: (next: SessionFilterState) => void;
@@ -25,8 +33,28 @@ export type UseSessionSearchResult<TSession> = {
   isActive: boolean;
   isSearching: boolean;
   results: TSession[];
-  error: string | null;
+  /** Set when the last search failed: `results` is then empty because nothing was read, not
+   *  because nothing matched, and the sidebar must say which. */
+  failure: SessionSearchFailure | null;
+  /** Runs the current filter again. */
+  retry: () => void;
 };
+
+/** A failed search in words. A 401 is an ended session, not an empty result. */
+export function sessionSearchFailure(cause: unknown): SessionSearchFailure {
+  const status =
+    typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'status') : undefined;
+  if (status === 401) {
+    return {
+      sessionEnded: true,
+      message: 'Your session ended — sign in again to see your conversations.',
+    };
+  }
+  return {
+    sessionEnded: false,
+    message: `Couldn't search conversations — ${loadFailureWhy(cause) ?? 'it did not go through.'}`,
+  };
+}
 
 export function useSessionSearch<TSession>(params: {
   isEnabled: boolean;
@@ -37,7 +65,8 @@ export function useSessionSearch<TSession>(params: {
   const [filters, setFilters] = useState<SessionFilterState>(EMPTY_SESSION_FILTERS);
   const [results, setResults] = useState<TSession[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<SessionSearchFailure | null>(null);
+  const [attempt, setAttempt] = useState(0);
   // Monotonic request id: a slower earlier query must never overwrite a newer one.
   const requestIdRef = useRef(0);
 
@@ -47,13 +76,15 @@ export function useSessionSearch<TSession>(params: {
     if (!isEnabled || !isActive) {
       setResults([]);
       setIsSearching(false);
-      setError(null);
+      setFailure(null);
       return;
     }
 
+    // Read so a Retry (a new attempt) runs this effect again with the same filters.
+    void attempt;
     const requestId = ++requestIdRef.current;
     setIsSearching(true);
-    setError(null);
+    setFailure(null);
 
     void fetchSessions(toSessionListFilters(filters))
       .then((sessions) => {
@@ -63,15 +94,16 @@ export function useSessionSearch<TSession>(params: {
       .catch((cause: unknown) => {
         if (requestIdRef.current !== requestId) return;
         setResults([]);
-        setError(cause instanceof Error ? cause.message : 'Search failed.');
+        setFailure(sessionSearchFailure(cause));
       })
       .finally(() => {
         if (requestIdRef.current !== requestId) return;
         setIsSearching(false);
       });
-  }, [fetchSessions, filters, isActive, isEnabled]);
+  }, [attempt, fetchSessions, filters, isActive, isEnabled]);
 
   const clearFilters = useCallback(() => setFilters(EMPTY_SESSION_FILTERS), []);
+  const retry = useCallback(() => setAttempt((count) => count + 1), []);
 
-  return { filters, setFilters, clearFilters, isActive, isSearching, results, error };
+  return { filters, setFilters, clearFilters, isActive, isSearching, results, failure, retry };
 }

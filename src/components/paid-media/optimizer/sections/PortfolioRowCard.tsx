@@ -39,6 +39,7 @@ import {
 import { PlatformChip } from './platforms/PlatformChip';
 import { type AdPlatform, orderPlatforms } from './platforms/platformTabsModel';
 import { figureAsOfText, type PortfolioFigure } from './portfolioFigure';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { pacingStaleLine, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 
 // ---------------------------------------------------------------------------
@@ -519,7 +520,7 @@ export function PortfolioRowCard({
             </span>
             <span aria-hidden>·</span>
             <span className="tabular-nums">
-              {formatCurrency(portfolio.daily_total, currency)}/day
+              {formatCurrency(portfolioPlanPerDay(portfolio), currency)}/day
             </span>
           </div>
         </>

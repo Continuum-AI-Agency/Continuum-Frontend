@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { createSessionLossGuard } from '@/lib/auth/sessionLoss';
 import { onBrandChange } from '@/lib/brands/brand-switch';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { retryUnlessTimeout } from './retry';
@@ -27,12 +28,30 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    // A tab learns its session is gone from a failed read or the client's own event, and then
+    // leaves for sign-in with nothing of the brand left on screen (sessionLoss.ts).
+    const sessionLoss = createSessionLossGuard({
+      getSession: async () => {
+        const { data, error } = await supabase.auth.getSession();
+        // No session WITH an error is a refresh that could not reach the server: unknown.
+        return error ? undefined : data.session;
+      },
+      clearClientData: () => queryClient.clear(),
+      leave: (href) => window.location.assign(href),
+      currentPath: () => `${window.location.pathname}${window.location.search}`,
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || (!session && event === 'TOKEN_REFRESHED')) {
-        queryClient.clear();
+        sessionLoss.onSignedOut();
+      }
+    });
+
+    const unsubscribeFailedReads = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'error') {
+        void sessionLoss.onReadFailed();
       }
     });
 
@@ -47,6 +66,7 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
 
     return () => {
       subscription.unsubscribe();
+      unsubscribeFailedReads();
       unsubscribeBrand();
     };
   }, [queryClient]);

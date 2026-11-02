@@ -359,4 +359,107 @@ describe('a build gate asked for a turn after the proposal', () => {
     expect(screen.getByText('Awaiting your approval')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
   });
+
+  it("draws a copy's diff ON its scaffold card, in Read, once — not as a second figure", async () => {
+    const { fixtureStructure } = await import('../blocks/campaignStructure.fixtures');
+    const base = toJainaChatMessage(
+      {
+        id: 'msg_copy',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'paid_scaffold_build',
+            toolCallId: 'call_build',
+            state: 'approval-requested',
+            input: { scaffold_version_id: VERSION, content_hash: 'abc' },
+            approval: { id: 'appr_build' },
+          },
+        ],
+      } as unknown as JainaUIMessage,
+      { isStreaming: false },
+    );
+    const message = {
+      ...base,
+      campaignStructures: [
+        fixtureStructure('diff', { scaffoldId: VERSION }),
+        fixtureStructure('tree', { scaffoldId: VERSION }),
+      ],
+    } as JainaChatMessage;
+
+    render(<JainaMessageItem message={message} onApprovalDecision={() => {}} />, {
+      wrapper: withTree,
+    });
+
+    const card = screen.getByTestId('paid-scaffold-card');
+    expect(
+      card.querySelector('[data-testid="lectura-change-c0/a2"]')?.getAttribute('data-mark'),
+    ).toBe('added');
+    // The compiled picture still draws above; the diff is not drawn a second time.
+    const figures = screen.getAllByTestId('campaign-structure');
+    expect(figures.map((figure) => figure.getAttribute('data-layout'))).toEqual(['tree']);
+    expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
+  });
+});
+
+describe('a live change at chat size', () => {
+  it("draws the canvas's Read card and opens the companion on it", async () => {
+    const { LIVE_BATCH_PREVIEW } = await import('@/lib/campaign-canvas/lectura.fixtures');
+    const { ScaffoldThreadContext } = await import('../scaffold/scaffoldThreadContext');
+    const opened: string[] = [];
+    const message = {
+      ...persistedMessage(),
+      pendingClarification: undefined,
+      liveChangePreviews: [LIVE_BATCH_PREVIEW],
+    } as unknown as JainaChatMessage;
+    render(
+      <ScaffoldThreadContext.Provider
+        value={{ sessionId: 's1', onLiveChangeOpen: (partId) => opened.push(partId) }}
+      >
+        <JainaMessageItem message={message} />
+      </ScaffoldThreadContext.Provider>,
+      { wrapper },
+    );
+    expect(screen.getByTestId('lectura-chat-card')).toBeTruthy();
+    expect(screen.getByText('3 changes')).toBeTruthy();
+    screen.getByTestId('lectura-open-in-canvas').click();
+    expect(opened).toEqual([LIVE_BATCH_PREVIEW.partId]);
+  });
+});
+
+describe('a turn that changes several campaigns', () => {
+  it('draws one portfolio card instead of a card per campaign, and opens the portfolio', async () => {
+    const { LIVE_BATCH_PREVIEW } = await import('@/lib/campaign-canvas/lectura.fixtures');
+    const { ScaffoldThreadContext } = await import('../scaffold/scaffoldThreadContext');
+    const other = {
+      ...LIVE_BATCH_PREVIEW,
+      approvalId: 'appr_other',
+      partId: 'live-change:appr_other',
+      nodes: LIVE_BATCH_PREVIEW.nodes.map((node) => ({
+        ...node,
+        id: `o-${node.id}`,
+        parentId: node.parentId ? `o-${node.parentId}` : null,
+        name: node.level === 'campaign' ? 'OTRA // VENTAS' : node.name,
+      })),
+    };
+    const opened: string[] = [];
+    const message = {
+      ...persistedMessage(),
+      pendingClarification: undefined,
+      liveChangePreviews: [LIVE_BATCH_PREVIEW, other],
+    } as unknown as JainaChatMessage;
+    render(
+      <ScaffoldThreadContext.Provider
+        value={{ sessionId: 's1', onPortfolioOpen: (messageId) => opened.push(messageId) }}
+      >
+        <JainaMessageItem message={message} />
+      </ScaffoldThreadContext.Provider>,
+      { wrapper },
+    );
+    expect(screen.getByTestId('portfolio-chat-card')).toBeTruthy();
+    expect(screen.queryByTestId('lectura-chat-card')).toBeNull();
+    expect(screen.getByTestId('portfolio-headline').textContent).toBe('2 campaigns · 6 changes');
+    screen.getByTestId('portfolio-open-in-canvas').click();
+    expect(opened).toEqual([message.id]);
+  });
 });

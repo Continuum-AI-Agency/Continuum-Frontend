@@ -5,52 +5,56 @@
 // supabase/functions/paid-media-metrics/{meta,google}/compute.ts mirrors this —
 // do not rename without changing both compute modules.
 
-import { z } from "zod";
+import { z } from 'zod';
 
-import { parsedAdNameSchema } from "./adNaming";
-import { entityHierarchySchema, paidEntityLevelSchema } from "./hierarchy";
+import { parsedAdNameSchema } from './adNaming';
+import { GoogleResultCountsSchema } from './google-tab';
+import { entityHierarchySchema, paidEntityLevelSchema } from './hierarchy';
 
 export const paidEntityKpiSchema = z.enum([
-  "spend",
-  "impressions",
-  "clicks",
-  "ctr",
-  "cpc",
-  "cpm",
-  "conversions",
-  "conversions_value",
-  "cost_per_conversion",
-  "roas",
-  "conversations",
-  "cost_per_conversation",
-  "leads",
-  "cost_per_lead",
+  'spend',
+  'impressions',
+  'clicks',
+  'ctr',
+  'cpc',
+  'cpm',
+  'conversions',
+  'conversions_value',
+  'cost_per_conversion',
+  'roas',
+  'conversations',
+  'cost_per_conversation',
+  'leads',
+  'cost_per_lead',
 ]);
 export type PaidEntityKpi = z.infer<typeof paidEntityKpiSchema>;
 
-export const paidEntityKpiUnitSchema = z.enum(["currency", "number", "percent", "multiplier"]);
+export const paidEntityKpiUnitSchema = z.enum(['currency', 'number', 'percent', 'multiplier']);
 export type PaidEntityKpiUnit = z.infer<typeof paidEntityKpiUnitSchema>;
 
-export const paidRankingScopeSchema = z.enum(["top_campaigns", "top_adsets", "top_ads"]);
+export const paidRankingScopeSchema = z.enum(['top_campaigns', 'top_adsets', 'top_ads']);
 export type PaidRankingScope = z.infer<typeof paidRankingScopeSchema>;
 
-export const paidRankingDirectionSchema = z.enum(["top", "bottom"]);
+export const paidRankingDirectionSchema = z.enum(['top', 'bottom']);
 export type PaidRankingDirection = z.infer<typeof paidRankingDirectionSchema>;
 
 // Known numeric metrics the edge emits; lenient (optional keys + numeric
 // catchall) so Meta/Google divergence and future metrics still validate.
 // Consumers read the ranked KPI via kpi_value / kpi_unit and only dip into
-// specific keys (spend, roas).
+// specific keys (spend, roas). Google counts one business result per read:
+// on an ambiguous basis it nulls the count and its costs, and `byResult`
+// counts every result apart (google-tab.ts). Without these a real Google row
+// failed the contract, and a Google ranking parsed to no rows.
 export const paidEntityMetricsSchema = z
   .object({
     spend: z.number().optional(),
     impressions: z.number().optional(),
     clicks: z.number().optional(),
-    conversions: z.number().optional(),
+    conversions: z.number().nullable().optional(),
     conversionValue: z.number().optional(),
     roas: z.number().optional(),
-    cpa: z.number().optional(),
-    costPerConversion: z.number().optional(),
+    cpa: z.number().nullable().optional(),
+    costPerConversion: z.number().nullable().optional(),
     ctr: z.number().optional(),
     cpc: z.number().optional(),
     cpm: z.number().optional(),
@@ -58,6 +62,7 @@ export const paidEntityMetricsSchema = z
     costPerConversation: z.number().optional(),
     leads: z.number().optional(),
     costPerLead: z.number().optional(),
+    byResult: GoogleResultCountsSchema.optional(),
   })
   .catchall(z.number());
 export type PaidEntityMetrics = z.infer<typeof paidEntityMetricsSchema>;

@@ -22,6 +22,7 @@ import {
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { platformName } from '../../entityNoun';
 import { holdsOtherPlatforms, type PortfolioFigure } from '../portfolioFigure';
+import { portfolioPlanPerDay } from '../portfolioPlan';
 import { impactPerDay } from '../recQueueModel';
 import { stripPaceClaim } from './paceClaim';
 import type { ResolvedRange } from './rangeModel';
@@ -328,6 +329,29 @@ function growthFromRecap(args: {
   };
 }
 
+/** The recommendation kinds the creative module holds — the brief worker's own list
+ *  (Continuum-Backend App/paid/portfolio-briefs/packet.ts). */
+const CREATIVE_KINDS = new Set([
+  'variate_creative',
+  'creative_refresh',
+  'pause_ad',
+  'seed_experiment',
+]);
+
+/**
+ * The hero module a recommendation kind belongs to, exactly as the brief worker maps it, or null
+ * for a kind the hero does not list. A platform finding (platform_signal: Google's P8 account
+ * findings, TikTok's signals), a settings change or a delivery restore is none of budget, pause,
+ * creative or audience: listed as "Creative on <campaign id>" it named the wrong thing and offered
+ * a creative CTA (deep test 2026-10-31). Those render as their own cards on the platform's tab and
+ * in Actions, and the decisions tile counts them.
+ */
+function candidateModuleOf(kind: string): 'pause' | 'creative' | 'audience' | null {
+  if (kind === 'pause') return 'pause';
+  if (kind === 'audience_expand') return 'audience';
+  return CREATIVE_KINDS.has(kind) ? 'creative' : null;
+}
+
 /** The Frontend's candidates when no brief exists: pending recommendations priced by the
  *  engine's own estImpactPerDay (what the queue already shows), plus the cycle's moves. */
 function candidatesFromReport(
@@ -360,14 +384,7 @@ function candidatesFromReport(
     });
   }
   for (const rec of report.recommendations) {
-    const module =
-      rec.kind === 'pause'
-        ? 'pause'
-        : rec.kind === 'audience_expand'
-          ? 'audience'
-          : rec.kind === 'settings' || rec.kind === 'restore_delivery'
-            ? null
-            : 'creative';
+    const module = candidateModuleOf(rec.kind);
     if (!module) continue;
     const impact = impactPerDay(rec);
     out.push({
@@ -496,7 +513,7 @@ export function buildHeroView(args: {
           candidates: report
             ? candidatesFromReport(report, growth.cost_per_result ?? args.target)
             : [],
-          dailyTotal: args.portfolio.daily_total,
+          dailyTotal: portfolioPlanPerDay(args.portfolio),
           standing: report ? readBriefStanding(report.latest_run, report.latest_items) : null,
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),

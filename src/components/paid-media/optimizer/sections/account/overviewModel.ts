@@ -16,6 +16,7 @@ import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contra
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import type { FigureProps } from '../../format';
 import { pendingWorkCount } from '../../reportModel';
+import { portfolioPlanPerDay } from '../portfolioPlan';
 
 /** How a figure sits against its target. `none` is "cannot be judged", never "fine". */
 export type TileState = 'ok' | 'warn' | 'bad' | 'none';
@@ -458,7 +459,7 @@ export function sortPortfolioRows(
     }
     let delta: number;
     if (key === 'name') delta = a.name.localeCompare(b.name);
-    else if (key === 'daily') delta = (a.daily_total ?? 0) - (b.daily_total ?? 0);
+    else if (key === 'daily') delta = (portfolioPlanPerDay(a) ?? 0) - (portfolioPlanPerDay(b) ?? 0);
     else delta = pendingWorkCount(a) - pendingWorkCount(b);
     return delta * factor;
   });

@@ -12,13 +12,14 @@ export type PaidOverviewInput = {
     impressions?: number;
     clicks?: number;
     cpc?: number;
-    cpa?: number;
+    /** Null when Google could not name one result to count (contracts paidAccountOverviewSchema). */
+    cpa?: number | null;
     purchases?: number;
     purchase_value?: number;
   };
   comparison?: Record<
     string,
-    { previous?: number | null; percentageChange?: number | null } | undefined
+    { previous?: number | null; percentageChange?: number | null } | null | undefined
   >;
   trends?: Array<{ spend?: number; roas?: number; ctr?: number }>;
 };
@@ -55,7 +56,7 @@ export function buildPaidStatCards(
   const cmp = overview.comparison ?? {};
   const trends = overview.trends ?? [];
   const currency = overview.currency ?? accountCurrency ?? null;
-  const maybe = (value: number | undefined, unit: Unit): string =>
+  const maybe = (value: number | null | undefined, unit: Unit): string =>
     typeof value === 'number' ? formatKpiValue(value, unit, currency) : '—';
 
   const deltaOf = (key: string): number | undefined => {

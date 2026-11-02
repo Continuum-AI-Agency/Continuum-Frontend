@@ -5,12 +5,56 @@ import { motion, useReducedMotion } from 'motion/react';
 import * as React from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { loadFailureCause, loadFailureWhy } from '@/lib/api/loadFailure';
 import { useApprove, useReject } from '@/lib/approvals/queries';
 import { useApprovalsStore } from '@/lib/approvals/store';
 import type { RuleAction } from '@/lib/approvals/types';
 import { cn } from '@/lib/utils';
 import { actionTypeLabel } from './formatters';
 import { RejectDialog } from './RejectDialog';
+
+/** Elements that own their keys: text entry, and every control whose Enter or Space activates
+ *  itself. The page shortcuts (Enter / A approve, R reject) fire only when focus rests on none
+ *  of these — on the page itself. */
+const KEY_OWNING_TARGET = [
+  'input',
+  'textarea',
+  'select',
+  'button',
+  'a[href]',
+  'summary',
+  '[contenteditable="true"]',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="tab"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="switch"]',
+  '[role="combobox"]',
+  '[role="slider"]',
+  '[role="textbox"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+].join(', ');
+
+/**
+ * Why a decision failed, in the product's words — never the edge client's own ("Failed to send a
+ * request to the Edge Function"). An Approve that never reached the server says nothing changed
+ * on the platform; any other failure claims nothing it cannot know
+ * (PP-DT-C-approve-failure-toast-raw-edge-string).
+ */
+function decisionFailure(verb: 'Approve' | 'Reject', error: unknown): string {
+  const why = loadFailureWhy(error) ?? 'it did not go through.';
+  const source = error instanceof Error && error.cause !== undefined ? error.cause : error;
+  const neverLeft = verb === 'Approve' && loadFailureCause(source) === 'offline';
+  return `${verb} failed — ${why}${neverLeft ? ' Nothing changed on the platform.' : ''}`;
+}
 
 type DecisionActionsHandle = {
   approve: () => Promise<void>;
@@ -50,7 +94,7 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
           toast.success(`Approved · ${actionTypeLabel(action.action_type)}`);
         }
       } catch (err) {
-        toast.error(`Approve failed · ${(err as Error).message}`);
+        toast.error(decisionFailure('Approve', err));
       } finally {
         clearOptimistic(action.id);
       }
@@ -69,7 +113,7 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
             toast.success(`Rejected · ${actionTypeLabel(action.action_type)}`);
           }
         } catch (err) {
-          toast.error(`Reject failed · ${(err as Error).message}`);
+          toast.error(decisionFailure('Reject', err));
         } finally {
           clearOptimistic(action.id);
         }
@@ -89,12 +133,14 @@ export const DecisionActions = React.forwardRef<DecisionActionsHandle, Props>(
     React.useEffect(() => {
       if (!bindGlobalKeys) return;
       function handler(event: KeyboardEvent) {
+        // A held key auto-repeats, and each approve advances the queue: a repeat must never
+        // decide the next item.
+        if (event.repeat) return;
         const target = event.target as HTMLElement | null;
-        if (
-          target &&
-          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-        )
-          return;
+        if (target?.isContentEditable) return;
+        // Enter on a focused control means "activate THIS control" (the item menu, a link, the
+        // shortcuts help), never "approve the focused action", which executes on the platform.
+        if (target instanceof Element && target.closest(KEY_OWNING_TARGET)) return;
         if (event.metaKey || event.ctrlKey || event.altKey) return;
         const key = event.key.toLowerCase();
         if (event.key === 'Enter' || key === 'a') {

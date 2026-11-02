@@ -10,6 +10,7 @@ import {
   effectiveTargetMetric,
   emptyDraft,
   enrollLabel,
+  goalCostCapRequested,
   hasMetaSelection,
   memberBlockReason,
   memberKey,
@@ -586,5 +587,27 @@ describe('campaign types', () => {
     expect(channelTypeSummary(members)).toBe('Search 2 · Performance Max 1');
     const untyped = members.map(({ channel_type: _type, ...member }) => member);
     expect(channelTypeSummary(untyped)).toBeNull();
+  });
+});
+
+describe('goalCostCapRequested', () => {
+  it('starts unticked on a new draft', () => {
+    expect(emptyDraft().goalAsPlatformCostCap).toBe(false);
+    expect(goalCostCapRequested(emptyDraft())).toBe(false);
+  });
+
+  it('is requested only when ticked with a positive cost-per-conversion goal', () => {
+    const lead = { ...emptyDraft(), objective: 'lead' as const, target: '36' };
+    expect(goalCostCapRequested({ ...lead, goalAsPlatformCostCap: true })).toBe(true);
+    expect(goalCostCapRequested({ ...lead, goalAsPlatformCostCap: false })).toBe(false);
+    expect(goalCostCapRequested({ ...lead, goalAsPlatformCostCap: true, target: '' })).toBe(false);
+    expect(
+      goalCostCapRequested({
+        ...lead,
+        objective: 'awareness',
+        goalAsPlatformCostCap: true,
+        target: '12',
+      }),
+    ).toBe(false);
   });
 });

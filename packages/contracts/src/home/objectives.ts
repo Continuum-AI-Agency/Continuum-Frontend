@@ -113,19 +113,56 @@ export function inferHomeObjectives(totals: HomeResultTotals): HomeObjective[] {
     : [objectiveFor(primary, 'primary')];
 }
 
-/** The saved row for this scope wins, then the brand-wide row, then inference. */
+/** Whether the account produced any result the inference can lead with. */
+function hasAnyResult(totals: HomeResultTotals): boolean {
+  return RESULT_KINDS.some((metric) => {
+    const value = totals[metric];
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  });
+}
+
+/**
+ * The saved row for this scope wins, then the brand-wide row, then inference from results. An
+ * account with no result yet leads with the goals its business suggests (the Home's reading of the
+ * Brand Book) before falling back to clicks or spend.
+ */
 export function resolveHomeObjectives(input: {
   scope: string;
   rows: HomeProfileRow[];
   totals: HomeResultTotals;
-}): { objectives: HomeObjective[]; source: HomeProfileSource; fromScope: string | null } {
+  suggested?: HomeObjective[];
+}): {
+  objectives: HomeObjective[];
+  source: HomeProfileSource;
+  fromScope: string | null;
+  /** The objectives are the business's suggestion, not a read of the account's results. */
+  fromSuggestion: boolean;
+} {
   const exact = input.rows.find((row) => row.scope === input.scope);
   const brand = input.rows.find((row) => row.scope === HOME_PROFILE_BRAND_SCOPE);
   const saved = exact ?? brand;
   if (saved && saved.objectives.length > 0) {
-    return { objectives: saved.objectives, source: saved.source, fromScope: saved.scope };
+    return {
+      objectives: saved.objectives,
+      source: saved.source,
+      fromScope: saved.scope,
+      fromSuggestion: false,
+    };
   }
-  return { objectives: inferHomeObjectives(input.totals), source: 'inferred', fromScope: null };
+  if (!hasAnyResult(input.totals) && input.suggested && input.suggested.length > 0) {
+    return {
+      objectives: input.suggested,
+      source: 'inferred',
+      fromScope: null,
+      fromSuggestion: true,
+    };
+  }
+  return {
+    objectives: inferHomeObjectives(input.totals),
+    source: 'inferred',
+    fromScope: null,
+    fromSuggestion: false,
+  };
 }
 
 /** Promote one objective to primary; every other one becomes secondary, order kept. */

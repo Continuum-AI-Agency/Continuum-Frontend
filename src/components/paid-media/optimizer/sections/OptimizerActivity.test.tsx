@@ -8,16 +8,20 @@ import type { OptimizerActionFeedRow } from '../useOptimizerData';
   SyntaxError;
 
 let actions: OptimizerActionFeedRow[] = [];
+let actionsLoading = false;
 
 // Spread the real module: `mock.module` replaces it for the whole PROCESS, so a partial
 // replacement here would reach the next file in the run.
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
-  useOptimizerActions: () => ({ data: actions, isLoading: false }),
+  useOptimizerActions: () => ({ data: actions, isLoading: actionsLoading }),
 }));
 mock.module('./OptimizerLogs', () => ({
   OptimizerLogs: () => <div>server-log</div>,
+}));
+mock.module('@/components/settings/account/OptimizerNotificationsSection', () => ({
+  OptimizerNotificationsSection: () => <div data-testid="notifications-section" />,
 }));
 
 const { OptimizerActivity } = await import('./OptimizerActivity');
@@ -44,6 +48,7 @@ const action = (over: Partial<OptimizerActionFeedRow> = {}): OptimizerActionFeed
 
 beforeEach(() => {
   actions = [];
+  actionsLoading = false;
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
@@ -112,5 +117,27 @@ describe('OptimizerActivity rows name the platform their receipt names', () => {
     renderActivity(<OptimizerActivity brandId="brand-1" />);
     expect(chip().getAttribute('data-platform')).toBe('meta');
     expect(screen.queryByTestId('receipt-token')).toBeNull();
+  });
+});
+
+// PP-DT-C-creative-insights-layout-shift-0.955 (Optimizer Activity, CLS 0.151 on a phone): the
+// Notifications block sat under the feed while the feed's skeleton loaded, and the timeline that
+// replaced the skeleton pushed it down. It is drawn once the feed has settled, never under a
+// skeleton that is about to change height.
+describe('OptimizerActivity keeps the Notifications block off a loading feed', () => {
+  it('leaves it out while the action feed loads', () => {
+    actionsLoading = true;
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
+    expect(screen.queryByText('Notifications')).toBeNull();
+    expect(screen.queryByTestId('notifications-section')).toBeNull();
+  });
+
+  it('draws it under the feed once the feed has answered', () => {
+    actions = [action()];
+    renderActivity(<OptimizerActivity brandId="brand-1" />);
+    expect(screen.getByText('Notifications')).toBeTruthy();
+    const feed = screen.getByTestId('action-timeline');
+    const notifications = screen.getByTestId('notifications-section');
+    expect(feed.compareDocumentPosition(notifications) & 4).toBe(4);
   });
 });

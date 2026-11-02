@@ -246,11 +246,16 @@ export function OrganicCreativesTable({
       getRowId={(row) => row.id}
       maxHeight={DASHBOARD_PANEL_MAX_HEIGHT}
       defaultSort={{ columnId: 'metric', direction: 'desc' }}
-      isLoading={postsState.status === 'idle' || postsState.status === 'loading'}
+      isLoading={
+        integrationAccountId !== null &&
+        (postsState.status === 'idle' || postsState.status === 'loading')
+      }
       emptyState={
-        postsState.status === 'error'
-          ? "Couldn't load your creatives right now."
-          : 'No posts yet for this account.'
+        integrationAccountId === null
+          ? 'Connect an Instagram or YouTube account to see your top creatives.'
+          : postsState.status === 'error'
+            ? "Couldn't load your creatives right now."
+            : 'No posts yet for this account.'
       }
       contextMenu={(row) => <InsightContextActions permalink={row.permalink} />}
       rowActions={(row) => <InsightActionsDropdown permalink={row.permalink} />}

@@ -33,6 +33,8 @@ let onPlatform: Record<'google_ads' | 'tiktok_ads', PortfolioListItem[]> = {
   tiktok_ads: [],
 };
 let actionsProps: Record<string, unknown> | null = null;
+/** The brand's assigned ad accounts (plugin_mcp.list_brand_ad_accounts rows). */
+let assignedAccounts: { platform: string; account_id: string; name: string | null }[] = [];
 
 mock.module('./useOptimizerData', () => ({
   ...realOptimizerData,
@@ -46,7 +48,7 @@ mock.module('./useOptimizerData', () => ({
   }),
   // Secondary reads: a pending one must never hold the surface.
   useOptimizerRenewals: () => ({ data: [], isLoading: pendingSecondaryRead }),
-  useOptimizerAdAccounts: () => ({ data: [], isLoading: pendingSecondaryRead }),
+  useOptimizerAdAccounts: () => ({ data: assignedAccounts, isLoading: pendingSecondaryRead }),
   useOptimizerPlatformPortfolios: (_brandId: string, platform: 'google_ads' | 'tiktok_ads') => ({
     data: onPlatform[platform],
   }),
@@ -151,6 +153,7 @@ beforeEach(() => {
   actionsProps = null;
   onPlatform = { google_ads: [], tiktok_ads: [] };
   elsewhere = [];
+  assignedAccounts = [];
   setView.mockClear();
   setPlatform.mockClear();
   openCreate.mockClear();
@@ -268,6 +271,49 @@ describe('OptimizerTab second bar', () => {
       'tab=jaina',
     );
     expect(screen.getByRole('button', { name: 'New portfolio' })).toBeTruthy();
+  });
+
+  it('leads each platform in the switch with its own logo, muted while it is not connected', () => {
+    renderTab();
+
+    const logo = (platform: string) =>
+      screen.getByTestId(`platform-tab-${platform}`).querySelector('span[title]');
+    expect(logo('meta')?.getAttribute('title')).toBe('Meta');
+    expect(logo('google_ads')?.getAttribute('title')).toBe('Google Ads');
+    expect(logo('tiktok_ads')?.getAttribute('title')).toBe('TikTok');
+    expect(logo('tiktok_ads')?.className).toContain('grayscale');
+    expect(logo('meta')?.className).not.toContain('grayscale');
+    expect(screen.getByTestId('platform-tab-all').querySelector('svg')).toBeTruthy();
+  });
+
+  // PP-DT-E-platform-tabs-no-arrow-keys: the switch is a role=tablist, so a keyboard user
+  // expects one Tab stop and the arrows between platforms; ArrowRight used to do nothing.
+  it('is one Tab stop, and the arrow keys, Home and End move between platforms', () => {
+    renderTab();
+
+    const tab = (name: string) => screen.getByTestId(`platform-tab-${name}`);
+    expect(['all', 'meta', 'google_ads', 'tiktok_ads'].map((name) => tab(name).tabIndex)).toEqual([
+      0, -1, -1, -1,
+    ]);
+
+    tab('all').focus();
+    fireEvent.keyDown(tab('all'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('meta');
+    expect(document.activeElement).toBe(tab('meta'));
+
+    fireEvent.keyDown(tab('meta'), { key: 'End' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+    expect(document.activeElement).toBe(tab('tiktok_ads'));
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+
+    fireEvent.keyDown(tab('all'), { key: 'ArrowLeft' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'Home' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+    expect(document.activeElement).toBe(tab('all'));
   });
 
   it('keeps the Overview actions off a platform the Overview does not manage', () => {
@@ -402,5 +448,46 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
     expect(queued).toEqual([mixed.id, EASY_FIT_G1.id]);
     // 1 on the account's portfolio + 2 on the Google one: what the Actions tab renders.
     expect(screen.getByRole('tab', { name: /Actions/ }).textContent).toBe('Actions3');
+  });
+});
+
+// PP-DT-E-meta-tab-connected-on-google-account (deep test 2026-10-31, lane E): Pink Elephant has a
+// Google Ads account and no Meta ad account. Opened on its Google account, the switch read "Meta"
+// as connected — the selected account was taken for a Meta one — while TikTok said Connect.
+describe('OptimizerTab on a brand whose selected account is a Google one', () => {
+  it('reads Meta as not connected, Google as connected', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    const meta = screen.getByTestId('platform-tab-meta');
+    expect(meta.getAttribute('data-connected')).toBe('false');
+    expect(meta.textContent).toContain('Connect');
+    expect(screen.getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe(
+      'true',
+    );
+  });
+
+  it('still reads Meta as connected on a selected Meta account while the list loads', () => {
+    renderTab();
+    expect(screen.getByTestId('platform-tab-meta').getAttribute('data-connected')).toBe('true');
+  });
+});
+
+// PP-DT-E-google-only-lands-on-blank-all (deep test 2026-10-31, lane E): opened on Pink Elephant's
+// Google account, the Optimizer landed on "All", whose managed rows are Meta's: a greyed headline
+// over an empty page until the person found the Google tab.
+describe('OptimizerTab opened on a Google account', () => {
+  it('lands on the Google tab instead of an empty All', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    expect(setPlatform).toHaveBeenCalledWith('google_ads');
+  });
+
+  it('leaves a Meta account on the tab the URL names', () => {
+    renderTab();
+    expect(setPlatform).not.toHaveBeenCalledWith('google_ads');
   });
 });

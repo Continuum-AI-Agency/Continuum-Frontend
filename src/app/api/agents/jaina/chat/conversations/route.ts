@@ -72,21 +72,29 @@ function normalizePath(path: string) {
   return path.startsWith('/') ? path : `/${path}`;
 }
 
+/** Markup in an error is a page some layer answered with (a firewall, a gateway), not words. */
+const carriesMarkup = (text: string): boolean => /[<>]/.test(text);
+
 async function readErrorMessage(response: Response, fallback: string) {
   const detail = await response.text().catch(() => fallback);
   if (!detail) return fallback;
+  let message = detail;
   try {
     const parsed = JSON.parse(detail);
     if (parsed && typeof parsed === 'object' && 'error' in parsed) {
       const errorMessage = (parsed as { error?: unknown }).error;
       if (typeof errorMessage === 'string' && errorMessage.length > 0) {
-        return errorMessage;
+        message = errorMessage;
       }
     }
   } catch {
     // plain text
   }
-  return detail;
+  // The firewall in front of the database answers a SQL-looking search with an HTML page, which
+  // the Backend's message carried and this route forwarded as the error text
+  // (PP-DT-C-jaina-search-wildcards-and-firewall-500). A page is never the error; the route's own
+  // sentence is, and the status still says what kind of failure it was.
+  return carriesMarkup(message) ? fallback : message;
 }
 
 type BackendFetchResult =

@@ -146,6 +146,10 @@ let activeProposals: unknown[] = [];
 const RECENT_AUDIT_ID = '66666666-6666-4666-8666-666666666666';
 let recentActions: Record<string, unknown>[] = [];
 
+// The currency the account list carries for the portfolio's account (useAdAccountCurrency). A
+// Google customer's asset row carries none, so the Google-portfolio spec sets it to null.
+let activeAccountCurrency: string | null = 'USD';
+
 const requestApplyItemsMutate = mock(() => {});
 const setStatusesMutate = mock(() => {});
 const setStatusMutate = mock(() => {});
@@ -215,7 +219,7 @@ mock.module('../useOptimizerData', () => ({
     implement: { mutateAsync: async () => 'job', isPending: false },
     refreshPipelines: () => undefined,
   }),
-  useAdAccountCurrency: () => 'USD',
+  useAdAccountCurrency: () => activeAccountCurrency,
   fetchAdsetAds: async () => [],
   useOptimizerAudienceProposals: () => ({ data: activeProposals, isLoading: false }),
   useAudienceProposalMutations: () => ({
@@ -351,6 +355,7 @@ afterEach(() => {
   recentActions = [];
   activeRoster = null;
   activeEnrollments = [];
+  activeAccountCurrency = 'USD';
 });
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
@@ -609,6 +614,42 @@ describe("queueWaitingCount — the list read's definition", () => {
     renderGroup();
     const header = screen.getByTestId('queue-tray').querySelector('header');
     expect(header?.textContent).toContain('Prospecting4 waiting');
+  });
+});
+
+// PP-DT-C-actions-search-leaves-budget-table-and-counts: the search filtered the item rows only.
+// A query that matched nothing left the reallocation story ("Moving … from 7 ad sets") and the
+// budget moves on screen, shrank the list with no word, and never said nothing matched.
+describe('OptimizerActionsPortfolioGroup — searching the queue', () => {
+  const search = (value: string) =>
+    fireEvent.change(screen.getByPlaceholderText('Search name, id, kind, reason'), {
+      target: { value },
+    });
+
+  it('a search that matches nothing says so, and shows nothing it did not search', () => {
+    renderGroup();
+    expect(screen.getAllByText(/Budget Set/).length).toBeGreaterThan(0);
+
+    search('zzzz-nothing');
+
+    expect(screen.getByTestId('queue-search-status').textContent).toBe(
+      'No actions match “zzzz-nothing”.',
+    );
+    expect(screen.queryAllByText(/Budget Set/)).toHaveLength(0);
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(0);
+  });
+
+  it('a search that matches says how many actions it shows', () => {
+    renderGroup();
+    search('Budget Set');
+    expect(screen.getByTestId('queue-search-status').textContent).toMatch(
+      /^\d+ actions? match(es)? “Budget Set”\.$/,
+    );
+  });
+
+  it('says nothing about a search before one is typed', () => {
+    renderGroup();
+    expect(screen.queryByTestId('queue-search-status')).toBeNull();
   });
 });
 
@@ -1884,5 +1925,30 @@ describe("a Google portfolio's pending platform card in its queue", () => {
     expect(screen.queryByTestId('queue-platform-cards')).toBeNull();
     expect(screen.getByTestId('queue-rows').children).toHaveLength(1);
     expect(waiting()).toBe('1 waiting');
+  });
+});
+
+// PP-DT-E-google-portfolio-money-without-currency (deep test 2026-10-31): a Google portfolio
+// stamped MXN printed its Actions money bare, because the group asked the ACCOUNT list for the
+// currency and a Google customer's asset row carries none. The portfolio's own code wins.
+describe("a portfolio's money is in the portfolio's own currency", () => {
+  it('prints a Google portfolio stamped MXN in MXN although its account row has no code', () => {
+    activeReport = rebalanceReport;
+    activeAccountCurrency = null;
+    const { container } = renderGroup({
+      ad_account_id: '5251780631',
+      currency: 'MXN',
+      platforms: ['google_ads'],
+    });
+    fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
+    expect(container.textContent).toContain('Before → after: $50.00 MXN → $65.00 MXN');
+  });
+
+  it("falls back on the portfolio's account when the portfolio carries no code", () => {
+    activeReport = rebalanceReport;
+    activeAccountCurrency = 'USD';
+    const { container } = renderGroup({ currency: null });
+    fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
+    expect(container.textContent).toContain('Before → after: $50.00 USD → $65.00 USD');
   });
 });

@@ -290,10 +290,37 @@ describe('CreativeInsightsView', () => {
     );
   });
 
-  it('holds the angle sections while the reads load', () => {
+  // PP-DT-C-creative-insights-layout-shift-0.955: the sections mounted as one-line "Loading…"
+  // placeholders, then the read was inserted ABOVE the angle table when the reads landed and the
+  // table, the per-ad-set list and the ads grew under it — CLS 0.955 on a phone, 0.652 on a
+  // tablet. Nothing the reads would push may be on the page while they load.
+  it('lays out nothing the angle reads would push while they load', () => {
     renderView({ anglesLoading: true });
-    expect(screen.queryByTestId('creative-insights-read')).toBeNull();
-    expect(screen.getByText('Loading angles…')).toBeTruthy();
-    expect(screen.getByText('Loading ad sets…')).toBeTruthy();
+    expect(screen.getByTestId('creative-insights-loading')).toBeTruthy();
+    for (const section of [
+      'creative-insights-read',
+      'creative-insights-angles',
+      'creative-insights-next',
+      'creative-insights-ads',
+    ]) {
+      expect(screen.queryByTestId(section)).toBeNull();
+    }
+  });
+
+  it('puts every section in place, in order, once the angle reads land', () => {
+    renderView({ anglesLoading: false, ads: { status: 'loading' } });
+    expect(screen.queryByTestId('creative-insights-loading')).toBeNull();
+    const order = [
+      'creative-insights-read',
+      'creative-insights-angles',
+      'creative-insights-next',
+      'creative-insights-ads',
+    ].map((section) => screen.getByTestId(section));
+    for (let index = 1; index < order.length; index += 1) {
+      const previous = order[index - 1] as HTMLElement;
+      const current = order[index] as HTMLElement;
+      // DOCUMENT_POSITION_FOLLOWING: each section comes after the one before it.
+      expect(previous.compareDocumentPosition(current) & 4).toBe(4);
+    }
   });
 });

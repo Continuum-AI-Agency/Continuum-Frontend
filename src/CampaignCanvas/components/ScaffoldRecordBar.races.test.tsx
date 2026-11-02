@@ -54,3 +54,13 @@ it('a different requested scaffold invalidates a pending auto-load', async () =>
   await waitFor(() => expect(pending.has('oneB')).toBe(true)); await complete('oneB'); await complete('oneA', true);
   expect(loaded).toEqual(['oneB']); expect(screen.queryByRole('alert')).toBeNull();
 });
+// PP-DT-E-canvas-small-copy (deep test 2026-10-31, lane E): a failed proposal read printed the
+// library's words — "Could not load the campaign scaffold: TypeError: Failed to fetch".
+it('a failed proposal read says so in words, never the library error', async () => {
+  render(bar()); await choose('oneA');
+  const read = pending.get('oneA'); if (!read) throw new Error('oneA was never requested');
+  await act(async () => { read.reject(new Error('Could not load the campaign scaffold: TypeError: Failed to fetch')); });
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent).toContain("Couldn't load this proposal");
+  expect(alert.textContent).not.toContain('TypeError');
+});

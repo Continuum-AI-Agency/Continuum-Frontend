@@ -1,0 +1,265 @@
+{
+  "_source": {
+    "kind": "REAL",
+    "note": "The deployed paid-media-reporting edge, account_overview for Pink Elephant's Google Ads customer, one read per business result (leads, purchases) over 7 complete days, recorded 2026-10-31. No figure is hand-written; the per-day GA4 keys are dropped.",
+    "customerId": "6619636193",
+    "recordedAt": "2026-11-01T02:42:37.231Z",
+    "range": {
+      "preset": "custom",
+      "since": "2026-10-24",
+      "until": "2026-10-30"
+    }
+  },
+  "leads": {
+    "currency": "MXN",
+    "metrics": {
+      "cpa": 1549.7931,
+      "cpc": 12.7032,
+      "ctr": 3.4822,
+      "roas": 0,
+      "spend": 3099.5863,
+      "clicks": 244,
+      "impressions": 7007,
+      "gaSessions": 0,
+      "gaConversions": 0
+    },
+    "comparison": {
+      "cpa": {
+        "current": 1549.7931,
+        "previous": 616.7108,
+        "percentageChange": 151.2998
+      },
+      "cpc": {
+        "current": 12.7032,
+        "previous": 13.1682,
+        "percentageChange": -3.5312
+      },
+      "ctr": {
+        "current": 3.4822,
+        "previous": 3.4829,
+        "percentageChange": -0.0201
+      },
+      "roas": {
+        "current": 0,
+        "previous": 0,
+        "percentageChange": null
+      },
+      "spend": {
+        "current": 3099.5863,
+        "previous": 3700.2649,
+        "percentageChange": -16.2334
+      },
+      "clicks": {
+        "current": 244,
+        "previous": 281,
+        "percentageChange": -13.1673
+      },
+      "impressions": {
+        "current": 7007,
+        "previous": 8068,
+        "percentageChange": -13.1507
+      }
+    },
+    "trends": [
+      {
+        "cpa": 0,
+        "date": "2026-10-24",
+        "roas": 0,
+        "spend": 103.164832,
+        "clicks": 14,
+        "conversions": 0,
+        "impressions": 550
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-25",
+        "roas": 0,
+        "spend": 167.249108,
+        "clicks": 27,
+        "conversions": 0,
+        "impressions": 620
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-26",
+        "roas": 0,
+        "spend": 235.537645,
+        "clicks": 26,
+        "conversions": 0,
+        "impressions": 768
+      },
+      {
+        "cpa": 472.7555,
+        "date": "2026-10-27",
+        "roas": 0,
+        "spend": 945.511086,
+        "clicks": 74,
+        "conversions": 2,
+        "impressions": 1795
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-28",
+        "roas": 0,
+        "spend": 880.431087,
+        "clicks": 52,
+        "conversions": 0,
+        "impressions": 1528
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-29",
+        "roas": 0,
+        "spend": 574.670078,
+        "clicks": 39,
+        "conversions": 0,
+        "impressions": 1335
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-30",
+        "roas": 0,
+        "spend": 193.022424,
+        "clicks": 12,
+        "conversions": 0,
+        "impressions": 411
+      }
+    ],
+    "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "leads",
+      "unambiguous": true
+    },
+    "range": {
+      "since": "2026-10-24",
+      "until": "2026-10-30",
+      "preset": "custom"
+    }
+  },
+  "purchases": {
+    "currency": "MXN",
+    "metrics": {
+      "cpa": 0,
+      "cpc": 12.7032,
+      "ctr": 3.4822,
+      "roas": 0,
+      "spend": 3099.5863,
+      "clicks": 244,
+      "impressions": 7007,
+      "gaSessions": 0,
+      "gaConversions": 0
+    },
+    "comparison": {
+      "cpa": {
+        "current": 0,
+        "previous": 3700.2649,
+        "percentageChange": -100
+      },
+      "cpc": {
+        "current": 12.7032,
+        "previous": 13.1682,
+        "percentageChange": -3.5312
+      },
+      "ctr": {
+        "current": 3.4822,
+        "previous": 3.4829,
+        "percentageChange": -0.0201
+      },
+      "roas": {
+        "current": 0,
+        "previous": 0.1993,
+        "percentageChange": -100
+      },
+      "spend": {
+        "current": 3099.5863,
+        "previous": 3700.2649,
+        "percentageChange": -16.2334
+      },
+      "clicks": {
+        "current": 244,
+        "previous": 281,
+        "percentageChange": -13.1673
+      },
+      "impressions": {
+        "current": 7007,
+        "previous": 8068,
+        "percentageChange": -13.1507
+      }
+    },
+    "trends": [
+      {
+        "cpa": 0,
+        "date": "2026-10-24",
+        "roas": 0,
+        "spend": 103.164832,
+        "clicks": 14,
+        "conversions": 0,
+        "impressions": 550
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-25",
+        "roas": 0,
+        "spend": 167.249108,
+        "clicks": 27,
+        "conversions": 0,
+        "impressions": 620
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-26",
+        "roas": 0,
+        "spend": 235.537645,
+        "clicks": 26,
+        "conversions": 0,
+        "impressions": 768
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-27",
+        "roas": 0,
+        "spend": 945.511086,
+        "clicks": 74,
+        "conversions": 0,
+        "impressions": 1795
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-28",
+        "roas": 0,
+        "spend": 880.431087,
+        "clicks": 52,
+        "conversions": 0,
+        "impressions": 1528
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-29",
+        "roas": 0,
+        "spend": 574.670078,
+        "clicks": 39,
+        "conversions": 0,
+        "impressions": 1335
+      },
+      {
+        "cpa": 0,
+        "date": "2026-10-30",
+        "roas": 0,
+        "spend": 193.022424,
+        "clicks": 12,
+        "conversions": 0,
+        "impressions": 411
+      }
+    ],
+    "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "purchases",
+      "unambiguous": true
+    },
+    "range": {
+      "since": "2026-10-24",
+      "until": "2026-10-30",
+      "preset": "custom"
+    }
+  }
+}

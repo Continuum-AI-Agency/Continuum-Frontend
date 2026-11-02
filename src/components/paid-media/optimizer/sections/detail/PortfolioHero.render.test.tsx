@@ -641,7 +641,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(text('tile-adsets')).toBe(
       'Ad sets on target3 of 9best Ad set E 25.07worst Ad set D 100',
     );
-    expect(text('tile-decisions')).toBe('Decisions390.72/day at stake4 open opportunities');
+    expect(text('tile-decisions')).toBe('Decisions490.72/day at stake4 open opportunities');
     // Tile figures stay in the foreground: the anchor is the one protagonist.
     for (const tileFigure of container.querySelectorAll(
       '[data-testid="portfolio-tiles"] [data-figure-role="tile"]',

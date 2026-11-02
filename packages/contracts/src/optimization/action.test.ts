@@ -77,6 +77,27 @@ describe('OptimizerActionSchema', () => {
     expect(OptimizerActionSchema.safeParse({ ...tcpa, target: 0 }).success).toBe(false);
   });
 
+  test("set_bid_target carries a Meta ad set's cost cap as bid_amount_minor, and only there", () => {
+    const cap = {
+      kind: 'set_bid_target',
+      ref: metaAdset,
+      field: 'bid_amount_minor',
+      expected: 40_000,
+      target: 32_000,
+    };
+    expect(OptimizerActionSchema.parse(cap).kind).toBe('set_bid_target');
+    // Whole minor units only: Meta's bid_amount is an integer.
+    expect(OptimizerActionSchema.safeParse({ ...cap, target: 320.5 }).success).toBe(false);
+    // Never a Google field on Meta, never a Meta field on Google.
+    expect(OptimizerActionSchema.safeParse({ ...cap, field: 'target_cpa_micros' }).success).toBe(
+      false,
+    );
+    expect(OptimizerActionSchema.safeParse({ ...cap, ref: googleCampaign }).success).toBe(false);
+    // Meta keeps bid_amount on the ad set, never on the campaign (CBO holds only the strategy).
+    const campaignRef = { ...metaAdset, level: 'campaign', nativeLevel: 'campaign' };
+    expect(OptimizerActionSchema.safeParse({ ...cap, ref: campaignRef }).success).toBe(false);
+  });
+
   test('add_negatives enforces Google keyword limits (80 chars, 10 words)', () => {
     const negatives = {
       kind: 'add_negatives',

@@ -33,6 +33,8 @@ import {
   jainaOptimizerCardSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaToolApprovalRequiredPayloadSchema,
+  type LiveChangePreviewPayload,
+  liveChangePreviewPayloadSchema,
   paidScaffoldProgressPayloadSchema,
   paidScaffoldProposedPayloadSchema,
   paidScaffoldReceiptPayloadSchema,
@@ -520,6 +522,17 @@ export const campaignStructuresOf = (message: JainaUIMessage): CampaignStructure
   });
 
 /**
+ * The live campaign under each pending edit this turn, for the companion canvas. Parsed: a
+ * part can come from a replayed run log, and a shape this Frontend cannot read is dropped
+ * rather than drawn half.
+ */
+export const liveChangePreviewsOf = (message: JainaUIMessage): LiveChangePreviewPayload[] =>
+  partsOfType(message, JAINA_UI_DATA_PART.liveChange).flatMap((data) => {
+    const parsed = liveChangePreviewPayloadSchema.safeParse(data);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+/**
  * One structure payload, or null. A layout this Frontend does not know yet (a newer Backend
  * mid-deploy) is drawn as the outline of the same nodes rather than dropped: the person still
  * has a proposal to read.
@@ -832,6 +845,7 @@ export const toJainaChatMessage = (
   const optimizerCitations = optimizerCitationsOf(message);
   const optimizerHyperframes = optimizerHyperframesOf(message);
   const campaignStructures = campaignStructuresOf(message);
+  const liveChangePreviews = liveChangePreviewsOf(message);
   const plan = planOf(message);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
@@ -873,6 +887,7 @@ export const toJainaChatMessage = (
     ...(optimizerCitations.length > 0 ? { optimizerCitations } : {}),
     ...(optimizerHyperframes.length > 0 ? { optimizerHyperframes } : {}),
     ...(campaignStructures.length > 0 ? { campaignStructures } : {}),
+    ...(liveChangePreviews.length > 0 ? { liveChangePreviews } : {}),
     ...(pendingClarification ? { pendingClarification } : {}),
     ...(objectives.length > 0 ? { objectives } : {}),
     ...(delegations.length > 0 ? { delegations } : {}),

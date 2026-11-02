@@ -2,6 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import type { BriefGrowth } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import {
+  buildActionQueue,
+  buildMoveQueue,
+  queueWaitingCount,
+} from '../OptimizerActionsPortfolioGroup';
+import {
   adsetsOnTargetTile,
   agoWords,
   anchorOf,
@@ -228,7 +233,9 @@ describe('FORMULARIOS — the real body', () => {
       sub: '+31% over target 35.00',
       state: 'bad',
     });
-    expect(decisions).toMatchObject({ label: 'Decisions', value: '3', state: 'warn' });
+    // The queue's count for this body (PP-DT-C-decisions-count-15-vs-8-same-portfolio): its
+    // three pending recommendations and the budget move its Actions queue lists.
+    expect(decisions).toMatchObject({ label: 'Decisions', value: '4', state: 'warn' });
     expect(decisions?.sub).toMatch(/^90\.72\/day at stake$/);
   });
 
@@ -338,11 +345,18 @@ describe('the small rules', () => {
     expect(coveredDays(quoted, null)).toBe(7);
   });
 
-  it('decisions count pending recommendations, and held moves only in Recommend', () => {
-    const { report } = readBody('prueba');
-    expect(decisionsWaiting(report, 'recommend')).toBe(5);
-    expect(decisionsWaiting(report, 'autopilot')).toBe(2);
-    expect(decisionsWaiting(null, 'recommend')).toBe(0);
+  // PP-DT-C-decisions-count-15-vs-8-same-portfolio: the portfolio page counted held budget moves
+  // only in Recommend, while the Actions queue its Review button opens (and the Overview, and the
+  // Portfolios PENDING column) lists them in every mode: "Decisions 8" on the page of the
+  // autopilot portfolio whose queue said "15 waiting on a decision". One word, one count — the
+  // queue's (PP-L3-decisions-waiting-two-sources chose it for the Overview).
+  it('decisions count what the Actions queue lists, in every apply mode', () => {
+    for (const name of ['prueba', 'formularios'] as const) {
+      const { report } = readBody(name);
+      const queued = queueWaitingCount(buildActionQueue(report), buildMoveQueue(report), 0);
+      expect(decisionsWaiting(report)).toBe(queued);
+    }
+    expect(decisionsWaiting(null)).toBe(0);
   });
 
   it('ago words', () => {

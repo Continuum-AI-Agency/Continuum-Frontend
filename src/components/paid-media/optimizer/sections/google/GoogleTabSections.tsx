@@ -33,15 +33,19 @@ export function GoogleTabSections({
   customerId,
   currency,
   resultBucket = null,
+  lastCompleteDay = null,
 }: {
   brandId: string;
   customerId: string;
   currency: string | null;
   /** The portfolios' goal result the tab counts (useGoogleAdsOverview); null when none. */
   resultBucket?: GoogleResultBucket | null;
+  /** The account's last complete day — the producer's window end, dated in the account's
+   *  calendar — so these sections end on the day the header does; null reads UTC days. */
+  lastCompleteDay?: string | null;
 }) {
   const [days, setDays] = useState<WindowDays>(14);
-  const window = completeDaysWindow(days);
+  const window = completeDaysWindow(days, new Date(), lastCompleteDay);
   const target = { brandId, customerId, resultBucket };
   const campaigns = useGoogleCampaigns({ ...target, window });
   const goals = useGoogleCampaignGoals(brandId);

@@ -3,7 +3,8 @@
 // Step 3 — the goal. The objective as radio rows, the metric the target is priced
 // in (with the alternative where one exists), the target itself with the account's own
 // number as a hint, and the mode said in a sentence. Scale mode opens its plan right here:
-// grow by X% every N days, up to a ceiling.
+// grow by X% every N days, up to a ceiling. Under the target, the box that makes it the
+// platforms' cost cap; the wizard saves it right after the create.
 
 import type {
   AnalogObjective,
@@ -29,6 +30,7 @@ import {
 import { TargetHint } from '../../advisor/SetupAdvisor';
 import { currencyFieldSuffix, formatCurrency, humanize, normalizeCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
+import { GoalCostCapControl } from '../goalCostCap/GoalCostCapField';
 import { MODES, OBJECTIVES } from '../suggestionModel';
 import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
 import { OptionRow, questionHeading } from './OptionRow';
@@ -37,6 +39,7 @@ import {
   DEFAULT_SCALE_GROWTH_PCT,
   effectiveTargetMetric,
   MODE_COPY,
+  parseTypedAmount,
   type WizardDraft,
 } from './wizardModel';
 
@@ -239,6 +242,15 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
             currency={currency}
             disabled={disabled}
             onUse={(value) => onChange({ target: value })}
+          />
+          <GoalCostCapControl
+            busy={disabled}
+            checked={draft.goalAsPlatformCostCap}
+            goal={parseTypedAmount(draft.target) ?? Number.NaN}
+            id="wizard-goal-cost-cap"
+            maxChangePctPerCycle={(parseTypedAmount(draft.maxChangePct) ?? Number.NaN) / 100}
+            onCheckedChange={(next) => onChange({ goalAsPlatformCostCap: next })}
+            targetMetric={targetMetric}
           />
         </div>
       </div>

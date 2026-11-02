@@ -825,6 +825,9 @@ export const CycleItemDiagnosticsSchema = z
     // When present, the ad set was HELD (budget unchanged on purpose) — the FE
     // renders a labeled "Held" state instead of a $0.00 change.
     freezeReason: FreezeReasonSchema.optional(),
+    // True when the item was held this cycle for ANY reason — with no freezeReason it was an
+    // operator or rule hold, or an entity not being served (its `delivery` read says so).
+    freeze: z.boolean().optional(),
     ci: z
       .object({
         cpa: z.number().optional(),
@@ -1262,6 +1265,10 @@ export const PortfolioListItemSchema = z.object({
    * exactly as before when they are absent.
    */
   last_actual_cycle_at: z.string().nullable().optional(),
+  /** The daily budget the last cycle conserved (its run's total_budget; null before any). On
+   *  budget_source 'observed' this is the plan — daily_total is a creation-time sum that kept
+   *  paused and ended members (PP-DT-B-portfolio-plan-counts-paused-campaigns). */
+  conserved_daily_total: z.number().nullable().optional(),
   /** Whole days since the last actual cycle (or creation) once the gap reaches two
    *  cycle_intervals; null while fresh. Mirrors Continuum-Optimizer/src/staleness.ts. */
   stale_for_days: z.number().int().nonnegative().nullable().optional(),
@@ -1307,8 +1314,40 @@ export const PortfolioListItemSchema = z.object({
    *  20261017090000). A platform with no row is absent: Meta then applies as it always has, and
    *  any other platform has no write path. `{}` from an older server. */
   platform_writes: z.record(z.string(), z.boolean()).default({}).catch({}),
+  /**
+   * The "use this goal as the cost cap on the ad platforms" checkbox (migration
+   * 20261031120000). On: the portfolio's one CPA goal is the cost cap wanted on the
+   * platforms, and the Optimizer proposes setting each Google campaign's target CPA (bid
+   * setting) and each COST_CAP Meta ad set's cost cap (bid setting, 20261031130000) to it. Off
+   * (the default): the goal is only measured, and no bid target is proposed. Written by
+   * optimizer_set_portfolio_goal_as_platform_cost_cap.
+   *
+   * `.catch(false)`: a row from the RPC before the migration, or an unreadable value, reads as
+   * off — the default, and the side that never proposes a platform bid change.
+   */
+  goal_as_platform_cost_cap: z.boolean().catch(false),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
+
+/** Where the "use this goal as the cost cap" checkbox acts: the platforms whose bid target the
+ *  Optimizer can set (set_bid_target) — the Google Ads target CPA (rule G07) and, since
+ *  20261031130000, the Meta cost cap (bid setting) of an ad set already bidding COST_CAP (rule
+ *  meta_cost_cap). TikTok cost caps are not written yet, so the checkbox's help text names
+ *  these two. Mirrors optimizer._goal_as_cost_cap_platforms(). */
+export const GOAL_AS_COST_CAP_PLATFORMS = [
+  'google_ads',
+  'meta',
+] as const satisfies readonly z.infer<typeof PlatformIdSchema>[];
+
+/** optimizer_set_portfolio_goal_as_platform_cost_cap(portfolio, enabled): the flag as stored,
+ *  and allowed_actions of every platform of the portfolio after the write. On adds
+ *  set_bid_target on the GOAL_AS_COST_CAP_PLATFORMS; off removes it from every platform. A
+ *  platform whose accounts were written apart and disagree reads null: no one list to show. */
+export const PortfolioGoalAsCostCapResultSchema = z.object({
+  goal_as_platform_cost_cap: z.boolean(),
+  allowed_actions: z.record(z.string(), z.array(z.string()).nullable()),
+});
+export type PortfolioGoalAsCostCapResult = z.infer<typeof PortfolioGoalAsCostCapResultSchema>;
 
 /** A renewal work item, opened when a fatigue recommendation is approved. */
 export const RenewalTaskStatusSchema = z.enum(['open', 'done', 'dismissed']);
@@ -1468,6 +1507,28 @@ export const ConvertCboRequestSchema = z.object({
 });
 export type ConvertCboRequest = z.infer<typeof ConvertCboRequestSchema>;
 
+/** What a real convert left on Meta, read back after the write: the campaign holds no budget
+ *  and every ad set holds the daily budget written (MINOR units). Meta's {success:true} only
+ *  says the request was accepted; this is the verdict. Mirrored by the edge's readback.ts. */
+export const ConvertReadBackSchema = z.object({
+  verdict: z.enum(['verified', 'mismatch', 'unreadable']),
+  campaign: z
+    .object({
+      daily_budget: z.number().nullable(),
+      lifetime_budget: z.number().nullable(),
+    })
+    .nullable(),
+  adsets: z.array(
+    z.object({
+      adset_id: z.string(),
+      expected: z.number(),
+      observed: z.number().nullable(),
+    }),
+  ),
+  problems: z.array(z.string()),
+});
+export type ConvertReadBack = z.infer<typeof ConvertReadBackSchema>;
+
 /** optimizer-convert-cbo response — the per-ad-set budgets that would be (dryRun) or were
  *  set. `reason` is present on a soft failure (not_permitted / no_adsets / no_token). */
 export const ConvertCboResponseSchema = z.object({
@@ -1480,6 +1541,9 @@ export const ConvertCboResponseSchema = z.object({
   /** A real convert (dryRun:false) skipped because this campaign was already converted
    *  today — the per-(campaign, utc_day) convert_ledger deduped the second write. */
   deduped: z.boolean().optional(),
+  /** A real convert only: true when the read-back found exactly what was written. */
+  verified: z.boolean().optional(),
+  read_back: ConvertReadBackSchema.optional(),
   reason: z.string().optional(),
   error: z.string().optional(),
 });

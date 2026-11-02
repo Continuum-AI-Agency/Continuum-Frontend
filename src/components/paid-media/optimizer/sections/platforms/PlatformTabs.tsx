@@ -6,14 +6,29 @@
 // disappears, because a missing tab reads as "we don't do TikTok" rather than "you haven't
 // connected it yet" (frontend.html §2, Recomendación).
 
+import type { KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { PlatformIcon, platformColor } from './PlatformChip';
 import {
   type AdPlatform,
   PLATFORM_TABS,
   type PlatformTab,
+  platformTabAfterKey,
   platformTabLabel,
 } from './platformTabsModel';
+
+/** The keyboard half of a platform tablist, for this row and the Optimizer bar's switch: the
+ *  arrows, Home and End pick the next platform and take focus there. With each tab's tabIndex
+ *  set from whether it is picked, the whole row is one Tab stop. */
+export function platformTabKeyHandler(onChange: (tab: PlatformTab) => void) {
+  return (event: KeyboardEvent<HTMLElement>) => {
+    const next = platformTabAfterKey(event.key, (event.target as HTMLElement).dataset.tab);
+    if (next == null) return;
+    event.preventDefault();
+    onChange(next);
+    event.currentTarget.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  };
+}
 
 type PlatformTabsProps = {
   value: PlatformTab;
@@ -27,6 +42,7 @@ export function PlatformTabs({ value, onChange, connected }: PlatformTabsProps) 
       aria-label="Ad platform"
       className="flex items-end gap-1 overflow-x-auto border-border/70 border-b px-1"
       data-testid="platform-tabs"
+      onKeyDown={platformTabKeyHandler(onChange)}
       role="tablist"
     >
       {PLATFORM_TABS.map((tab) => {
@@ -52,6 +68,7 @@ export function PlatformTabs({ value, onChange, connected }: PlatformTabsProps) 
             key={tab}
             onClick={() => onChange(tab)}
             role="tab"
+            tabIndex={active ? 0 : -1}
             type="button"
           >
             {platform ? <PlatformIcon platform={platform} /> : null}

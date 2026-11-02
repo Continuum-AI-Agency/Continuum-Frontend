@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AdSetSnapshot } from '@continuum/contracts';
 import { metaCurrencyOffset } from '@continuum/contracts';
-import { buildConvertBudgets } from '../../../../../../supabase/functions/optimizer-convert-cbo/compute.ts';
 import type { CampaignSection } from '../picker/campaignGroups';
 import {
   convertPreviewRows,
@@ -79,12 +80,58 @@ describe('convertPreviewTotals', () => {
   });
 });
 
-// The projection mirrors the split policy that the DEPLOYED convert edge writes
-// (supabase/functions/optimizer-convert-cbo/compute.ts). Importing that module here is
-// deliberate and test-only: it makes drift between the two impossible to merge, which a
-// table of hand-written expectations could never guarantee. The FE cannot import it at
-// runtime (Deno-side `../_shared/*` specifiers do not survive the bundler) — that is the
-// whole reason the policy is mirrored rather than shared.
+// The projection mirrors the split policy that the convert edge writes
+// (supabase/functions/optimizer-convert-cbo/compute.ts). The FE cannot import that module at
+// runtime (Deno-side `../_shared/*` specifiers do not survive the bundler) — that is the whole
+// reason the policy is mirrored rather than shared. GOLDEN is the edge's own buildConvertBudgets
+// output for every case, not hand-written: inside the monorepo, where the edge's module sits
+// beside the Frontend, each case also runs through the edge and must equal the same table, so
+// drift between the two still cannot merge. The standalone Frontend repo (what Vercel and its
+// CI check out) has no supabase/: there the projection is held to GOLDEN, and the edge check is
+// reported as skipped instead of failing the whole file on an unresolvable import.
+type ConvertBudget = { adset_id: string; adset_name?: string; daily_major: number };
+type BuildConvertBudgets = (
+  adsets: Array<Pick<AdSetSnapshot, 'id' | 'name' | 'windows'>>,
+  offset: number,
+  minDailyBudgetMinor: number,
+) => ConvertBudget[];
+
+const EDGE_COMPUTE = join(
+  import.meta.dir,
+  '../../../../../../supabase/functions/optimizer-convert-cbo/compute.ts',
+);
+const edge: { buildConvertBudgets: BuildConvertBudgets } | null = existsSync(EDGE_COMPUTE)
+  ? await import(EDGE_COMPUTE)
+  : null;
+
+const GOLDEN: Record<string, ConvertBudget[]> = {
+  'USD, typical spread': [
+    { adset_id: 'a0', adset_name: 'AdSet 0', daily_major: 100 },
+    { adset_id: 'a1', adset_name: 'AdSet 1', daily_major: 50 },
+    { adset_id: 'a2', adset_name: 'AdSet 2', daily_major: 13.1 },
+  ],
+  'zero-spend falls to the account minimum': [
+    { adset_id: 'a0', adset_name: 'AdSet 0', daily_major: 1 },
+  ],
+  'MXN client account': [
+    { adset_id: 'a0', adset_name: 'AdSet 0', daily_major: 916.05 },
+    { adset_id: 'a1', adset_name: 'AdSet 1', daily_major: 50 },
+    { adset_id: 'a2', adset_name: 'AdSet 2', daily_major: 50 },
+  ],
+  'JPY zero-decimal currency': [
+    { adset_id: 'a0', adset_name: 'AdSet 0', daily_major: 10000 },
+    { adset_id: 'a1', adset_name: 'AdSet 1', daily_major: 100 },
+  ],
+  'rounding boundary': [
+    { adset_id: 'a0', adset_name: 'AdSet 0', daily_major: 1 },
+    { adset_id: 'a1', adset_name: 'AdSet 1', daily_major: 1 },
+    { adset_id: 'a2', adset_name: 'AdSet 2', daily_major: 0.1 },
+  ],
+};
+
+const budgetsOf = (rows: ConvertBudget[]): ConvertBudget[] =>
+  rows.map(({ adset_id, adset_name, daily_major }) => ({ adset_id, adset_name, daily_major }));
+
 describe('projectAboBudgets — parity with the real convert edge', () => {
   const snap = (id: string, spend7: number, name?: string): AdSetSnapshot =>
     ({
@@ -115,26 +162,32 @@ describe('projectAboBudgets — parity with the real convert edge', () => {
     { label: 'rounding boundary', currency: 'USD', minMinor: 1, spends: [7.005, 7.004, 0.7] },
   ];
 
-  for (const { label, currency, minMinor, spends } of cases) {
-    it(`matches buildConvertBudgets — ${label}`, () => {
-      const snapshots = spends.map((spend, i) => snap(`a${i}`, spend, `AdSet ${i}`));
-      const offset = metaCurrencyOffset(currency);
+  const snapshotsOf = (spends: number[]) =>
+    spends.map((spend, i) => snap(`a${i}`, spend, `AdSet ${i}`));
 
-      const projected = projectAboBudgets(snapshots, {
+  for (const { label, currency, minMinor, spends } of cases) {
+    it(`matches the convert edge's budgets — ${label}`, () => {
+      const projected = projectAboBudgets(snapshotsOf(spends), {
         currency,
         minDailyBudgetMinor: minMinor,
       });
-      const authoritative = buildConvertBudgets(
-        snapshots.map((s) => ({ id: s.id, name: s.name, windows: s.windows })),
-        offset,
-        minMinor,
-      );
-
-      expect(projected.map((p) => p.daily_major)).toEqual(authoritative.map((a) => a.daily_major));
-      expect(projected.map((p) => p.adset_id)).toEqual(authoritative.map((a) => a.adset_id));
-      expect(projected.map((p) => p.adset_name)).toEqual(authoritative.map((a) => a.adset_name));
+      expect(budgetsOf(projected)).toEqual(GOLDEN[label]);
     });
   }
+
+  it.skipIf(edge === null)(
+    "GOLDEN is the convert edge's own output (runs inside the monorepo, where supabase/ exists)",
+    () => {
+      for (const { label, currency, minMinor, spends } of cases) {
+        const authoritative = edge?.buildConvertBudgets(
+          snapshotsOf(spends).map((s) => ({ id: s.id, name: s.name, windows: s.windows })),
+          metaCurrencyOffset(currency),
+          minMinor,
+        );
+        expect(budgetsOf(authoritative ?? [])).toEqual(GOLDEN[label]);
+      }
+    },
+  );
 
   it('projects a post-convert fleet the engine can score: budgeted, active, unfrozen', () => {
     const held = [snap('a0', 700), snap('a1', 0)].map((s) => ({

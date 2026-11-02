@@ -9,8 +9,16 @@
 import { wasRetried } from '@/lib/api/errors';
 import { isRequestTimeout } from '@/lib/api/timeout';
 
-/** Nor an error the call already retried itself (a render read through a deploy cut). */
+/** A payment refusal (402) is the brand's plan answering; a retry gets the same answer. */
+const isPaymentRefusal = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && Reflect.get(error, 'status') === 402;
+
+/** Nor an error the call already retried itself (a render read through a deploy cut), nor a
+ *  payment refusal (PP-DT-C-unpaid-brand-polls-402-on-every-page). */
 export function retryUnlessTimeout(maxRetries: number) {
   return (failureCount: number, error: unknown): boolean =>
-    failureCount < maxRetries && !isRequestTimeout(error) && !wasRetried(error);
+    failureCount < maxRetries &&
+    !isRequestTimeout(error) &&
+    !wasRetried(error) &&
+    !isPaymentRefusal(error);
 }

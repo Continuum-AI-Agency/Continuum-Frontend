@@ -193,9 +193,21 @@ const LONG_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
   'admin-access-actions',
 ]);
 
+/** The reporting edges, which read an ad platform live when their cache is cold. */
+const PLATFORM_READ_EDGES: ReadonlySet<string> = new Set([
+  'paid-media-reporting',
+  'paid-media-metrics',
+]);
+/** The platforms whose cold read passes the read bound: a Google Ads read runs six or seven GAQL
+ *  queries — 5.7–7.8 s cold from the deployed edge on 2026-10-31 — and a bound that fires also
+ *  aborts the edge's own queries, so Retry would start cold again. The read names its platform
+ *  in the URL (`?platform=google-ads`), which both edges already read. */
+const SLOW_COLD_PLATFORMS: ReadonlySet<string> = new Set(['google-ads', 'google_ads']);
+
 /** The Supabase client's bound, by URL: storage has none (uploads take as long as they take),
- *  a long edge function or a cache-bypassing refresh gets the long budget, every other REST,
- *  RPC, auth and edge call is a read. */
+ *  a long edge function or a cache-bypassing refresh gets the long budget, a reporting read of a
+ *  platform that is slow cold gets the platform-read budget, every other REST, RPC, auth and edge
+ *  call is a read. */
 export const supabaseTimeoutPolicy: TimeoutPolicy = (url) => {
   let parsed: URL;
   try {
@@ -210,6 +222,12 @@ export const supabaseTimeoutPolicy: TimeoutPolicy = (url) => {
     if (LONG_EDGE_FUNCTIONS.has(name)) return LONG_OPERATION_TIMEOUT_MS;
     // `refresh=true` bypasses the reporting edge cache and reads the platform live.
     if (parsed.searchParams.get('refresh') === 'true') return LONG_OPERATION_TIMEOUT_MS;
+    if (
+      PLATFORM_READ_EDGES.has(name) &&
+      SLOW_COLD_PLATFORMS.has(parsed.searchParams.get('platform') ?? '')
+    ) {
+      return PLATFORM_READ_TIMEOUT_MS;
+    }
   }
   return READ_TIMEOUT_MS;
 };
@@ -223,3 +241,32 @@ export const RENDER_TIMEOUT_MS = 300_000;
 /** The Backend client's bound: a GET is a read; anything else may be a job. */
 export const backendTimeoutPolicy: TimeoutPolicy = (_url, method) =>
   method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+
+/**
+ * The app's own Next routes that read an ad platform through the reporting edges: each answers a
+ * POST that reads, and a cold one goes live to Meta or Google — "well past the 8 s read bound"
+ * when the Explorer's skeletons hung (PP-DT-C-unfinished-dashboard-hang-and-raw-error). A route is
+ * named here with every route under it.
+ */
+const PLATFORM_READ_ROUTES: readonly string[] = [
+  '/api/paid-media/account-insights',
+  '/api/paid-media/campaign-insights',
+  '/api/paid-media/budget-pacing',
+  '/api/paid-media/timeline',
+];
+
+/** The bound for the app's own /api routes, by URL: a platform read gets the platform-read
+ *  budget, any other GET is a read, and anything else may be a job. Relative URLs are the
+ *  browser's own origin. */
+export const appRouteTimeoutPolicy: TimeoutPolicy = (url, method) => {
+  let path: string;
+  try {
+    path = new URL(url, 'http://app.local').pathname;
+  } catch {
+    return method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+  }
+  if (PLATFORM_READ_ROUTES.some((route) => path === route || path.startsWith(`${route}/`))) {
+    return PLATFORM_READ_TIMEOUT_MS;
+  }
+  return method === 'GET' ? READ_TIMEOUT_MS : LONG_OPERATION_TIMEOUT_MS;
+};

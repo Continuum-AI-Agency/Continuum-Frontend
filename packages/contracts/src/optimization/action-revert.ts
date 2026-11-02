@@ -8,7 +8,9 @@
 // validate_only → auto-apply gate → live mutate → read back path as any action. The undo's
 // own apply_audits row points at the original through reverts_audit_id.
 //
-// Meta writes keep their own undo (optimizer-apply-revert → /apply/revert).
+// Meta writes apply.ts made keep their own undo (optimizer-apply-revert → /apply/revert). A Meta
+// write the action executor made — a G6 move leg, or a Meta cost cap (set_bid_target, field
+// bid_amount_minor) — has an action_ledger row and is undone HERE, through this envelope.
 // Design: Continuum-Optimizer/src/multiplatform/actions/undo.ts.
 
 import { z } from 'zod';

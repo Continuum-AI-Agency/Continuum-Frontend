@@ -23,7 +23,7 @@ import { createBenchRecorder } from './support/benchRecorder';
 //   01 tree · 04 matrix · 05 funnel  the REAL Backend compiler's documents
 //                                    (`compileCampaignStructureHtml`), signed through the real
 //                                    `signHyperframeAsset`, in the real sandboxed frame
-//   08 diff · 09 outline             the real React renderer, styled by the app's own
+//   08 diff · 09 outline             the canvas's Read card (React), styled by the app's own
 //                                    Tailwind build (globals.css compiled for these files)
 //
 // Asserted at each width: no horizontal overflow on the page or in any figure; every node
@@ -259,23 +259,24 @@ test('the five structure designs read at 375 and at 1280', async ({ browser }) =
         );
       }
 
-      await rec.step(`${width}: outline names every node, unfolded`, async () => {
-        const figure = page.locator('[data-testid="campaign-structure"][data-layout="outline"]');
-        await figure.locator('details').evaluateAll((all) => {
-          for (const details of all) (details as HTMLDetailsElement).open = true;
-        });
-        const names = figure.getByTestId('structure-node-name');
-        await expect(names).toHaveCount(structures[0]?.nodes.length ?? -1);
-        for (const name of await names.all()) await expect(name).toBeVisible();
-        await figure.screenshot({ path: join(ARTIFACTS, String(width), 'outline.png') });
-      });
+      await rec.step(
+        `${width}: outline reads as the canvas's Read card, every ad set named`,
+        async () => {
+          const figure = page.locator('[data-testid="campaign-structure"][data-layout="outline"]');
+          const lines = figure.locator('[data-testid="lectura-chat-adsets"] li');
+          const adSets = (structures[0]?.nodes ?? []).filter((node) => node.level === 'adset');
+          await expect(lines).toHaveCount(Math.min(adSets.length, 4));
+          for (const line of await lines.all()) await expect(line).toBeVisible();
+          await figure.screenshot({ path: join(ARTIFACTS, String(width), 'outline.png') });
+        },
+      );
 
-      await rec.step(`${width}: diff shows the original and every copy entry`, async () => {
+      await rec.step(`${width}: diff reads as the copy's changes first, each marked`, async () => {
         const figure = page.locator('[data-testid="campaign-structure"][data-layout="diff"]');
-        const entries = figure.locator('[data-change]');
-        await expect(entries).toHaveCount(fixtureStructure('diff').diff?.entries.length ?? -1);
-        for (const entry of await entries.all()) await expect(entry).toBeVisible();
-        await expect(figure).toContainText('Original · Promo Oct');
+        const changes = figure.locator('[data-testid^="lectura-change-"][data-mark]');
+        await expect(changes.first()).toBeVisible();
+        for (const change of await changes.all()) await expect(change).toBeVisible();
+        await expect(figure).toContainText('Promo Oct');
         await figure.screenshot({ path: join(ARTIFACTS, String(width), 'diff.png') });
       });
 

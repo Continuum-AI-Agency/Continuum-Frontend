@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import type { TimelineBlock, TimelineCampaign, TimelineEvent } from '@/types/timeline';
 
 type TimelineResolution = 'daily' | 'hourly';
@@ -243,7 +245,7 @@ export function useTimelineBlocks({
       fetchStart: string,
       fetchEnd: string,
     ): Promise<TimelineBlock[]> => {
-      const response = await fetch('/api/paid-media/timeline', {
+      const response = await paidMediaRouteFetch('/api/paid-media/timeline', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,7 +262,9 @@ export function useTimelineBlocks({
 
       if (!response.ok) {
         const errorPayload = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errorPayload.error ?? 'Failed to fetch timeline blocks');
+        throw Object.assign(new Error(errorPayload.error ?? 'Failed to fetch timeline blocks'), {
+          status: response.status,
+        });
       }
 
       const payload = (await response.json()) as { blocks?: unknown };
@@ -390,7 +394,8 @@ export function useTimelineBlocks({
         setEvents(merged.events);
       } catch (err) {
         console.error('[useTimelineBlocks] Error fetching timeline:', err);
-        setError(err as Error);
+        // The panel prints the message; it says why in words, never the library's "Failed to fetch".
+        setError(new Error(loadFailureMessage('the timeline', err), { cause: err }));
       } finally {
         setLoading(false);
       }

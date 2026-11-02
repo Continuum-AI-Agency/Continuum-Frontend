@@ -320,9 +320,13 @@ export function pacingSnapshot(input: PacingInput): PacingSnapshot {
     (!(realBudget != null && realBudget > 0) && budget != null) ||
     (placeholderSource && budget != null);
 
-  const ratio =
-    numeric(input.pacingRatio) ??
-    (ideal != null && ideal > 0 && spent != null ? spent / ideal : null);
+  // A placeholder row's ratio is the engine's fallback (1 by construction), not a measurement
+  // against a plan, so it yields no verdict — the same reading as heroModel.pacingVerdict.
+  // Deriving one here contradicted `estimated`, which already said the row was not real.
+  const ratio = placeholderSource
+    ? null
+    : (numeric(input.pacingRatio) ??
+      (ideal != null && ideal > 0 && spent != null ? spent / ideal : null));
 
   let status: PacingSnapshot['status'] = 'unknown';
   if (ratio != null) {

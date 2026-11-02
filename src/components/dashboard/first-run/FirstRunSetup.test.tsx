@@ -17,7 +17,18 @@ function readyBook(): BrandBookResponse {
     status: 'ready',
     present: true,
     refreshed_at: '2026-07-01T00:00:00.000Z',
-    assembled: { report: { readiness: { overall_score: 80, findings: [] } } },
+    assembled: { report: { readiness: { overall_score: 80, findings: [], dimensions: {} } } },
+  } as unknown as BrandBookResponse;
+}
+
+/** A Brand Book that is ready while its readiness was never scored (Diésel, 2026-10-31). */
+function readyUnscoredBook(): BrandBookResponse {
+  return {
+    brand_id: 'brand-1',
+    status: 'ready',
+    present: true,
+    refreshed_at: '2026-07-01T00:00:00.000Z',
+    assembled: { report: { readiness: null } },
   } as unknown as BrandBookResponse;
 }
 
@@ -66,6 +77,20 @@ describe('FirstRunSetup checklist', () => {
 
     expect(container.textContent).toContain('0 of 3 done');
   });
+
+  it('heads only the steps it counts, and sets the guidance steps apart as optional', () => {
+    // PP-DT-C-setup-checklist-2-of-3-over-5-steps: "2 of 3 done" headed a list of five steps,
+    // two of which are never counted and have the same checkbox as the three that are.
+    const { container } = render(<FirstRunSetup setup={emptySetup} brandBookRefreshedAt={null} />);
+
+    const counted = container.querySelectorAll('[data-testid="setup-tracked-steps"] > li');
+    expect(counted).toHaveLength(3);
+    const optional = container.querySelector('[data-testid="setup-optional-steps"]');
+    expect(optional?.textContent).toMatch(/optional/i);
+    expect(optional?.textContent).toContain('Add competitors');
+    expect(optional?.textContent).toContain('Create your first plan');
+    expect(optional?.querySelectorAll('li')).toHaveLength(2);
+  });
 });
 
 describe('FirstRunSetup workflow map', () => {
@@ -105,5 +130,20 @@ describe('FirstRunSetup Brand Book milestone', () => {
     expect(milestone?.textContent).toContain('Brand Book ready');
     expect(milestone?.textContent).toContain('80');
     expect(href(container, 'brand-book-milestone-view')).toBe('/settings?section=brand-book');
+  });
+
+  it('says a readiness that was never scored is not scored yet, never a red 0', () => {
+    // PP-DT-C-unscored-readiness-shows-zero.
+    const setup = deriveDashboardSetup({
+      hasConnectedProviders: true,
+      hasAssignedAccounts: false,
+      brandBook: readyUnscoredBook(),
+    });
+    const { container } = render(<FirstRunSetup setup={setup} brandBookRefreshedAt={null} />);
+
+    const milestone = container.querySelector('[data-testid="brand-book-milestone"]');
+    expect(milestone?.textContent).toContain('Brand Book ready');
+    expect(milestone?.textContent).toMatch(/not scored yet/i);
+    expect(milestone?.textContent).not.toMatch(/·\s*0\b/);
   });
 });

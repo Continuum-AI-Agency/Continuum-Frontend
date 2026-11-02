@@ -4,6 +4,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { markImpersonatedSession } from '@/lib/auth/impersonation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function ImpersonatePage() {
@@ -72,6 +73,10 @@ export default function ImpersonatePage() {
             }
 
             if (data.session) {
+              // This landing only ever signs in from an impersonation link, so the session is
+              // marked here, as the ?code= landing's callback marks it on the server: the marker
+              // keeps Sign out of all devices from ending the customer's other sessions.
+              markImpersonatedSession();
               addLog('Session set successfully. Redirecting...');
               if (mounted) setStatus('Redirecting to dashboard...');
               router.replace('/dashboard');

@@ -125,3 +125,43 @@ describe('jainaAccountForPlatform', () => {
     expect(jainaAccountForPlatform([META], 'google_ads')).toBeNull();
   });
 });
+
+// PP-DT-C-ad-account-names-indistinguishable: Easy Fit's picker offered "Easy fit (Read-Only)"
+// twice and "Easy Fit (Read-Only)" once, with nothing to tell act_1296885445611472,
+// act_1474284901098956 and act_1472300554278005 apart.
+describe('jainaAccountOptions — accounts that share a name', () => {
+  it('tell same-named accounts apart by the end of their id, and leave unique names alone', () => {
+    const options = jainaAccountOptions('act_521903353286118', {
+      facebook: {
+        accounts: [
+          account({
+            externalAccountId: 'act_521903353286118',
+            name: 'Easyfit',
+            type: 'meta_ad_account',
+          }),
+          account({
+            externalAccountId: 'act_1296885445611472',
+            name: 'Easy fit (Read-Only)',
+            type: 'meta_ad_account',
+          }),
+          account({
+            externalAccountId: 'act_1474284901098956',
+            name: 'Easy fit (Read-Only)',
+            type: 'meta_ad_account',
+          }),
+          account({
+            externalAccountId: 'act_1472300554278005',
+            name: 'Easy Fit (Read-Only)',
+            type: 'meta_ad_account',
+          }),
+        ],
+      },
+    });
+    const labels = options.map((option) => option.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain('Easyfit');
+    expect(labels).toContain('Easy fit (Read-Only) · …1472');
+    expect(labels).toContain('Easy fit (Read-Only) · …8956');
+    expect(labels).toContain('Easy Fit (Read-Only) · …8005');
+  });
+});

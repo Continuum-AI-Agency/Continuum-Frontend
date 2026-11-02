@@ -226,11 +226,13 @@ export const GooglePromoteTermCardSchema = z.object({
   matched_keyword: z.string().min(1).nullable(),
 });
 
-/** Google Ads bid target adjustment (G07): Google's own target (a bid setting on the
- *  platform), the real cost over the window, the proposal, and the cooldown since the last bid
- *  change (Smart Bidding relearns). Two different numbers live here and are never the same
- *  thing: `current_target`/`proposed_target` are the Google Ads bid setting; `portfolio_goal` is
- *  the portfolio's CPA goal the move serves, never pushed to Google. */
+/** Setting the portfolio CPA goal as the Google Ads cost cap (G07), only on a portfolio whose
+ *  "use this goal as the cost cap on the ad platforms" checkbox is on: Google's own target (a
+ *  bid setting on the platform), the real cost over the window, the proposal, and the cooldown
+ *  since the last bid change (Smart Bidding relearns). `current_target`/`proposed_target` are
+ *  the Google Ads target CPA (bid setting); `portfolio_goal` is the portfolio's CPA goal.
+ *  `proposed_target` equals `portfolio_goal` when the gap fits the per-cycle limit, and is a
+ *  capped step toward it otherwise. */
 export const GoogleBidTargetCardSchema = z.object({
   variant: z.literal('google_bid_target'),
   campaign_name: z.string().min(1),
@@ -243,10 +245,41 @@ export const GoogleBidTargetCardSchema = z.object({
   proposed_target: z.number().positive(),
   window_days: z.number().int().positive(),
   days_since_last_change: z.number().int().nonnegative().nullable(),
-  /** The portfolio's CPA goal in `currency`: what the move serves. Optional for cards written
-   *  before the rule priced against it. */
+  /** The portfolio's CPA goal in `currency`: the cost cap the move sets, or steps toward.
+   *  Optional for cards written before the rule priced against it. */
   portfolio_goal: z.number().positive().nullable().optional(),
 });
+
+/** Setting the portfolio CPA goal as a Meta ad set's cost cap (engine rule meta_cost_cap), only
+ *  on a portfolio whose "use this goal as the cost cap on the ad platforms" checkbox is on, and
+ *  only on an ad set ALREADY bidding COST_CAP. Two numbers that are never the same thing:
+ *  `current_cap`/`proposed_cap` are the Meta cost cap (bid setting) — the ad set's `bid_amount`
+ *  — and `portfolio_goal` is the portfolio CPA goal. `proposed_cap` equals `portfolio_goal` when
+ *  the gap fits the per-cycle limit, and is a capped step toward it otherwise. Money is MAJOR
+ *  units of `currency`; the action carries the same amounts in minor units.
+ *
+ *  `strategy_owner`: where Meta keeps the bid strategy. 'adset' under ABO (each ad set bids on
+ *  its own); 'campaign' under CBO (Advantage campaign budget), where the campaign holds
+ *  bid_strategy and each ad set still holds its own bid_amount — the write is on the ad set in
+ *  both cases. */
+export const MetaCostCapCardSchema = z.object({
+  variant: z.literal('meta_cost_cap'),
+  ad_set_name: z.string().min(1),
+  campaign_name: z.string().min(1).nullable(),
+  currency: CurrencyCodeSchema,
+  strategy_owner: z.enum(['adset', 'campaign']),
+  /** The Meta cost cap (bid setting) as it stands on the ad set. */
+  current_cap: z.number().positive(),
+  /** The Meta cost cap (bid setting) the card proposes. */
+  proposed_cap: z.number().positive(),
+  /** The portfolio CPA goal in `currency`: the cost cap the move sets, or steps toward. */
+  portfolio_goal: z.number().positive(),
+  /** The per-cycle limit the step honoured, a fraction (0.2 = 20%). */
+  max_change_pct: z.number().positive(),
+  /** Days since this service last changed the ad set's cost cap; null when it never has. */
+  days_since_last_change: z.number().int().nonnegative().nullable(),
+});
+export type MetaCostCapCard = z.infer<typeof MetaCostCapCardSchema>;
 
 /** A keyword with a very low Quality Score that spends without results (G11). */
 export const GoogleLowQualityKeywordCardSchema = z.object({
@@ -322,6 +355,13 @@ export const GoogleDeliveryIssueCardSchema = z.object({
   /** Google's own reason codes, e.g. HAS_ADS_DISAPPROVED, BUDGET_CONSTRAINED. */
   reasons: z.array(z.string().min(1)).min(1),
   dark_days: z.number().int().nonnegative(),
+  /** The first day of the dark run (YYYY-MM-DD, the account's calendar): the day the campaign —
+   *  or, on an account card, the last campaign — stopped showing ads. Absent on a card written
+   *  before it was stamped, and when nothing is dark (disapproved ads only). */
+  dark_since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   currency: CurrencyCodeSchema.nullable(),
   budget_per_day: money.nullable(),
   disapproved_ads: z.number().int().nonnegative(),
@@ -470,9 +510,7 @@ export const GoogleAccountFindingCardSchema = z.object({
   /** The client executes the account: recommend and verify, never a write control. */
   recommend_only: z.boolean(),
   /** The figures, already worded by the producer ("Real cost per lead", "$1,151 MXN"). */
-  facts: z
-    .array(z.object({ label: z.string().min(1), value: z.string().min(1) }))
-    .min(1),
+  facts: z.array(z.object({ label: z.string().min(1), value: z.string().min(1) })).min(1),
   /** Bars the card draws: one value per row in `unit`, and the agreed share when there is one. */
   bars: z
     .array(
@@ -515,6 +553,7 @@ export const PlatformCardSchema = z.union([
   GoogleNegativeTermsCardSchema,
   GooglePromoteTermCardSchema,
   GoogleBidTargetCardSchema,
+  MetaCostCapCardSchema,
   GoogleLowQualityKeywordCardSchema,
   TikTokHookRetentionCardSchema,
   TikTokSparkCandidateCardSchema,

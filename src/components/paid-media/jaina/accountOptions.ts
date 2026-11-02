@@ -5,6 +5,7 @@ import {
 } from '@continuum/contracts';
 import { resolveAssetLabel } from '@/lib/integrations/assetLabel';
 import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandProfile';
+import { withDistinctAccountLabels } from '@/lib/integrations/distinctAccountLabels';
 
 type Account = Pick<
   BrandIntegrationAccountSummary,
@@ -73,12 +74,12 @@ export function jainaAccountOptions(
       });
     }
   }
-  if (!primaryId) return options;
+  if (!primaryId) return withDistinctAccountLabels(options);
   const primary = options.find((option) => option.id === primaryId);
-  return [
+  return withDistinctAccountLabels([
     primary ?? { id: primaryId, label: primaryId, platform: 'meta' },
     ...options.filter((option) => option !== primary),
-  ];
+  ]);
 }
 
 /** The data-scope contract names TikTok once, for organic and ads alike; Jaina holds no TikTok

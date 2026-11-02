@@ -122,6 +122,34 @@ describe('Jaina conversations proxy route', () => {
     expect(sessionsUrl).toContain('tags=q4%2Cbudget');
   });
 
+  // PP-DT-C-jaina-search-wildcards-and-firewall-500: a search that looked like SQL was refused by
+  // the firewall in front of the database with an HTML page, and the Backend's 500 carried that
+  // page in its message; the proxy passed it through as `error`, so the page's HTML was the
+  // error text. Whatever upstream says, the proxy answers in words.
+  it('never hands an upstream HTML page through as the error text', async () => {
+    const firewallPage =
+      '<!DOCTYPE html> <!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->';
+    for (const body of [
+      JSON.stringify({ error: `Failed to list conversation sessions: ${firewallPage}` }),
+      firewallPage,
+    ]) {
+      globalThis.fetch = mock(() =>
+        Promise.resolve(new Response(body, { status: 500 })),
+      ) as unknown as typeof fetch;
+      const response = await GET(
+        new Request(
+          'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1&q=Robert%22)%3B%20DROP%20TABLE%20x%3B--',
+          { method: 'GET' },
+        ),
+      );
+      expect(response.status).toBe(500);
+      const payload = (await response.json()) as { error?: unknown };
+      expect(typeof payload.error).toBe('string');
+      expect(String(payload.error)).not.toMatch(/[<>]/);
+      expect(String(payload.error).length).toBeGreaterThan(0);
+    }
+  });
+
   it('rejects an unknown initiator before touching the Backend', async () => {
     const request = new Request(
       'http://localhost/api/agents/jaina/chat/conversations?brandId=brand-1&initiator=automation',

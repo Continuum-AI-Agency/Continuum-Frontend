@@ -22,7 +22,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import type { BrandIntegrationAccountSummary } from '@/lib/integrations/brandProfile';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import { cn } from '@/lib/utils';
 import { PAID_SETUP_CONNECT_HREF } from './paid-setup-diagnostics';
 
@@ -187,6 +189,9 @@ export function AdAccountSelector({
   const [timelineAccountsLoaded, setTimelineAccountsLoaded] = React.useState(
     hasInitialAccounts ?? false,
   );
+  // The timeline lookup settles "loaded" when it fails too (so the picker never hangs); a failed
+  // one is what a Retry can fix, an answer with no account is not.
+  const [timelineFailed, setTimelineFailed] = React.useState(false);
 
   const adAccounts = React.useMemo(() => {
     const seen = new Set<string>();
@@ -200,6 +205,9 @@ export function AdAccountSelector({
     };
     const pushIntegrationAccounts = (accounts: BrandIntegrationAccountSummary[] | undefined) => {
       (accounts ?? []).forEach((account) => {
+        // A Google Ads manager runs no campaigns: never an account to pick
+        // (PP-DT-E-home-setup-mode-mcc-mismatch).
+        if (isAdsManagerAccount(account)) return;
         const id = account.externalAccountId ?? account.integrationAccountId;
         if (id) pushAccount({ id, name: account.name });
       });
@@ -254,6 +262,7 @@ export function AdAccountSelector({
     if (isGoogleAds || isAll || isLinkedIn || isOpenAi) {
       initialAccountsUsedRef.current = false;
       setTimelineAccounts([]);
+      setTimelineFailed(false);
       setTimelineAccountsLoaded(true);
       return;
     }
@@ -267,10 +276,11 @@ export function AdAccountSelector({
     let isCancelled = false;
     setTimelineAccountsLoaded(false);
     setTimelineAccounts([]);
+    setTimelineFailed(false);
 
     const fetchAccounts = async () => {
       try {
-        const response = await fetch('/api/paid-media/timeline/accounts', {
+        const response = await paidMediaRouteFetch('/api/paid-media/timeline/accounts', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -281,6 +291,7 @@ export function AdAccountSelector({
 
         if (!response.ok) {
           if (!isCancelled) {
+            setTimelineFailed(true);
             setTimelineAccountsLoaded(true);
           }
           return;
@@ -295,6 +306,7 @@ export function AdAccountSelector({
       } catch {
         if (!isCancelled) {
           setTimelineAccounts([]);
+          setTimelineFailed(true);
           setTimelineAccountsLoaded(true);
         }
       }
@@ -357,30 +369,45 @@ export function AdAccountSelector({
     (isError && visibleAccounts.length === 0) ||
     timedOut ||
     (resolved && visibleAccounts.length === 0);
+  // Retry is for a read that failed or never answered. A read that answered with no account
+  // has nothing to retry: Connect is the one next step.
+  const canRetry = isError || timedOut || timelineFailed;
 
   if (showRecovery) {
+    // In the Scale bar the pair lives in a slot that shrinks with the header; on a phone the
+    // words would overflow it onto the module switch (PP-DT-E-scale-header-phone-overlap). There
+    // Connect is its plug mark, named for assistive tech, until the bar has the room the chip
+    // gives its brand name (@[30rem]/scale-bar).
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         <Link
           href={PAID_SETUP_CONNECT_HREF}
           className={cn(
             buttonVariants({ variant: 'outline', size: 'sm' }),
             'h-8 gap-1.5 px-2 text-xs',
+            chip && 'w-8 shrink-0 px-0 @[30rem]/scale-bar:w-auto @[30rem]/scale-bar:px-2',
           )}
+          title={chip ? 'Connect ad account' : undefined}
         >
           <PlugZapIcon aria-hidden="true" className="h-3.5 w-3.5" />
-          Connect ad account
+          {chip ? (
+            <span className="sr-only @[30rem]/scale-bar:not-sr-only">Connect ad account</span>
+          ) : (
+            'Connect ad account'
+          )}
         </Link>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          aria-label="Retry loading ad accounts"
-          onClick={handleRetry}
-        >
-          <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
-        </Button>
+        {canRetry ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 shrink-0 p-0"
+            aria-label="Retry loading ad accounts"
+            onClick={handleRetry}
+          >
+            <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
       </div>
     );
   }

@@ -6,6 +6,7 @@ import type { CycleItemDiagnostics } from '@continuum/contracts';
 
 import { figureProps, formatCurrency } from '../format';
 import { measuredCpa, upperBoundNote } from '../reportModel';
+import { formatResults } from './detail/byPlatformModel';
 
 export function CostIntervalLine({
   adsetId,
@@ -48,7 +49,8 @@ export function CostIntervalLine({
           {')'}
         </>
       ) : null}
-      {typeof ci?.events === 'number' ? ` from ${ci.events} events` : ''}
+      {/* Google credits fractions of a conversion: "420.6", never the raw sum. */}
+      {typeof ci?.events === 'number' ? ` from ${formatResults(ci.events)} events` : ''}
     </p>
   );
 }

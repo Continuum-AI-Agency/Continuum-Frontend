@@ -21,16 +21,28 @@ import {
 } from '@/lib/brand-icons';
 import { cn } from '@/lib/utils';
 
-export type IconComponent = React.ComponentType<{ className?: string }>;
+/** `aria-hidden` lets a mark that sits beside its own name stay out of the accessible name;
+ *  JSX does not type-check hyphenated props, so an icon that ignored it dropped it silently. */
+export type IconComponent = React.ComponentType<{
+  className?: string;
+  'aria-hidden'?: boolean | 'true' | 'false';
+}>;
 
 export function makeSvgIcon(iconData: BrandIconData): IconComponent {
-  function SvgIcon({ className }: { className?: string }) {
+  function SvgIcon({
+    className,
+    'aria-hidden': ariaHidden,
+  }: {
+    className?: string;
+    'aria-hidden'?: boolean | 'true' | 'false';
+  }) {
     return (
       <span
         className={cn(
           'h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block',
           className,
         )}
+        aria-hidden={ariaHidden}
         title={iconData.title}
         // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted inline brand-icon SVG from local @/lib/brand-icons constants, never user input
         dangerouslySetInnerHTML={{ __html: iconData.svg }}

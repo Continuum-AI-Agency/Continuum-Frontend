@@ -92,6 +92,9 @@ export const DeliverySignalsSchema = z.object({
   reach7d: z.number().nonnegative().optional(),
   reach14d: z.number().nonnegative().optional(),
   impressions7d: z.number().nonnegative().optional(),
+  /** Consecutive complete days with zero impressions, counted from the platform's own read when
+   *  no daily series rides on the snapshot (Google, TikTok). Mirrors DeliverySignals.darkDays. */
+  darkDays: z.number().int().nonnegative().optional(),
 });
 
 /** Why the ingest boundary abstained (froze) an ad set — mirrors FreezeReason in ./types. */

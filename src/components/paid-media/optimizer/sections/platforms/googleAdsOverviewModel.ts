@@ -110,21 +110,28 @@ export function googleCurrencyOf(
 }
 
 /**
- * The `days` complete UTC days ending yesterday — the window the multi-platform producer
- * (optimizer_get_account_platform_metrics) reads. The edge's own `last_7d` runs to TODAY and
- * covers eight days, so a header and a breakdown read that way could never agree.
+ * The `days` complete days ending on the account's last complete day — `lastCompleteDay`, the
+ * producer's window end (optimizer_get_account_platform_metrics dates it in the account's own
+ * calendar) — so every read on the page ends on the same finished day. With no account-dated day,
+ * the UTC days ending yesterday stand in: from 18:00 to 24:00 in Mexico City those include the
+ * account's unfinished today (PP-DT-B-utc-complete-days-window). The edge's own `last_7d` runs to
+ * TODAY and covers eight days, so a header and a breakdown read that way could never agree.
  */
 export function completeDaysWindow(
   days: number,
   now: Date = new Date(),
+  lastCompleteDay: string | null = null,
 ): {
   since: string;
   until: string;
 } {
   const DAY = 86_400_000;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  return { since: iso(today - days * DAY), until: iso(today - DAY) };
+  const anchored = lastCompleteDay ? Date.parse(`${lastCompleteDay}T00:00:00Z`) : Number.NaN;
+  const until = Number.isFinite(anchored)
+    ? anchored
+    : Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - DAY;
+  return { since: iso(until - (days - 1) * DAY), until: iso(until) };
 }
 
 function daysBetween(since: string, until: string): number {
@@ -274,13 +281,22 @@ export function ownResultsLabel(byResult: GoogleResultCounts | null): string | n
 }
 
 /** Spend per result of one type; null when there is none to price. */
+/** Fewer results than this buy no cost per result: Google's data-driven attribution splits
+ *  conversions into fractions, and 7,155 MXN over 0.05 of one printed "$68,187 per conversion"
+ *  (PP-DT-B-pmax-cpa-from-fractional-conversions). Under it the screen says so instead. */
+export const MIN_PRICED_RESULTS = 1;
+
+/** Spend per result, or null when fewer than MIN_PRICED_RESULTS were counted. */
+export function pricedPerResult(spend: number, results: number | null | undefined): number | null {
+  return results != null && results >= MIN_PRICED_RESULTS ? spend / results : null;
+}
+
 export function costPerResult(
   spend: number,
   byResult: GoogleResultCounts | null,
   bucket: GoogleResultBucket,
 ): number | null {
-  const count = byResult?.[bucket] ?? 0;
-  return count > 0 ? spend / count : null;
+  return pricedPerResult(spend, byResult?.[bucket] ?? 0);
 }
 
 /** Room for six tiles: spend, conversions, and up to four campaign groups. */
@@ -289,9 +305,7 @@ export const MAX_GROUP_TILES = 4;
 export const MIN_TILES = 4;
 
 export function costPerConversion(group: CampaignGroup): number | null {
-  return group.conversions != null && group.conversions > 0
-    ? group.spend / group.conversions
-    : null;
+  return pricedPerResult(group.spend, group.conversions);
 }
 
 /** Signed % of `value` against `base`, rounded; null when there is no base to compare with. */

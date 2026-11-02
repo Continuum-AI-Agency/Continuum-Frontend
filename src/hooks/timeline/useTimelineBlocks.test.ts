@@ -119,7 +119,11 @@ describe('useTimelineBlocks', () => {
 
     expect(result.current.blocks).toHaveLength(0);
     expect(result.current.campaigns).toHaveLength(0);
-    expect(result.current.error?.message).toBe('Failed to fetch timeline blocks');
+    // Said in words with the reason, never the developer string or the upstream page
+    // (PP-DT-C-unfinished-dashboard-hang-and-raw-error).
+    expect(result.current.error?.message).toBe(
+      "Couldn't load the timeline — the service answered with an error.",
+    );
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
   });
 });

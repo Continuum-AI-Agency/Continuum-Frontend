@@ -21,7 +21,13 @@ export type BrandAccess = {
 // — live or not — is decided (and unit-tested) here. The Frontend gate is a courtesy: the
 // Backend refuses the same brands with 402 `product_required`.
 
-export type GatedSurface = 'ai-studio' | 'organic' | 'scale' | 'approvals' | 'forge';
+export type GatedSurface =
+  | 'ai-studio'
+  | 'organic'
+  | 'scale'
+  | 'approvals'
+  | 'campaign-canvas'
+  | 'forge';
 
 type SurfaceRule = {
   product: ProductCode;
@@ -58,6 +64,14 @@ const SURFACES: Record<GatedSurface, SurfaceRule> = {
     legacy: {
       minTier: 1,
       description: 'Approvals is a paid feature. Please contact an Administrator.',
+    },
+  },
+  'campaign-canvas': {
+    product: 'paid_media',
+    path: '/scale/campaign-canvas',
+    legacy: {
+      minTier: 1,
+      description: 'Campaign Canvas is a paid feature. Please contact an Administrator.',
     },
   },
   forge: {

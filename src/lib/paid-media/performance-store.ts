@@ -9,6 +9,7 @@ import {
   fetchCampaignPerformanceRows,
 } from '@/lib/paid-media/campaign-performance-loader';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import { consumePrefetchedCampaigns } from '@/lib/prefetch/paid-media-cache';
 import type { BudgetPacingResponse } from '@/lib/schemas/budgetPacing';
 import type { PaidMetricsRange } from '@/lib/schemas/paidMetrics';
@@ -172,7 +173,7 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
         data: { session },
       } = await supabase.auth.getSession();
 
-      const response = await fetch('/api/paid-media/budget-pacing', {
+      const response = await paidMediaRouteFetch('/api/paid-media/budget-pacing', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

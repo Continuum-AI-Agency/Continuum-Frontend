@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
@@ -6,6 +7,7 @@ import { ChatConnectionsSection } from '@/components/settings/account/ChatConnec
 import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
 import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
 import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
+import { SignOutEverywhereSection } from '@/components/settings/account/SignOutEverywhereSection';
 import { UserBrandsPanel } from '@/components/settings/account/UserBrandsPanel';
 import { UserConnectionsSwitcher } from '@/components/settings/account/UserConnectionsSwitcher';
 import { UserProfileSection } from '@/components/settings/account/UserProfileSection';
@@ -37,6 +39,7 @@ import { SettingsShell } from '@/components/settings/shell/SettingsShell';
 import { resolveSection } from '@/components/settings/shell/sections';
 import { GlossaryTooltip } from '@/components/shared/glossary';
 import { RunStrategicAnalysisButton } from '@/components/strategic-analyses/RunStrategicAnalysisButton';
+import { isImpersonationMarked } from '@/lib/auth/impersonation';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandAdNamingSchema } from '@/lib/brands/adNaming';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
@@ -379,17 +382,24 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       </>
     );
   } else if (initialSection === 'profile') {
+    const impersonating = isImpersonationMarked(await cookies());
+
     activeSectionSlot = (
-      <SettingsSection
-        title="Your profile"
-        description="Identity tied to your login across every brand you join."
-      >
-        <UserProfileSection
-          email={userEmail}
-          name={user?.user_metadata?.full_name ?? null}
-          lastSignIn={null}
-        />
-      </SettingsSection>
+      <>
+        <SettingsSection
+          title="Your profile"
+          description="Identity tied to your login across every brand you join."
+        >
+          <UserProfileSection
+            email={userEmail}
+            name={user?.user_metadata?.full_name ?? null}
+            lastSignIn={null}
+          />
+        </SettingsSection>
+        <SettingsSection title="Sessions">
+          <SignOutEverywhereSection impersonating={impersonating} />
+        </SettingsSection>
+      </>
     );
   } else if (initialSection === 'connections') {
     const userIntegrationSummary = user

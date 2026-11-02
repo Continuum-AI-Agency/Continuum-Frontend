@@ -230,6 +230,22 @@ export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
 
 type SearchParamsLike = { get(key: string): string | null };
 
+/**
+ * The area the header names for `pathname`: the navigation entry whose href is the path or a
+ * parent of it, the same prefix rule `isRouteActive` applies (Home only on itself). Null when no
+ * area owns the path. Matching exactly sent every sub-route of a module — /scale/approvals,
+ * /scale/campaign-canvas — to the "Home" fallback (PP-DT-C-header-pill-says-home-on-scale-subroutes).
+ */
+export function headerRouteFor(pathname: string): AppNavigationItem | null {
+  const areas = [...APP_NAVIGATION, ...APP_NAVIGATION_FOOTER];
+  const noParams = { get: () => null };
+  return (
+    areas.find((area) => isRouteActive(pathname, noParams, area)) ??
+    areas.flatMap((area) => area.items ?? []).find((item) => item.href === pathname) ??
+    null
+  );
+}
+
 // Active when the current location matches the item href. Dashboard matches
 // only on exact equality; query-bearing hrefs require every param to match;
 // otherwise the path matches exactly or as a parent prefix.
