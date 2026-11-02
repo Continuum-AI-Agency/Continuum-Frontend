@@ -25,6 +25,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ReactNode } from 'react';
 import * as React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 
@@ -577,6 +578,7 @@ describe('JainaChatSurface integration', () => {
 
   beforeEach(() => {
     cleanup();
+    useAgentRunStore.getState().reset();
     chatStatus = 'ready';
     resumeChecked = true;
     pushMessages = null;
@@ -1165,6 +1167,82 @@ describe('JainaChatSurface integration', () => {
     expect(screen.getAllByTestId('user-content').map((node) => node.textContent)).toEqual([
       'question in session-b',
     ]);
+  });
+
+  describe('a turn sent from outside the transcript (the canvas Implement button)', () => {
+    const turn = {
+      id: 'implement-1',
+      text: 'Implement this proposal now.\n1. Pause campaign «X» (id 1).',
+    };
+    const runningRun = (sessionId: string) => ({
+      runId: 'run_analysis',
+      agent: 'jaina' as const,
+      sessionId,
+      status: 'running' as const,
+      createdAt: '2026-11-02T00:00:00.000Z',
+    });
+
+    it('waits for the run in flight and sends the turn once it ends, not before and not twice', async () => {
+      global.fetch = emptyHistoryFetch();
+      chatStatus = 'streaming';
+      const consumed = mock(() => {});
+      const withTurn = () =>
+        React.cloneElement(surface, { autoSendPrompt: turn, onAutoSendConsumed: consumed });
+      const view = render(withTurn(), { wrapper: withQueryClient });
+      await screen.findByTestId('jaina-empty-state', undefined, { timeout: 2000 }).catch(() => {});
+      expect(sendTurnMock).not.toHaveBeenCalled();
+      expect(consumed).not.toHaveBeenCalled();
+
+      chatStatus = 'ready';
+      view.rerender(withTurn());
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+
+      view.rerender(withTurn());
+      view.rerender(withTurn());
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('also waits for a run the conversation holds elsewhere (analysis still finishing)', async () => {
+      // "Thinking… Handoff complete": this reader is not streaming, but the run is not over.
+      global.fetch = emptyHistoryFetch();
+      act(() => {
+        useAgentRunStore.getState().upsertRun(runningRun('session-x'));
+      });
+      const consumed = mock(() => {});
+      render(
+        React.cloneElement(surface, {
+          initialSessionId: 'session-x',
+          autoSendPrompt: turn,
+          onAutoSendConsumed: consumed,
+        }),
+        { wrapper: withQueryClient },
+      );
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      expect(sendTurnMock).not.toHaveBeenCalled();
+      expect(consumed).not.toHaveBeenCalled();
+
+      act(() => {
+        useAgentRunStore.getState().upsertRun({ ...runningRun('session-x'), status: 'completed' });
+      });
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+    });
+
+    it('tells the host when a run holds the conversation, so its button can stay disabled', async () => {
+      global.fetch = emptyHistoryFetch();
+      chatStatus = 'streaming';
+      const busy = mock((_value: boolean) => {});
+      const withBusy = () => React.cloneElement(surface, { onRunInFlightChange: busy });
+      const view = render(withBusy(), { wrapper: withQueryClient });
+      await waitFor(() => expect(busy).toHaveBeenLastCalledWith(true));
+      chatStatus = 'ready';
+      view.rerender(withBusy());
+      await waitFor(() => expect(busy).toHaveBeenLastCalledWith(false));
+    });
   });
 
   it('opens nothing when the reader started a new conversation while the latest one was loading', async () => {

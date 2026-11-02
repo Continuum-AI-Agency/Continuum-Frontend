@@ -28,6 +28,7 @@ export function LiveChangeConfirmBar({
   variants,
   onDecide,
   onImplement,
+  implementBlocked = false,
 }: {
   preview: LiveChangePreviewPayload;
   decision: LiveChangeDecision;
@@ -36,6 +37,12 @@ export function LiveChangeConfirmBar({
   variants: readonly ConfirmVariantOption[] | null;
   onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
   onImplement?: () => void;
+  /**
+   * A run holds the conversation, or this click's turn is still waiting to be sent. Implement
+   * stays disabled for as long: a click in that window would be sent into a busy conversation or
+   * twice.
+   */
+  implementBlocked?: boolean;
 }) {
   const [asked, setAsked] = React.useState(false);
   React.useEffect(() => {
@@ -43,6 +50,13 @@ export function LiveChangeConfirmBar({
     const timer = setTimeout(() => setAsked(false), IMPLEMENT_RETRY_MS);
     return () => clearTimeout(timer);
   }, [asked]);
+  // "Asking Jaina…" holds until the turn it asked for has run (blocked, then free again). If
+  // that turn came to nothing and the proposal is still a proposal, the button comes back.
+  const wasBlockedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (wasBlockedRef.current && !implementBlocked) setAsked(false);
+    wasBlockedRef.current = implementBlocked;
+  }, [implementBlocked]);
 
   const bar = liveChangeConfirmBarOf({
     preview,
@@ -106,15 +120,20 @@ export function LiveChangeConfirmBar({
         {bar.kind === 'implement' ? (
           <button
             type="button"
-            disabled={asked}
+            disabled={asked || implementBlocked}
             onClick={() => {
+              if (asked || implementBlocked) return;
               setAsked(true);
               onImplement?.();
             }}
             className={PRIMARY}
             data-testid="live-change-implement"
           >
-            {asked ? 'Asking Jaina…' : 'Implement these changes'}
+            {asked
+              ? 'Asking Jaina…'
+              : implementBlocked
+                ? 'Jaina is working…'
+                : 'Implement these changes'}
           </button>
         ) : null}
       </span>

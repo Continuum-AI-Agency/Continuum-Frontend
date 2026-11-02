@@ -383,6 +383,12 @@ type JainaChatSurfaceProps = {
   autoSendPrompt?: { id: string; text: string } | null;
   onAutoSendConsumed?: () => void;
   /**
+   * Whether a run, a queued turn or an unsent turn holds this conversation. A button outside the
+   * transcript that sends a turn stays disabled for as long, so its click is never sent into a
+   * busy conversation.
+   */
+  onRunInFlightChange?: (inFlight: boolean) => void;
+  /**
    * Opens the optimizer's account read for a cited optimizer figure in an answer.
    *
    * The surface only forwards it: honouring it means moving the paid-media tab AND the
@@ -876,6 +882,7 @@ export function JainaChatSurface({
   onLiveChangeFocus,
   onPortfolioFocus,
   autoSendPrompt = null,
+  onRunInFlightChange,
   onAutoSendConsumed,
   onOpenAccountRead,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
@@ -2817,16 +2824,18 @@ export function JainaChatSurface({
     if (outcome) pending.settle(outcome);
   }, [isStreaming, messages]);
 
+  const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const consumedAutoSendRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     // Not before the thread has loaded: a panel opened BY this send would otherwise fire it into
     // the fresh session it mounted with, and the deep-linked thread would never see the turn.
-    if (!autoSendPrompt || !adAccountId || isStreaming) return;
+    if (!autoSendPrompt || !adAccountId || isQueueStreaming) return;
     if (!historyReady || isHistoryLoading || isConversationSwitching) return;
     if (consumedAutoSendRef.current === autoSendPrompt.id) return;
     consumedAutoSendRef.current = autoSendPrompt.id;
-    void handleSubmit(autoSendPrompt.text);
-    onAutoSendConsumed?.();
+    // Consumed once the turn has left, not when it starts to: the host keeps its button disabled
+    // until then, so there is no gap in which the same click can be made again.
+    void handleSubmit(autoSendPrompt.text).then(() => onAutoSendConsumed?.());
   }, [
     adAccountId,
     autoSendPrompt,
@@ -2834,9 +2843,14 @@ export function JainaChatSurface({
     historyReady,
     isConversationSwitching,
     isHistoryLoading,
-    isStreaming,
+    isQueueStreaming,
     onAutoSendConsumed,
   ]);
+
+  const runInFlight = isQueueStreaming || Boolean(outboxTurn) || queuedMessages.length > 0;
+  React.useEffect(() => {
+    onRunInFlightChange?.(runInFlight);
+  }, [onRunInFlightChange, runInFlight]);
 
   // A deep link that arrives AFTER mount — "Back to chat", or a run toast's View onto a Scale page
   // Next kept alive — switches the thread. It is handed to the bootstrap rather than opened here:
@@ -3196,7 +3210,6 @@ export function JainaChatSurface({
     queuedMessages.length === 0
       ? liveChatMessage.content
       : null;
-  const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const canStartQueuedNow =
     !isQueueStreaming && !isHistoryLoading && !isConversationSwitching && !outboxTurn;
   // Retry waits for whatever holds the conversation, exactly as the queue does.

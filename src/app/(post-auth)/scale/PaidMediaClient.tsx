@@ -709,6 +709,8 @@ export default function PaidMediaClientPage({
     },
     [],
   );
+  // A run holds the Jaina conversation: the canvas button waits for it instead of sending into it.
+  const [jainaRunInFlight, setJainaRunInFlight] = React.useState(false);
   const sendCompanionTurn = React.useCallback((text: string) => {
     setCompanionTurn({ id: crypto.randomUUID(), text });
   }, []);
@@ -1121,6 +1123,7 @@ export default function PaidMediaClientPage({
                   onPortfolioFocus={handlePortfolioFocus}
                   autoSendPrompt={companionTurn}
                   onAutoSendConsumed={clearCompanionTurn}
+                  onRunInFlightChange={setJainaRunInFlight}
                   operatorActionRequest={companionDeploy.request}
                   onOperatorActionConsumed={companionDeploy.consumed}
                   onOperatorActionSettled={companionDeploy.settled}
@@ -1184,6 +1187,7 @@ export default function PaidMediaClientPage({
                               {...(companionLiveChange.onDecide
                                 ? { onDecide: companionLiveChange.onDecide }
                                 : {})}
+                              implementBlocked={jainaRunInFlight || companionTurn !== null}
                               {...(implementTurn
                                 ? { onImplement: () => sendCompanionTurn(implementTurn) }
                                 : {})}

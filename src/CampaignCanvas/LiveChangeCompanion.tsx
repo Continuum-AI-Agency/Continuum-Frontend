@@ -13,9 +13,9 @@ import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { LiveChangeCanvas, LiveChangeDecisionPill } from './LiveChangeCanvas';
 import { type ConfirmVariantOption, LiveChangeConfirmBar } from './LiveChangeConfirmBar';
-import { ProjectionPanel } from './ProjectionPanel';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
 import { LecturaView, PlatformChip } from './lectura/LecturaView';
+import { ProjectionPanel } from './ProjectionPanel';
 import { CampaignModelBody, useVersionLine, VersionLineBar } from './versions/VersionLine';
 
 export function LiveChangeCompanion({
@@ -24,6 +24,7 @@ export function LiveChangeCompanion({
   versions = null,
   onDecide,
   onImplement,
+  implementBlocked = false,
   pendingDecision = null,
   variants = null,
 }: {
@@ -39,6 +40,8 @@ export function LiveChangeCompanion({
   variants?: readonly ConfirmVariantOption[] | null;
   /** Asks Jaina to run a proposal's changes through the approval cards. */
   onImplement?: () => void;
+  /** A run holds the conversation, or the implement turn is still waiting to be sent. */
+  implementBlocked?: boolean;
 }) {
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
@@ -49,7 +52,9 @@ export function LiveChangeCompanion({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <span className="flex min-w-[12rem] flex-1 items-baseline gap-2 text-[13px] text-muted-foreground">
           <PlatformChip platform={model.platform} />
-          <span className="min-w-0">{preview.subject ?? (decision === 'proposal' ? 'Proposed change' : 'Pending change')}</span>
+          <span className="min-w-0">
+            {preview.subject ?? (decision === 'proposal' ? 'Proposed change' : 'Pending change')}
+          </span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <LiveChangeDecisionPill decision={decision} />
@@ -90,6 +95,7 @@ export function LiveChangeCompanion({
           variants={variants}
           {...(onDecide ? { onDecide } : {})}
           {...(onImplement ? { onImplement } : {})}
+          implementBlocked={implementBlocked}
         />
       ) : null}
     </div>
