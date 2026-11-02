@@ -20,6 +20,7 @@ import {
   restoreBrandPreference,
   revokeBenchSession,
 } from './support/auth';
+import { pinTodayOverview } from './support/overviewLayout';
 import { benchBrowserChannel, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
@@ -1383,6 +1384,7 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     );
 
     context = await browser.newContext({ storageState });
+    await pinTodayOverview(context);
     context.on('request', (request) => {
       const url = new URL(request.url());
       if (url.port === '54321' || url.hostname === '127.0.0.1') {

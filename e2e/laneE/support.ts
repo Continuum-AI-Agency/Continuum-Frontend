@@ -10,6 +10,7 @@ import {
   restoreBrandPreference,
   revokeBenchSession,
 } from '../support/auth';
+import { pinTodayOverview } from '../support/overviewLayout';
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from '../support/prodEnv';
 import {
   auditVisual,
@@ -289,6 +290,7 @@ export async function openAs(
     reducedMotion: options.reducedMotion ? 'reduce' : 'no-preference',
   });
   await seedTheme(context, theme);
+  await pinTodayOverview(context);
   await installVisualProbes(context);
   const guard: GuardLog = { blocked: [], allowedNonGet: [] };
   await installWriteGuard(context, guard);

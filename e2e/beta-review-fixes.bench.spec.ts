@@ -9,6 +9,7 @@ import {
   revokeBenchSession,
 } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
+import { pinTodayOverview } from './support/overviewLayout';
 import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
@@ -198,7 +199,9 @@ async function jainaRunCount(): Promise<number> {
 }
 
 async function memberContext(browser: Browser, member: Member): Promise<BrowserContext> {
-  return browser.newContext({ storageState: member.session.state });
+  const context = await browser.newContext({ storageState: member.session.state });
+  await pinTodayOverview(context);
+  return context;
 }
 
 async function shoot(page: Page, name: string): Promise<void> {

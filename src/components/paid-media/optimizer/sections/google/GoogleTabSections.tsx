@@ -135,6 +135,7 @@ export function GoogleTabSections({
         currency={currency}
         history={history}
         onClose={() => setOpenId(null)}
+        target={target}
         window={range}
       />
     </div>
