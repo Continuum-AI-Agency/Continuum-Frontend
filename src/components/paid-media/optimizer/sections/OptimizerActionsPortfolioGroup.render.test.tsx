@@ -1952,3 +1952,113 @@ describe("a portfolio's money is in the portfolio's own currency", () => {
     expect(container.textContent).toContain('Before → after: $50.00 USD → $65.00 USD');
   });
 });
+
+// G12: the queue opens with its change preview — the cycle's budget moves before → after, the
+// guardrails they are held to, and the action their state allows, on the queue's own paths.
+describe('the change preview at the head of the queue', () => {
+  it("draws the cycle's budget move before → after with its guardrails", () => {
+    renderGroup({ max_change_pct_per_cycle: 0.2, max_daily_apply_minor: 500_000 });
+    const preview = screen.getByTestId('write-preview');
+    expect(within(preview).getByTestId('write-bar').textContent).toBe(
+      'Budget Set$100 USD$130 USD+30%',
+    );
+    const checks = within(preview)
+      .getAllByRole('listitem')
+      .filter((item) => item.hasAttribute('data-check'));
+    expect(checks.map((item) => item.getAttribute('data-state'))).toEqual([
+      'wait',
+      'pass',
+      'pass',
+      'pass',
+    ]);
+    expect(checks[0]?.textContent).toContain('1 move is above it: autopilot would hold it too');
+  });
+
+  it('approves the move through the same RPC as the row, carrying its ad set id', () => {
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve 1 move' }));
+    expect(requestApplyItemsMutate).toHaveBeenCalledTimes(1);
+    const [payload] = requestApplyItemsMutate.mock.calls[0] as [
+      { run_id: string; adset_ids: string[] },
+    ];
+    expect(payload).toEqual({ run_id: RUN_ID, adset_ids: ['as-budget'] });
+  });
+
+  it('once approved, Apply now opens the same confirm, and only the confirm writes', () => {
+    activeReport = executableReport;
+    renderGroup();
+    expect(screen.queryByRole('button', { name: 'Approve 1 move' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply now' }));
+    expect(applyApprovedMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^apply budget moves$/i }));
+    expect(applyApprovedMutate).toHaveBeenCalledTimes(1);
+    const [payload] = applyApprovedMutate.mock.calls[0] as [{ dryRun: boolean }];
+    expect(payload.dryRun).toBe(false);
+  });
+
+  it('holds both actions in observe mode', () => {
+    renderGroup({ apply_mode: 'observe' });
+    const approve = screen.getByRole('button', { name: 'Approve 1 move' }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    expect(screen.getByTestId('write-state').textContent).toContain('Observe mode writes nothing.');
+  });
+
+  it('steps aside while a search narrows the queue', () => {
+    renderGroup();
+    fireEvent.change(screen.getByPlaceholderText('Search name, id, kind, reason'), {
+      target: { value: 'Pause Set' },
+    });
+    expect(screen.queryByTestId('write-preview')).toBeNull();
+  });
+
+  const ARMED = {
+    apply_mode: 'autopilot',
+    autopilot_paused: false,
+    autopilot_scopes: {
+      budget: true,
+      creative_swap: false,
+      audience_change: false,
+      new_audience: false,
+      new_creatives: false,
+    },
+    max_change_pct_per_cycle: 0.2,
+    max_daily_apply_minor: 500_000,
+    next_realloc_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
+    platforms: ['meta'],
+  };
+
+  it('says when an armed autopilot writes again on its own, inside its guardrails', () => {
+    renderGroup(ARMED);
+    expect(screen.getByTestId('write-autopilot-run').textContent).toContain('Queued for');
+    // The move above the 20% cap is the one that waits for a person.
+    expect(screen.getByRole('button', { name: 'Approve 1 move' })).toBeTruthy();
+  });
+
+  it('never says autopilot writes a Google portfolio: those moves stay proposals', () => {
+    renderGroup({ ...ARMED, platforms: ['google_ads'] });
+    expect(screen.queryByTestId('write-autopilot-run')).toBeNull();
+  });
+
+  it('draws a recently applied budget before → after, with its state and its undo', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        entity_id: 'as-budget',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    renderGroup();
+    const row = screen.getByTestId('applied-write');
+    expect(row.textContent).toContain('$50.00 USD$35.00 USD-30%');
+    expect(within(row).getByTestId('action-applied-state').textContent).toBe('Applied');
+    expect(within(row).getByRole('button', { name: 'Revert' })).toBeTruthy();
+  });
+});

@@ -1,9 +1,17 @@
 'use client';
 
-// Idea 3's campaign detail: one campaign's figures against its portfolio CPA goal, its bidding
-// and impression share, and what changed on it, in a sheet kept in ?googleCampaign= so the
-// link opens it again. Read-only: it links to Google Ads and to Jaina, and writes nothing.
+// The campaign page (G11), in a sheet kept in ?googleCampaign= so the link opens it again. It
+// adapts to the campaign's type: a visual header (its type, whether it serves, its budget and
+// portfolio), its figures as tiles, its cost per result day by day against the portfolio goal
+// with what changed on it marked, the Search auctions it lost, and the tabs its type opens on —
+// keywords, search terms and Quality Score for Search; asset groups and channels for
+// Performance Max; channels for the rest. Under them, every figure against its goal, its
+// bidding and what changed on it. Read-only: it links to Google Ads and to Jaina.
+//
+// The day-by-day trend and the type tabs read with the brand's Google customer (`target`); a
+// host that does not hand it one gets the page without them, never a made-up line.
 
+import type { PaidAccountOverview } from '@continuum/contracts';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 import {
@@ -14,7 +22,26 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
+import { cn } from '@/lib/utils';
+import { ChartError, ChartSkeleton } from '../../charts/ChartStates';
+import { TEXT_DISCLOSURE } from '../../components/disclosure';
 import { formatCurrency } from '../../format';
+import { boardPaletteClass } from '../board/palette';
+import {
+  AuctionShareBar,
+  CampaignHeader,
+  CampaignKpiTiles,
+} from '../pages/campaign/CampaignPageParts';
+import { CampaignTrendChart } from '../pages/campaign/CampaignTrendChart';
+import { CampaignTypeTabs } from '../pages/campaign/CampaignTypeTabs';
+import {
+  auctionSlices,
+  campaignKind,
+  campaignKpis,
+  campaignTrend,
+  changeMarks,
+} from '../pages/campaign/campaignPageModel';
+import { useGoogleCampaignDaily } from '../pages/campaign/useGoogleCampaignDaily';
 import { googleAdsCampaignHref, percentLabel } from '../platformCards/platformCardModel';
 import {
   formatConversions,
@@ -22,7 +49,6 @@ import {
   ownResultsLabel,
 } from '../platforms/googleAdsOverviewModel';
 import { cooldownText, lastChangeText } from './BiddingPanel';
-import { statusWords } from './CampaignExplorer';
 import {
   type BiddingView,
   type CampaignView,
@@ -33,6 +59,8 @@ import {
   targetLabel,
 } from './campaignExplorerModel';
 import { BandText, FigureText, Missing } from './GoogleSection';
+import type { GoogleReadTarget } from './googleReads';
+import { type ViewRead, viewRead } from './views/viewParts';
 
 export const CAMPAIGN_PARAM = 'googleCampaign';
 
@@ -64,70 +92,145 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 const MAX_CHANGES = 5;
 
+/** The day-by-day trend, or why it is not drawn: still reading, or the read failed. */
+function CampaignTrendSection({
+  daily,
+  campaign,
+  history,
+  currency,
+  window,
+}: {
+  daily: ViewRead<PaidAccountOverview>;
+  campaign: CampaignView;
+  history: HistoryRead;
+  currency: string | null;
+  window: { since: string; until: string };
+}) {
+  if (daily.status === 'loading') return <ChartSkeleton className="h-40" />;
+  if (daily.status === 'error') {
+    return (
+      <ChartError
+        message={`The campaign's days could not be read: ${daily.message}`}
+        onRetry={daily.retry}
+      />
+    );
+  }
+  return (
+    <CampaignTrendChart
+      currency={currency}
+      marks={changeMarks(history, campaign.id, window)}
+      trend={campaignTrend(daily.data, window, campaign.band.goal)}
+    />
+  );
+}
+
 export function GoogleCampaignDetailBody({
   campaign,
   bidding,
   history,
   currency,
   window,
+  daily = null,
+  target = null,
 }: {
   campaign: CampaignView;
   bidding: BiddingView | null;
   history: HistoryRead;
   currency: string | null;
   window: { since: string; until: string };
+  /** The campaign day by day (useGoogleCampaignDaily); null when this host does not read it. */
+  daily?: ViewRead<PaidAccountOverview> | null;
+  /** The brand's Google customer, for the reads the type tabs make; null leaves them out. */
+  target?: GoogleReadTarget | null;
 }) {
+  const kind = campaignKind(campaign.channelType);
   const changes =
     history.status === 'ready'
       ? history.history.changes.filter((change) => change.campaignId === campaign.id)
       : [];
   const share = (value: number) => percentLabel(value);
+  const auction = kind === 'search' || kind === 'pmax' ? auctionSlices(campaign) : null;
   return (
-    <div className="space-y-4 px-4 pb-6 text-sm" data-testid="google-campaign-detail">
-      <dl data-testid="google-campaign-figures">
-        <Row label={`Spend · ${dayLabel(window.since)} – ${dayLabel(window.until)}`}>
-          {formatCurrency(campaign.spend, currency)}
-        </Row>
-        <Row label="Conversions">
-          {campaign.conversions == null
-            ? (ownResultsLabel(campaign.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
-            : formatConversions(campaign.conversions)}
-        </Row>
-        <Row label="Cost per conversion">
-          {campaign.cost != null ? (
-            formatCurrency(campaign.cost, currency)
-          ) : (
-            <Missing
-              reason={
-                campaign.conversions == null
-                  ? NO_SINGLE_RESULT
-                  : 'No conversion in the window to price'
-              }
+    <div
+      className={cn('space-y-5 px-4 pb-6 text-sm', boardPaletteClass)}
+      data-kind={kind}
+      data-testid="google-campaign-detail"
+    >
+      <CampaignHeader campaign={campaign} currency={currency} />
+      <CampaignKpiTiles tiles={campaignKpis(campaign, currency)} />
+      {daily ? (
+        <CampaignTrendSection
+          campaign={campaign}
+          currency={currency}
+          daily={daily}
+          history={history}
+          window={window}
+        />
+      ) : null}
+      {auction ? <AuctionShareBar slices={auction} /> : null}
+      {target ? (
+        <CampaignTypeTabs
+          campaignId={campaign.id}
+          currency={currency}
+          kind={kind}
+          target={target}
+          window={window}
+        />
+      ) : null}
+
+      <details className="group">
+        <summary className={TEXT_DISCLOSURE}>
+          <span className="font-medium text-foreground">Every figure</span> · against the goal,{' '}
+          {dayLabel(window.since)} – {dayLabel(window.until)}
+        </summary>
+        <dl className="mt-2" data-testid="google-campaign-figures">
+          <Row label={`Spend · ${dayLabel(window.since)} – ${dayLabel(window.until)}`}>
+            {formatCurrency(campaign.spend, currency)}
+          </Row>
+          <Row label="Conversions">
+            {campaign.conversions == null
+              ? (ownResultsLabel(campaign.byResult) ?? <Missing reason={NO_SINGLE_RESULT} />)
+              : formatConversions(campaign.conversions)}
+          </Row>
+          <Row label="Cost per conversion">
+            {campaign.cost != null ? (
+              formatCurrency(campaign.cost, currency)
+            ) : (
+              <Missing
+                reason={
+                  campaign.conversions == null
+                    ? NO_SINGLE_RESULT
+                    : 'No conversion in the window to price'
+                }
+              />
+            )}
+          </Row>
+          <Row label="Portfolio CPA goal">
+            {campaign.band.goal != null ? (
+              <>
+                {formatCurrency(campaign.band.goal, currency)} <BandText band={campaign.band} />
+              </>
+            ) : (
+              <BandText band={campaign.band} />
+            )}
+          </Row>
+          <Row label="Budget per day">
+            <FigureText
+              figure={campaign.budgetPerDay}
+              format={(v) => formatCurrency(v, currency)}
             />
-          )}
-        </Row>
-        <Row label="Portfolio CPA goal">
-          {campaign.band.goal != null ? (
-            <>
-              {formatCurrency(campaign.band.goal, currency)} <BandText band={campaign.band} />
-            </>
-          ) : (
-            <BandText band={campaign.band} />
-          )}
-        </Row>
-        <Row label="Budget per day">
-          <FigureText figure={campaign.budgetPerDay} format={(v) => formatCurrency(v, currency)} />
-        </Row>
-        <Row label="Search impression share">
-          <FigureText figure={campaign.impressionShare} format={share} />
-        </Row>
-        <Row label="Lost to budget">
-          <FigureText figure={campaign.budgetLost} format={share} />
-        </Row>
-        <Row label="Lost to rank">
-          <FigureText figure={campaign.rankLost} format={share} />
-        </Row>
-      </dl>
+          </Row>
+          <Row label="Search impression share">
+            <FigureText figure={campaign.impressionShare} format={share} />
+          </Row>
+          <Row label="Lost to budget">
+            <FigureText figure={campaign.budgetLost} format={share} />
+          </Row>
+          <Row label="Lost to rank">
+            <FigureText figure={campaign.rankLost} format={share} />
+          </Row>
+        </dl>
+      </details>
 
       {bidding ? (
         <section className="space-y-1" data-testid="google-campaign-bidding">
@@ -217,6 +320,7 @@ export function GoogleCampaignDetail({
   currency,
   window,
   onClose,
+  target = null,
 }: {
   campaignId: string | null;
   campaign: CampaignView | null;
@@ -225,15 +329,16 @@ export function GoogleCampaignDetail({
   currency: string | null;
   window: { since: string; until: string };
   onClose: () => void;
+  /** The brand's Google customer. With it the page reads the campaign day by day and its
+   *  type's tabs; without it, it shows what the host already read. */
+  target?: GoogleReadTarget | null;
 }) {
+  const dailyQuery = useGoogleCampaignDaily(target, campaign?.id ?? null, window);
+  const daily = target && campaign ? viewRead(dailyQuery) : null;
+  // The header under it names the type, the status and the portfolio; the description says
+  // the window every figure on the page covers.
   const subtitle = campaign
-    ? [
-        campaign.typeLabel,
-        statusWords(campaign.status),
-        campaign.goal?.portfolioName ?? 'in no portfolio',
-      ]
-        .filter(Boolean)
-        .join(' · ')
+    ? `${dayLabel(window.since)} – ${dayLabel(window.until)} · against its portfolio's CPA goal`
     : null;
   return (
     <Sheet onOpenChange={(open) => (open ? undefined : onClose())} open={campaignId != null}>
@@ -249,7 +354,9 @@ export function GoogleCampaignDetail({
             bidding={bidding}
             campaign={campaign}
             currency={currency}
+            daily={daily}
             history={history}
+            target={target}
             window={window}
           />
         ) : null}

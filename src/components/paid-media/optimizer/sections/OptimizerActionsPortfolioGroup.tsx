@@ -121,9 +121,15 @@ import {
 } from './crossPlatformMove/queuedMoveModel';
 import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
 import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
-import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { AppliedWriteRow, BudgetWritePreview } from './pages/actions/WritePreview';
+import {
+  autopilotNextRun,
+  budgetWriteState,
+  guardrailChecks,
+} from './pages/actions/writePreviewModel';
 import { cardActionsOf, cardRecommendationId } from './platformCards/platformCardActionModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
 import { portfolioPlanPerDay } from './portfolioPlan';
 import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 import { QueueTraySkeleton } from './QueueTraySkeleton';
@@ -1241,6 +1247,18 @@ export function OptimizerActionsPortfolioGroup({
   const waitingCount = queueWaitingCount(rows, moveRows, platformCards.length);
   const sentence = queueSentence(waitingCount, summary, currency);
 
+  // The change preview (G12): the cycle's budget moves before → after, the guardrails they are
+  // held to, and the one action their state allows, on the queue's own approve and apply paths.
+  const budgetRows = rows.filter((row): row is BudgetQueueRow => row.route === 'budget');
+  const writeState = budgetWriteState(
+    budgetRows.map((row) => ({ key: row.key, approved: row.approved })),
+  );
+  const writeChecks = guardrailChecks({
+    portfolio,
+    moves: budgetRows.map((row) => row.item),
+    currency,
+  });
+
   return (
     <section className="@container space-y-3" data-testid="queue-tray">
       {/* The tray's one header line: whose queue, how much is waiting, how current it is. */}
@@ -1347,6 +1365,28 @@ export function OptimizerActionsPortfolioGroup({
         <p className="text-muted-foreground text-xs" role="status">
           {executeNote}
         </p>
+      ) : null}
+
+      {!searching ? (
+        <BudgetWritePreview
+          autopilotRun={autopilotNextRun(portfolio, writeChecks)}
+          blockedReason={writesBlocked ? 'Observe mode writes nothing.' : null}
+          busy={busyApprove || applyApproved.isPending}
+          checks={writeChecks}
+          currency={currency}
+          moves={budgetRows.map((row) => ({
+            key: row.key,
+            entityId: row.adsetId,
+            name: row.name,
+            before: row.item.current_budget,
+            after: row.item.final_budget,
+          }))}
+          onApply={() => setConfirm('budget')}
+          onApprove={runApprove}
+          platforms={portfolioPlatforms(portfolio.platforms)}
+          state={writeState}
+          writesBlocked={writesBlocked}
+        />
       ) : null}
 
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
@@ -1559,7 +1599,7 @@ function PortfolioRecentActions({
               move={item.move}
             />
           ) : (
-            <ActionRow
+            <AppliedWriteRow
               brandId={brandId}
               currency={currency}
               entityNames={entityNames}

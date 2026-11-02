@@ -6,6 +6,9 @@
 // standing "ad-level is preview" banner is gone: ad-level rows now carry a per-row danger
 // tooltip inside the queue, so the limit shows exactly where it applies.
 //
+// Each group opens with its change preview (G12, pages/actions): the cycle's budget moves before
+// → after, the guardrails they are held to, and the action their state allows.
+//
 // The list is the selected account's portfolios plus the brand's on Google and TikTok (the page
 // shell merges them). Each portfolio's pending platform cards (optimizer_get_platform_cards)
 // ride into its group, where they render with their own control, as on the platform's tab.
@@ -16,10 +19,12 @@ import { useMemo } from 'react';
 
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { nextCycleLabel, soonestNextCycle } from '../format';
 import { hasPendingWork } from '../reportModel';
 import * as typeScale from '../typeScale';
 import { type PlatformCardsState, useOptimizerPlatformCards } from '../useOptimizerData';
+import { boardPaletteClass } from './board/palette';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { PlatformChips } from './platforms/PlatformChip';
 import { portfolioPlatforms } from './platforms/platformTabsModel';
@@ -98,7 +103,8 @@ export function OptimizerActions({
   }
 
   return (
-    <div className="space-y-10">
+    // The board's chart colours reach every change preview on the page from here.
+    <div className={cn('space-y-10', boardPaletteClass)} data-testid="actions-page">
       {portfoliosWithPending.map((portfolio) => (
         <div key={portfolio.id} data-testid="actions-portfolio">
           <OptimizerActionsPortfolioGroup
