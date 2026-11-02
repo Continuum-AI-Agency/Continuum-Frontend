@@ -352,6 +352,11 @@ type JainaChatSurfaceProps = {
     opened: boolean;
     /** Every proposal the thread made for this campaign, for the canvas's version line. */
     versions?: VersionLine | null;
+    /**
+     * Answers the preview's pending approval with the chat card's own decision. Absent when the
+     * thread holds no approval to answer (a decided edit, a proposal, a loaded thread).
+     */
+    onDecide?: (decision: 'approve' | 'deny') => void;
   }) => void;
   /**
    * A host with a companion canvas. Called when a turn changes several campaigns at once (a
@@ -2888,13 +2893,22 @@ export function JainaChatSurface({
       Boolean(message && !historyMessageIds.has(message.id));
     if (fresh) openedLiveChangeRef.current = preview.partId;
     const campaignId = campaignIdsOfPreview(preview)[0];
+    const pendingApproval =
+      decision === 'pending'
+        ? messages
+            .flatMap((entry) => entry.pendingToolApprovals ?? [])
+            .find((approval) => approval.approvalId === preview.approvalId)
+        : undefined;
     onLiveChangeFocus({
       preview,
       decision,
       opened: fresh,
       versions: campaignId ? liveChangeVersionsOf(messages, campaignId) : null,
+      ...(pendingApproval
+        ? { onDecide: (answer) => handleApprovalDecision(pendingApproval, answer) }
+        : {}),
     });
-  }, [historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
+  }, [handleApprovalDecision, historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
 
   // A turn that changes several campaigns opens the canvas on its portfolio, once, live.
   const portfolioFocusOf = React.useCallback(

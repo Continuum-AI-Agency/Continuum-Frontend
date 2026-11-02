@@ -3,6 +3,7 @@
 // component only lays them out. The approval itself stays on the chat card.
 
 import {
+  canConfirmLiveChange,
   formatMoney,
   isProposalApprovalId,
   type LiveChangeNode,
@@ -143,3 +144,31 @@ export const liveChangeByPartIdOf = (
   }
   return null;
 };
+
+export type LiveChangeConfirmBar =
+  | { kind: 'confirm' }
+  | { kind: 'implement' }
+  | { kind: 'none' };
+
+/**
+ * What the canvas offers to do with the change it shows. A pending gated edit is confirmed or
+ * declined with the approval card's own decision; a proposal made in the answer has no approval
+ * yet, so the canvas offers to ask Jaina to run its changes through the approval cards. A
+ * decided edit offers nothing.
+ */
+export const liveChangeConfirmBarOf = (params: {
+  preview: Pick<LiveChangePreviewPayload, 'origin'>;
+  decision: LiveChangeDecision;
+  canDecide: boolean;
+  canImplement: boolean;
+}): LiveChangeConfirmBar => {
+  if (params.decision === 'pending' && params.canDecide && canConfirmLiveChange(params.preview)) {
+    return { kind: 'confirm' };
+  }
+  if (params.decision === 'proposal' && params.canImplement) return { kind: 'implement' };
+  return { kind: 'none' };
+};
+
+/** The turn the canvas sends to implement a proposal: through the approval cards, nothing else. */
+export const LIVE_CHANGE_IMPLEMENT_TURN =
+  'Implement the changes you proposed. Run each one through its approval card so I can confirm it; do not apply anything without one. Answer in the language of this conversation.';

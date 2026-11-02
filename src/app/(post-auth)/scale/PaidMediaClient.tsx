@@ -46,7 +46,7 @@ import {
   buildCampaignCreativeRequest,
   type CampaignCreativeRequest,
 } from '@/lib/campaign-canvas/creativeGeneration';
-import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
+import { LIVE_CHANGE_IMPLEMENT_TURN, type LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import type { PortfolioViewModel } from '@/lib/campaign-canvas/portfolio';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
@@ -455,6 +455,7 @@ export default function PaidMediaClientPage({
     preview: LiveChangePreviewPayload;
     decision: LiveChangeDecision;
     versions: VersionLine | null;
+    onDecide: ((decision: 'approve' | 'deny') => void) | null;
   } | null>(null);
   // The scaffold's versions the thread drew, for the companion's version line.
   const [companionScaffoldVersions, setCompanionScaffoldVersions] =
@@ -653,11 +654,13 @@ export default function PaidMediaClientPage({
       decision: LiveChangeDecision;
       opened: boolean;
       versions?: VersionLine | null;
+      onDecide?: (decision: 'approve' | 'deny') => void;
     }) => {
       const next = {
         preview: focus.preview,
         decision: focus.decision,
         versions: focus.versions ?? null,
+        onDecide: focus.onDecide ?? null,
       };
       if (focus.opened) {
         setCompanionLiveChange(next);
@@ -1160,6 +1163,10 @@ export default function PaidMediaClientPage({
                               preview={companionLiveChange.preview}
                               decision={companionLiveChange.decision}
                               versions={companionLiveChange.versions}
+                              {...(companionLiveChange.onDecide
+                                ? { onDecide: companionLiveChange.onDecide }
+                                : {})}
+                              onImplement={() => sendCompanionTurn(LIVE_CHANGE_IMPLEMENT_TURN)}
                             />
                           ) : (
                             <ScaleCompanionCanvas

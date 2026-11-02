@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { ChangeProjection, ProjectionFigures } from '@continuum/contracts';
-import { liveChangeDecisionOf, liveChangeValueText } from './liveChange';
+import { liveChangeConfirmBarOf, liveChangeDecisionOf, liveChangeValueText } from './liveChange';
 import {
   projectionBarsOf,
   projectionHeadlineOf,
@@ -117,5 +117,20 @@ describe('proposal previews in the existing canvas helpers', () => {
     expect(liveChangeValueText({ field: 'results', before: 70, after: 98 }, 'after', 'MXN')).toBe(
       '98',
     );
+  });
+});
+
+describe('liveChangeConfirmBarOf', () => {
+  const base = { canDecide: true, canImplement: true };
+  it('offers the approval card decision on a pending gated edit', () => {
+    expect(liveChangeConfirmBarOf({ ...base, preview: {}, decision: 'pending' })).toEqual({ kind: 'confirm' });
+  });
+  it('offers nothing to confirm when the chat holds no approval to answer', () => {
+    expect(liveChangeConfirmBarOf({ ...base, canDecide: false, preview: {}, decision: 'pending' })).toEqual({ kind: 'none' });
+  });
+  it('offers to implement a proposal, and nothing once decided', () => {
+    expect(liveChangeConfirmBarOf({ ...base, preview: { origin: 'proposal' }, decision: 'proposal' })).toEqual({ kind: 'implement' });
+    expect(liveChangeConfirmBarOf({ ...base, preview: {}, decision: 'approved' })).toEqual({ kind: 'none' });
+    expect(liveChangeConfirmBarOf({ ...base, preview: {}, decision: 'denied' })).toEqual({ kind: 'none' });
   });
 });
