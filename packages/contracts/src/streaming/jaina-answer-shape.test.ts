@@ -150,28 +150,28 @@ describe('answerShapeOf — non-template answers', () => {
       codes: ['answer_missing'],
     },
     {
-      name: 'a multi-sentence executive is allowed: length follows the question',
+      name: 'a three-sentence executive (es)',
       report: {
         executive_summary: 'El CPA subió. El gasto creció. Las compras no.',
         blocks: [narrative('why', GOOD_JUSTIFICATION_ES)],
       },
-      codes: [],
+      codes: ['executive_not_one_sentence'],
     },
     {
-      name: 'an answer with no prose under it is allowed',
+      name: 'no justification at all',
       report: { executive_summary: 'Spend rose 12% this week.', blocks: [] },
-      codes: [],
+      codes: ['justification_missing'],
     },
     {
-      name: 'a narrative that only repeats the executive is allowed',
+      name: 'a narrative that only repeats the executive is no justification',
       report: {
         executive_summary: 'Spend rose 12% this week.',
         blocks: [narrative('block_prose', 'Spend rose 12% this week.')],
       },
-      codes: [],
+      codes: ['justification_missing'],
     },
     {
-      name: 'a short body is allowed',
+      name: 'a justification shorter than the floor',
       report: {
         executive_summary: 'Spend rose 12% this week.',
         blocks: [
@@ -181,10 +181,10 @@ describe('answerShapeOf — non-template answers', () => {
           ),
         ],
       },
-      codes: [],
+      codes: ['justification_not_longer'],
     },
     {
-      name: 'a body in one long sentence is allowed',
+      name: 'a long justification in one sentence',
       report: {
         executive_summary: 'Spend rose.',
         blocks: [
@@ -194,10 +194,10 @@ describe('answerShapeOf — non-template answers', () => {
           ),
         ],
       },
-      codes: [],
+      codes: ['justification_not_longer'],
     },
     {
-      name: 'a body with no window and no source cue is allowed (the data_scope frame states them)',
+      name: 'no window and no source cue',
       report: {
         executive_summary: 'El costo por compra subió.',
         blocks: [
@@ -208,7 +208,7 @@ describe('answerShapeOf — non-template answers', () => {
           ),
         ],
       },
-      codes: [],
+      codes: ['justification_no_procedure'],
     },
     {
       name: 'a data_scope block states the window',
@@ -226,7 +226,7 @@ describe('answerShapeOf — non-template answers', () => {
       codes: [],
     },
     {
-      name: 'a body that relates no two metrics is allowed',
+      name: 'no sentence relates two metrics',
       report: {
         executive_summary: 'Spend rose this week.',
         blocks: [
@@ -238,7 +238,7 @@ describe('answerShapeOf — non-template answers', () => {
           ),
         ],
       },
-      codes: [],
+      codes: ['justification_no_relation'],
     },
     {
       name: 'insight rationale and impact count as justification',
@@ -301,7 +301,7 @@ describe('answerShapeOf — non-template answers', () => {
 
   it('carries no client prose in a violation message', () => {
     const violations = answerShapeOf({
-      executive_summary: 'SECRET campaign cost rose −12% this month.',
+      executive_summary: 'SECRET campaign rose. SECRET again.',
       blocks: [],
     });
     expect(violations.length).toBeGreaterThan(0);
@@ -310,8 +310,52 @@ describe('answerShapeOf — non-template answers', () => {
 
   it('declares every code it can emit', () => {
     expect([...ANSWER_SHAPE_CODES].sort()).toEqual(
-      ['answer_missing', 'sentence_figure_unjustified', 'sentence_direction_contradicts'].sort(),
+      [
+        'answer_missing',
+        'executive_not_one_sentence',
+        'justification_missing',
+        'justification_not_longer',
+        'justification_no_procedure',
+        'justification_no_relation',
+        'sentence_figure_unjustified',
+        'sentence_direction_contradicts',
+        'format_requested_not_delivered',
+      ].sort(),
     );
+  });
+
+  it('holds a short ask to its sentence: no justification floor, no relation rule', () => {
+    const report = {
+      executive_summary: 'We spent 1,200 MXN yesterday, 8% under the day before.',
+      blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],
+    };
+    const codes = (query: string) =>
+      answerShapeOf(report, { query }).map((violation) => violation.code);
+    expect(codes('What did we spend yesterday?')).toContain('justification_missing');
+    expect(codes('Rápido, en una línea: ¿cuánto gastamos ayer?')).toEqual([]);
+  });
+
+  it('names a requested format the answer does not carry, only when the ask is given', () => {
+    const report = {
+      executive_summary: 'Spend was 1,200 MXN over the last 7 days.',
+      blocks: [{ block_id: 'scope', category: 'data_scope', dates: 'x', source: 'api' }],
+    };
+    const codes = (ask?: { query: string }) =>
+      answerShapeOf(report, ask).map((violation) => violation.code);
+    expect(codes()).not.toContain('format_requested_not_delivered');
+    expect(codes({ query: 'What did we spend last week?' })).not.toContain(
+      'format_requested_not_delivered',
+    );
+    expect(codes({ query: 'Put spend by campaign in a table' })).toContain(
+      'format_requested_not_delivered',
+    );
+    const withTable = {
+      ...report,
+      blocks: [...report.blocks, { block_id: 't', category: 'data_table', rows: [{ a: 1 }] }],
+    };
+    expect(
+      answerShapeOf(withTable, { query: 'Put spend by campaign in a table' }).map((v) => v.code),
+    ).not.toContain('format_requested_not_delivered');
   });
 });
 
@@ -451,6 +495,12 @@ describe('answerShapeOf — template answers', () => {
     expect(texts.justification).toContain('Gastar más: $300 MXN.');
   });
 
+  it('a two-sentence template sentence is flagged', () => {
+    expect(
+      codesOf(templated(rankingBlock({ sentence: 'A es la mejor. Cuesta {cpr_1} por compra.' }))),
+    ).toEqual(['executive_not_one_sentence']);
+  });
+
   it('a sentence figure no section carries is unjustified', () => {
     const block = rankingBlock({
       sentence: 'A es la que mejor rinde con {cpr_1} y {results_1} compras.',
@@ -465,6 +515,41 @@ describe('answerShapeOf — template answers', () => {
     const violations = answerShapeOf(templated(block));
     expect(violations.map((v) => v.code)).toEqual(['sentence_figure_unjustified']);
     expect(violations[0]?.message).toContain('results_1');
+  });
+
+  it('a measured section with no figure has no procedure', () => {
+    expect(
+      codesOf(templated(rankingBlock({ measuredText: 'Gasto y compras de todas las campañas.' }))),
+    ).toEqual(['justification_no_procedure']);
+  });
+
+  it('with no derived figure and no two-metric sentence there is no relation', () => {
+    const block = rankingBlock({
+      foundText: 'A cuesta {cpr_1} y B cuesta {cpr_2}; la cuenta queda en {cpr_avg}.',
+      figures: [
+        fig('cpr_1', 248.73),
+        fig('cpr_2', 356.32),
+        fig('cpr_avg', 300),
+        fig('campaigns_read', 2, 'count'),
+      ],
+    });
+    // "Gasto y compras" in the measured section names two metrics — take it out too.
+    const noRelation = {
+      ...block,
+      justification: {
+        sections: block.justification.sections.map((section) =>
+          section.kind === 'measured'
+            ? { ...section, text: 'Leímos {campaigns_read} campañas este mes.' }
+            : section.kind === 'why'
+              ? {
+                  ...section,
+                  text: 'Solo cuentan las campañas con al menos cinco resultados en el mes.',
+                }
+              : section,
+        ),
+      },
+    };
+    expect(codesOf(templated(noRelation))).toEqual(['justification_no_relation']);
   });
 
   it('"mejor" citing the worst ranked figure contradicts the ranking', () => {

@@ -1,18 +1,15 @@
 /**
- * The TEXT shape of a Jaina answer, as a function: an answer exists, and the words around a
- * figure do not fight it. The figures carry their own gates (`groundingViolationsOf`,
- * `validateTemplateBlock`); this checks that the reader got an answer, that a template
- * sentence's figure is shown somewhere, that a direction word agrees with the sign of the
- * figure it describes, and that a format the ask named was delivered.
- *
- * It does NOT dictate how long the answer is or how it is organised. Until 2026-11 it demanded
- * one executive sentence over a justification longer than the answer, and every answer took
- * that shape whatever the question asked; length and structure follow the question now.
+ * The TEXT shape of a Jaina answer, as a function: one executive sentence that answers the
+ * question, and a justification under it that is longer than the answer, says how it was
+ * measured, and relates at least two metrics. The figures carry their own gates
+ * (`groundingViolationsOf`, `validateTemplateBlock`); nothing checked the words around them,
+ * so an answer could ship three paragraphs as its "executive", or a one-line justification
+ * that never said which window it read, and every gate stayed green.
  *
  * What the reader sees is what is graded. With an `answer_template` block, the reader sees
  * the block's `executive.sentence` (refs rendered) and its sections — the report's
  * `executive_summary` is hidden behind it — so that sentence is the executive. Without one,
- * the executive is `executive_summary` and the rest is the prose under it.
+ * the executive is `executive_summary` and the justification is the prose under it.
  *
  * Pure and deterministic, no model: the Backend records the verdict as run events and the
  * golden grader turns it into soft failures, from the same function. Violation messages
@@ -20,6 +17,7 @@
  * them to a durable table.
  */
 
+import { askShapeOf, formatDelivered } from './jaina-ask-shape';
 import { stripProseMarks } from './jaina-report';
 import {
   figureRefsIn,
@@ -30,8 +28,17 @@ import {
 
 export const ANSWER_SHAPE_CODES = [
   'answer_missing',
+  'executive_not_one_sentence',
+  'justification_missing',
+  'justification_not_longer',
+  'justification_no_procedure',
+  'justification_no_relation',
   'sentence_figure_unjustified',
   'sentence_direction_contradicts',
+  // The ask named a format — a list, steps, a table, a comparison, a chart — and the answer
+  // carries no block in it (`askShapeOf`, `formatDelivered` in jaina-ask-shape.ts). The
+  // Backend repairs it from the turn's datasets when it can and records it either way.
+  'format_requested_not_delivered',
 ] as const;
 export type AnswerShapeCode = (typeof ANSWER_SHAPE_CODES)[number];
 
@@ -41,6 +48,9 @@ export type AnswerShapeViolation = {
   block_id: string | null;
   message: string;
 };
+
+/** Justification floor: longer than twice the answer, and never under this many words. */
+export const JUSTIFICATION_MIN_WORDS = 30;
 
 // ---------------------------------------------------------------------------
 // Loose readers — the grader hands in transcript JSON, the Backend a parsed report
@@ -226,6 +236,69 @@ export function metricsNamedIn(text: string): string[] {
   }
   return [...firstAt.entries()].sort((a, b) => a[1] - b[1]).map(([metric]) => metric);
 }
+
+// ---------------------------------------------------------------------------
+// Procedure cues — the window it read, and where the numbers came from
+// ---------------------------------------------------------------------------
+
+const WINDOW_PATTERN = wordsPattern([
+  '(?:last|past|previous) \\d+ days',
+  '[uú]ltimos \\d+ d[ií]as',
+  '(?:this|last|previous|prior) (?:week|month|year|quarter)',
+  'week before',
+  'month to date',
+  'este (?:mes|año|trimestre)',
+  'esta semana',
+  'semana (?:pasada|anterior)',
+  'mes (?:pasado|anterior)',
+  'lo que va del mes',
+  'yesterday',
+  'ayer',
+  'today',
+  'hoy',
+  'last_\\d+d',
+  'this_month',
+  'last_month',
+  '\\d{4}-\\d{2}-\\d{2}',
+  '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.? \\d{1,2}',
+  '\\d{1,2} de (?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)',
+  'del \\d{1,2} al \\d{1,2}',
+]);
+
+const WINDOW_MARK = /\[window:/iu;
+
+const SOURCE_PATTERN = wordsPattern([
+  'seg[uú]n',
+  'de acuerdo con',
+  'meta ads',
+  '(?:de|en|from|in|on) meta',
+  'ads manager',
+  'administrador de anuncios',
+  'api',
+  'le[ií]mos',
+  'leemos',
+  'medimos',
+  'medid[oa]s?',
+  'calculad[oa]s?',
+  'calculamos',
+  'calculated',
+  'computed',
+  'we (?:read|measured|pulled|compared)',
+  'read from',
+  'measured',
+  'dividid[oa]s?',
+  'divided',
+  'sumamos',
+  'summed',
+  'sum of',
+  'suma de',
+  'reported by',
+  'reportad[oa]s? por',
+  'fuente',
+  'source',
+  'data from',
+  'datos de',
+]);
 
 // ---------------------------------------------------------------------------
 // Direction words — what the sentence claims moved, and which way
@@ -587,7 +660,7 @@ const proseDirectionContradicts = (executive: string): boolean => {
  * Every way the answer's text misses its shape. Empty is a well-shaped answer. Messages
  * carry counts and figure ids, never the answer's words.
  */
-export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
+export function answerShapeOf(report: unknown, ask?: { query: string }): AnswerShapeViolation[] {
   const rec = recordOf(report);
   const blocks = arrayOf(rec.blocks);
   const texts = answerTextsOf(report);
@@ -607,6 +680,74 @@ export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
         : 'The answer is a placeholder, not an answer.',
     );
   }
+  const executiveSentences = answered ? splitSentences(texts.executive) : [];
+  if (answered && executiveSentences.length > 1) {
+    add(
+      'executive_not_one_sentence',
+      `The executive answer runs to ${executiveSentences.length} sentences; it is one.`,
+    );
+  }
+
+  // A short ask ("rápido", "en una línea", "one line, no caveats") is answered by the sentence:
+  // its figure, window and comparison. The justification's floor and its relation are the
+  // standard card's rules, never a short answer's (Ramiro, 2026-10-13).
+  const asked = ask ? askShapeOf(ask.query) : null;
+  const brief = asked?.format === 'short';
+  const justificationText = texts.justification.join('\n\n');
+  const justificationSentences = texts.justification.flatMap(splitSentences);
+  const justificationWords = texts.justification.reduce((sum, text) => sum + wordCount(text), 0);
+
+  if (justificationWords === 0) {
+    if (!brief) add('justification_missing', 'No justification follows the answer.');
+  } else if (!brief) {
+    const executiveWords = answered ? wordCount(texts.executive) : 0;
+    const floor = Math.max(2 * executiveWords, JUSTIFICATION_MIN_WORDS);
+    if (justificationWords <= floor || justificationSentences.length < 2) {
+      add(
+        'justification_not_longer',
+        `The justification has ${justificationWords} words in ${justificationSentences.length} sentences; it needs more than ${floor} words in at least 2.`,
+      );
+    }
+
+    if (template) {
+      const figures = figuresOf(template);
+      const sections = sectionsOf(template);
+      const measured = sections.find((section) => section.kind === 'measured');
+      if (!measured || sectionFigureIds(measured).size === 0) {
+        add(
+          'justification_no_procedure',
+          'The "measured" section cites no figure, so the reader cannot see what was read.',
+        );
+      }
+      const cited = new Set(sections.flatMap((section) => [...sectionFigureIds(section)]));
+      const derived = figures.some((figure) => cited.has(figure.id) && figure.derivation !== null);
+      const related = justificationSentences.some(
+        (sentence) => metricsNamedIn(sentence).length >= 2,
+      );
+      if (!derived && !related) {
+        add(
+          'justification_no_relation',
+          'No section cites a derived figure and no sentence relates two metrics.',
+        );
+      }
+    } else {
+      const windowStated =
+        blocks.some((block) => recordOf(block).category === 'data_scope') ||
+        WINDOW_MARK.test(`${texts.executive}\n${justificationText}`) ||
+        WINDOW_PATTERN.test(`${texts.executive}\n${justificationText}`);
+      const sourced = SOURCE_PATTERN.test(justificationText);
+      if (!windowStated && !sourced) {
+        add(
+          'justification_no_procedure',
+          'The justification states no window and no source or derivation.',
+        );
+      }
+      if (!justificationSentences.some((sentence) => metricsNamedIn(sentence).length >= 2)) {
+        add('justification_no_relation', 'No justification sentence relates two metrics.');
+      }
+    }
+  }
+
   if (template && answered) {
     const sentence = stringOf(recordOf(template.executive).sentence);
     const figures = figuresOf(template);
@@ -632,6 +773,16 @@ export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
       'sentence_direction_contradicts',
       'A direction word in the answer disagrees with the sign of the change it states.',
     );
+  }
+  if (asked) {
+    const format = asked.format;
+    if (!formatDelivered(report, format)) {
+      out.push({
+        code: 'format_requested_not_delivered',
+        block_id: null,
+        message: `The ask requested a ${format} and the answer carries none.`,
+      });
+    }
   }
   return out;
 }

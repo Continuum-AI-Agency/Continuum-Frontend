@@ -168,20 +168,6 @@ export const JAINA_PLAN_FORMATS = [
 ] as const;
 
 /**
- * The blocks the planner may choose to show an answer (the Prism catalogue the evidence can fill:
- * headline figures, entities side by side, a shape over time, ranked findings, a before/after).
- * The model picks them by what the question needs; code only checks their figures come from cells.
- */
-export const JAINA_PLAN_BLOCKS = [
-  'metric_grid',
-  'data_table',
-  'chart',
-  'insight_list',
-  'comparison',
-] as const;
-export type JainaPlanBlock = (typeof JAINA_PLAN_BLOCKS)[number];
-
-/**
  * The question plan the planner model returns (§3.2): what the question is and asks for, read
  * from the last question together with the conversation. Flat on purpose: Gemini cannot FILL a
  * union in a structured-output schema (harness playbook, trap catalog), so every field is a
@@ -211,12 +197,6 @@ export const jainaQuestionPlanSchema = z.object({
     )
     .optional(),
   format: z.enum(JAINA_PLAN_FORMATS),
-  /**
-   * The blocks that show this answer, chosen by what the question needs (a table to set entities
-   * side by side, a chart for a shape over time, ranked findings for priorities). Absent or empty:
-   * the response kind's own blocks. Never decides depth, which is the asks'.
-   */
-  blocks: z.array(z.enum(JAINA_PLAN_BLOCKS)).optional(),
   /** The language of the last question. */
   language: z.enum(['es', 'en']),
   /** Long when the answer must read several layers; Jaina says so before it starts (§5.6). */
