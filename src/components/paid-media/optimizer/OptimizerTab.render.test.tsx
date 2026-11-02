@@ -116,6 +116,9 @@ mock.module('./sections/PortfolioDetailWorkspace', () => ({
 mock.module('./sections/OptimizerPortfolioBrowser', () => ({
   OptimizerPortfolioBrowser: stub('browser-section'),
 }));
+mock.module('./dashboard/EasyfitDashboard', () => ({
+  EasyfitDashboard: stub('easyfit-dashboard-section'),
+}));
 mock.module('@/components/settings/account/OptimizerNotificationsSection', () => ({
   OptimizerNotificationsSection: stub('notifications-section'),
 }));
@@ -489,5 +492,30 @@ describe('OptimizerTab opened on a Google account', () => {
   it('leaves a Meta account on the tab the URL names', () => {
     renderTab();
     expect(setPlatform).not.toHaveBeenCalledWith('google_ads');
+  });
+});
+
+// The Easy Fit sign-ups dashboard is one brand's module: the tab exists only on that brand,
+// and a `dashboard` link opened on any other brand lands on the Overview, never a blank tab.
+describe('OptimizerTab Dashboard tab gating', () => {
+  const EASYFIT = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+  const renderFor = (brandId: string) =>
+    render(<OptimizerTab adAccountId="act_1" brandId={brandId} platform="meta" />);
+
+  it('offers the Dashboard tab on the Easy Fit brand and renders it when selected', () => {
+    view = 'dashboard';
+    renderFor(EASYFIT);
+
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toBeTruthy();
+    expect(screen.getByTestId('easyfit-dashboard-section')).toBeTruthy();
+  });
+
+  it('has no Dashboard tab on any other brand, and a dashboard link falls back to the Overview', () => {
+    view = 'dashboard';
+    renderFor('brand-1');
+
+    expect(screen.queryByRole('tab', { name: 'Dashboard' })).toBeNull();
+    expect(screen.queryByTestId('easyfit-dashboard-section')).toBeNull();
+    expect(screen.getByTestId('overview-section')).toBeTruthy();
   });
 });

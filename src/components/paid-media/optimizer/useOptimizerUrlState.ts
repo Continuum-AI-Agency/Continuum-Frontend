@@ -7,7 +7,16 @@ import { type PlatformTab, parsePlatformTab } from './sections/platforms/platfor
 
 // `automations` sits first in the tablist: it is where the account-level autonomy controls
 // live, and they used to be a strip inside Overview that nobody could find again.
-const VIEWS = ['automations', 'overview', 'portfolios', 'actions', 'create', 'logs'] as const;
+// `dashboard` is the Easy Fit sign-ups dashboard; OptimizerTab offers it only on that brand.
+const VIEWS = [
+  'automations',
+  'overview',
+  'portfolios',
+  'actions',
+  'create',
+  'logs',
+  'dashboard',
+] as const;
 const SECTIONS = ['performance', 'manage', 'activity'] as const;
 const METRICS = ['spend', 'cost', 'roas', 'ctr'] as const;
 
