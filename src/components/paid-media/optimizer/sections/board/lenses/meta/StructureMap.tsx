@@ -1,19 +1,511 @@
 'use client';
 
-// M15 Structure: campaign, ad set and ad, with the portfolios on top.
-// Placeholder that holds the slot until the module is built.
-import { ModuleFrame } from '../../ModuleFrame';
-import type { BoardModuleProps } from '../../types';
+// Account structure (M15): campaign → ad set → ad as an icicle, each node as wide as its spend
+// over the last 30 days and tinted by its cost against the goal, or by the portfolio holding it.
+// An ad set a portfolio holds but Meta no longer serves is hatched. A campaign zooms on click:
+// it takes the width, its ad sets the row below and their ads (read on zoom) the last row, every
+// node gliding to its place. Small, it leads with the share of spend the portfolios hold over a
+// bare two-row icicle.
 
-export default function StructureMap({ slot }: BoardModuleProps) {
+import type { BoardModuleSize } from '@continuum/contracts';
+import { AlertTriangleIcon, ChevronRightIcon } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  type CSSProperties,
+  type FocusEvent,
+  type PointerEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  currencyColumnSuffix,
+  formatCurrency,
+  formatCurrencyInColumn,
+} from '@/components/paid-media/optimizer/format';
+import { useOptimizerAdAccounts } from '@/components/paid-media/optimizer/useOptimizerData';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { bareAccountId } from '@/lib/paid-media/accountId';
+import { cn } from '@/lib/utils';
+import { BOARD_COLOR } from '../../palette';
+import type { BoardModuleProps } from '../../types';
+import {
+  ChartTip,
+  frameStateOf,
+  HATCH_STYLE,
+  Headline,
+  LegendItem,
+  LegendRow,
+  LensNote,
+  leanFill,
+  MetaFrame,
+  PORTFOLIO_SLOT_COLORS,
+  ReadNote,
+  slotFill,
+  Takeaway,
+  useChartTip,
+  useMeasuredWidth,
+  WindowLine,
+} from './MetaLensParts';
+import { costLean, formatShare, type MetaRankRow, monthDayEn } from './metaLensModel';
+import {
+  type MetaReadState,
+  useCampaignAds,
+  useMetaRanking,
+  usePortfolioRosters,
+} from './metaReads';
+import {
+  buildStructure,
+  type IcicleCell,
+  type LostGroup,
+  layoutIcicle,
+  type StructureModel,
+  type StructureNode,
+} from './structureModel';
+
+const TEST_ID = 'board-module-structure';
+const ROW_HEIGHT = 44;
+const SMALL_ROW_HEIGHT = 16;
+const ROW_GAP = 4;
+/** Below this width a node draws no label: its tooltip names it. */
+const LABEL_MIN_PX = 44;
+
+type StructureColor = 'goal' | 'portfolio';
+
+export default function StructureMap({ ctx, slot }: BoardModuleProps) {
+  const campaigns = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_campaigns');
+  const adsets = useMetaRanking(ctx.brandId, ctx.adAccountId, 'top_adsets');
+  const { rosters } = usePortfolioRosters(ctx.portfolios);
+  const [zoomedId, setZoomedId] = useState<string | null>(null);
+  const ads = useCampaignAds(ctx.brandId, ctx.adAccountId, slot.size === 's' ? null : zoomedId);
+  const accounts = useOptimizerAdAccounts(ctx.brandId);
+  const rootName = useMemo(() => {
+    const wanted = ctx.adAccountId ? bareAccountId(ctx.adAccountId) : null;
+    const account = accounts.data.find((row) => bareAccountId(row.account_id) === wanted);
+    return account?.name ?? 'Meta account';
+  }, [accounts.data, ctx.adAccountId]);
+  const model = useMemo(() => {
+    if (campaigns.status !== 'ready' || adsets.status === 'loading') return null;
+    return buildStructure({
+      campaigns: campaigns.data,
+      adsets: adsets.status === 'ready' ? adsets.data : [],
+      adsetsRead: adsets.status === 'ready',
+      portfolios: ctx.portfolios,
+      rosters,
+      rootName,
+    });
+  }, [campaigns, adsets, ctx.portfolios, rosters, rootName]);
+  const waiting =
+    campaigns.status !== 'ready' ? campaigns : adsets.status === 'loading' ? adsets : null;
+  // Still reading while the rosters are on their way too: the portfolios land on the icicle and in
+  // its takeaway. A failed ad set read still draws the campaigns, and says it failed.
+  const state =
+    rosters == null && campaigns.status === 'ready'
+      ? 'loading'
+      : frameStateOf(
+          waiting?.status ?? (adsets.status === 'error' ? 'error' : 'ready'),
+          model != null,
+        );
   return (
-    <ModuleFrame
-      reason={slot.reason}
-      size={slot.size}
-      testId="board-module-structure"
-      title="Account structure"
-    >
-      <p className="text-muted-foreground text-xs">Account structure</p>
-    </ModuleFrame>
+    <MetaFrame slot={slot} state={state} testId={TEST_ID} title="Account structure">
+      {waiting ? (
+        <ReadNote size={slot.size} state={waiting} testId={TEST_ID} what="campaigns" />
+      ) : model ? (
+        <StructureView
+          ads={ads}
+          currency={ctx.currency}
+          model={model}
+          onZoom={setZoomedId}
+          size={slot.size}
+          zoomedId={zoomedId}
+        />
+      ) : (
+        <LensNote testId={`${TEST_ID}-empty`}>No campaign spent in the last 30 days.</LensNote>
+      )}
+    </MetaFrame>
+  );
+}
+
+function slotOf(model: StructureModel, portfolioId: string | null): number | null {
+  if (!portfolioId) return null;
+  return model.portfolios.find((portfolio) => portfolio.id === portfolioId)?.slot ?? null;
+}
+
+function fillOf(node: StructureNode, color: StructureColor, model: StructureModel): CSSProperties {
+  if (node.lost) return HATCH_STYLE;
+  if (node.level === 'root' || node.level === 'rest') return { background: 'var(--muted)' };
+  if (color === 'portfolio') {
+    if (node.level === 'campaign') return { background: 'var(--muted)' };
+    const slot = slotOf(model, node.portfolioId);
+    return { background: slot != null ? slotFill(slot) : BOARD_COLOR.mid };
+  }
+  return {
+    background:
+      node.costPerResult != null
+        ? leanFill(costLean(node.costPerResult, model.reference?.value ?? null))
+        : BOARD_COLOR.mid,
+  };
+}
+
+function figureLine(node: StructureNode, model: StructureModel, currency: string | null): string {
+  const spend = formatCurrencyInColumn(node.spend, currency);
+  const words = model.result?.en;
+  if (!words || node.level === 'rest') return spend;
+  if (node.costPerResult != null) {
+    return `${spend} · ${formatCurrencyInColumn(node.costPerResult, currency)} per ${words.one}`;
+  }
+  return node.results === 0 ? `${spend} · no ${words.many}` : spend;
+}
+
+function nodeTip(node: StructureNode, model: StructureModel, currency: string | null) {
+  const portfolio = node.portfolioId
+    ? model.portfolios.find((candidate) => candidate.id === node.portfolioId)
+    : undefined;
+  const words = model.result?.en;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="font-medium">{node.name}</span>
+      <span>
+        {formatCurrency(node.spend, currency)} ·{' '}
+        {formatShare(model.totalSpend > 0 ? node.spend / model.totalSpend : null)} of spend
+      </span>
+      {words && node.results != null ? (
+        <span>
+          {node.results.toLocaleString('en-US')} {node.results === 1 ? words.one : words.many}
+          {node.costPerResult != null
+            ? ` · ${formatCurrency(node.costPerResult, currency)} each`
+            : ''}
+        </span>
+      ) : null}
+      {portfolio ? <span>In {portfolio.name}</span> : null}
+      {node.lost ? (
+        <span>
+          Lost{node.lostSince ? ` on ${monthDayEn(node.lostSince)}` : ''}: Meta no longer serves it
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+export function StructureView({
+  model,
+  size,
+  currency,
+  zoomedId,
+  onZoom,
+  ads,
+}: {
+  model: StructureModel;
+  size: BoardModuleSize;
+  currency: string | null;
+  /** The campaign zoomed into, or null for the whole account. */
+  zoomedId: string | null;
+  onZoom: (campaignId: string | null) => void;
+  /** The zoomed campaign's ads. */
+  ads: MetaReadState<MetaRankRow[]>;
+}) {
+  if (size === 's') return <StructureSmall model={model} />;
+  return (
+    <StructureFull
+      ads={ads}
+      currency={currency}
+      model={model}
+      onZoom={onZoom}
+      zoomedId={zoomedId}
+    />
+  );
+}
+
+function lostText(group: LostGroup): string {
+  return `${group.count} ${group.count === 1 ? 'ad set' : 'ad sets'} of ${group.portfolioName} lost${group.since ? ` on ${monthDayEn(group.since)}` : ''}`;
+}
+
+function lostLine(model: StructureModel): string | null {
+  const lost = model.lost[0];
+  return lost ? lostText(lost) : null;
+}
+
+function StructureSmall({ model }: { model: StructureModel }) {
+  const cells = layoutIcicle(model, null, null).filter((cell) => cell.row > 0);
+  const lost = lostLine(model);
+  return (
+    <div className="flex flex-col gap-3">
+      {model.managedShare != null ? (
+        <Headline
+          caption="of the spend is in ad sets a portfolio optimizes"
+          figure={formatShare(model.managedShare)}
+          testId={`${TEST_ID}-headline`}
+        />
+      ) : (
+        <Headline
+          caption={`campaigns · ${model.adsetCount} ad sets with spend`}
+          figure={String(model.campaigns.length)}
+          testId={`${TEST_ID}-headline`}
+        />
+      )}
+      <WindowLine testId={TEST_ID} />
+      <div
+        aria-hidden="true"
+        className="relative w-full"
+        style={{ height: 2 * SMALL_ROW_HEIGHT + ROW_GAP }}
+      >
+        {cells.map((cell) => (
+          <span
+            className="absolute rounded-[3px] border border-card"
+            key={cell.node.id}
+            style={{
+              left: `${cell.x}%`,
+              width: `${cell.w}%`,
+              top: (cell.row - 1) * (SMALL_ROW_HEIGHT + ROW_GAP),
+              height: SMALL_ROW_HEIGHT,
+              ...fillOf(cell.node, 'goal', model),
+            }}
+          />
+        ))}
+      </div>
+      {lost ? (
+        <p className="flex items-start gap-1.5 text-xs" data-testid={`${TEST_ID}-lost`}>
+          <AlertTriangleIcon
+            aria-hidden="true"
+            className="mt-0.5 size-3 shrink-0 text-destructive-ink"
+          />
+          {lost}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StructureFull({
+  model,
+  currency,
+  zoomedId,
+  onZoom,
+  ads,
+}: {
+  model: StructureModel;
+  currency: string | null;
+  zoomedId: string | null;
+  onZoom: (campaignId: string | null) => void;
+  ads: MetaReadState<MetaRankRow[]>;
+}) {
+  const reduce = useReducedMotion();
+  const [color, setColor] = useState<StructureColor>('goal');
+  const host = useRef<HTMLDivElement>(null);
+  const width = useMeasuredWidth(host, 560);
+  const { tip, show, hide } = useChartTip(host);
+  const focused = zoomedId
+    ? model.campaigns.find((campaign) => campaign.id === zoomedId)
+    : undefined;
+  const cells = useMemo(
+    () => layoutIcicle(model, focused?.id ?? null, ads.status === 'ready' ? ads.data : null),
+    [model, focused, ads],
+  );
+  const words = model.result?.en;
+  const spring = reduce
+    ? { duration: 0 }
+    : { type: 'spring' as const, visualDuration: 0.5, bounce: 0.12 };
+  const held = model.portfolios.filter((portfolio) => portfolio.slot != null);
+
+  // A node keeps its element across zooms, so it glides to its new place instead of being
+  // replaced: a campaign is always a button (disabled while it is collapsed), the rest are marks.
+  const node = (cell: IcicleCell) => {
+    const { node: entity } = cell;
+    const wide = (cell.w / 100) * width >= LABEL_MIN_PX;
+    const isCampaign = entity.level === 'campaign';
+    const zoomIn = isCampaign && !focused;
+    const enabled = cell.visible && isCampaign;
+    const content = wide ? (
+      <>
+        <span className="block truncate font-medium text-foreground text-xs">{entity.name}</span>
+        <span className="block truncate text-foreground/75 text-xs tabular-nums">
+          {figureLine(entity, model, currency)}
+        </span>
+      </>
+    ) : null;
+    const tipOf = () => nodeTip(entity, model, currency);
+    const common = {
+      animate: {
+        left: `${cell.x}%`,
+        width: `${cell.w}%`,
+        top: cell.row * (ROW_HEIGHT + ROW_GAP),
+        opacity: cell.visible ? 1 : 0,
+      },
+      'aria-hidden': cell.visible ? undefined : true,
+      className: cn(
+        'absolute overflow-hidden rounded-md border-2 border-card px-1.5 py-1 text-left outline-none transition-[background-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+        entity.lost && 'border-muted-foreground/50 border-dashed',
+        enabled ? 'cursor-pointer' : 'cursor-default',
+        !cell.visible && 'pointer-events-none',
+      ),
+      'data-level': entity.level,
+      'data-lost': entity.lost ? 'true' : undefined,
+      'data-testid': `${TEST_ID}-node`,
+      exit: { opacity: 0 },
+      initial: reduce ? false : { opacity: 0, top: cell.row * (ROW_HEIGHT + ROW_GAP) + 6 },
+      onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+        if (cell.visible) show(event, tipOf());
+      },
+      onPointerLeave: hide,
+      style: { height: ROW_HEIGHT, ...fillOf(entity, color, model) },
+      transition: spring,
+    };
+    if (isCampaign) {
+      return (
+        <motion.button
+          key={entity.id}
+          {...common}
+          aria-label={
+            zoomIn ? `Zoom into ${entity.name}` : `Back to every campaign from ${entity.name}`
+          }
+          disabled={!enabled}
+          onBlur={hide}
+          onClick={() => {
+            hide();
+            onZoom(zoomIn ? entity.id : null);
+          }}
+          onFocus={(event: FocusEvent<HTMLElement>) => show(event, tipOf())}
+          tabIndex={enabled ? 0 : -1}
+          type="button"
+        >
+          {content}
+        </motion.button>
+      );
+    }
+    return (
+      <motion.div
+        key={entity.id}
+        {...common}
+        aria-label={cell.visible ? entity.name : undefined}
+        role={cell.visible ? 'img' : undefined}
+      >
+        {content}
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {focused ? (
+          <nav aria-label="Structure path" className="flex min-w-0 items-center gap-1 text-xs">
+            <button
+              className="shrink-0 rounded px-1 text-primary-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => onZoom(null)}
+              type="button"
+            >
+              {model.root.name}
+            </button>
+            <ChevronRightIcon
+              aria-hidden="true"
+              className="size-3 shrink-0 text-muted-foreground"
+            />
+            <span className="min-w-0 truncate font-medium" title={focused.name}>
+              {focused.name}
+            </span>
+          </nav>
+        ) : (
+          <WindowLine
+            detail={`width: spend${currencyColumnSuffix(currency)} · tap a campaign to zoom`}
+            testId={TEST_ID}
+          />
+        )}
+        {model.portfolios.some((portfolio) => portfolio.slot != null) ? (
+          <ToggleGroup
+            aria-label="Color the structure by"
+            onValueChange={(value) => {
+              const next: string = value;
+              if (next === 'goal' || next === 'portfolio') setColor(next);
+            }}
+            size="sm"
+            type="single"
+            value={color}
+            variant="outline"
+          >
+            <ToggleGroupItem className="h-7 px-2 text-xs" value="goal">
+              vs goal
+            </ToggleGroupItem>
+            <ToggleGroupItem className="h-7 px-2 text-xs" value="portfolio">
+              By portfolio
+            </ToggleGroupItem>
+          </ToggleGroup>
+        ) : null}
+      </div>
+      <div
+        className="relative w-full overflow-hidden"
+        data-testid={`${TEST_ID}-icicle`}
+        ref={host}
+        style={{ height: 3 * ROW_HEIGHT + 2 * ROW_GAP }}
+      >
+        <AnimatePresence>{cells.map(node)}</AnimatePresence>
+        {focused && ads.status === 'loading' ? (
+          <div
+            aria-hidden="true"
+            className="skeleton-glint absolute inset-x-0 rounded-md"
+            data-slot="skeleton"
+            style={{ top: 2 * (ROW_HEIGHT + ROW_GAP), height: ROW_HEIGHT }}
+          />
+        ) : null}
+        <ChartTip tip={tip} />
+      </div>
+      {focused && ads.status === 'error' ? (
+        <LensNote testId={`${TEST_ID}-ads-error`}>
+          The ads of this campaign could not be read.{' '}
+          <button className="text-primary-ink underline" onClick={ads.retry} type="button">
+            Retry
+          </button>
+        </LensNote>
+      ) : null}
+      {focused && ads.status === 'ready' && ads.data.length === 0 ? (
+        <LensNote>No ad of this campaign spent in the last 30 days.</LensNote>
+      ) : null}
+      <LegendRow>
+        {color === 'goal' ? (
+          <>
+            <LegendItem
+              label={
+                model.reference
+                  ? `Cheaper → dearer than the ${model.reference.kind === 'goal' ? `goal (${formatCurrency(model.reference.value, currency)} per ${words?.one ?? 'result'})` : 'account average'}`
+                  : 'No cost to compare'
+              }
+              variant="ramp"
+            />
+            <LegendItem
+              color={BOARD_COLOR.mid}
+              label={`On it, or no ${words?.many ?? 'results'}`}
+            />
+          </>
+        ) : (
+          <>
+            {held.map((portfolio) => (
+              <LegendItem
+                color={PORTFOLIO_SLOT_COLORS[portfolio.slot ?? 0]}
+                key={portfolio.id}
+                label={portfolio.name}
+              />
+            ))}
+            <LegendItem color={BOARD_COLOR.mid} label="In no portfolio" />
+          </>
+        )}
+        <LegendItem label="Lost: Meta no longer serves it" variant="hatch" />
+      </LegendRow>
+      {model.lost.map((group) => (
+        <p
+          className="flex items-start gap-1.5 text-xs"
+          data-testid={`${TEST_ID}-lost`}
+          key={group.portfolioId}
+        >
+          <AlertTriangleIcon
+            aria-hidden="true"
+            className="mt-0.5 size-3 shrink-0 text-destructive-ink"
+          />
+          <span>
+            {lostText(group)}
+            {group.unseen.length > 0 ? ` · ${group.unseen.join(', ')} had no spend in 30 days` : ''}
+          </span>
+        </p>
+      ))}
+      <Takeaway testId={`${TEST_ID}-takeaway`} text={model.takeaway} />
+    </div>
   );
 }
