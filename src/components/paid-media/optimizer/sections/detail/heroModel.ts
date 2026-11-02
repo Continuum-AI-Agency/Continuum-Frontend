@@ -409,7 +409,7 @@ function candidatesFromReport(
 /** Where a candidate's call to action lands: the queue row, the audience card, or Manage
  *  when the portfolio only observes (the click then shows what Recommend would do). */
 export function ctaForCandidate(
-  candidate: Pick<BriefCandidate, 'id' | 'module' | 'cta'>,
+  candidate: Pick<BriefCandidate, 'id' | 'module' | 'cta'> & { kind?: string },
   observe: boolean,
 ): HeroCta {
   if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
@@ -419,16 +419,20 @@ export function ctaForCandidate(
   if (candidate.cta.kind !== 'manage' && !rowKey) {
     return { kind: 'manage', rowKey: null, label: 'Open Manage' };
   }
+  // pause_ad sits in the creative module (a creative losing the auction), but the row it
+  // opens is a pause: the button names what it opens.
   const label =
     candidate.module === 'pause'
       ? 'Review the pause'
-      : candidate.module === 'budget'
-        ? 'Review the budget moves'
-        : candidate.module === 'creative'
-          ? 'Open the creative recommendation'
-          : candidate.cta.kind === 'audience_card'
-            ? 'Open the audience proposal'
-            : 'Open the audience recommendation';
+      : candidate.kind === 'pause_ad'
+        ? 'Review the ad pause'
+        : candidate.module === 'budget'
+          ? 'Review the budget moves'
+          : candidate.module === 'creative'
+            ? 'Open the creative recommendation'
+            : candidate.cta.kind === 'audience_card'
+              ? 'Open the audience proposal'
+              : 'Open the audience recommendation';
   return { kind: candidate.cta.kind, rowKey, label };
 }
 

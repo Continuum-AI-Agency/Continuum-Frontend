@@ -492,6 +492,23 @@ describe('ctaForCandidate', () => {
     ).toEqual({ kind: 'manage', rowKey: null, label: 'Open Manage' });
   });
 
+  // Easy Fit's "Conversaciones Whatsapp": the third "Open the creative recommendation" opened
+  // "Pause this ad · CAÑADAS" — pause_ad lives in the creative module (a creative losing the
+  // auction), so the button promised a creative card and landed on a pause.
+  it('names a creative-module ad pause as the pause it opens', () => {
+    expect(
+      ctaForCandidate(
+        {
+          id: 'rec:p',
+          module: 'creative',
+          kind: 'pause_ad',
+          cta: { kind: 'queue_row', target_id: 'rec:p' },
+        },
+        false,
+      ),
+    ).toEqual({ kind: 'queue_row', rowKey: 'rec:p', label: 'Review the ad pause' });
+  });
+
   it('lands an audience card on its recommendation row', () => {
     expect(
       ctaForCandidate(
