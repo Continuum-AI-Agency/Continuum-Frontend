@@ -9,6 +9,10 @@
 // field says a person should approve those moves. Until the database accepts the key
 // (20261005120000) the merged patch fails its check (23514) and nothing is saved; the field
 // says the scope is not available yet rather than flicking a switch that did nothing.
+//
+// Two shapes of the same field: the Manage panel's `list` (each scope with what it does), and
+// the Automations page's `chips` (a row of switches, what each does on hover), where every
+// portfolio's scopes sit under its autonomy dial.
 
 import type { AutopilotScope, AutopilotScopes } from '@continuum/contracts';
 import { AUTOPILOT_SCOPE_COPY, DEFAULT_AUTOPILOT_SCOPES } from '@continuum/contracts';
@@ -16,6 +20,7 @@ import { Loader2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import { MOVE_APPROVAL_RECOMMENDATION } from './crossPlatformMove/queuedMoveModel';
 
 const ORDER: AutopilotScope[] = [
@@ -46,7 +51,30 @@ export type AutopilotScopesFieldProps = {
   savingScope: AutopilotScope | null;
   /** Saves one scope. A returned promise lets the field read a refusal of the key itself. */
   onChange: (scope: AutopilotScope, enabled: boolean) => void | Promise<unknown>;
+  /** `list` (default): every scope with what it does. `chips`: a compact row of switches. */
+  variant?: 'list' | 'chips';
+  /** The scopes this portfolio can use; every scope when absent. */
+  shown?: (scope: AutopilotScope) => boolean;
 };
+
+function BudgetMoveLines({ notYet }: { notYet: boolean }) {
+  return (
+    <>
+      <p className="font-medium text-foreground text-xs" data-testid="budget-move-recommendation">
+        {MOVE_APPROVAL_RECOMMENDATION}
+      </p>
+      {notYet ? (
+        <p
+          className="text-amber-600 text-xs dark:text-amber-400"
+          data-testid="budget-move-unavailable"
+          role="status"
+        >
+          This is not available yet for this portfolio. Nothing was saved.
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 export function AutopilotScopesField({
   portfolioId,
@@ -55,9 +83,12 @@ export function AutopilotScopesField({
   disabled,
   savingScope,
   onChange,
+  variant = 'list',
+  shown,
 }: AutopilotScopesFieldProps) {
   const current = scopes ?? DEFAULT_AUTOPILOT_SCOPES;
   const [unavailable, setUnavailable] = useState<ReadonlySet<AutopilotScope>>(new Set());
+  const order = shown ? ORDER.filter(shown) : ORDER;
 
   const change = (scope: AutopilotScope, enabled: boolean) => {
     const saving = onChange(scope, enabled);
@@ -67,21 +98,70 @@ export function AutopilotScopesField({
     });
   };
 
+  const scopeSwitch = (scope: AutopilotScope, id: string) => (
+    <Switch
+      checked={current[scope] ?? false}
+      disabled={disabled || unavailable.has(scope) || savingScope !== null}
+      id={id}
+      onCheckedChange={(checked) => change(scope, checked)}
+      size={variant === 'chips' ? 'sm' : 'default'}
+    />
+  );
+
+  const noActorLine = noActor ? (
+    <p className="text-xs text-amber-600 dark:text-amber-400">
+      Autopilot needs a person to act as. Toggle any scope once so your account is recorded as the
+      approver.
+    </p>
+  ) : null;
+
+  if (variant === 'chips') {
+    return (
+      <div className="space-y-1.5" data-testid="autopilot-scopes">
+        <ul className="flex flex-wrap gap-1.5">
+          {order.map((scope) => {
+            const copy = AUTOPILOT_SCOPE_COPY[scope];
+            const id = `autopilot-scope-${scope}-${portfolioId}`;
+            return (
+              <li
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-full border bg-background py-1 pr-2.5 pl-1.5',
+                  (current[scope] ?? false) && !disabled && 'border-primary/40',
+                )}
+                data-scope={scope}
+                key={scope}
+                title={copy.body}
+              >
+                {scopeSwitch(scope, id)}
+                <Label className="flex items-center gap-1 font-medium text-xs" htmlFor={id}>
+                  {copy.label}
+                  {savingScope === scope ? (
+                    <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
+                  ) : null}
+                </Label>
+              </li>
+            );
+          })}
+        </ul>
+        {order.includes('budget_move') && (current.budget_move ?? false) ? (
+          <BudgetMoveLines notYet={unavailable.has('budget_move')} />
+        ) : unavailable.has('budget_move') ? (
+          <BudgetMoveLines notYet />
+        ) : null}
+        {noActorLine}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2" data-testid="autopilot-scopes">
       <ul className="space-y-1.5">
-        {ORDER.map((scope) => {
+        {order.map((scope) => {
           const copy = AUTOPILOT_SCOPE_COPY[scope];
           const id = `autopilot-scope-${scope}-${portfolioId}`;
-          const notYet = unavailable.has(scope);
           return (
             <li className="flex items-start gap-2" key={scope}>
-              <Switch
-                checked={current[scope] ?? false}
-                disabled={disabled || notYet || savingScope !== null}
-                id={id}
-                onCheckedChange={(checked) => change(scope, checked)}
-              />
+              {scopeSwitch(scope, id)}
               <div className="min-w-0">
                 <Label className="flex items-center gap-1.5" htmlFor={id}>
                   {copy.label}
@@ -91,21 +171,7 @@ export function AutopilotScopesField({
                 </Label>
                 <p className="text-xs text-muted-foreground">{copy.body}</p>
                 {scope === 'budget_move' ? (
-                  <p
-                    className="font-medium text-foreground text-xs"
-                    data-testid="budget-move-recommendation"
-                  >
-                    {MOVE_APPROVAL_RECOMMENDATION}
-                  </p>
-                ) : null}
-                {notYet ? (
-                  <p
-                    className="text-amber-600 text-xs dark:text-amber-400"
-                    data-testid="budget-move-unavailable"
-                    role="status"
-                  >
-                    This is not available yet for this portfolio. Nothing was saved.
-                  </p>
+                  <BudgetMoveLines notYet={unavailable.has(scope)} />
                 ) : null}
               </div>
             </li>
@@ -116,12 +182,7 @@ export function AutopilotScopesField({
         Everything is still recommended in the queue. Nothing a scope creates spends until you
         activate it. Stop halts all of these.
       </p>
-      {noActor ? (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          Autopilot needs a person to act as. Toggle any scope once so your account is recorded as
-          the approver.
-        </p>
-      ) : null}
+      {noActorLine}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { PortfolioListItem } from '@continuum/contracts';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 // The apply-mode pill needs a TooltipProvider ancestor and is not what these tests are about.
 mock.module('../../ApplyModePill', () => ({
@@ -14,6 +14,16 @@ mock.module('../../ApplyModePill', () => ({
 let accountReadData: unknown = null;
 const setFamilyMutate = mock((_input: unknown) => {});
 let familyFailure: Error | null = null;
+// The dial, the scopes and Stop write through the mutations the Manage section uses; each call is
+// answered by the test, so a write is pending until the test says the database has answered.
+type Answer = { resolve: () => void; reject: (error: unknown) => void };
+let answers: Answer[] = [];
+const answered = () =>
+  new Promise<void>((resolve, reject) => {
+    answers.push({ resolve: () => resolve(), reject });
+  });
+const updateMutateAsync = mock((_input: unknown) => answered());
+const setPausedMutateAsync = mock((_input: unknown) => answered());
 const realOptimizerData = await import('../../useOptimizerData');
 mock.module('../../useOptimizerData', () => ({
   ...realOptimizerData,
@@ -26,6 +36,10 @@ mock.module('../../useOptimizerData', () => ({
   useInsightApprovalMutations: () => ({
     setInsight: { mutate: () => {}, isError: false, error: null },
     setFamily: { mutate: setFamilyMutate, isError: Boolean(familyFailure), error: familyFailure },
+  }),
+  useOptimizerMutations: () => ({
+    update: { mutateAsync: updateMutateAsync, isPending: false },
+    setPaused: { mutateAsync: setPausedMutateAsync, isPending: false },
   }),
 }));
 
@@ -70,6 +84,9 @@ afterEach(() => {
   accountReadData = null;
   familyFailure = null;
   setFamilyMutate.mockClear();
+  updateMutateAsync.mockClear();
+  setPausedMutateAsync.mockClear();
+  answers = [];
   cleanup();
 });
 
@@ -188,5 +205,222 @@ describe('AccountAutomations — autopilot that has missed a cycle is counted as
       portfolio({ id: 'g', name: 'Gamma', apply_mode: 'recommend' }),
     ]);
     expect(getByTestId('portfolio-autonomy-meta').textContent).toBe('1 of 2 on autopilot');
+  });
+});
+
+// G14: the autonomy dial per portfolio. Observe and Autopilot are apply modes; Recommend and
+// Approve are both 'recommend', told apart by whether Continuum may write the portfolio's
+// platforms (Meta unless switched off, Google only when switched on).
+describe('AccountAutomations — the autonomy dial (G14)', () => {
+  const armed = {
+    max_change_pct_per_cycle: 0.2,
+    max_daily_apply_minor: 130_000,
+    currency: 'MXN',
+  } satisfies Partial<PortfolioListItem>;
+  const card = (id: string) =>
+    screen
+      .getByTestId('portfolio-autonomy')
+      .querySelector(`[data-portfolio="${id}"]`) as HTMLElement;
+  const dial = (id: string) => within(card(id)).getByTestId('autonomy-dial');
+  const step = (id: string, level: string) =>
+    dial(id).querySelector(`[data-level-option="${level}"]`) as HTMLButtonElement;
+  const answerNext = async (outcome: 'ok' | Error) => {
+    const answer = answers.shift();
+    await act(async () => {
+      if (outcome === 'ok') answer?.resolve();
+      else answer?.reject(outcome);
+    });
+  };
+
+  it('puts each portfolio on its level, and counts the levels above the list', () => {
+    mount([
+      portfolio({ id: 'o', name: 'Watching', apply_mode: 'observe' }),
+      portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend' }),
+      portfolio({ id: 'p', name: 'Flying', apply_mode: 'autopilot', ...armed }),
+      portfolio({
+        id: 'r',
+        name: 'Client applies',
+        apply_mode: 'recommend',
+        platforms: ['google_ads'],
+      }),
+    ]);
+    expect(dial('o').getAttribute('data-level')).toBe('observe');
+    expect(dial('a').getAttribute('data-level')).toBe('approve');
+    expect(dial('p').getAttribute('data-level')).toBe('autopilot');
+    expect(dial('r').getAttribute('data-level')).toBe('recommend');
+    const summary = screen.getByTestId('autonomy-summary');
+    for (const level of ['observe', 'recommend', 'approve', 'autopilot']) {
+      expect(summary.querySelector(`[data-level="${level}"]`)?.textContent).toMatch(/1$/);
+    }
+  });
+
+  it('writes the apply mode of the level chosen, and moves only once the write is answered', async () => {
+    mount([portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend' })]);
+    fireEvent.click(step('a', 'observe'));
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      portfolio_id: 'a',
+      patch: { apply_mode: 'observe' },
+    });
+    // Asked, not answered: the dial stays where the database still has it.
+    expect(dial('a').getAttribute('data-level')).toBe('approve');
+    expect(step('a', 'autopilot').disabled).toBe(true);
+    await answerNext('ok');
+    expect(dial('a').getAttribute('data-level')).toBe('observe');
+    expect(within(card('a')).queryByTestId('autonomy-error')).toBeNull();
+  });
+
+  it('leaves the dial where it was and says why when the write is refused', async () => {
+    mount([portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend' })]);
+    fireEvent.click(step('a', 'observe'));
+    await answerNext(new Error('Could not update the portfolio.'));
+    expect(dial('a').getAttribute('data-level')).toBe('approve');
+    expect(within(card('a')).getByTestId('autonomy-error').textContent).toBe(
+      'Could not update the portfolio. Nothing was changed.',
+    );
+  });
+
+  it('asks before turning autopilot on, and writes it only when the person says so', async () => {
+    mount([portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend', ...armed })]);
+    fireEvent.click(step('a', 'autopilot'));
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+    const ask = await screen.findByRole('alertdialog');
+    expect(ask.textContent).toContain('Turn on autopilot for “Approving”?');
+    expect(ask.textContent).toContain('Max 20% per cycle · Max $1,300 MXN/day');
+    fireEvent.click(within(ask).getByRole('button', { name: 'Turn on autopilot' }));
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      portfolio_id: 'a',
+      patch: { apply_mode: 'autopilot' },
+    });
+    await answerNext('ok');
+    expect(dial('a').getAttribute('data-level')).toBe('autopilot');
+  });
+
+  it('sends the person to Manage to preview the cycle instead, writing nothing', async () => {
+    const { onManage } = mount([
+      portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend', ...armed }),
+    ]);
+    fireEvent.click(step('a', 'autopilot'));
+    const ask = await screen.findByRole('alertdialog');
+    fireEvent.click(within(ask).getByRole('button', { name: 'Preview in Manage' }));
+    expect(onManage).toHaveBeenCalledWith('a');
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('locks Autopilot until both caps are set, and says which', () => {
+    mount([portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend' })]);
+    expect(step('a', 'autopilot').disabled).toBe(true);
+    expect(step('a', 'autopilot').getAttribute('data-locked')).toBe('true');
+    const lock = within(card('a')).getByTestId('autonomy-lock');
+    expect(lock.getAttribute('data-lock')).toBe('autopilot');
+    expect(lock.textContent).toContain('Needs both caps first');
+    const caps = within(card('a')).getByTestId('autonomy-caps');
+    expect(caps.querySelector('[data-cap="per-cycle"]')?.getAttribute('data-missing')).toBe('true');
+    expect(caps.querySelector('[data-cap="daily"]')?.getAttribute('data-missing')).toBe('true');
+  });
+
+  it('locks Approve and Autopilot when the portfolio’s writes are switched off', () => {
+    mount([
+      portfolio({
+        id: 'r',
+        name: 'Client applies',
+        apply_mode: 'recommend',
+        platforms: ['google_ads'],
+        platform_writes: { google_ads: false },
+        ...armed,
+      }),
+    ]);
+    expect(step('r', 'approve').disabled).toBe(true);
+    expect(step('r', 'autopilot').disabled).toBe(true);
+    expect(step('r', 'observe').disabled).toBe(false);
+    const locks = within(card('r')).getAllByTestId('autonomy-lock');
+    // Both levels share one reason, said once.
+    expect(locks).toHaveLength(1);
+    expect(locks[0]?.textContent).toContain(
+      'Writes to Google are switched off for this portfolio, so Continuum only recommends.',
+    );
+  });
+
+  it('locks Autopilot on a portfolio whose whole roster has left the account', () => {
+    mount([
+      portfolio({
+        id: 't',
+        name: 'Tours Programados - Octubre',
+        apply_mode: 'recommend',
+        last_cycle_current: false,
+        withdrawn_reason: 'roster_absent',
+        ...armed,
+      }),
+    ]);
+    expect(step('t', 'autopilot').disabled).toBe(true);
+    expect(within(card('t')).getByTestId('autonomy-lock').textContent).toContain(
+      'Withdrawn: its whole roster has left the ad account.',
+    );
+  });
+
+  it('shows the caps autopilot writes inside, priced in the portfolio’s currency', () => {
+    mount([portfolio({ id: 'p', name: 'Flying', apply_mode: 'autopilot', ...armed })]);
+    const caps = within(card('p')).getByTestId('autonomy-caps');
+    expect(caps.querySelector('[data-cap="per-cycle"]')?.textContent).toBe('Max 20% per cycle');
+    expect(caps.querySelector('[data-cap="daily"]')?.textContent).toBe('Max $1,300 MXN/day');
+    expect(caps.querySelector('[data-cap="paused"]')?.textContent).toBe(
+      'New objects created PAUSED',
+    );
+  });
+
+  it('stops autopilot through its kill switch, and says it is stopped once answered', async () => {
+    mount([portfolio({ id: 'p', name: 'Flying', apply_mode: 'autopilot', ...armed })]);
+    fireEvent.click(within(card('p')).getByRole('button', { name: 'Stop autopilot' }));
+    expect(setPausedMutateAsync).toHaveBeenCalledWith({
+      portfolio_id: 'p',
+      paused: true,
+      reason: 'Stopped from Automations',
+    });
+    await answerNext('ok');
+    expect(within(card('p')).getByRole('button', { name: 'Resume autopilot' })).toBeTruthy();
+    expect(within(card('p')).getAllByTestId('autonomy-note')[0]?.textContent).toContain(
+      'Stopped by a person',
+    );
+  });
+
+  it('saves a scope as a partial patch on autopilot, and holds the switches off below it', async () => {
+    mount([
+      portfolio({ id: 'p', name: 'Flying', apply_mode: 'autopilot', ...armed }),
+      portfolio({ id: 'a', name: 'Approving', apply_mode: 'recommend' }),
+    ]);
+    const swap = () => within(card('p')).getByRole('switch', { name: 'Creative rotation' });
+    fireEvent.click(swap());
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      portfolio_id: 'p',
+      patch: { autopilot_scopes: { creative_swap: true } },
+    });
+    // Off until the database answers; on once it has, before the list read catches up.
+    expect(swap().getAttribute('aria-checked')).toBe('false');
+    await answerNext('ok');
+    expect(swap().getAttribute('aria-checked')).toBe('true');
+    const held = within(card('a')).getByRole('switch', { name: 'Creative rotation' });
+    expect(
+      held.hasAttribute('data-disabled') || held.getAttribute('aria-disabled') === 'true',
+    ).toBe(true);
+    expect(within(card('a')).getByTestId('autonomy-scopes-locked')).toBeTruthy();
+  });
+
+  it('offers the move between platforms only to a portfolio on more than one', () => {
+    mount([
+      portfolio({ id: 'm', name: 'Meta only', apply_mode: 'autopilot', ...armed }),
+      portfolio({
+        id: 'x',
+        name: 'Meta and Google',
+        apply_mode: 'autopilot',
+        platforms: ['meta', 'google_ads'],
+        platform_writes: { google_ads: true },
+        ...armed,
+      }),
+    ]);
+    expect(
+      within(card('m')).queryByRole('switch', { name: 'Move budget between platforms' }),
+    ).toBeNull();
+    expect(
+      within(card('x')).getByRole('switch', { name: 'Move budget between platforms' }),
+    ).toBeTruthy();
   });
 });

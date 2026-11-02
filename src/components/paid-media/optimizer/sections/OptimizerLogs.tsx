@@ -10,33 +10,21 @@
 // and a revert, which is more than a flat log line could ever carry. The client-side family
 // triage that used to paper over the merge is gone with it.
 //
-// Each event renders its own shape (readLifecycleRow) rather than the first four keys of its
-// `fields` bag printed as monospace `key: value`.
+// Each event renders its own shape (LifecycleLogRow, over readLifecycleRow) rather than the
+// first four keys of its `fields` bag printed as monospace `key: value`. The row lives with the
+// Activity page, which lists the platform's own lifecycle rows (a drifted roster) beside the
+// actions.
 
-import type { OptimizerFeedWindowDays, OptimizerLogRow } from '@continuum/contracts';
+import type { OptimizerFeedWindowDays } from '@continuum/contracts';
 import { ScrollTextIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
-import { cn } from '@/lib/utils';
-import * as typeScale from '../typeScale';
 import { useOptimizerLogs } from '../useOptimizerData';
 import { FeedFooter, FeedSkeleton, PortfolioFilter } from './feedChrome';
-import {
-  FeedToolbar,
-  groupByDay,
-  QuietTextButton,
-  TimelineDay,
-  TimelineEntry,
-  type TimelineTone,
-} from './feedTimeline';
-import {
-  ALL_PORTFOLIOS,
-  distinctPortfolioNames,
-  filterByPortfolio,
-  type LifecycleFact,
-  readLifecycleRow,
-} from './logFilters';
+import { FeedToolbar, groupByDay, QuietTextButton, TimelineDay } from './feedTimeline';
+import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
+import { LifecycleLogRow } from './pages/activity/LifecycleEntry';
 
 type OptimizerLogsProps = {
   brandId: string;
@@ -47,78 +35,6 @@ type OptimizerLogsProps = {
    *  timeline replaces at another height and would push it down (CLS on a phone). */
   footer?: ReactNode;
 };
-
-// An error is red on the dot; a warning keeps a muted dot but names itself, so a skip or a
-// drift is not mistaken for a quiet cycle. Info carries nothing extra.
-const LEVEL_TONE: Record<OptimizerLogRow['level'], TimelineTone> = {
-  info: 'neutral',
-  warn: 'neutral',
-  error: 'stopped',
-};
-
-function FactList({ facts }: { facts: LifecycleFact[] }) {
-  if (facts.length === 0) return null;
-  return (
-    <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-      {facts.map((fact) => (
-        <div key={fact.label} className="flex items-baseline gap-1">
-          <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-          <dd className="font-mono text-xs font-semibold tabular-nums">{fact.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-/** The long tail of a row — the drifted ad sets, the per-item failures. Collapsed by default
- *  so a 40-ad-set drift does not bury the rest of the feed, but present rather than truncated
- *  to four keys with the rest silently dropped. */
-function DetailList({ lines }: { lines: string[] }) {
-  if (lines.length === 0) return null;
-  return (
-    <details className="mt-1">
-      <summary className="hit-area cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
-        {lines.length} listed
-      </summary>
-      <ul className="mt-1 space-y-0.5">
-        {lines.map((line) => (
-          <li key={line} className="truncate font-mono text-xs text-muted-foreground">
-            {line}
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-}
-
-export function LifecycleLogRow({ row }: { row: OptimizerLogRow }) {
-  const read = readLifecycleRow(row);
-  return (
-    <TimelineEntry data-level={row.level} tone={LEVEL_TONE[row.level]} ts={row.ts}>
-      <p className="text-sm leading-snug">
-        <span className="font-semibold text-foreground">{read.title}</span>
-        {row.level === 'warn' ? (
-          <span className={`${typeScale.label} ml-2 font-semibold text-warning`}>warn</span>
-        ) : null}
-        {row.portfolio_name ? (
-          <span className="text-muted-foreground text-xs"> · {row.portfolio_name}</span>
-        ) : null}
-      </p>
-      {read.summary ? (
-        <p
-          className={cn(
-            'mt-0.5 text-xs leading-relaxed',
-            row.level === 'error' ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {read.summary}
-        </p>
-      ) : null}
-      <FactList facts={read.facts} />
-      <DetailList lines={read.detail} />
-    </TimelineEntry>
-  );
-}
 
 export function OptimizerLogs({ brandId, windowDays = 7, controls, footer }: OptimizerLogsProps) {
   const logsQuery = useOptimizerLogs(brandId, windowDays);

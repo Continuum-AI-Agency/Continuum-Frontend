@@ -1,23 +1,28 @@
 'use client';
 
-// The Activity sub-view: two feeds that used to be one.
+// The Activity sub-view (G13): two feeds that used to be one.
 //
-//   Actions    — what the optimizer did to the AD ACCOUNT. Every row has a before, an after,
-//                an actor, a reason and (where the server says so) a one-click undo.
+//   Actions    — what changed on the AD ACCOUNT, against what it spent. The account's spend per
+//                day over the window, the days it showed no ad shaded, a dot per event coloured
+//                by the hand that made it (the Optimizer, the team, the platform), then the same
+//                events as a list by day. Every write keeps its before, its after, its actor, its
+//                reason and (where the server says so) its one-click undo.
 //   Server log — what the MACHINE did. Cycle lifecycle, skips, drift, failures.
 //
 // They are separate because they answer different questions, and merging them made both
 // worse: a lifecycle row has no before/after to show, and an action row buried in cycle
 // chatter has no revert. The split is the server's (optimizer_list_actions vs the narrowed
-// optimizer_list_logs); this only chooses which of the two to render.
+// optimizer_list_logs); this only chooses which of the two to render. The one crossing is the
+// platform's own: a roster that drifted is listed beside the actions, because the platform did it.
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
 import { useState } from 'react';
 import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { cn } from '@/lib/utils';
-import { OptimizerActionFeed } from './OptimizerActionFeed';
+import { boardPaletteClass } from './board/palette';
 import { OptimizerLogs } from './OptimizerLogs';
+import { ActivityActionsView } from './pages/activity/ActivityActionsView';
 
 type ActivityFeed = 'actions' | 'server';
 
@@ -86,8 +91,8 @@ export function OptimizerActivity({ brandId }: { brandId: string }) {
   const [feed, setFeed] = useState<ActivityFeed>('actions');
   const [windowDays, setWindowDays] = useState<OptimizerFeedWindowDays>(7);
 
-  // The feed switch and the window ride on the same line as the feed's own portfolio filter;
-  // the feed draws that line because only it knows which portfolios it has loaded.
+  // The feed switch and the window lead both views. The Server log draws them on the line its
+  // portfolio filter shares; the Actions view puts its chart between them and its list.
   const controls = (
     <>
       <Segmented legend="Choose a feed" onChange={setFeed} options={FEEDS} value={feed} />
@@ -102,14 +107,21 @@ export function OptimizerActivity({ brandId }: { brandId: string }) {
 
   const footer = <ActivityNotifications brandId={brandId} />;
 
-  return feed === 'actions' ? (
-    <OptimizerActionFeed
-      brandId={brandId}
-      controls={controls}
-      footer={footer}
-      windowDays={windowDays}
-    />
-  ) : (
-    <OptimizerLogs brandId={brandId} controls={controls} footer={footer} windowDays={windowDays} />
+  return (
+    <div className={cn(boardPaletteClass, 'space-y-3')} data-testid="optimizer-activity">
+      {feed === 'actions' ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">{controls}</div>
+          <ActivityActionsView brandId={brandId} footer={footer} windowDays={windowDays} />
+        </>
+      ) : (
+        <OptimizerLogs
+          brandId={brandId}
+          controls={controls}
+          footer={footer}
+          windowDays={windowDays}
+        />
+      )}
+    </div>
   );
 }
