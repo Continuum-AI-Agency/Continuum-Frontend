@@ -1,0 +1,47 @@
+name: Preserve frontend CI receipts
+on:
+  workflow_run:
+    workflows: [Frontend CI]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+jobs:
+  receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # This trusted default-branch workflow never checks out or executes PR code.
+      - name: Declare bounded evidence
+        run: echo "Owner Frontend CI; staging $RUNNER_TEMP/continuum-ci; budget 1 MiB; destination gs://continuum-production-477821-creative-benchmarks/cicd/github/Continuum-AI-Agency_Continuum-Frontend/"
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: google-github-actions/auth@v3
+        id: artifacts
+        with:
+          workload_identity_provider: ${{ vars.CI_WIF_PROVIDER }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Archive exact-run metadata with pinned readback
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          repo=os.environ['GITHUB_REPOSITORY']; run=os.environ['RUN_ID']
+          data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run}']))
+          jobs=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run}/jobs?filter=latest&per_page=100']))
+          receipt={k:data.get(k) for k in ['id','head_sha','head_branch','event','status','conclusion','run_attempt','html_url','created_at','run_started_at','updated_at']}
+          receipt['jobs']=[{k:j.get(k) for k in ['id','name','status','conclusion','started_at','completed_at','steps']} for j in jobs['jobs']]
+          source=pathlib.Path(os.environ['RUNNER_TEMP'])/'frontend-ci-receipt.json'
+          source.write_text(json.dumps(receipt,indent=2)); assert source.stat().st_size<=1024*1024
+          uri=f"gs://continuum-production-477821-creative-benchmarks/cicd/github/{repo.replace('/','_')}/{run}/attempt-{data['run_attempt']}/receipt.json"
+          subprocess.run(['gcloud','storage','cp','--if-generation-match=0',str(source),uri],check=True)
+          meta=json.loads(subprocess.check_output(['gcloud','storage','objects','describe',uri,'--format=json']))
+          restored=subprocess.check_output(['gcloud','storage','cat',uri+'#'+str(meta['generation'])])
+          assert len(restored)==int(meta['size']) and restored==source.read_bytes()
+          print(json.dumps({'object':uri,'generation':meta['generation'],'sha256':hashlib.sha256(restored).hexdigest()}))
+          PY

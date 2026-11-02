@@ -1,0 +1,40 @@
+name: Frontend CI
+on:
+  pull_request:
+  push:
+    branches: [main, beta]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  validation:
+    name: Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Release-critical unit checks
+        run: bun run test:vercel
+      - name: Changed tests with an explicit verified base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$BASE_SHA"
+          if test -z "$base" || test "$base" = 0000000000000000000000000000000000000000; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          git cat-file -e "$base^{commit}"
+          bun test --changed="$base" --path-ignore-patterns '**/e2e/**' --timeout=30000 --max-concurrency=2
+      - name: Complete frontend typecheck
+        run: bun run typecheck
