@@ -317,13 +317,14 @@ export function OptimizerTab({
   const portfolios = portfoliosQuery.data;
   const pendingCount = totalPending(portfolios);
   const renewalCount = renewalsQuery.data.length;
-  // Actions is the brand's queue for this account AND every Google or TikTok portfolio, so its
-  // badge counts the same list the tab renders.
-  const actionPortfolios = useMemo(
+  // Actions and Portfolios list this account's portfolios AND every Google or TikTok one: the
+  // account picker lists Meta accounts only, so a Google-only portfolio is on no account a person
+  // can select. The Actions badge counts the same list the tab renders.
+  const accountAndPlatformPortfolios = useMemo(
     () => withPlatformPortfolios(portfolios, googlePortfolios, tiktokPortfolios),
     [portfolios, googlePortfolios, tiktokPortfolios],
   );
-  const actionsPending = totalPending(actionPortfolios);
+  const actionsPending = totalPending(accountAndPlatformPortfolios);
   const landingPlatform: AdPlatform | null =
     googlePortfolios.length > 0 ? 'google_ads' : tiktokPortfolios.length > 0 ? 'tiktok_ads' : null;
 
@@ -581,8 +582,8 @@ export function OptimizerTab({
             <TabsTrigger
               value="actions"
               className={subTab}
-              onMouseEnter={() => warmActionsQueue(actionPortfolios)}
-              onFocus={() => warmActionsQueue(actionPortfolios)}
+              onMouseEnter={() => warmActionsQueue(accountAndPlatformPortfolios)}
+              onFocus={() => warmActionsQueue(accountAndPlatformPortfolios)}
             >
               Actions
               {actionsPending + renewalCount > 0 ? (
@@ -660,7 +661,7 @@ export function OptimizerTab({
         <OptimizerPortfolios
           brandId={brandId}
           adAccountId={adAccountId}
-          portfolios={portfolios}
+          portfolios={accountAndPlatformPortfolios}
           currency={currency}
           onCreate={openCreate}
           onOpenDetail={openPortfolio}
@@ -679,7 +680,7 @@ export function OptimizerTab({
         <OptimizerActions
           brandId={brandId}
           adAccountId={adAccountId}
-          portfolios={actionPortfolios}
+          portfolios={accountAndPlatformPortfolios}
           renewals={renewalsQuery.data}
           onBrowsePortfolios={() => setView('portfolios')}
         />

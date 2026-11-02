@@ -33,6 +33,7 @@ let onPlatform: Record<'google_ads' | 'tiktok_ads', PortfolioListItem[]> = {
   tiktok_ads: [],
 };
 let actionsProps: Record<string, unknown> | null = null;
+let portfoliosProps: Record<string, unknown> | null = null;
 /** The brand's assigned ad accounts (plugin_mcp.list_brand_ad_accounts rows). */
 let assignedAccounts: { platform: string; account_id: string; name: string | null }[] = [];
 
@@ -93,7 +94,10 @@ mock.module('./sections/account/AccountAutomations', () => ({
   AccountAutomations: stub('automations-section'),
 }));
 mock.module('./sections/OptimizerPortfolios', () => ({
-  OptimizerPortfolios: stub('portfolios-section'),
+  OptimizerPortfolios: (props: Record<string, unknown>) => {
+    portfoliosProps = props;
+    return <div data-testid="portfolios-section" />;
+  },
 }));
 mock.module('./sections/OptimizerActions', () => ({
   OptimizerActions: (props: Record<string, unknown>) => {
@@ -154,6 +158,7 @@ beforeEach(() => {
   openPortfolioId = null;
   overviewProps = null;
   actionsProps = null;
+  portfoliosProps = null;
   onPlatform = { google_ads: [], tiktok_ads: [] };
   elsewhere = [];
   assignedAccounts = [];
@@ -451,6 +456,27 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
     expect(queued).toEqual([mixed.id, EASY_FIT_G1.id]);
     // 1 on the account's portfolio + 2 on the Google one: what the Actions tab renders.
     expect(screen.getByRole('tab', { name: /Actions/ }).textContent).toBe('Actions3');
+  });
+
+  // voltaic-salad 4.3: Easy Fit's account switcher lists only Meta accounts, so the Portfolios
+  // view, narrowed to the selected Meta account, never listed its Google-only portfolios
+  // (5aaf5931 "Test — Google Ads (Easy Fit)") on any account the person could pick.
+  it("lists the brand's Google-only portfolios in Portfolios beside the account's own, each once", () => {
+    const mixed = { ...PORTFOLIO, platforms: ['meta', 'google_ads'] } as PortfolioListItem;
+    const otherMetaAccount = {
+      ...PORTFOLIO,
+      id: '22222222-2222-4222-8222-222222222222',
+      ad_account_id: 'act_2',
+      platforms: ['meta'],
+    } as PortfolioListItem;
+    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [mixed] };
+    elsewhere = [otherMetaAccount, EASY_FIT_G1];
+    onPlatform = { google_ads: [mixed, EASY_FIT_G1], tiktok_ads: [] };
+    view = 'portfolios';
+    platformTab = 'google_ads';
+    renderTab();
+    const listed = (portfoliosProps?.portfolios as PortfolioListItem[]).map((p) => p.id);
+    expect(listed).toEqual([mixed.id, EASY_FIT_G1.id]);
   });
 });
 
