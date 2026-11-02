@@ -37,6 +37,7 @@ import {
   humanize,
   portfolioLevelLabel,
 } from '../format';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { pendingWorkCount } from '../reportModel';
 import {
   useOptimizerAccountRead,
@@ -423,7 +424,7 @@ export function OptimizerPortfolios({
               <PortfolioTableRow
                 key={portfolio.id}
                 portfolio={portfolio}
-                currency={currency}
+                currency={portfolioCurrency(portfolio, currency)}
                 window={windows.get(portfolio.id) ?? null}
                 pacing={pacingById.get(portfolio.id) ?? null}
                 lead={leads.get(portfolio.id) ?? null}

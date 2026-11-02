@@ -318,6 +318,19 @@ describe('OptimizerPortfolios', () => {
     expect(queryByTestId('portfolio-lead')).toBeNull();
   });
 
+  // Pink Elephant, 2026-11-01: "Evento Webinar 29 Octubre" is a Google portfolio stored in MXN,
+  // but the selected account's currency could not be read (Meta refused the account), and the
+  // row printed "100" — money with no code. A portfolio's money is in its own currency first.
+  it("prints a portfolio's money in its own currency when the account's is unknown", () => {
+    const { container } = renderList({
+      currency: null,
+      portfolios: [portfolio({ id: 'pink1', currency: 'MXN', daily_total: 100 })],
+    });
+
+    const daily = container.querySelector('[data-figure="portfolios.pink1.daily"]');
+    expect(daily?.textContent).toContain('MXN');
+  });
+
   // Easy Fit, 2026-11-01: the selected account is the Meta one and both portfolios are Google
   // ones, so the list opened on "Portfolios (0)" with the two behind "All accounts · 2" — a
   // page that reads as "no portfolios". An empty account with portfolios elsewhere opens on them.
