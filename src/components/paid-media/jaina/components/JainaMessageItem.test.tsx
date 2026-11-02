@@ -12,7 +12,7 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { JainaUIMessage } from '@continuum/contracts';
+import { buildImplementProposalTurn, type JainaUIMessage } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -23,6 +23,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from '@/components/ui/message-scroller';
+import { implementablePreview } from '@/lib/jaina/implementProposal.fixture';
 import { toJainaChatMessage } from '@/lib/jaina/uiMessageProjection';
 import type { JainaChatMessage } from '../types';
 
@@ -269,6 +270,29 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
     );
 
     expect(screen.getByText('How is spend doing?')).toBeTruthy();
+  });
+
+  it('shows the canvas implement turn as one short line, not as the technical text it sends', () => {
+    const turn = buildImplementProposalTurn(implementablePreview()) ?? '';
+    expect(turn.length).toBeGreaterThan(0);
+    render(
+      <JainaMessageItem
+        message={
+          {
+            id: 'msg_1',
+            role: 'user',
+            content: turn,
+            createdAt: '',
+            status: 'done',
+          } as JainaChatMessage
+        }
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByText('Implementing the proposed changes…')).toBeTruthy();
+    expect(screen.queryByText(/Implement this proposal now/)).toBeNull();
+    expect(document.body.textContent).not.toContain('gated Meta tool');
   });
 });
 

@@ -22,6 +22,7 @@ import {
   creativeCanvasUpdate,
 } from '@/lib/campaign-canvas/creativeGeneration';
 import { jainaOpeningSessionId } from '@/lib/jaina/deepLink';
+import { answersImplementTurn } from '@/lib/jaina/implementTurn';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 
 const AnimatedShaderBackground = dynamic(
@@ -1730,13 +1731,15 @@ export function JainaChatSurface({
 
   // The planner names the conversation. Applied only when the session has no title yet, so a
   // later turn's plan cannot rename a conversation the reader has already learned to recognise.
+  // The canvas's implement turn is the exception: its plan is named after a machine-written order.
+  const answersImplement = answersImplementTurn(messages);
   React.useEffect(() => {
     const planTitle = normalizeSessionTitle(liveChatMessage?.plan?.title ?? null);
-    if (!planTitle) return;
+    if (!planTitle || answersImplement) return;
     setSessionTitleById((previous) =>
       previous[sessionId] === planTitle ? previous : { ...previous, [sessionId]: planTitle },
     );
-  }, [liveChatMessage?.plan?.title, sessionId]);
+  }, [answersImplement, liveChatMessage?.plan?.title, sessionId]);
 
   // Mirror the active run/response into refs so the realtime run-status handler
   // (which fires outside React's render) can match the in-flight run.

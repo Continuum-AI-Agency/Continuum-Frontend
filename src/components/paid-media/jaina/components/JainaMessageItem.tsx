@@ -6,6 +6,7 @@ import type {
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
 } from '@continuum/contracts';
+import { isImplementProposalTurn } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { LiveChangeChatCard } from '@/CampaignCanvas/lectura/LiveChangeChatCard';
@@ -312,9 +313,19 @@ function JainaMessageItemImpl({
       >
         {message.role === 'user' ? (
           <>
-            <span className="text-sm font-medium whitespace-pre-wrap">
-              <MentionifiedText text={message.content} references={message.metadata?.references} />
-            </span>
+            {isImplementProposalTurn(message.content) ? (
+              // The canvas's button sends a machine-written order; the reader sees what it does.
+              <span className="text-sm font-medium text-muted-foreground">
+                Implementing the proposed changes…
+              </span>
+            ) : (
+              <span className="text-sm font-medium whitespace-pre-wrap">
+                <MentionifiedText
+                  text={message.content}
+                  references={message.metadata?.references}
+                />
+              </span>
+            )}
             <ChatMediaGrid
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
               lightboxTitle="Attachment"
