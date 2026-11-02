@@ -128,6 +128,11 @@ describe('liveChangeConfirmBarOf', () => {
   it('offers nothing to confirm when the chat holds no approval to answer', () => {
     expect(liveChangeConfirmBarOf({ ...base, canDecide: false, preview: {}, decision: 'pending' })).toEqual({ kind: 'none' });
   });
+  it('says a Google proposal cannot be implemented from here', () => {
+    expect(
+      liveChangeConfirmBarOf({ ...base, preview: { origin: 'proposal', platform: 'google' }, decision: 'proposal' }),
+    ).toEqual({ kind: 'google_note' });
+  });
   it('offers to implement a proposal, and nothing once decided', () => {
     expect(liveChangeConfirmBarOf({ ...base, preview: { origin: 'proposal' }, decision: 'proposal' })).toEqual({ kind: 'implement' });
     expect(liveChangeConfirmBarOf({ ...base, preview: {}, decision: 'approved' })).toEqual({ kind: 'none' });

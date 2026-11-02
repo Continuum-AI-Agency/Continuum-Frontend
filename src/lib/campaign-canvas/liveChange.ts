@@ -3,7 +3,6 @@
 // component only lays them out. The approval itself stays on the chat card.
 
 import {
-  canConfirmLiveChange,
   formatMoney,
   isProposalApprovalId,
   type LiveChangeNode,
@@ -148,22 +147,27 @@ export const liveChangeByPartIdOf = (
 export type LiveChangeConfirmBar =
   | { kind: 'confirm' }
   | { kind: 'implement' }
+  | { kind: 'google_note' }
   | { kind: 'none' };
 
 /**
  * What the canvas offers to do with the change it shows. A pending gated edit is confirmed or
  * declined with the approval card's own decision; a proposal made in the answer has no approval
  * yet, so the canvas offers to ask Jaina to run its changes through the approval cards. A
- * decided edit offers nothing.
+ * Google proposal cannot be implemented from here: Jaina has no Google write tool with an
+ * approval yet. A decided edit offers nothing.
  */
 export const liveChangeConfirmBarOf = (params: {
-  preview: Pick<LiveChangePreviewPayload, 'origin'>;
+  preview: Pick<LiveChangePreviewPayload, 'origin' | 'platform'>;
   decision: LiveChangeDecision;
   canDecide: boolean;
   canImplement: boolean;
 }): LiveChangeConfirmBar => {
-  if (params.decision === 'pending' && params.canDecide && canConfirmLiveChange(params.preview)) {
+  if (params.decision === 'pending' && params.canDecide && params.preview.origin !== 'proposal') {
     return { kind: 'confirm' };
+  }
+  if (params.decision === 'proposal' && params.preview.platform === 'google') {
+    return { kind: 'google_note' };
   }
   if (params.decision === 'proposal' && params.canImplement) return { kind: 'implement' };
   return { kind: 'none' };

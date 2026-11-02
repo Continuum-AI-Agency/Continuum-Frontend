@@ -4,12 +4,7 @@ import {
   changeProjectionPartId,
   changeProjectionSchema,
 } from './jaina-change-projection';
-import {
-  canConfirmLiveChange,
-  liveChangeConfirmActionOf,
-  liveChangeConfirmActionSchema,
-  liveChangePreviewPayloadSchema,
-} from './jaina-live-change';
+import { liveChangePreviewPayloadSchema } from './jaina-live-change';
 
 const figures = (spend: number | null, results: number | null) => ({
   spend,
@@ -103,19 +98,5 @@ describe('live change preview carrying a projection', () => {
     });
     expect(parsed.projection?.platform).toBe('google');
     expect(parsed.origin).toBe('proposal');
-  });
-});
-
-describe('confirming from the canvas', () => {
-  it('is the approval card decision on the same approval id', () => {
-    const action = liveChangeConfirmActionOf({ approvalId: 'appr_1', toolCallId: 'call_1' }, 'approve');
-    expect(action).toEqual({ decision: 'approve', approval_id: 'appr_1', tool_call_id: 'call_1' });
-    expect(liveChangeConfirmActionSchema.safeParse({ ...action, decision: 'maybe' }).success).toBe(false);
-  });
-
-  it('refuses nothing for an approval preview and offers nothing for a proposal', () => {
-    expect(canConfirmLiveChange({})).toBe(true);
-    expect(canConfirmLiveChange({ origin: 'approval' })).toBe(true);
-    expect(canConfirmLiveChange({ origin: 'proposal' })).toBe(false);
   });
 });

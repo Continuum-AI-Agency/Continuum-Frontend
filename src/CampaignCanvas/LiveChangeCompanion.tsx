@@ -6,15 +6,13 @@
 // When the thread proposed this campaign more than once, the version line sits under the
 // header: an older version, or a version compared with the one before, is drawn in its place.
 
-import type { LiveChangePreviewPayload } from '@continuum/contracts';
+import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
 import * as React from 'react';
 import { lecturaFromLiveChange } from '@/lib/campaign-canvas/lectura';
-import {
-  type LiveChangeDecision,
-  liveChangeConfirmBarOf,
-} from '@/lib/campaign-canvas/liveChange';
+import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import type { VersionLine } from '@/lib/campaign-canvas/versions';
 import { LiveChangeCanvas, LiveChangeDecisionPill } from './LiveChangeCanvas';
+import { type ConfirmVariantOption, LiveChangeConfirmBar } from './LiveChangeConfirmBar';
 import { ProjectionPanel } from './ProjectionPanel';
 import { CanvasViewHint, CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
 import { LecturaView, PlatformChip } from './lectura/LecturaView';
@@ -26,23 +24,22 @@ export function LiveChangeCompanion({
   versions = null,
   onDecide,
   onImplement,
+  pendingDecision = null,
+  variants = null,
 }: {
   preview: LiveChangePreviewPayload;
   decision: LiveChangeDecision;
   /** Every proposal the thread made for this campaign, oldest first. */
   versions?: VersionLine | null;
-  /** Answers the pending approval with the chat card's own decision. */
-  onDecide?: (decision: 'approve' | 'deny') => void;
+  /** Answers the pending approval with the chat card's own decision (and its choice). */
+  onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+  /** The decision already sent for this approval, from the card or the canvas. */
+  pendingDecision?: 'approve' | 'deny' | null;
+  /** The choices the gated tool's card offers. */
+  variants?: readonly ConfirmVariantOption[] | null;
   /** Asks Jaina to run a proposal's changes through the approval cards. */
   onImplement?: () => void;
 }) {
-  const [sent, setSent] = React.useState<'approve' | 'deny' | 'implement' | null>(null);
-  const bar = liveChangeConfirmBarOf({
-    preview,
-    decision,
-    canDecide: Boolean(onDecide),
-    canImplement: Boolean(onImplement),
-  });
   const { view, setView, isPhone, hint, dismissHint } = useCanvasView('proposed');
   const model = React.useMemo(() => lecturaFromLiveChange(preview), [preview]);
   const versionLine = useVersionLine(versions, preview.partId);
@@ -79,65 +76,21 @@ export function LiveChangeCompanion({
           <LiveChangeCanvas preview={preview} decision={decision} showHeader={false} />
         )}
       </div>
-      {bar.kind !== 'none' && !shown ? (
-        <div
-          className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-2"
-          data-testid="live-change-confirm"
-        >
-          <span className="min-w-0 text-[13px] text-muted-foreground">
-            {bar.kind === 'confirm'
-              ? 'Confirming uses the same approval as the chat card.'
-              : 'Nothing is applied yet. Jaina will ask for your approval on each change.'}
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            {bar.kind === 'confirm' ? (
-              <>
-                <button
-                  type="button"
-                  disabled={sent !== null}
-                  onClick={() => {
-                    setSent('deny');
-                    onDecide?.('deny');
-                  }}
-                  className="rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-primary"
-                  data-testid="live-change-deny"
-                >
-                  Decline
-                </button>
-                <button
-                  type="button"
-                  disabled={sent !== null}
-                  onClick={() => {
-                    setSent('approve');
-                    onDecide?.('approve');
-                  }}
-                  className="rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-primary"
-                  data-testid="live-change-approve"
-                >
-                  {sent === 'approve' ? 'Approving…' : 'Confirm and apply'}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={sent !== null}
-                onClick={() => {
-                  setSent('implement');
-                  onImplement?.();
-                }}
-                className="rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-primary"
-                data-testid="live-change-implement"
-              >
-                {sent === 'implement' ? 'Asking Jaina…' : 'Implement these changes'}
-              </button>
-            )}
-          </span>
-        </div>
-      ) : null}
       {preview.projection && !shown ? (
         <div className="max-h-[55%] shrink-0 overflow-y-auto border-t border-border bg-card">
           <ProjectionPanel projection={preview.projection} />
         </div>
+      ) : null}
+      {!shown ? (
+        <LiveChangeConfirmBar
+          key={preview.partId}
+          preview={preview}
+          decision={decision}
+          pendingDecision={pendingDecision}
+          variants={variants}
+          {...(onDecide ? { onDecide } : {})}
+          {...(onImplement ? { onImplement } : {})}
+        />
       ) : null}
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import type { LiveChangePreviewPayload } from '@continuum/contracts';
+import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   Bot,
@@ -455,7 +455,9 @@ export default function PaidMediaClientPage({
     preview: LiveChangePreviewPayload;
     decision: LiveChangeDecision;
     versions: VersionLine | null;
-    onDecide: ((decision: 'approve' | 'deny') => void) | null;
+    onDecide: ((decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void) | null;
+    pendingDecision: 'approve' | 'deny' | null;
+    variants: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
   } | null>(null);
   // The scaffold's versions the thread drew, for the companion's version line.
   const [companionScaffoldVersions, setCompanionScaffoldVersions] =
@@ -654,13 +656,17 @@ export default function PaidMediaClientPage({
       decision: LiveChangeDecision;
       opened: boolean;
       versions?: VersionLine | null;
-      onDecide?: (decision: 'approve' | 'deny') => void;
+      onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+      pendingDecision?: 'approve' | 'deny' | null;
+      variants?: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
     }) => {
       const next = {
         preview: focus.preview,
         decision: focus.decision,
         versions: focus.versions ?? null,
         onDecide: focus.onDecide ?? null,
+        pendingDecision: focus.pendingDecision ?? null,
+        variants: focus.variants ?? null,
       };
       if (focus.opened) {
         setCompanionLiveChange(next);
@@ -1160,7 +1166,10 @@ export default function PaidMediaClientPage({
                             />
                           ) : companionLiveChange ? (
                             <LiveChangeCompanion
+                              key={companionLiveChange.preview.partId}
                               preview={companionLiveChange.preview}
+                              pendingDecision={companionLiveChange.pendingDecision}
+                              variants={companionLiveChange.variants}
                               decision={companionLiveChange.decision}
                               versions={companionLiveChange.versions}
                               {...(companionLiveChange.onDecide

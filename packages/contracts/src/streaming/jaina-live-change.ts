@@ -18,7 +18,6 @@
 
 import { z } from 'zod';
 import { changeProjectionPlatformSchema, changeProjectionSchema } from './jaina-change-projection';
-import { jainaToolActionSchema } from './jaina-scaffold';
 
 export const LIVE_CHANGE_PREVIEW_FRAME_TYPE = 'paid.live_change_preview' as const;
 
@@ -98,33 +97,4 @@ export type LiveChangePreviewPayload = z.infer<typeof liveChangePreviewPayloadSc
 
 export function liveChangePreviewPartId(approvalId: string): string {
   return `live-change:${approvalId}`;
-}
-
-/**
- * Confirming from the canvas IS the approval card's decision: the same `jainaToolActionSchema`
- * the chat card sends (approval id and tool call id of the pending gated edit), so the gate,
- * the approval record, the Optimizer ledger and the Activity log are the ones the card uses.
- * The canvas owns no write path of its own.
- */
-export const liveChangeConfirmActionSchema = jainaToolActionSchema.pick({
-  decision: true,
-  approval_id: true,
-  tool_call_id: true,
-});
-export type LiveChangeConfirmAction = z.infer<typeof liveChangeConfirmActionSchema>;
-
-/** A preview beside a pending gated edit can be confirmed; a proposal has no approval yet. */
-export function canConfirmLiveChange(preview: Pick<LiveChangePreviewPayload, 'origin'>): boolean {
-  return preview.origin !== 'proposal';
-}
-
-export function liveChangeConfirmActionOf(
-  preview: Pick<LiveChangePreviewPayload, 'approvalId' | 'toolCallId'>,
-  decision: LiveChangeConfirmAction['decision'],
-): LiveChangeConfirmAction {
-  return liveChangeConfirmActionSchema.parse({
-    decision,
-    approval_id: preview.approvalId,
-    tool_call_id: preview.toolCallId,
-  });
 }

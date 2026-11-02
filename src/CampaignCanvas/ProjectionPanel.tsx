@@ -53,6 +53,9 @@ export function ProjectionPanel({ projection }: { projection: ChangeProjection }
         <p className="text-foreground" data-testid="projection-headline">
           {projectionHeadlineOf(projection)}
         </p>
+        <p className="text-xs text-muted-foreground" data-testid="projection-first-assumption">
+          {projection.assumptions[0]}
+        </p>
       </header>
 
       <div className="overflow-x-auto">
@@ -105,7 +108,11 @@ export function ProjectionPanel({ projection }: { projection: ChangeProjection }
           {bars.map((bar) => (
             <div key={bar.id} className="grid grid-cols-[7rem_1fr] items-center gap-2">
               <span className="truncate text-xs text-foreground">{bar.label}</span>
-              <div className="space-y-0.5">
+              <div
+                className="space-y-0.5"
+                role="img"
+                aria-label={`${bar.label}: ${bar.before} now, ${bar.after} after`}
+              >
                 <div className="h-2 rounded-sm bg-muted-foreground/40" style={{ width: `${bar.beforePct}%` }} />
                 <div className="h-2 rounded-sm bg-primary" style={{ width: `${bar.afterPct}%` }} />
               </div>
@@ -130,7 +137,7 @@ export function ProjectionPanel({ projection }: { projection: ChangeProjection }
         </summary>
         <p className="mt-1">{projection.method.summary}</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-4">
-          {projection.assumptions.map((assumption) => (
+          {projection.assumptions.slice(1).map((assumption) => (
             <li key={assumption}>{assumption}</li>
           ))}
         </ul>

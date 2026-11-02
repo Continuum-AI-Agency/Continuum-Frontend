@@ -44,6 +44,7 @@ import type {
 } from '@continuum/contracts';
 import {
   AGENT_RUN_QUEUED,
+  approvalVariantsOf,
   isApprovalVariantOffered,
   JAINA_MAX_AD_ACCOUNTS,
   type JainaApprovalVariant,
@@ -353,10 +354,14 @@ type JainaChatSurfaceProps = {
     /** Every proposal the thread made for this campaign, for the canvas's version line. */
     versions?: VersionLine | null;
     /**
-     * Answers the preview's pending approval with the chat card's own decision. Absent when the
-     * thread holds no approval to answer (a decided edit, a proposal, a loaded thread).
+     * Answers the preview's pending approval with the chat card's own decision and choice.
+     * Absent when the thread holds no approval to answer (a decided edit, a proposal).
      */
-    onDecide?: (decision: 'approve' | 'deny') => void;
+    onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+    /** The decision already sent for this approval, from the card or the canvas. */
+    pendingDecision?: 'approve' | 'deny' | null;
+    /** The choices the gated tool's card offers (budget changes: apply, or pause for review). */
+    variants?: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
   }) => void;
   /**
    * A host with a companion canvas. Called when a turn changes several campaigns at once (a
@@ -2879,6 +2884,41 @@ export function JainaChatSurface({
 
   // The companion canvas follows the thread's newest live edit too: it opens on the campaign
   // a pending pause, budget or copy touches, and tracks the approval's decision after.
+  // What the canvas may do with a preview's approval: the card's own decision, its choices, and
+  // the decision already in flight (so a failed send re-enables the canvas and a click on the
+  // card disables it).
+  const confirmFocusOf = React.useCallback(
+    (
+      preview: LiveChangePreviewPayload,
+      decision: LiveChangeDecision,
+      thread: typeof messages,
+    ): {
+      onDecide?: (answer: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+      pendingDecision: 'approve' | 'deny' | null;
+      variants: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
+    } => {
+      if (decision !== 'pending') return { pendingDecision: null, variants: null };
+      const approval = thread
+        .flatMap((entry) => entry.pendingToolApprovals ?? [])
+        .find((candidate) => candidate.approvalId === preview.approvalId);
+      const choices = approval ? approvalVariantsOf(approval.toolName) : null;
+      return {
+        pendingDecision: optimisticApprovalDecisions[preview.approvalId] ?? null,
+        variants: choices
+          ? choices.map((choice) => ({ variant: choice.variant, label: choice.label }))
+          : null,
+        ...(approval
+          ? {
+              onDecide: (answer, variant) =>
+                handleApprovalDecision(approval, answer, undefined, variant),
+            }
+          : {}),
+      };
+    },
+    [handleApprovalDecision, optimisticApprovalDecisions],
+  );
+  const confirmFocusRef = React.useRef(confirmFocusOf);
+  confirmFocusRef.current = confirmFocusOf;
   const latestLiveChange = React.useMemo(() => latestLiveChangeOf(messages), [messages]);
   const openedLiveChangeRef = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -2893,22 +2933,14 @@ export function JainaChatSurface({
       Boolean(message && !historyMessageIds.has(message.id));
     if (fresh) openedLiveChangeRef.current = preview.partId;
     const campaignId = campaignIdsOfPreview(preview)[0];
-    const pendingApproval =
-      decision === 'pending'
-        ? messages
-            .flatMap((entry) => entry.pendingToolApprovals ?? [])
-            .find((approval) => approval.approvalId === preview.approvalId)
-        : undefined;
     onLiveChangeFocus({
       preview,
       decision,
       opened: fresh,
       versions: campaignId ? liveChangeVersionsOf(messages, campaignId) : null,
-      ...(pendingApproval
-        ? { onDecide: (answer) => handleApprovalDecision(pendingApproval, answer) }
-        : {}),
+      ...confirmFocusOf(preview, decision, messages),
     });
-  }, [handleApprovalDecision, historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
+  }, [confirmFocusOf, historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
 
   // A turn that changes several campaigns opens the canvas on its portfolio, once, live.
   const portfolioFocusOf = React.useCallback(
@@ -2973,6 +3005,11 @@ export function JainaChatSurface({
               if (found)
                 onLiveChangeFocus({
                   ...found,
+                  ...confirmFocusRef.current(
+                    found.preview,
+                    found.decision,
+                    liveChangeMessagesRef.current,
+                  ),
                   opened: true,
                   versions: campaignId
                     ? liveChangeVersionsOf(liveChangeMessagesRef.current, campaignId)
