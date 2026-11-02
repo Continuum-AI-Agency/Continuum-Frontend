@@ -30,7 +30,7 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           python3 - <<'PY'
-          import hashlib,json,os,pathlib,subprocess
+          import hashlib,json,os,pathlib,subprocess,urllib.parse,urllib.request
           repo=os.environ['GITHUB_REPOSITORY']; run=os.environ['RUN_ID']
           data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run}']))
           jobs=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run}/jobs?filter=latest&per_page=100']))
@@ -38,10 +38,18 @@ jobs:
           receipt['jobs']=[{k:j.get(k) for k in ['id','name','status','conclusion','started_at','completed_at','steps']} for j in jobs['jobs']]
           source=pathlib.Path(os.environ['RUNNER_TEMP'])/'frontend-ci-receipt.json'
           source.write_text(json.dumps(receipt,indent=2)); assert source.stat().st_size<=1024*1024
-          uri=f"gs://continuum-production-477821-creative-benchmarks/cicd/github/{repo.replace('/','_')}/{run}/attempt-{data['run_attempt']}/receipt.json"
-          subprocess.run(['gcloud','storage','cp','--if-generation-match=0',str(source),uri],check=True)
-          meta=json.loads(subprocess.check_output(['gcloud','storage','objects','describe',uri,'--format=json']))
-          restored=subprocess.check_output(['gcloud','storage','cat',uri+'#'+str(meta['generation'])])
+          bucket='continuum-production-477821-creative-benchmarks'
+          name=f"cicd/github/{repo.replace('/','_')}/{run}/attempt-{data['run_attempt']}/receipt.json"
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'}
+          query=urllib.parse.urlencode({'uploadType':'media','name':name,'ifGenerationMatch':'0'})
+          request=urllib.request.Request(f'https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?{query}',data=source.read_bytes(),headers=headers,method='POST')
+          with urllib.request.urlopen(request,timeout=60) as response:
+              meta=json.load(response)
+          assert meta['name']==name and meta['bucket']==bucket
+          url=f"https://storage.googleapis.com/storage/v1/b/{bucket}/o/{urllib.parse.quote(name,safe='')}?alt=media&generation={meta['generation']}"
+          with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=60) as response:
+              restored=response.read(1024*1024+1)
           assert len(restored)==int(meta['size']) and restored==source.read_bytes()
-          print(json.dumps({'object':uri,'generation':meta['generation'],'sha256':hashlib.sha256(restored).hexdigest()}))
+          print(json.dumps({'object':f'gs://{bucket}/{name}','generation':meta['generation'],'sha256':hashlib.sha256(restored).hexdigest()}))
           PY
