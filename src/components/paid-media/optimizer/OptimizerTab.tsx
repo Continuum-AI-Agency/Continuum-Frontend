@@ -24,6 +24,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
+import { EasyfitDashboard } from './dashboard/EasyfitDashboard';
+import { isEasyfitBrand } from './dashboard/easyfitBrand';
+import { useDashboardCopy } from './dashboard/i18n/useDashboardLocale';
 import { pendingWorkCount } from './reportModel';
 import { AccountAutomations } from './sections/account/AccountAutomations';
 import { jainaWeeklyReportPrompt } from './sections/jainaEntryModel';
@@ -306,6 +309,7 @@ export function OptimizerTab({
   const prefetchPortfolioDetail = usePrefetchPortfolioDetail(brandId);
   const warmActionsQueue = useWarmActionsQueue(brandId);
   const connected = useConnectedPlatforms(brandId, adAccountId, platform);
+  const dashboardCopy = useDashboardCopy().t;
 
   const googlePortfolios = useOptimizerPlatformPortfolios(brandId, 'google_ads').data;
   const tiktokPortfolios = useOptimizerPlatformPortfolios(brandId, 'tiktok_ads').data;
@@ -546,7 +550,11 @@ export function OptimizerTab({
     );
   }
 
-  const showsOverviewChrome = view === 'overview';
+  // The Easy Fit dashboard exists for one brand; a `dashboard` link opened on any other brand
+  // lands on the Overview instead of an empty tab.
+  const showsDashboard = isEasyfitBrand(brandId);
+  const activeView = view === 'dashboard' && !showsDashboard ? 'overview' : view;
+  const showsOverviewChrome = activeView === 'overview';
   // The line variant hangs its underline 5px below the trigger; here it sits on the bar's hairline.
   const subTab = 'h-9 flex-none px-0 text-xs group-data-horizontal/tabs:after:bottom-0';
   return (
@@ -554,7 +562,7 @@ export function OptimizerTab({
     // the bar wraps and the five tabs scroll inside it: the tab list alone is wider than a 390px
     // screen, and it used to widen the whole surface past the viewport.
     <Tabs
-      value={view}
+      value={activeView}
       onValueChange={(value) => setView(value as typeof view)}
       className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden"
     >
@@ -589,6 +597,11 @@ export function OptimizerTab({
             <TabsTrigger value="logs" className={subTab}>
               Activity
             </TabsTrigger>
+            {showsDashboard ? (
+              <TabsTrigger value="dashboard" className={subTab}>
+                {dashboardCopy.tab}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
           {portfoliosQuery.isError ? (
             <RefreshFailedNotice onRetry={() => void portfoliosQuery.refetch()} />
@@ -678,6 +691,15 @@ export function OptimizerTab({
       >
         <OptimizerActivity brandId={brandId} />
       </TabsContent>
+
+      {showsDashboard ? (
+        <TabsContent
+          value="dashboard"
+          className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
+        >
+          <EasyfitDashboard brandId={brandId} />
+        </TabsContent>
+      ) : null}
     </Tabs>
   );
 }

@@ -16,6 +16,8 @@ export * from './creative-strategy/index';
 export * from './creative-system/index';
 export * from './design-system/index';
 export * from './documents/index';
+export * from './easyfit/index';
+export * from './easyfit-http/index';
 export * from './embedding/index';
 export * from './errors/integration-error';
 export * from './goals/index';
