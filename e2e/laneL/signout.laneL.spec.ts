@@ -211,7 +211,9 @@ test('laneL:signout — Sign out ends only this browser; a marked session gets n
       { name: 'is_impersonating', value: 'true', url: baseURL ?? 'http://localhost:3116' },
     ]);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const sentence = page.getByText(/came from an impersonation link/);
+    // The deployed Settings keeps a hidden copy of the section mounted beside the visible one;
+    // getByRole skips hidden nodes, getByText does not, so the sentence is asked for visibly.
+    const sentence = page.getByText(/came from an impersonation link/).filter({ visible: true });
     await expect(sentence).toBeVisible({ timeout: 120_000 });
     await expect(page.getByRole('button', { name: 'Sign out of all devices' })).toHaveCount(0);
     await page.screenshot({ path: out('02-impersonating-withheld.png') });
