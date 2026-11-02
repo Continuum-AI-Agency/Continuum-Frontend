@@ -1105,6 +1105,10 @@ export function JainaChatSurface({
   const deepLinkSessionIdRef = React.useRef(initialSessionId ?? null);
   // A new-conversation deep link skips "most recent" exactly once, on first bootstrap.
   const startNewConversationRef = React.useRef(startNewConversation);
+  // Counts the conversations the reader chose or started ("+ New", a pick in the sidebar). The
+  // first load opens the latest conversation only if the reader has chosen none by the time it
+  // lands; otherwise it would put the old chat back over the one they just started.
+  const conversationChoiceRef = React.useRef(0);
   const activeResponseIdRef = React.useRef<string | null>(null);
   const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
@@ -1625,6 +1629,7 @@ export function JainaChatSurface({
     async (targetSessionId: string, options?: { silent?: boolean }) => {
       if (!adAccountId) return;
 
+      conversationChoiceRef.current += 1;
       setIsConversationSwitching(true);
       try {
         const payload = await fetchConversationHistory(targetSessionId);
@@ -1933,6 +1938,8 @@ export function JainaChatSurface({
       persistedAssistantResponseIdsRef.current.clear();
       setIsHistoryLoading(true);
       setHistoryError(null);
+      const choiceAtStart = conversationChoiceRef.current;
+      const readerChoseMeanwhile = () => conversationChoiceRef.current !== choiceAtStart;
 
       try {
         const cachedSessions = getFreshConversationSessionsFromCache();
@@ -1970,6 +1977,7 @@ export function JainaChatSurface({
           return;
         }
 
+        if (readerChoseMeanwhile()) return;
         const conversationPayload = await fetchConversationHistory(targetSessionId);
         if (!conversationPayload || cancelled) return;
         setConversationSessionsWithCache(sortConversationSessions(conversationPayload.sessions));
@@ -1983,6 +1991,7 @@ export function JainaChatSurface({
           }
           return next;
         });
+        if (readerChoseMeanwhile()) return;
         showConversation(targetSessionId, conversationPayload.uiMessages);
         setEarlierCursor(conversationPayload.nextCursor ?? null);
         setShaderState(conversationPayload.uiMessages.length > 0 ? 'hidden' : 'visible');
@@ -2469,6 +2478,7 @@ export function JainaChatSurface({
   // started. Switching conversation already only detaches; this now matches it, and the run's
   // completion toast still finds the reader. Stop is the one control that ends a run.
   const handleClearConversation = React.useCallback(() => {
+    conversationChoiceRef.current += 1;
     if (isStreaming) stopChat();
     setUiMessages([]);
     setQueuedMessages([]);

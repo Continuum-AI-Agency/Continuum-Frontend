@@ -343,13 +343,18 @@ mock.module('./components/JainaConversationSidebar', () => ({
   JainaConversationSidebar: ({
     sessions,
     onSelectConversation,
+    onCreateConversation,
     loadError,
   }: {
     sessions: { sessionId: string; title?: string | null }[];
     onSelectConversation: (sessionId: string) => void;
+    onCreateConversation: () => void;
     loadError?: string | null;
   }) => (
     <div data-testid="conversation-sidebar">
+      <button type="button" data-testid="create-session" onClick={onCreateConversation}>
+        New
+      </button>
       {loadError ? <span data-testid="jaina-conversations-error">{loadError}</span> : null}
       {sessions.map((session) => (
         <button
@@ -1160,6 +1165,52 @@ describe('JainaChatSurface integration', () => {
     expect(screen.getAllByTestId('user-content').map((node) => node.textContent)).toEqual([
       'question in session-b',
     ]);
+  });
+
+  it('opens nothing when the reader started a new conversation while the latest one was loading', async () => {
+    // Production, 2026-11-02: "+ New" tapped while the most recent conversation's history was
+    // still in flight. The load finished after it and put the old conversation back on screen,
+    // so the first question of the "new" chat landed in the last one.
+    const session = {
+      sessionId: 'session-a',
+      brandId: 'brand-1',
+      adAccountId: 'act-1',
+      title: 'First',
+      lastMessageRole: 'assistant',
+      lastMessagePreview: 'First',
+      lastMessageAt: '2026-04-17T16:30:00.000Z',
+      createdAt: '2026-04-17T16:20:00.000Z',
+      updatedAt: '2026-04-17T16:30:00.000Z',
+    };
+    let releaseHistory: () => void = () => {};
+    const historyHeld = new Promise<void>((resolve) => {
+      releaseHistory = resolve;
+    });
+    global.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (!url.includes('/api/agents/jaina/chat/conversations?')) {
+        return { ok: false, text: () => Promise.resolve('Unhandled') } as MockFetchResponse;
+      }
+      if (!new URL(url, 'http://localhost').searchParams.get('sessionId')) {
+        return jsonResponse({ sessions: [session], uiMessages: [] });
+      }
+      await historyHeld;
+      return jsonResponse({
+        sessions: [session],
+        uiMessages: [uiMessage('a-user', 'user', [textPart('question in session-a')])],
+      });
+    }) as typeof fetch;
+
+    render(surface, { wrapper: withQueryClient });
+    await screen.findByTestId('select-session-a');
+    fireEvent.click(screen.getByTestId('create-session'));
+    await act(async () => {
+      releaseHistory();
+      await historyHeld;
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('jaina-starter')).not.toBeNull());
+    expect(screen.queryAllByTestId('user-content')).toEqual([]);
   });
 
   it('says a failed history load once, inline in the sidebar, never as a toast over the composer', async () => {
