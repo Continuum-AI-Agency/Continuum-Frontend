@@ -1,6 +1,10 @@
 'use client';
 
-import type { JainaApprovalVariant, LiveChangePreviewPayload } from '@continuum/contracts';
+import {
+  buildImplementProposalTurn,
+  type JainaApprovalVariant,
+  type LiveChangePreviewPayload,
+} from '@continuum/contracts';
 import { ReactFlowProvider } from '@xyflow/react';
 import {
   Bot,
@@ -46,7 +50,7 @@ import {
   buildCampaignCreativeRequest,
   type CampaignCreativeRequest,
 } from '@/lib/campaign-canvas/creativeGeneration';
-import { LIVE_CHANGE_IMPLEMENT_TURN, type LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
+import type { LiveChangeDecision } from '@/lib/campaign-canvas/liveChange';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import type { PortfolioViewModel } from '@/lib/campaign-canvas/portfolio';
 import type { ScaffoldStructureDiff } from '@/lib/campaign-canvas/scaffoldDiff';
@@ -708,6 +712,11 @@ export default function PaidMediaClientPage({
   const sendCompanionTurn = React.useCallback((text: string) => {
     setCompanionTurn({ id: crypto.randomUUID(), text });
   }, []);
+  // The proposal on the canvas, as the turn that opens its approval cards; null offers no button.
+  const implementTurn = React.useMemo(
+    () => (companionLiveChange ? buildImplementProposalTurn(companionLiveChange.preview) : null),
+    [companionLiveChange],
+  );
   const clearCompanionTurn = React.useCallback(() => setCompanionTurn(null), []);
 
   const getCanvasWidthLimits = React.useCallback(() => {
@@ -1175,7 +1184,9 @@ export default function PaidMediaClientPage({
                               {...(companionLiveChange.onDecide
                                 ? { onDecide: companionLiveChange.onDecide }
                                 : {})}
-                              onImplement={() => sendCompanionTurn(LIVE_CHANGE_IMPLEMENT_TURN)}
+                              {...(implementTurn
+                                ? { onImplement: () => sendCompanionTurn(implementTurn) }
+                                : {})}
                             />
                           ) : (
                             <ScaleCompanionCanvas

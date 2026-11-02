@@ -172,7 +172,3 @@ export const liveChangeConfirmBarOf = (params: {
   if (params.decision === 'proposal' && params.canImplement) return { kind: 'implement' };
   return { kind: 'none' };
 };
-
-/** The turn the canvas sends to implement a proposal: through the approval cards, nothing else. */
-export const LIVE_CHANGE_IMPLEMENT_TURN =
-  'Implement the changes you proposed. Run each one through its approval card so I can confirm it; do not apply anything without one. Answer in the language of this conversation.';
