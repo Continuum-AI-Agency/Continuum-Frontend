@@ -86,7 +86,9 @@ const liveStatusOf = (
   }
   const decisions = previews.map((preview) => liveChangeDecisionOf(messages, preview.approvalId));
   if (decisions.includes('denied')) return 'denied';
-  if (decisions.some((decision) => decision === 'pending')) return 'proposed';
+  if (decisions.some((decision) => decision === 'pending' || decision === 'proposal')) {
+    return 'proposed';
+  }
   const outcomes = previews.map((preview) => results.get(preview.toolCallId));
   if (outcomes.includes(false)) return 'failed';
   return outcomes.every((ok) => ok === true) ? 'applied' : 'approved';

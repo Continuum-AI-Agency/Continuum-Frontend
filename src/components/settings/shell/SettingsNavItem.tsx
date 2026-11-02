@@ -19,7 +19,8 @@ export function SettingsNavItem({ value, label, icon: Icon }: SettingsNavItemPro
         'text-muted-foreground transition-colors duration-150',
         'hover:bg-muted/40 hover:text-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-        'data-[state=active]:bg-muted/50 data-[state=active]:text-foreground',
+        // Base UI marks the selected tab with `data-active` (Radix's `data-state` is gone).
+        'data-active:bg-muted/50 data-active:text-foreground',
       )}
     >
       <span
@@ -27,7 +28,7 @@ export function SettingsNavItem({ value, label, icon: Icon }: SettingsNavItemPro
         className={cn(
           'absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-r-full bg-primary',
           'opacity-0 transition-opacity duration-150',
-          'group-data-[state=active]:opacity-100',
+          'group-data-active:opacity-100',
         )}
       />
       <Icon className="h-4 w-4 shrink-0" aria-hidden />
