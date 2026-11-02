@@ -1,0 +1,22 @@
+/* The board's chart colors, validated with the dataviz validator (three categorical slots, every
+ * pair, light and dark): channel identity for Search, Performance Max and YouTube / Demand Gen,
+ * and the diverging pair for a cost against its goal (below / at / above). Platform identity
+ * (Meta blue, Google yellow) stays in the global --platform-* tokens and only marks chips. */
+.palette {
+  --board-search: #5a48f9;
+  --board-pmax: #eb6834;
+  --board-video: #1baf7a;
+  --board-below: #2a78d6;
+  --board-mid: #d4d2de;
+  --board-above: #e34948;
+}
+
+:global(.dark) .palette,
+:global([data-theme="dark"]) .palette {
+  --board-search: #7c6fff;
+  --board-pmax: #d95926;
+  --board-video: #199e70;
+  --board-below: #4b8fe0;
+  --board-mid: #4a4860;
+  --board-above: #e8605f;
+}
