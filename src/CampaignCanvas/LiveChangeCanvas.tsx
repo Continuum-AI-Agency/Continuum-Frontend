@@ -17,6 +17,7 @@ const DECISION_LABEL: Record<LiveChangeDecision, string> = {
   pending: 'Preview · approve in chat',
   approved: 'Approved in chat',
   denied: 'Denied · nothing changed',
+  proposal: 'Projection · nothing applied',
 };
 
 /** Where the approval stands; the companion's header shows it in both views. */
@@ -25,7 +26,7 @@ export function LiveChangeDecisionPill({ decision }: { decision: LiveChangeDecis
     <span
       className={cn(
         'shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px]',
-        decision === 'pending' && 'border-primary text-primary-ink',
+        (decision === 'pending' || decision === 'proposal') && 'border-primary text-primary-ink',
         decision === 'approved' && 'border-[color:var(--success)] text-[color:var(--success)]',
         decision === 'denied' && 'border-border text-muted-foreground',
       )}

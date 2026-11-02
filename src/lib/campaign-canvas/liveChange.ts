@@ -4,12 +4,15 @@
 
 import {
   formatMoney,
+  isProposalApprovalId,
   type LiveChangeNode,
   type LiveChangePreviewPayload,
   type LiveChangeRow,
 } from '@continuum/contracts';
 
-export type LiveChangeDecision = 'pending' | 'approved' | 'denied';
+// `proposal`: Jaina proposed the change in her answer; no gated edit was called, so there is
+// nothing to approve on the canvas.
+export type LiveChangeDecision = 'pending' | 'approved' | 'denied' | 'proposal';
 
 export type LiveChangeAdSet = {
   node: LiveChangeNode;
@@ -54,12 +57,14 @@ export const liveChangeSummaryOf = (payload: LiveChangePreviewPayload): string =
   return parts.length > 0 ? parts.join(' · ') : 'No change on this campaign';
 };
 
-const MONEY_FIELDS = new Set(['daily_budget', 'lifetime_budget', 'bid_amount']);
+const MONEY_FIELDS = new Set(['daily_budget', 'daily_spend', 'lifetime_budget', 'bid_amount']);
 
 const FIELD_LABELS: Record<string, string> = {
   status: 'Status',
   name: 'Name',
   daily_budget: 'Daily budget',
+  daily_spend: 'Daily spend (run-rate)',
+  results: 'Results',
   lifetime_budget: 'Lifetime budget',
   bid_amount: 'Bid',
   bid_strategy: 'Bid strategy',
@@ -106,7 +111,7 @@ export const liveChangeDecisionOf = (
   messages: readonly LiveChangeThreadMessage[],
   approvalId: string,
 ): LiveChangeDecision => {
-  let decision: LiveChangeDecision = 'pending';
+  let decision: LiveChangeDecision = isProposalApprovalId(approvalId) ? 'proposal' : 'pending';
   for (const message of messages) {
     const resolved = message.resolvedApprovals?.[approvalId];
     if (resolved) decision = resolved.decision;

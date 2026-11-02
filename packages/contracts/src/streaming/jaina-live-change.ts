@@ -17,6 +17,7 @@
  */
 
 import { z } from 'zod';
+import { changeProjectionPlatformSchema, changeProjectionSchema } from './jaina-change-projection';
 
 export const LIVE_CHANGE_PREVIEW_FRAME_TYPE = 'paid.live_change_preview' as const;
 
@@ -80,6 +81,16 @@ export const liveChangePreviewPayloadSchema = z
     }),
     /** ISO time of the Meta read the tree reflects. */
     readAt: z.string(),
+    /**
+     * `approval`: beside a pending gated edit (the default, and what a payload from before this
+     * field means). `proposal`: Jaina proposed a change in the answer and called no gated tool,
+     * so there is nothing to approve here and the canvas says "proposal", not "pending".
+     */
+    origin: z.enum(['approval', 'proposal']).optional(),
+    /** Which platform the tree is from; absent means Meta, the only one before this field. */
+    platform: changeProjectionPlatformSchema.optional(),
+    /** The projected after of the change: table figures, assumptions, window (./jaina-change-projection). */
+    projection: changeProjectionSchema.nullable().optional(),
   })
   .passthrough();
 export type LiveChangePreviewPayload = z.infer<typeof liveChangePreviewPayloadSchema>;
