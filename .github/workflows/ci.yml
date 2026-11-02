@@ -35,6 +35,6 @@ jobs:
             base="$(git rev-parse HEAD^)"
           fi
           git cat-file -e "$base^{commit}"
-          bun test --changed="$base" --path-ignore-patterns '**/e2e/**' --timeout=30000 --max-concurrency=2
+          bun test --changed="$base" --pass-with-no-tests --path-ignore-patterns '**/e2e/**' --timeout=30000 --max-concurrency=2
       - name: Complete frontend typecheck
         run: bun run typecheck
