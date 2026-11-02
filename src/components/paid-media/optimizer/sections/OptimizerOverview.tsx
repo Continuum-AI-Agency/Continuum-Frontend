@@ -29,6 +29,11 @@
 // recommendation cards with their controls, the links to Actions and Activity, and its
 // portfolio rows — the same components, fed the brand's Google portfolios and cards whichever
 // ad account the page has selected.
+//
+// The Meta and Google tabs open on the adaptive board (O01, docs/optimizer-redesign/adaptive-15):
+// the account read into a mode, the result that counts and the modules the reading puts first.
+// "Adaptive · Today" switches a viewer back to the layout above, which renders exactly as it did
+// (board/BoardSwitch); the choice is remembered per viewer. "All" and "TikTok" stay as they are.
 
 import type { CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
@@ -85,9 +90,10 @@ import {
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
+import { BoardSwitch } from './board/BoardSwitch';
 import { GoogleRecentChanges } from './google/GoogleRecentChanges';
 import { JainaEntryChips } from './JainaEntryChips';
-import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import { type JainaEntry, jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import {
   AccountReadFreshnessSkeleton,
   HeadlineSkeleton,
@@ -113,6 +119,7 @@ import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
 import { PlatformTabs } from './platforms/PlatformTabs';
 import {
   type AdPlatform,
+  accountsOn,
   connectedPlatforms,
   OPTIMIZER_MANAGED_PLATFORM,
   PLATFORM_NAMES,
@@ -351,9 +358,8 @@ export function OptimizerOverview({
     <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />
   );
   if (!rendersManagedOverview(platformTab)) {
-    return (
-      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
-        {tabs}
+    const platformBody = (
+      <>
         {jainaBand}
         <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab}>
           {platformTab === 'google_ads' && tabConnected ? (
@@ -368,6 +374,24 @@ export function OptimizerOverview({
             />
           ) : null}
         </PlatformTab>
+      </>
+    );
+    return (
+      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+        {tabs}
+        {platformTab === 'google_ads' && tabConnected ? (
+          <GoogleBoardSwitch
+            asks={jainaEntries}
+            brandId={brandId}
+            onCreatePortfolio={onCreatePortfolio}
+            onOpenActions={onOpenActions}
+            onOpenActivity={onOpenActivity}
+            onSelectPortfolio={onSelectPortfolio}
+            today={platformBody}
+          />
+        ) : (
+          platformBody
+        )}
       </div>
     );
   }
@@ -380,50 +404,8 @@ export function OptimizerOverview({
   const producerLoading = allFrame?.status === 'loading';
   const connectedCount = Object.values(connected).filter(Boolean).length;
 
-  return (
-    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
-      {tabs}
-      {chromeInShell ? null : (
-        <div className="flex flex-wrap items-center justify-end gap-2 px-1">
-          {pendingCount > 0 ? (
-            <Button
-              className="h-7 gap-1.5 px-2 text-xs"
-              onClick={onOpenActions}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              Review {pendingCount} pending
-              <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-            </Button>
-          ) : null}
-          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
-           *  prepared ask for this account, the way the band's questions do. */}
-          {adAccountId ? (
-            <a
-              className={cn(
-                buttonVariants({ size: 'sm', variant: 'outline' }),
-                'h-7 gap-1.5 px-2 text-xs',
-              )}
-              data-testid="overview-weekly-report"
-              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
-            >
-              <FileTextIcon aria-hidden="true" className="size-3.5" />
-              Weekly report
-            </a>
-          ) : null}
-          <Button
-            className="h-7 gap-1.5 px-2 text-xs"
-            onClick={onCreatePortfolio}
-            size="sm"
-            type="button"
-          >
-            <PlusIcon aria-hidden="true" className="size-3.5" />
-            New portfolio
-          </Button>
-        </div>
-      )}
-
+  const managedBody = (
+    <>
       {allFrame?.status === 'error' ? (
         <p
           className="px-1 text-muted-foreground text-xs"
@@ -683,6 +665,72 @@ export function OptimizerOverview({
           windows={windows}
         />
       )}
+    </>
+  );
+
+  return (
+    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+      {tabs}
+      {chromeInShell ? null : (
+        <div className="flex flex-wrap items-center justify-end gap-2 px-1">
+          {pendingCount > 0 ? (
+            <Button
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={onOpenActions}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              Review {pendingCount} pending
+              <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+            </Button>
+          ) : null}
+          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
+           *  prepared ask for this account, the way the band's questions do. */}
+          {adAccountId ? (
+            <a
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 gap-1.5 px-2 text-xs',
+              )}
+              data-testid="overview-weekly-report"
+              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
+            >
+              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              Weekly report
+            </a>
+          ) : null}
+          <Button
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={onCreatePortfolio}
+            size="sm"
+            type="button"
+          >
+            <PlusIcon aria-hidden="true" className="size-3.5" />
+            New portfolio
+          </Button>
+        </div>
+      )}
+
+      {platformTab === 'meta' && tabConnected ? (
+        <BoardSwitch
+          asks={jainaEntries}
+          base={{
+            brandId,
+            platform: 'meta',
+            adAccountId,
+            currency: currency ?? null,
+            portfolios,
+            onOpenActions,
+            onOpenActivity,
+            onSelectPortfolio,
+            onCreatePortfolio,
+          }}
+          today={managedBody}
+        />
+      ) : (
+        managedBody
+      )}
     </div>
   );
 }
@@ -837,6 +885,54 @@ function PortfolioRows({
 function oneCurrency(codes: readonly (string | null | undefined)[]): string | null {
   const distinct = new Set(codes.filter(Boolean));
   return distinct.size === 1 ? ([...distinct][0] ?? null) : null;
+}
+
+/**
+ * The Google tab's board: the brand's Google portfolios, whichever ad account the page has
+ * selected (the Google tab's rows read the same list), in the granted Google account's currency.
+ * Today's tab for Google is `today`, rendered as it was.
+ */
+function GoogleBoardSwitch({
+  brandId,
+  asks,
+  today,
+  onOpenActions,
+  onOpenActivity,
+  onSelectPortfolio,
+  onCreatePortfolio,
+}: {
+  brandId: string;
+  asks: readonly JainaEntry[];
+  today: ReactNode;
+  onOpenActions: () => void;
+  onOpenActivity: () => void;
+  onSelectPortfolio: (portfolioId: string) => void;
+  onCreatePortfolio: () => void;
+}) {
+  const portfoliosQuery = useOptimizerPlatformPortfolios(brandId, 'google_ads');
+  const portfolios = portfoliosQuery.data;
+  const accounts = useOptimizerAdAccounts(brandId).data;
+  const currency =
+    accountsOn(accounts, 'google_ads')[0]?.currency ??
+    oneCurrency(portfolios.map((portfolio) => portfolio.currency));
+  return (
+    <BoardSwitch
+      asks={asks}
+      base={{
+        brandId,
+        platform: 'google_ads',
+        adAccountId: null,
+        currency,
+        portfolios,
+        onOpenActions,
+        onOpenActivity,
+        onSelectPortfolio,
+        onCreatePortfolio,
+      }}
+      pending={portfoliosQuery.isPending}
+      today={today}
+    />
+  );
 }
 
 /**

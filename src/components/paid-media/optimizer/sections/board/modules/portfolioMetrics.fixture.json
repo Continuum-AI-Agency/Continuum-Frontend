@@ -1,0 +1,319 @@
+{
+ "_source": "Real optimizer_get_portfolio_metrics (p_window d7) reads, 2026-11-02 (as ramibuisel@gmail.com, session revoked), keyed by portfolio id.",
+ "b9cebbcf-2832-440a-b326-3af20c19be37": {
+  "target": {
+   "cpa": 99,
+   "metric": null
+  },
+  "totals": {
+   "roas": 0.03437070183632692,
+   "spend": 29.094547,
+   "clicks": 39,
+   "results": 1,
+   "entities": 4,
+   "conversions": 1,
+   "impressions": 620,
+   "cost_per_result": 29.094547,
+   "conversion_value": 1,
+   "delivering_entities": 2
+  },
+  "window": {
+   "label": "d7",
+   "since": "2026-10-25",
+   "until": "2026-10-31",
+   "ends_yesterday": false
+  },
+  "read_at": "2026-11-02T20:03:49.200387Z",
+  "currency": "MXN",
+  "objective": "lead",
+  "attribution": {
+   "used": "platform",
+   "configured": "platform",
+   "fallback_reason": "none"
+  },
+  "by_platform": [
+   {
+    "roas": 0.03437070183632692,
+    "spend": 29.094547,
+    "clicks": 39,
+    "results": 1,
+    "entities": 4,
+    "platform": "google_ads",
+    "conversions": 1,
+    "impressions": 620,
+    "cost_per_result": 29.094547,
+    "conversion_value": 1,
+    "delivering_entities": 2
+   }
+  ],
+  "result_kind": "leads",
+  "portfolio_id": "b9cebbcf-2832-440a-b326-3af20c19be37",
+  "prior_totals": {
+   "roas": 0.041503097857559096,
+   "spend": 4288.836477,
+   "clicks": 2925,
+   "results": 178,
+   "entities": 4,
+   "conversions": 178,
+   "impressions": 48885,
+   "cost_per_result": 24.094586949438202,
+   "conversion_value": 178,
+   "delivering_entities": 2
+  },
+  "prior_window": {
+   "label": "d7",
+   "since": "2026-10-18",
+   "until": "2026-10-24",
+   "ends_yesterday": false
+  },
+  "conversions_by_source": [
+   {
+    "kind": "platform",
+    "error": null,
+    "label": "Plataforma",
+    "source_id": null,
+    "conversions": 1,
+    "coverage_pct": 1,
+    "refreshed_at": "2026-11-02T06:58:49.330406Z",
+    "conversion_value": 1
+   }
+  ]
+ },
+ "5aaf5931-7407-4940-aab6-52e914bced45": {
+  "target": {
+   "cpa": null,
+   "metric": null
+  },
+  "totals": {
+   "roas": null,
+   "spend": 0,
+   "clicks": 0,
+   "results": 0,
+   "entities": 1,
+   "conversions": 0,
+   "impressions": 0,
+   "cost_per_result": null,
+   "conversion_value": 0,
+   "delivering_entities": 0
+  },
+  "window": {
+   "label": "d7",
+   "since": "2026-10-25",
+   "until": "2026-10-31",
+   "ends_yesterday": false
+  },
+  "read_at": "2026-11-02T20:03:50.114029Z",
+  "currency": "MXN",
+  "objective": "lead",
+  "attribution": {
+   "used": "platform",
+   "configured": "platform",
+   "fallback_reason": "none"
+  },
+  "by_platform": [
+   {
+    "roas": null,
+    "spend": 0,
+    "clicks": 0,
+    "results": 0,
+    "entities": 1,
+    "platform": "google_ads",
+    "conversions": 0,
+    "impressions": 0,
+    "cost_per_result": null,
+    "conversion_value": 0,
+    "delivering_entities": 0
+   }
+  ],
+  "result_kind": "leads",
+  "portfolio_id": "5aaf5931-7407-4940-aab6-52e914bced45",
+  "prior_totals": {
+   "roas": null,
+   "spend": 0,
+   "clicks": 0,
+   "results": 0,
+   "entities": 1,
+   "conversions": 0,
+   "impressions": 0,
+   "cost_per_result": null,
+   "conversion_value": 0,
+   "delivering_entities": 0
+  },
+  "prior_window": {
+   "label": "d7",
+   "since": "2026-10-18",
+   "until": "2026-10-24",
+   "ends_yesterday": false
+  },
+  "conversions_by_source": [
+   {
+    "kind": "platform",
+    "error": null,
+    "label": "Plataforma",
+    "source_id": null,
+    "conversions": 0,
+    "coverage_pct": 0,
+    "refreshed_at": "2026-11-02T06:58:49.330406Z",
+    "conversion_value": 0
+   }
+  ]
+ },
+ "e642c737-ddde-4622-af8f-4b5622da98d0": {
+  "target": {
+   "cpa": null,
+   "metric": null
+  },
+  "totals": {
+   "roas": 0.13485630866436069,
+   "spend": 7622.354543,
+   "clicks": 1799,
+   "results": 10,
+   "entities": 2,
+   "conversions": 10,
+   "impressions": 65929,
+   "cost_per_result": 762.2354543,
+   "conversion_value": 1027.922597,
+   "delivering_entities": 2
+  },
+  "window": {
+   "label": "d7",
+   "since": "2026-10-26",
+   "until": "2026-11-01",
+   "ends_yesterday": false
+  },
+  "read_at": "2026-11-02T20:03:50.799271Z",
+  "currency": "MXN",
+  "objective": "lead",
+  "attribution": {
+   "used": "platform",
+   "configured": "platform",
+   "fallback_reason": "none"
+  },
+  "by_platform": [
+   {
+    "roas": 0.13485630866436069,
+    "spend": 7622.354543,
+    "clicks": 1799,
+    "results": 10,
+    "entities": 2,
+    "platform": "google_ads",
+    "conversions": 10,
+    "impressions": 65929,
+    "cost_per_result": 762.2354543,
+    "conversion_value": 1027.922597,
+    "delivering_entities": 2
+   }
+  ],
+  "result_kind": "leads",
+  "portfolio_id": "e642c737-ddde-4622-af8f-4b5622da98d0",
+  "prior_totals": {
+   "roas": 0.13067476875762346,
+   "spend": 10008.763141,
+   "clicks": 2122,
+   "results": 16,
+   "entities": 2,
+   "conversions": 16,
+   "impressions": 74478,
+   "cost_per_result": 625.5476963125,
+   "conversion_value": 1307.892809,
+   "delivering_entities": 2
+  },
+  "prior_window": {
+   "label": "d7",
+   "since": "2026-10-19",
+   "until": "2026-10-25",
+   "ends_yesterday": false
+  },
+  "conversions_by_source": [
+   {
+    "kind": "platform",
+    "error": null,
+    "label": "Plataforma",
+    "source_id": null,
+    "conversions": 10,
+    "coverage_pct": 1,
+    "refreshed_at": "2026-11-02T16:46:39.431679Z",
+    "conversion_value": 1027.922597
+   }
+  ]
+ },
+ "e4db2796-0cc9-4582-9c1d-b9a60ec2f3ed": {
+  "target": {
+   "cpa": null,
+   "metric": null
+  },
+  "totals": {
+   "roas": 0,
+   "spend": 631.564892,
+   "clicks": 23,
+   "results": 0,
+   "entities": 1,
+   "conversions": 0,
+   "impressions": 466,
+   "cost_per_result": null,
+   "conversion_value": 0,
+   "delivering_entities": 1
+  },
+  "window": {
+   "label": "d7",
+   "since": "2026-10-25",
+   "until": "2026-10-31",
+   "ends_yesterday": false
+  },
+  "read_at": "2026-11-02T20:03:51.667537Z",
+  "currency": "MXN",
+  "objective": "purchase",
+  "attribution": {
+   "used": "platform",
+   "configured": "platform",
+   "fallback_reason": "none"
+  },
+  "by_platform": [
+   {
+    "roas": 0,
+    "spend": 631.564892,
+    "clicks": 23,
+    "results": 0,
+    "entities": 1,
+    "platform": "google_ads",
+    "conversions": 0,
+    "impressions": 466,
+    "cost_per_result": null,
+    "conversion_value": 0,
+    "delivering_entities": 1
+   }
+  ],
+  "result_kind": "purchases",
+  "portfolio_id": "e4db2796-0cc9-4582-9c1d-b9a60ec2f3ed",
+  "prior_totals": {
+   "roas": 1.6596580236944765,
+   "spend": 444.281772,
+   "clicks": 24,
+   "results": 1,
+   "entities": 1,
+   "conversions": 1,
+   "impressions": 544,
+   "cost_per_result": 444.281772,
+   "conversion_value": 737.355807681,
+   "delivering_entities": 1
+  },
+  "prior_window": {
+   "label": "d7",
+   "since": "2026-10-18",
+   "until": "2026-10-24",
+   "ends_yesterday": false
+  },
+  "conversions_by_source": [
+   {
+    "kind": "platform",
+    "error": null,
+    "label": "Plataforma",
+    "source_id": null,
+    "conversions": 0,
+    "coverage_pct": 1,
+    "refreshed_at": "2026-11-02T03:16:44.005501Z",
+    "conversion_value": 0
+   }
+  ]
+ }
+}

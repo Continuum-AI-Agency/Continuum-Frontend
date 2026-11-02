@@ -23,3 +23,21 @@ export const BOARD_MODULES: Record<BoardModuleId, LazyModule> = {
   events: lazy(() => import('./lenses/meta/EventsLens')),
   structure: lazy(() => import('./lenses/meta/StructureMap')),
 };
+
+/** Each module's title, product chrome in English: what the board names a slot it draws itself
+ *  (a frame that could not be drawn), and what a module's own frame should say. */
+export const BOARD_MODULE_TITLES: Record<BoardModuleId, string> = {
+  result: 'Result',
+  decisions: 'Decisions',
+  portfolios: 'Portfolios',
+  mix: 'Campaign mix',
+  auction: 'Auction share',
+  signal: 'Conversion signal',
+  terms: 'Search terms',
+  quality: 'Quality Score',
+  pmax: 'Performance Max',
+  branches: 'Branches',
+  headroom: 'Delivery headroom',
+  events: 'Optimization event',
+  structure: 'Structure',
+};

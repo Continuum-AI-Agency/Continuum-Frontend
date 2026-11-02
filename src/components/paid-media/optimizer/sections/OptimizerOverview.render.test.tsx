@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import type {
+  AdAccountReading,
+  EfficiencySeriesPoint,
+  PortfolioListItem,
+} from '@continuum/contracts';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import type { PlatformCardsState } from '../useOptimizerData';
 import type { PortfolioMetricsState } from './detail/usePortfolioMetrics';
@@ -176,6 +180,92 @@ mock.module('./usePortfolioFigures', () => ({
   },
 }));
 
+// The adaptive board the Meta and Google tabs open on. The reading is its own hook with its own
+// bench, and every module has render tests of its own, so here the reading is stated (the spine,
+// in the account's language) and each module is a stub that names its slot and what it was
+// handed. What these tests prove is the mount: which tab opens on the board, what the board is
+// given, and that Today renders exactly as it did.
+const readingAsked: {
+  brandId: string;
+  platform: string;
+  adAccountId: string | null;
+  portfolios: readonly PortfolioListItem[];
+  currency: string | null;
+}[] = [];
+let boardAsks: string[] = [];
+function statedReading(platform: 'meta' | 'google_ads', portfolios: number): AdAccountReading {
+  return {
+    platform,
+    mode: 'operate',
+    modeLabel: 'Autopilot',
+    modeReason: `3 de ${portfolios} portafolios aplican solos dentro de sus topes.`,
+    result: {
+      label: 'conversaciones',
+      count: null,
+      platformReported: null,
+      costPerResult: null,
+      goal: 30,
+      spend: null,
+      currency: 'MXN',
+      windowDays: 7,
+    },
+    board: [
+      { module: 'decisions', size: 'l', score: 90, reason: '4 decisiones esperan.' },
+      {
+        module: 'result',
+        size: 'm',
+        score: 80,
+        reason: 'El resultado que cuenta, contra su meta.',
+      },
+      {
+        module: 'portfolios',
+        size: 'w',
+        score: 20,
+        reason: `${portfolios} portafolios contra su meta.`,
+      },
+    ],
+    hidden: [],
+    asks: boardAsks,
+  };
+}
+const realBoardReading = await import('./board/useAdAccountReading');
+mock.module('./board/useAdAccountReading', () => ({
+  ...realBoardReading,
+  useAdAccountReading: (args: (typeof readingAsked)[number]) => {
+    readingAsked.push(args);
+    return {
+      reading: statedReading(args.platform as 'meta' | 'google_ads', args.portfolios.length),
+      isLoading: false,
+    };
+  },
+}));
+const realRegistry = await import('./board/registry');
+const { ModuleFrame } = await import('./board/ModuleFrame');
+function StubModule({ ctx, slot }: import('./board/types').BoardModuleProps) {
+  return (
+    <ModuleFrame
+      reason={slot.reason}
+      size={slot.size}
+      testId={`board-module-${slot.module}`}
+      title={realRegistry.BOARD_MODULE_TITLES[slot.module]}
+    >
+      <p data-testid={`stub-${slot.module}`}>
+        {ctx.platform} · {ctx.adAccountId ?? 'no account'} · {ctx.currency ?? 'no currency'} ·{' '}
+        {ctx.portfolios.map((portfolio) => portfolio.name).join(', ')}
+      </p>
+    </ModuleFrame>
+  );
+}
+mock.module('./board/registry', () => ({
+  ...realRegistry,
+  BOARD_MODULES: Object.fromEntries(
+    Object.keys(realRegistry.BOARD_MODULES).map((id) => [id, StubModule]),
+  ),
+}));
+const { BOARD_LAYOUT_KEY } = await import('./board/boardLayout');
+/** The viewer picked Today: the tab renders today's layout, as it did before the board. */
+const viewToday = () => window.localStorage.setItem(BOARD_LAYOUT_KEY, 'today');
+
 const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
 const { cardActionAvailability, cardActionLabel, cardActionsOf, cardWriteOf } = await import(
   './platformCards/platformCardActionModel'
@@ -345,6 +435,8 @@ afterEach(() => {
   tiktokState = { status: 'loading' };
   tiktokAsked.length = 0;
   window.localStorage.clear();
+  readingAsked.length = 0;
+  boardAsks = [];
   accountReadData = null;
   accountReadLoading = false;
   brandRows = [];
@@ -1013,6 +1105,7 @@ describe('OptimizerOverview — the platform tabs', () => {
   });
 
   it('shows a brand with Google connected its Google read on the tab, and no Connect', () => {
+    viewToday();
     grantGoogle();
     googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
@@ -1069,6 +1162,8 @@ describe('OptimizerOverview — the platform tabs', () => {
 
   for (const tab of ['all', 'meta'] as const) {
     it(`renders today's O1 under ${tab}, with a Meta chip on every card and every row`, () => {
+      // On Meta that is the Today layout; All has only ever had it.
+      if (tab === 'meta') viewToday();
       navigation.params = new URLSearchParams(tab === 'all' ? '' : `platform=${tab}`);
       accountReadData = envelope({
         candidates: [candidate(), candidate({ id: 'dead_tail:prueba', portfolio_ids: ['prueba'] })],
@@ -1111,6 +1206,7 @@ describe('OptimizerOverview — the platform tabs', () => {
 
 describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   const metaO1 = () => {
+    viewToday();
     navigation.params = new URLSearchParams('tab=performance&platform=meta');
     const { getByTestId, unmount } = mount();
     const snapshot = {
@@ -1340,6 +1436,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   });
 
   it("leads Google's tab with its producer row, then the split by campaign type", () => {
+    viewToday();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     const { getByTestId, queryByTestId } = mount();
@@ -1350,6 +1447,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   });
 
   it("reads Google's split by campaign type over the producer's own window", () => {
+    viewToday();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     metricsState = { status: 'ready', metrics: EASY_FIT_MP1 };
     mount();
@@ -1357,6 +1455,7 @@ describe('OptimizerOverview — the multi-platform frame (MP1)', () => {
   });
 
   it('says what is true when Google is connected but the Optimizer has not read it: the live figures come from Google', () => {
+    viewToday();
     grantGoogle();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
@@ -1562,7 +1661,9 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
   });
   const META_ROW = { ...MENSAJES, platforms: ['meta' as const] };
 
+  // Today's Google tab: its read, its cards, its links and its rows, as before the board.
   const onGoogleTab = () => {
+    viewToday();
     grantGoogle();
     navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
     googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
@@ -1696,7 +1797,10 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
   it('links to Actions and Activity, on Google and on Meta', () => {
     for (const tab of ['google_ads', 'meta'] as const) {
       if (tab === 'google_ads') onGoogleTab();
-      else navigation.params = new URLSearchParams('tab=performance&platform=meta');
+      else {
+        viewToday();
+        navigation.params = new URLSearchParams('tab=performance&platform=meta');
+      }
       const { getByTestId, onOpenActions, onOpenActivity, unmount } = mount();
       expect(getByTestId('overview-link-actions').textContent).toBe('Review in Actions');
       expect(getByTestId('overview-link-activity').textContent).toBe('Activity');
@@ -1807,5 +1911,151 @@ describe('OptimizerOverview — the Google tab (G2)', () => {
     ]) {
       expect(queryByTestId(absent)).toBeNull();
     }
+  });
+});
+
+describe('OptimizerOverview — the adaptive board (O01) on Meta and Google', () => {
+  const boardSlots = (root: HTMLElement) =>
+    [...root.querySelectorAll('[data-board-slot]')].map((slot) =>
+      slot.getAttribute('data-board-slot'),
+    );
+  const GOOGLE_LEADS = portfolio({
+    id: '7a7a7a7a-0000-4000-8000-0000000000f1',
+    name: 'Google // Leads',
+    ad_account_id: '3710693645',
+    adset_count: 2,
+    platforms: ['google_ads'],
+  });
+
+  it("opens Meta's tab on the board, in the reading's order, under the toolbar", async () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId, queryByTestId, findByTestId, getByRole } = mount();
+    const board = getByTestId('adaptive-board');
+    expect(board.getAttribute('data-platform')).toBe('meta');
+    expect(boardSlots(board)).toEqual(['decisions', 'result', 'portfolios']);
+    expect(getByTestId('board-mode-label').textContent).toBe('Autopilot');
+    expect(getByTestId('board-mode-reason').textContent).toBe(
+      '3 de 4 portafolios aplican solos dentro de sus topes.',
+    );
+    expect(getByTestId('board-result-chip').textContent).toBe('conversaciones · goal $30.00 MXN');
+    expect(getByTestId('board-layout-adaptive').getAttribute('aria-pressed')).toBe('true');
+    // The toolbar stays above the board; Today's blocks are not drawn under it.
+    expect(follows(getByRole('button', { name: /Review 4 pending/ }), board)).toBe(true);
+    for (const today of ['overview-hero', 'account-tiles', 'portfolio-rows', 'overview-links']) {
+      expect(queryByTestId(today)).toBeNull();
+    }
+    // Every module is handed the account, its currency and its portfolios.
+    expect((await findByTestId('stub-result')).textContent).toBe(
+      'meta · act_easyfit · MXN · MENSAJES // TODOS, FORMULARIOS // TODOS, Prueba, Septiembre - Tours Programados',
+    );
+    expect(readingAsked.at(-1)).toMatchObject({
+      brandId: 'b1',
+      platform: 'meta',
+      adAccountId: 'act_easyfit',
+      currency: 'MXN',
+    });
+  });
+
+  it("asks the tab's own questions while the reading has none, carrying the platform", () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId } = mount();
+    const links = [...getByTestId('board-asks').querySelectorAll('a')];
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Why is MENSAJES // TODOS expensive?',
+      'What to pause this week?',
+      'How is Septiembre - Tours Programados doing?',
+      "Where's the budget?",
+      'Summary for the client',
+    ]);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toStartWith('/scale?tab=jaina&platform=meta&new=1&prompt=');
+    }
+  });
+
+  it("asks the reading's own questions, in the account's language", () => {
+    boardAsks = ['¿Por qué MENSAJES // TODOS cuesta más que su meta?'];
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId } = mount();
+    const link = getByTestId('board-asks').querySelector('a');
+    expect(link?.textContent).toBe('¿Por qué MENSAJES // TODOS cuesta más que su meta?');
+    expect(decodeURIComponent(link?.getAttribute('href')?.split('prompt=')[1] ?? '')).toBe(
+      '¿Por qué MENSAJES // TODOS cuesta más que su meta?',
+    );
+  });
+
+  it('switches Meta to Today, which renders as it did, and remembers it', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const first = mount();
+    fireEvent.click(first.getByTestId('board-layout-today'));
+    expect(first.queryByTestId('adaptive-board')).toBeNull();
+    expect(first.getByTestId('overview-headline').textContent).toBe(
+      'The account spent $23,911 MXN in 7 days. 4 decisions waiting.',
+    );
+    const blocks = [
+      first.getByTestId('board-today-bar'),
+      first.getByTestId('overview-headline'),
+      first.getByTestId('jaina-entry-chips'),
+      first.getByTestId('account-tiles'),
+      first.getByTestId('portfolio-rows'),
+    ];
+    for (let i = 1; i < blocks.length; i += 1) {
+      expect(follows(blocks[i - 1] as Element, blocks[i] as Element)).toBe(true);
+    }
+    expect(window.localStorage.getItem(BOARD_LAYOUT_KEY)).toBe('today');
+    first.unmount();
+
+    const again = mount();
+    expect(again.getByTestId('board-layout-today').getAttribute('aria-pressed')).toBe('true');
+    expect(again.getByTestId('portfolio-rows')).toBeTruthy();
+    fireEvent.click(again.getByTestId('board-layout-adaptive'));
+    expect(again.getByTestId('adaptive-board')).toBeTruthy();
+  });
+
+  it("opens Google's connected tab on the board, with the brand's Google portfolios", async () => {
+    grantGoogle();
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    brandRows = [{ ...MENSAJES, platforms: ['meta'] }, GOOGLE_LEADS];
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    const { getByTestId, queryByTestId, findByTestId } = mount();
+    expect(getByTestId('adaptive-board').getAttribute('data-platform')).toBe('google_ads');
+    expect((await findByTestId('stub-portfolios')).textContent).toBe(
+      'google_ads · no account · MXN · Google // Leads',
+    );
+    expect(readingAsked.at(-1)).toMatchObject({
+      platform: 'google_ads',
+      adAccountId: null,
+      currency: 'MXN',
+    });
+    // Today's Google tab is not drawn, so none of its reads are made.
+    expect(queryByTestId('google-headline')).toBeNull();
+    expect(queryByTestId('portfolio-rows')).toBeNull();
+    expect(googleAsked).toHaveLength(0);
+    const links = [...getByTestId('board-asks').querySelectorAll('a')];
+    expect(links[0]?.textContent).toBe('Which search terms bring leads?');
+    expect(links[0]?.getAttribute('href')).toStartWith('/scale?tab=jaina&platform=google_ads');
+  });
+
+  it('keeps one choice for both tabs', () => {
+    viewToday();
+    grantGoogle();
+    googleState = { status: 'ready', account: VIVO_47, overview: VIVO_47_OVERVIEW };
+    for (const platform of ['meta', 'google_ads']) {
+      navigation.params = new URLSearchParams(`tab=performance&platform=${platform}`);
+      const { queryByTestId, getByTestId, unmount } = mount();
+      expect(queryByTestId('adaptive-board')).toBeNull();
+      expect(getByTestId('board-today-bar')).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it('leaves All, TikTok and an unconnected Google tab exactly as they were', () => {
+    for (const params of ['tab=performance', 'platform=tiktok_ads', 'platform=google_ads']) {
+      navigation.params = new URLSearchParams(params);
+      const { queryByTestId, unmount } = mount();
+      expect(queryByTestId('adaptive-board')).toBeNull();
+      expect(queryByTestId('board-layout-toggle')).toBeNull();
+      unmount();
+    }
+    expect(readingAsked).toHaveLength(0);
   });
 });
