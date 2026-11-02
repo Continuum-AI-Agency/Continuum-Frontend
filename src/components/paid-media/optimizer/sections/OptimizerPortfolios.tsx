@@ -345,7 +345,11 @@ export function OptimizerPortfolios({
   planOpen,
   onOpenAcrossAccounts,
 }: OptimizerPortfoliosProps) {
-  const [scope, setScope] = useState<PortfolioBrowseScope>('account');
+  // An account with no portfolios while others hold some opens on the others: "Portfolios (0)"
+  // with the rows one toggle away reads as "none". The person's own pick always wins.
+  const [pickedScope, setScope] = useState<PortfolioBrowseScope | null>(null);
+  const scope: PortfolioBrowseScope =
+    pickedScope ?? (portfolios.length === 0 && brandPortfolioCount > 0 ? 'brand' : 'account');
   // The SAME query keys the Overview warms, so arriving from there is a cache hit and this
   // view never asks twice. No approvals read beside them: the lead line prints figures, and
   // only a candidate's STATE moves under an approval.
