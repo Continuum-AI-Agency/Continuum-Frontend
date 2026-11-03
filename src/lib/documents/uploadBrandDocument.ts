@@ -18,12 +18,17 @@ import {
   type DocumentRetention,
 } from '@continuum/contracts';
 import { requireBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { resumableStorageUpload, TUS_CHUNK_SIZE_BYTES } from '@/lib/library/resumableStorageUpload';
 import type { OnboardingDocument, OnboardingState } from '@/lib/onboarding/state';
 import { createBrandId } from '@/lib/onboarding/state';
 import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { resumableStorageUpload, TUS_CHUNK_SIZE_BYTES } from '@/lib/library/resumableStorageUpload';
-import { isAcceptedDocumentMime, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_MB } from './uploadLimits';
+import {
+  documentMimeType,
+  isAcceptedDocumentMime,
+  MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_MB,
+} from './uploadLimits';
 
 export const BRAND_DOCS_BUCKET = 'brand-docs';
 
@@ -88,8 +93,9 @@ export async function uploadBrandDocument({
   if (file.size > MAX_DOCUMENT_BYTES) {
     throw new Error(`File exceeds ${MAX_DOCUMENT_MB} MB limit`);
   }
-  if (!isAcceptedDocumentMime(file.type)) {
-    throw new Error(`Unsupported file type: ${file.type || 'unknown'}`);
+  const mimeType = documentMimeType(file.name, file.type);
+  if (!isAcceptedDocumentMime(mimeType)) {
+    throw new Error(`Unsupported file type: ${mimeType || 'unknown'}`);
   }
 
   const supabase = createSupabaseBrowserClient();
@@ -102,13 +108,18 @@ export async function uploadBrandDocument({
   if (file.size > TUS_CHUNK_SIZE_BYTES) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!supabaseUrl) throw new Error('Document upload is unavailable');
-    await resumableStorageUpload({ file, bucket: BRAND_DOCS_BUCKET, objectPath: storagePath,
-      accessToken, supabaseUrl,
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
+    await resumableStorageUpload({
+      file,
+      bucket: BRAND_DOCS_BUCKET,
+      objectPath: storagePath,
+      accessToken,
+      supabaseUrl,
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    });
   } else {
     const { error: uploadError } = await supabase.storage
       .from(BRAND_DOCS_BUCKET)
-      .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
+      .upload(storagePath, file, { contentType: mimeType || undefined, upsert: false });
     if (uploadError) throw new Error(uploadError.message || `Failed to upload ${file.name}`);
   }
 
@@ -122,7 +133,7 @@ export async function uploadBrandDocument({
         storagePath,
         fileName: sanitizedFileName,
         displayName: file.name,
-        mimeType: file.type,
+        mimeType,
         size: file.size,
         source: 'upload',
         category,

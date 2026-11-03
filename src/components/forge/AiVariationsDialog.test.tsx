@@ -406,6 +406,58 @@ describe('AiDraftDialog', () => {
     expect(onDrafted).not.toHaveBeenCalled();
   });
 
+  test('an unsupported file is refused by name with what can be attached, and nothing uploads', async () => {
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: {
+        files: [new File(['MZ'], 'setup.exe', { type: 'application/x-msdownload' })],
+      },
+    });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Unsupported file: setup.exe');
+    expect(alert.textContent).toContain('PDF');
+    expect(alert.textContent).toContain('CSV');
+    expect(uploadBrandDocument).not.toHaveBeenCalled();
+    expect(uploadMediaAsset).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['render_draft_file_unreadable', 'No text could be read from a file'],
+    ['render_draft_extracting', 'Files are still processing'],
+    ['render_draft_file_not_found', 'A source file is unavailable'],
+  ])('a %s answer is said plainly', async (code, said) => {
+    suggestRows.mockImplementationOnce(async () => {
+      throw new Error(code);
+    });
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: { files: [new File(['%PDF-1.4'], 'brief.pdf', { type: 'application/pdf' })] },
+    });
+    await waitFor(() => expect(uploadBrandDocument).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(said);
+  });
+
   test('nothing usable says why, with what could not be filled', async () => {
     suggestRows.mockImplementationOnce(async () => ({
       ...ANSWER,
