@@ -11,7 +11,7 @@ import type {
   HomeProfileRow,
 } from '@continuum/contracts';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
-import type { HomeAdAccount } from '@/lib/home/useHomeOverviewData';
+import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 import type { SnapshotAccountRef } from '@/lib/organic/brandOrganicSnapshot';
 
 export type HomeBoardContext = {

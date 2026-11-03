@@ -5,7 +5,8 @@ import { identityFor, Observations, openAs, revokeAll, settle, shot } from './su
 // laneE:fixes — the e2e anchor for the lane E fix branch (deeptest-laneE-fe). Run it against a
 // dev server of the BASE (7e87fc2d) to see each check red, then against the branch to see it
 // green. Every check reads the screen as a person sees it; nothing is written.
-//   · Home on Google-only Pink: no "Couldn't load … right now", the connect line instead;
+//   · Home on Google-only Pink: no "Couldn't load … right now"; the Creative tile says it reads
+//     Meta ads and none is connected;
 //   · Scale on Google-only Pink and Tangassi: Performance + opens (no connect gate);
 //   · Scale on an ads-less brand with a Facebook Page: the gate asks to connect Meta Ads;
 //   · Canvas page: the bar fits a phone, never covers Read's budget band, comes first for Tab;
@@ -147,16 +148,16 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
       const opened = await openAs(browser, ramiro, PINK, cell.viewport, cell.theme);
       try {
         await opened.page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-        await opened.page.locator('[data-home-reading]').first().waitFor({ timeout: 90_000 });
+        await opened.page.locator('[data-testid="home-board"]').first().waitFor({ timeout: 90_000 });
         await settle(opened.page, 45_000);
         const text = await opened.page.locator('main').first().innerText();
         await shot(opened.page, `fix-${LABEL}-${name}`);
         const failedLoad = /Couldn't load (campaigns|ads) right now/.test(text);
-        const connect = (text.match(/Connect a Meta ad account to rank/g) ?? []).length;
+        const connect = (text.match(/no Meta ad account connected/g) ?? []).length;
         const taps = await opened.page.evaluate(() =>
           Array.from(
             document.querySelectorAll(
-              '[data-home-module="health"] li a, [data-home-module="opp"] li a',
+              '[data-testid^="home-tile-"] li a',
             ),
           ).map((link) => {
             link.scrollIntoView({ block: 'center' });
@@ -176,16 +177,16 @@ test('laneE:fixes — the fix branch, read as a person sees it', async ({ browse
         );
         obs.add({ name, failedLoad, connect, taps });
         recorder.record(
-          `${name}: Performance + and Creative + never read as a failed load`,
+          `${name}: no tile reads as a failed load`,
           failedLoad ? 'FAIL' : 'PASS',
         );
         recorder.record(
-          `${name}: both say to connect a Meta ad account`,
-          connect === 2 ? 'PASS' : 'FAIL',
+          `${name}: the Creative tile says it reads Meta ads and none is connected`,
+          connect >= 1 ? 'PASS' : 'FAIL',
           `${connect} connect lines`,
         );
         recorder.record(
-          `${name}: every Health and Opportunities link takes a tap across 24 px`,
+          `${name}: every link in a Home tile's list takes a tap across 24 px`,
           taps.length === 0 ? 'WARN' : taps.every((tap) => tap.pad) ? 'PASS' : 'FAIL',
           taps.map((tap) => `${tap.text} ${tap.height}px pad=${tap.pad}`).join(' | '),
         );

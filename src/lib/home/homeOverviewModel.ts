@@ -1,4 +1,4 @@
-// Pure math behind the Home overview: puts each ad account's read in the Home's words, sums the
+// Pure math behind the Home's goal figures: puts each ad account's read in the Home's words, sums the
 // accounts in scope per currency, and turns an objective into the figure its tile shows (value,
 // change, cost per result, series). No fetching here, so every number the Home prints can be
 // checked against its inputs.
@@ -9,7 +9,6 @@ import {
   type HomeObjectiveMetric,
   type HomeResultTotals,
   type PaidAccountOverview,
-  type PaidEntityKpi,
 } from '@continuum/contracts';
 
 const COUNTED: HomeObjectiveMetric[] = [
@@ -345,79 +344,4 @@ export function objectiveFigure(objective: HomeObjective, totals: OverviewTotals
     cost,
     series: totals.series[metric] ?? [],
   };
-}
-
-/** Which ranking KPI orders campaigns and ads for an objective: the count, and its cost. */
-export function rankingKpisFor(metric: HomeObjectiveMetric): {
-  volume:
-    | 'conversions'
-    | 'conversations'
-    | 'leads'
-    | 'conversions_value'
-    | 'clicks'
-    | 'impressions'
-    | 'spend';
-  efficiency:
-    | 'cost_per_conversion'
-    | 'cost_per_conversation'
-    | 'cost_per_lead'
-    | 'roas'
-    | 'cpc'
-    | 'cpm'
-    | null;
-} {
-  switch (metric) {
-    case 'purchases':
-      return { volume: 'conversions', efficiency: 'cost_per_conversion' };
-    case 'purchase_value':
-      return { volume: 'conversions_value', efficiency: 'roas' };
-    case 'conversations':
-      return { volume: 'conversations', efficiency: 'cost_per_conversation' };
-    case 'leads':
-      return { volume: 'leads', efficiency: 'cost_per_lead' };
-    case 'clicks':
-      return { volume: 'clicks', efficiency: 'cpc' };
-    case 'impressions':
-      return { volume: 'impressions', efficiency: 'cpm' };
-    case 'spend':
-      return { volume: 'spend', efficiency: null };
-  }
-}
-
-/** How Google ranks campaigns by an objective's count: a business result is that result's
- *  conversions (its `resultBucket`); delivery is ranked as it is. Google reports no
- *  conversations, so it has nothing to rank for them. */
-export function googleVolumeRanking(
-  metric: HomeObjectiveMetric,
-): { kpi: PaidEntityKpi; resultBucket?: GoogleHomeResult } | null {
-  switch (metric) {
-    case 'purchases':
-      return { kpi: 'conversions', resultBucket: 'purchases' };
-    case 'purchase_value':
-      return { kpi: 'conversions_value', resultBucket: 'purchases' };
-    case 'leads':
-      return { kpi: 'conversions', resultBucket: 'leads' };
-    case 'conversations':
-      return null;
-    case 'clicks':
-    case 'impressions':
-    case 'spend':
-      return { kpi: metric };
-  }
-}
-
-/** What a paid module (Performance +, Creative +) shows. A brand with no account the module can
- *  rank — none at all, or only Google accounts for Creative +, which ranks image ads — is told
- *  so: never a failed load with a Retry that cannot succeed, never a week in which its campaigns
- *  "brought nothing". */
-export type PaidModuleState = 'no-meta-account' | 'loading' | 'error' | 'empty' | 'ready';
-
-export function paidModuleState(
-  metaAccounts: number,
-  load: { status: 'loading' | 'error' | 'ready' },
-  isEmpty: boolean,
-): PaidModuleState {
-  if (metaAccounts === 0) return 'no-meta-account';
-  if (load.status !== 'ready') return load.status;
-  return isEmpty ? 'empty' : 'ready';
 }

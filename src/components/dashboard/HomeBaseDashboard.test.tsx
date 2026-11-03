@@ -113,20 +113,23 @@ describe('HomeBaseDashboard', () => {
     expect(caption?.className).not.toContain('text-muted-foreground/');
   });
 
-  it('replaces empty modules with the first-run setup when no account is connected', () => {
+  it('hands a brand with nothing connected to the Home board, whose setup tile leads', () => {
+    // The page renders the overview (the board in setup mode) whenever nothing is connected; the
+    // separate checklist would repeat the setup tile, so it is not drawn.
     const { container } = render(
       <HomeBaseDashboard
-        activeView="organic"
-        activeViewSlot={<div>Organic slot</div>}
+        activeView="overview"
+        activeViewSlot={<div>Board slot</div>}
         setup={incompleteNoData}
       />,
     );
 
-    expect(container.querySelector('[data-testid="dashboard-first-run"]')).not.toBeNull();
-    expect(container.textContent).toContain('Set up your workspace');
+    expect(container.querySelector('[data-testid="dashboard-first-run"]')).toBeNull();
     expect(container.textContent).toContain('Get started');
-    // No live data + no mode toggle when there is nothing to show.
-    expect(container.querySelector('[data-dashboard-panel="organic"]')).toBeNull();
+    expect(container.querySelector('[data-dashboard-panel="overview"]')?.textContent).toContain(
+      'Board slot',
+    );
+    // No mode toggle when there is nothing to switch between.
     expect(container.querySelector('nav[aria-label="Dashboard view options"]')).toBeNull();
   });
 

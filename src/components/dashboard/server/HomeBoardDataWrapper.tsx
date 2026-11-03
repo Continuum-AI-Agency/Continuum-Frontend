@@ -4,7 +4,7 @@ import type { DashboardSetupState } from '@/components/dashboard/first-run/setup
 import { HomeBoard } from '@/components/dashboard/home-board/HomeBoard';
 import { loadHomeBoard } from '@/lib/home/brandReading.server';
 import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
-import type { HomeAdAccount } from '@/lib/home/useHomeOverviewData';
+import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import type { SnapshotAccountRef } from '@/lib/organic/brandOrganicSnapshot';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

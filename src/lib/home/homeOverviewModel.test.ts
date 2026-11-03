@@ -5,10 +5,7 @@ import pinkGoogle from './__fixtures__/pink-google-account-overview.json';
 import {
   deltaPercent,
   googleOverviewForHome,
-  googleVolumeRanking,
   objectiveFigure,
-  paidModuleState,
-  rankingKpisFor,
   resultTotalsAcross,
   sumOverviews,
   totalsByCurrency,
@@ -103,34 +100,11 @@ describe('helpers', () => {
     expect(deltaPercent(5, null)).toBeNull();
     expect(deltaPercent(15, 10)).toBe(50);
   });
-
-  it('ranks conversations by their own count and cost', () => {
-    expect(rankingKpisFor('conversations')).toEqual({
-      volume: 'conversations',
-      efficiency: 'cost_per_conversation',
-    });
-    expect(rankingKpisFor('spend').efficiency).toBeNull();
-  });
 });
 
 // PP-DT-E-home-no-meta-account-error: the paid modules read Meta accounts only. A brand with none
 // (Pink Elephant, Tangassi — Google-only) is told to connect one; it never reads as a failed
 // load or as a week in which its campaigns brought nothing.
-describe('paidModuleState', () => {
-  it('a brand with no Meta ad account gets the connect line, whatever the load says', () => {
-    expect(paidModuleState(0, { status: 'error' }, true)).toBe('no-meta-account');
-    expect(paidModuleState(0, { status: 'ready' }, true)).toBe('no-meta-account');
-    expect(paidModuleState(0, { status: 'loading' }, true)).toBe('no-meta-account');
-  });
-
-  it('with an account: loading, error, an empty week and results stay apart', () => {
-    expect(paidModuleState(2, { status: 'loading' }, true)).toBe('loading');
-    expect(paidModuleState(2, { status: 'error' }, true)).toBe('error');
-    expect(paidModuleState(2, { status: 'ready' }, true)).toBe('empty');
-    expect(paidModuleState(2, { status: 'ready' }, false)).toBe('ready');
-  });
-});
-
 // PP-DT-E-home-google-results-absent (deep test 2026-10-31, lane E): the Home read Meta accounts
 // only, so Pink Elephant — Google-only, ≈3,100 MXN a week — was told "Connect a Meta ad account".
 // Google counts ONE business result per read (its `resultBucket`) as `conversions`, so the Home
@@ -252,25 +226,5 @@ describe('money by currency', () => {
     expect(results.purchases).toBe(78);
     expect(results.purchase_value).toBeUndefined();
     expect(results.spend).toBe(23400);
-  });
-});
-
-describe('Google campaigns ranked for a goal', () => {
-  it('ranks a business result as the conversions of that result', () => {
-    expect(googleVolumeRanking('leads')).toEqual({ kpi: 'conversions', resultBucket: 'leads' });
-    expect(googleVolumeRanking('purchases')).toEqual({
-      kpi: 'conversions',
-      resultBucket: 'purchases',
-    });
-    expect(googleVolumeRanking('purchase_value')).toEqual({
-      kpi: 'conversions_value',
-      resultBucket: 'purchases',
-    });
-  });
-
-  it('ranks delivery as it is, and has nothing to rank for conversations', () => {
-    expect(googleVolumeRanking('clicks')).toEqual({ kpi: 'clicks' });
-    expect(googleVolumeRanking('spend')).toEqual({ kpi: 'spend' });
-    expect(googleVolumeRanking('conversations')).toBeNull();
   });
 });
