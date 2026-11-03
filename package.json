@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "bun run --bun next dev --turbopack",
-    "build": "bun run typecheck:build && next build && bun run bundle:check",
+    "build": "bun run typecheck:build && next build && node scripts/compile-hints.mjs && bun run bundle:check",
     "start": "next start",
     "lint": "cd .. && bun run agent:check -- --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
