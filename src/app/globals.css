@@ -148,12 +148,6 @@
   --glass-border: rgba(90, 72, 249, 0.08);
   --glass-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.28);
 
-  /* Legacy Galaxy background CSS variables for SSR-stable inline styles */
-  --bg-galaxy-c1-light: rgba(255, 122, 203, 0.25);
-  --bg-galaxy-c2-light: rgba(255, 255, 255, 0.22);
-  --bg-galaxy-c3-light: rgba(255, 210, 238, 0.14);
-  --bg-galaxy-vignette-light: rgba(255, 255, 255, 0.06);
-  --bg-galaxy-c1-overlay-light: rgba(255, 210, 238, 0.1);
 
   /* Layout and viewport density tokens.
      The dashboard is dense by default, then gently compacts on laptop-sized
@@ -399,11 +393,6 @@ html {
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-bg: rgba(2, 6, 23, 0.6);
   --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  --bg-galaxy-c1-dark: rgba(160, 140, 207, 0.24);
-  --bg-galaxy-c2-dark: rgba(93, 42, 142, 0.18);
-  --bg-galaxy-c3-dark: rgba(0, 0, 0, 0.18);
-  --bg-galaxy-vignette-dark: rgba(0, 0, 0, 0.25);
-  --bg-galaxy-c1-overlay-dark: rgba(160, 140, 207, 0.06);
 
   /* Studio Canvas connector tokens (dark) */
   --edge-text: #94a3b8;

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Continuum connects to Supabase (auth, database, storage, edge functions), a custom backend API (Node.js), and a Python/brand-insights service. Third-party integrations include Meta (Facebook Ads) and Google (OAuth + Drive Picker), with Mixpanel and Vercel for analytics. AI capabilities are proxied through the backend rather than called directly from the frontend.
+Continuum connects to Supabase (auth, database, storage, edge functions), a custom backend API (Node.js), and a Python/brand-insights service. Third-party integrations include Meta (Facebook Ads) and Google (OAuth + Drive Picker), with PostHog and Vercel for analytics. AI capabilities are proxied through the backend rather than called directly from the frontend.
 
 ## APIs & External Services
 
@@ -126,11 +126,10 @@ Edge functions are deployed to Supabase and called directly via `NEXT_PUBLIC_SUP
 
 ## Analytics & Monitoring
 
-### Mixpanel
-- SDK: `mixpanel-browser ^2.75.0`
-- Init: `src/components/analytics/MixpanelInit.tsx` — production only (disabled in development)
-- Token: hardcoded in `MixpanelInit.tsx` (not env-driven)
-- Config: `autocapture: true`, `record_sessions_percent: 100`
+### PostHog
+- SDK: `posthog-js`, imported after load-idle in `instrumentation-client.ts` (production only)
+- Ingest: proxied same-origin through `/ingest` (`next.config.ts` rewrites)
+- Mixpanel was removed 2026-11-02.
 
 ### Vercel Analytics
 - SDK: `@vercel/analytics ^1.6.1`
@@ -175,7 +174,6 @@ Edge functions are deployed to Supabase and called directly via `NEXT_PUBLIC_SUP
 
 ## Notable Observations
 
-- The Mixpanel token is **hardcoded in source code** at `src/components/analytics/MixpanelInit.tsx:6`. This is a minor security concern — while Mixpanel tokens are not secret (they're meant to be public), the convention is to use env vars for maintainability.
 - There are **two parallel API naming conventions** for the backend: `API_URL`/`API_BASE_URL` and `NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_API_BASE_URL`. The config resolves all four with environment-aware priority, but this creates redundancy.
 - Supabase Edge Functions are called **directly from the browser** in several places (e.g., DCO action logs in `src/hooks/useDCOActionLogs.ts`) by constructing `${NEXT_PUBLIC_SUPABASE_URL}/functions/v1/...` URLs manually, bypassing the API layer.
 - The AI Studio workflow execution (`src/StudioCanvas/utils/executeWorkflow.ts`) also calls `prompt-fast-enrich` edge function directly from the client, using the Supabase anon key as a fallback token if no session is present.

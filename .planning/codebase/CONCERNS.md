@@ -45,7 +45,7 @@ The codebase is a well-structured Next.js 16 / React 19 application with a clear
 
 **Severity:** HIGH
 
-- **Issue:** No Sentry, Datadog, Rollbar, Logtail, Axiom, or equivalent error tracking is integrated. The only analytics present is Mixpanel (user events, not errors). Production exceptions from SSE streams, workflow execution, and AI generation routes are swallowed by `console.error` and lost.
+- **Issue:** No Sentry, Datadog, Rollbar, Logtail, Axiom, or equivalent error tracking is integrated. Product analytics is PostHog (`instrumentation-client.ts`, `capture_exceptions: true`). Production exceptions from SSE streams, workflow execution, and AI generation routes are swallowed by `console.error` and lost.
 - **Files:** Error handling throughout `src/StudioCanvas/utils/executeWorkflow.ts`, `src/app/api/ai-studio/generate/route.ts`, `src/app/api/agents/jaina/chat/stream/route.ts` — all log to `console.error` only.
 - **Impact:** Silent production failures, no alerting, no stack trace aggregation.
 - **Fix approach:** Add Sentry (or equivalent) as a Next.js instrumentation file (`instrumentation.ts`); wire `captureException` to the existing `console.error` call sites.
@@ -54,11 +54,7 @@ The codebase is a well-structured Next.js 16 / React 19 application with a clear
 
 ### 5. Hardcoded Mixpanel Token in Source
 
-**Severity:** HIGH
-
-- **Issue:** `src/components/analytics/MixpanelInit.tsx:6` embeds the Mixpanel project token as a string literal: `const MIXPANEL_TOKEN = "c4c6970ea649d1a205fbf340cdbb97d7"`. This token is committed to the repository.
-- **Impact:** Anyone with repo access can send arbitrary events to the production Mixpanel project. Token cannot be rotated without a code deploy.
-- **Fix approach:** Move to `NEXT_PUBLIC_MIXPANEL_TOKEN` env var; remove hardcoded value.
+**Resolved 2026-11-02:** Mixpanel was removed; PostHog is the analytics SDK. The old project token is still in git history, so retire the Mixpanel project.
 
 ---
 
@@ -255,7 +251,7 @@ The codebase is a well-structured Next.js 16 / React 19 application with a clear
 
 3. **Harden the two unauthenticated API routes** — `src/app/api/campaigns/route.ts` and `src/app/api/ad-accounts/route.ts` need a server-side `getUser()` check added before proxying to Supabase edge functions.
 
-4. **Move Mixpanel token to an env var** — The hardcoded token in `src/components/analytics/MixpanelInit.tsx` should be `NEXT_PUBLIC_MIXPANEL_TOKEN`; rotate the old token after the change deploys.
+4. ~~Move Mixpanel token to an env var~~ — resolved 2026-11-02: Mixpanel removed.
 
 5. **Regenerate Supabase types to include `brand_profiles` schema** — Eliminates the 20+ `as any` casts in canvas realtime hooks and establishes type safety on canvas_sessions and canvas_rooms queries. Run: `SUPABASE_SCHEMAS=brand_profiles bun run supabase:gen:types`.
 

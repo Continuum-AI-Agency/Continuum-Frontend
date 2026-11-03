@@ -2,8 +2,6 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { Suspense } from 'react';
-import { MixpanelInit } from '@/components/analytics/MixpanelInit';
-import { GalaxyBackgroundLazy } from '@/components/ui/GalaxyBackgroundLazy';
 import { NavigationTransition } from '@/components/ui/NavigationTransition';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
@@ -72,7 +70,6 @@ export default function DashboardLayout({
     <ReactQueryProvider>
       <ToastProvider>
         <StudioRenderProvider>
-          <GalaxyBackgroundLazy intensity={1} speed="glacial" />
           <div
             className="min-h-dvh overflow-hidden"
             style={{
@@ -80,7 +77,6 @@ export default function DashboardLayout({
               color: 'var(--foreground)',
             }}
           >
-            <MixpanelInit />
             <Suspense fallback={<DashboardLayoutFallback />}>
               <DashboardLayoutContent>{children}</DashboardLayoutContent>
             </Suspense>

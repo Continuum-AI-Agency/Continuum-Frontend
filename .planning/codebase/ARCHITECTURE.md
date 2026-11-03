@@ -129,7 +129,7 @@ Continuum is a Next.js 16 App Router application built server-first: RSCs handle
 **Root Layout:**
 - Location: `src/app/layout.tsx`
 - Triggers: All routes
-- Responsibilities: Theme hydration (no-flash script + cookie-based `data-theme`), `ReactQueryProvider`, `ToastProvider`, `ThemeProvider`, Vercel Analytics/SpeedInsights, Mixpanel init
+- Responsibilities: Theme hydration (no-flash script + cookie-based `data-theme`), `ReactQueryProvider`, `ToastProvider`, `ThemeProvider`, Vercel Analytics/SpeedInsights
 
 **Auth Middleware:**
 - Location: `src/middleware.ts`
