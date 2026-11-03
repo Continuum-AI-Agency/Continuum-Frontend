@@ -55,7 +55,7 @@ Continuum-Frontend/
 │   │   ├── realtime/                 # Supabase Realtime client components
 │   │   ├── settings/                 # Settings page components
 │   │   ├── ui/                       # Shared primitives (shadcn/ui recipes, Base UI wrappers)
-│   │   └── [misc]/                   # loader-animations, presence, site, strategic-analyses, etc.
+│   │   └── [misc]/                   # presence, site, strategic-analyses, etc.
 │   ├── hooks/                        # Shared React hooks (useAuth, useSession, useBrandIntegrations, etc.)
 │   ├── lib/                          # Business logic, API clients, schemas, utilities (no React)
 │   │   ├── ai-studio/                # AI Studio execution (GraphExecutor, inputResolution, portTypes, backend)

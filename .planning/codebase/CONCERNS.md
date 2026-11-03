@@ -123,10 +123,9 @@ The codebase is a well-structured Next.js 16 / React 19 application with a clear
 
 **Severity:** MEDIUM
 
-- **Issue:** `three.js`, `@react-three/fiber`, `@react-three/drei`, `@rive-app/react-webgl2`, and `maplibre-gl` are all imported statically. None of these are wrapped in `next/dynamic` with `ssr: false`. They add significant initial bundle weight to pages that may not need them.
+- **Issue:** `three.js`, `@rive-app/react-webgl2`, and `maplibre-gl` are all imported statically. None of these are wrapped in `next/dynamic` with `ssr: false`. They add significant initial bundle weight to pages that may not need them.
 - **Files:**
   - `src/components/ui/map.tsx` — static MapLibre import including CSS
-  - `src/components/loader-animations/SaturnRingsScene.tsx`, `GalaxyParticles.tsx`, `SaturnRing.tsx` — Three.js
   - `src/components/ai-elements/persona.tsx` — Rive WebGL
 - **Impact:** All users pay the parse/init cost for 3D and map libraries on every page load.
 - **Fix approach:** Wrap each with `next/dynamic(() => import(...), { ssr: false })` at their consumer call sites.

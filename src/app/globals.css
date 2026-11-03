@@ -966,21 +966,7 @@ body {
   border-radius: 6px;
 }
 
-/* Slow, subtle 3-layer wave background */
 :root {
-  /* Optional: tune opacity/blur globally */
-  --waves-opacity: 0.42;
-  --waves-blur: 72px;
-  --waves-overscan: 25%;
-
-  /* Light theme wave colors (kept brand-consistent) */
-  --wave-1-a: #ede6fa; /* soft lavender */
-  --wave-1-b: #dde6ff; /* pale indigo */
-  --wave-2-a: #f6e9ff; /* light lilac */
-  --wave-2-b: #ede6fa; /* soft lavender */
-  --wave-3-a: #ffe3ec; /* blush */
-  --wave-3-b: #f3e7ff; /* pastel purple */
-
   /* BasedKit chart tokens (light). Sequential --chart-scale-* is a brand violet
      ramp low→high; brand categorical --chart-1..5 stay defined above and are NOT
      overridden. */
@@ -1012,90 +998,8 @@ body {
   --chart-scale-pattern-color: #ece9fe;
 }
 
-[data-theme="dark"] {
-  /* Dark theme wave colors (aligned to your palette) */
-  --wave-1-a: #2e2257; /* uses --secondary family */
-  --wave-1-b: #23376b; /* deep indigo */
-  --wave-2-a: #462559; /* deep purple */
-  --wave-2-b: #2e2257; /* deep indigo */
-  --wave-3-a: #8a4374; /* muted magenta */
-  --wave-3-b: #462559; /* deep purple */
-}
-
-/* Container sits behind all content */
-.wave-background {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-/* Each wave overscans the viewport to hide edges while animating */
-.wave-layer {
-  position: absolute;
-  top: calc(0px - var(--waves-overscan));
-  right: calc(0px - var(--waves-overscan));
-  bottom: calc(0px - var(--waves-overscan));
-  left: calc(0px - var(--waves-overscan));
-  opacity: var(--waves-opacity);
-  filter: blur(var(--waves-blur));
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-/* Gradients + very long, gentle motions */
-.layer-1 {
-  background: linear-gradient(135deg, var(--wave-1-a), var(--wave-1-b));
-  animation: moveWave1 90s ease-in-out infinite alternate;
-}
-
-.layer-2 {
-  background: linear-gradient(150deg, var(--wave-2-a), var(--wave-2-b));
-  animation: moveWave2 120s ease-in-out infinite alternate-reverse;
-}
-
-.layer-3 {
-  background: linear-gradient(165deg, var(--wave-3-a), var(--wave-3-b));
-  animation: moveWave3 150s ease-in-out infinite;
-}
-
-/* Keyframes: slow drift with slight scale */
-@keyframes moveWave1 {
-  0% {
-    transform: translate(-10%, -10%) scale(1.1);
-  }
-  100% {
-    transform: translate(10%, 10%) scale(1.1);
-  }
-}
-@keyframes moveWave2 {
-  0% {
-    transform: translate(-15%, 10%) scale(1.2);
-  }
-  100% {
-    transform: translate(15%, -10%) scale(1.2);
-  }
-}
-@keyframes moveWave3 {
-  0% {
-    transform: translate(10%, -15%) scale(1.3);
-  }
-  100% {
-    transform: translate(-10%, 15%) scale(1.3);
-  }
-}
-
-/* Motion and perf guardrails.
-   .wave-layer carries no animation of its own — the 90/120/150s drifts live on
-   .layer-1/2/3, so guarding only the parent left all three running under reduce. */
+/* Motion and perf guardrails. */
 @media (prefers-reduced-motion: reduce) {
-  .wave-layer {
-    filter: blur(calc(var(--waves-blur) * 0.5));
-  }
-  .layer-1,
-  .layer-2,
-  .layer-3,
   .particle-layer.top,
   .particle-layer.bottom,
   .sidebar-gradient-bg,

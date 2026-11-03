@@ -72,7 +72,7 @@ Continuum is a Next.js 16 (App Router) application built with React 19, TypeScri
 - maplibre-gl ^5.19.0 — geographic maps
 
 **3D / Animation:**
-- @react-three/fiber ^9.5.0, @react-three/drei ^10.7.7, three ^0.182.0 — 3D scenes
+- three ^0.182.0 — 3D scenes (library model viewer, shader background)
 - framer-motion ^12.35.1, motion ^12.35.1 — animation variants
 
 **UI Utilities:**
