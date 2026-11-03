@@ -135,8 +135,11 @@ function candidatesOf(signals: HomeBrandSignals, reading: HomeBrandReading): Can
     urgency: reading.goal.source === 'team' ? 2 : 1,
     confidence: ads > 0 ? 1 : 0.6,
   });
-  if (ads > 0) {
+  // A blocked portfolio is a problem to fix whether or not an ad account is assigned yet.
+  if (ads > 0 || issues > 0) {
     out.push({ id: 'health', impact: 9, urgency: issues > 0 ? 3 : 1, confidence: 1 });
+  }
+  if (ads > 0) {
     out.push({
       id: 'opps',
       impact: 8,

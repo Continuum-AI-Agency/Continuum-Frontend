@@ -7,6 +7,8 @@ export type BenchRecorder = {
   /** WARN is environmental (a contended speed sample): kept and counted, never a failure. */
   record(step: string, grade: 'PASS' | 'WARN' | 'FAIL' | 'SKIP', detail?: string): void;
   print(): void;
+  /** Whether any step graded FAIL, so a standalone bench can exit non-zero. */
+  failed(): boolean;
 };
 
 export function createBenchRecorder(bench: string, notes: string[]): BenchRecorder {
@@ -31,6 +33,9 @@ export function createBenchRecorder(bench: string, notes: string[]): BenchRecord
     },
     record(step, grade, detail) {
       graded.push({ step, grade, detail });
+    },
+    failed() {
+      return graded.some((result) => result.grade === 'FAIL');
     },
     print() {
       const counts = { pass: 0, warn: 0, skip: 0, fail: 0 };

@@ -631,4 +631,4 @@ try {
 } finally {
   recorder.print();
 }
-process.exit(0);
+process.exit(recorder.failed() ? 1 : 0);

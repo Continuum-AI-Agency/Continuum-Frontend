@@ -181,6 +181,8 @@ export function boardViolations(
   }
 
   for (const id of ids) {
+    // A blocked portfolio is a problem to show whether or not an ad account is assigned yet.
+    if (id === 'health' && facts.issues > 0) continue;
     if (ADS_TILES.has(id) && facts.ads === 0) {
       out.push({ rule: 'gating', detail: `${id} without an ad account` });
     }

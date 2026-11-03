@@ -104,6 +104,15 @@ describe('readHomeBoard — a recommend brand with no client checklist', () => {
 });
 
 describe('readHomeBoard — a tile only where its source exists', () => {
+  it('still opens on health when a blocked portfolio has no ad account assigned', () => {
+    const board = readHomeBoard(
+      brand({ accounts: { ads: 0, organic: 2 }, portfolios: [portfolio({ rosterAbsent: true })] }),
+    );
+    expect(board.mode).toBe('fix');
+    expect(board.tiles[0]).toMatchObject({ id: 'health', size: 'l' });
+    expect(board.tiles[0]?.why).toMatch(/\d/);
+  });
+
   it('promises no paid tile without an ad account', () => {
     const tiles = ids(readHomeBoard(brand({ accounts: { ads: 0, organic: 2 } })).tiles);
     for (const paid of ['pacing', 'creative', 'opps', 'health', 'brief', 'autopilot'] as const) {
