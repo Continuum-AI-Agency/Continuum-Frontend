@@ -1,0 +1,255 @@
+// optimizer_list_actions rows for Easy Fit's Meta brand. The two autopilot budget writes of
+// 2026-11-03 05:06, the 2026-11-02 write and the two 2026-11-01 setting changes are prod rows read
+// on 2026-11-03 (read-only). The Meta write with an empty receipt, the Google budget write and
+// the system decision copy the shapes prod carries for those kinds (a Google receipt is
+// {platform, requestId, resourceNames}; two Meta rows in prod store {}), timed inside the window.
+import type { OptimizerActionFeedRow } from '@/components/paid-media/optimizer/useOptimizerData';
+
+/** The instant the tests read "now" at: 15 h after the night's cycle. */
+export const OVERNIGHT_NOW = new Date('2026-11-03T20:00:00.000Z');
+
+export const EASY_FIT_ACTIONS: OptimizerActionFeedRow[] = [
+  {
+    id: 'df088128-ecf8-4c37-ab45-d39fdc1cc7e3',
+    ts: '2026-11-03T05:06:56.02843+00:00',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: '120252387183480236',
+    before: {
+      minor: 21979,
+    },
+    after: {
+      minor: 27474,
+    },
+    justification:
+      'Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result $57.41 MXN on 58 events. Truncated by the per-cycle velocity cap.',
+    actor_kind: 'autopilot',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: '5ec46354-f9e8-4c10-b3eb-21c1fb5443b1',
+    reversible: true,
+    revert_of: null,
+    reverted_by: null,
+    receipt: {
+      success: true,
+      entityId: '120252387183480236',
+      fbtraceId: 'GK+wrLGTUlM',
+      verification: {
+        state: 'verified',
+        deliveryChecked: true,
+      },
+    },
+    move_id: null,
+    leg: null,
+    platform: 'meta',
+  },
+  {
+    id: '39d6ecbc-e4e9-4505-b99d-9324ddfb0de0',
+    ts: '2026-11-03T05:06:53.907942+00:00',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: '120252387195420236',
+    before: {
+      minor: 49944,
+    },
+    after: {
+      minor: 62430,
+    },
+    justification:
+      'Earned a larger share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result $37.11 MXN on 167 events. Truncated by the per-cycle velocity cap.',
+    actor_kind: 'autopilot',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: '5ec46354-f9e8-4c10-b3eb-21c1fb5443b1',
+    reversible: true,
+    revert_of: null,
+    reverted_by: null,
+    receipt: {
+      success: true,
+      entityId: '120252387195420236',
+      fbtraceId: 'FnRoSzmMXiU',
+      verification: {
+        state: 'verified',
+        deliveryChecked: true,
+      },
+    },
+    move_id: null,
+    leg: null,
+    platform: 'meta',
+  },
+  {
+    id: '0d8e1b44-51b7-4f0e-8a77-0c5b8c1f2e02',
+    ts: '2026-11-03T05:06:50.000000+00:00',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: '120252387298200236',
+    before: {
+      minor: 63903,
+    },
+    after: {
+      minor: 60000,
+    },
+    justification: null,
+    actor_kind: 'autopilot',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: '5ec46354-f9e8-4c10-b3eb-21c1fb5443b1',
+    reversible: true,
+    revert_of: null,
+    reverted_by: null,
+    receipt: {},
+    move_id: null,
+    leg: null,
+    platform: 'meta',
+  },
+  {
+    id: 'a4c2b0e9-6f3d-4b0e-b1d2-5e9f0c7a8b03',
+    ts: '2026-11-03T05:06:46.580000+00:00',
+    family: 'decision',
+    op: 'decision',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: '120252366741610236',
+    before: {
+      status: 'pending',
+    },
+    after: {
+      status: 'rejected',
+    },
+    justification: null,
+    actor_kind: 'system',
+    actor_id: null,
+    run_id: '5ec46354-f9e8-4c10-b3eb-21c1fb5443b1',
+    reversible: false,
+    revert_of: null,
+    reverted_by: null,
+    receipt: null,
+    move_id: null,
+    leg: null,
+    platform: null,
+  },
+  {
+    id: '7b0c1f52-3d1e-4a52-9a43-2f7c1c3e9a01',
+    ts: '2026-11-03T03:16:58.120000+00:00',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: 'b9cebbcf-2832-440a-b326-3af20c19be37',
+    portfolio_name: 'Leads // Google Ads only',
+    entity_id: '12677560956',
+    before: {
+      minor: 60000,
+    },
+    after: {
+      minor: 75000,
+    },
+    justification:
+      'Budget-limited: loses 31% of impressions to budget at $86.65 MXN per conversion.',
+    actor_kind: 'human',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: null,
+    reversible: true,
+    revert_of: null,
+    reverted_by: null,
+    receipt: {
+      platform: 'google_ads',
+      requestId: 'BazCWFaa8WNphefUXzUlDg',
+      resourceNames: ['customers/5251780631/campaignBudgets/12677560956'],
+    },
+    move_id: null,
+    leg: null,
+    platform: 'google_ads',
+  },
+  {
+    id: '3f23d3d0-8413-4497-9c99-1b3243d37f1a',
+    ts: '2026-11-02T05:06:35.07135+00:00',
+    family: 'money',
+    op: 'budget',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: '120252366741610236',
+    before: {
+      minor: 43077,
+    },
+    after: {
+      minor: 35670,
+    },
+    justification:
+      "Pacing lowered the portfolio's daily total to $2,994 MXN to stay on its plan. Earned a smaller share of the pool than its current budget. The 3d, 7d and 14d scores agree. Cost per result $50.58 MXN on 91 events.",
+    actor_kind: 'autopilot',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: '330e2646-e786-457c-86be-ba0b960397f9',
+    reversible: true,
+    revert_of: null,
+    reverted_by: null,
+    receipt: {
+      success: true,
+      entityId: '120252366741610236',
+      fbtraceId: 'GzhuvzgTErv',
+      verification: {
+        state: 'verified',
+        deliveryChecked: true,
+      },
+    },
+    move_id: null,
+    leg: null,
+    platform: 'meta',
+  },
+  {
+    id: 'b2133f30-81a2-471d-b21c-b6e861dfe3c5',
+    ts: '2026-11-01T23:57:44.635169+00:00',
+    family: 'settings',
+    op: 'setting',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: 'daily_total',
+    before: {
+      value: '1200',
+    },
+    after: {
+      value: '3000',
+    },
+    justification: null,
+    actor_kind: 'human',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: null,
+    reversible: false,
+    revert_of: null,
+    reverted_by: null,
+    receipt: null,
+    move_id: null,
+    leg: null,
+    platform: null,
+  },
+  {
+    id: '5ddb31ca-c0c1-409e-8116-0d1847468487',
+    ts: '2026-11-01T23:57:44.635169+00:00',
+    family: 'settings',
+    op: 'setting',
+    portfolio_id: '0fd6f383-6a70-4ce1-baf8-c869bc5d4aec',
+    portfolio_name: 'Conversaciones Whatsapp',
+    entity_id: 'max_daily_apply_minor',
+    before: {
+      value: '130000',
+    },
+    after: {
+      value: '320000',
+    },
+    justification: null,
+    actor_kind: 'human',
+    actor_id: 'e6d86770-4928-4fd5-ba40-dbc47f565823',
+    run_id: null,
+    reversible: false,
+    revert_of: null,
+    reverted_by: null,
+    receipt: null,
+    move_id: null,
+    leg: null,
+    platform: null,
+  },
+];
+
+/** The rows inside the 24 h before OVERNIGHT_NOW. */
+export const EASY_FIT_ACTIONS_IN_WINDOW = 5;
