@@ -4,24 +4,33 @@
 //
 // Money is never added across currencies: a money goal has one amount per currency, the Home's
 // lead currency first (totalsByCurrency). A count (leads, conversations, purchases) is the same
-// unit everywhere, so it is summed across every account. There is no target and no period yet:
-// the team will set them in the UI once the goals update lands, so nothing here projects, paces or
-// rings a figure against one.
+// unit everywhere, so it is summed across every account. When the team set a target for the
+// primary goal, its figure is read over the target's period instead (goalTargetModel.ts);
+// secondaries stay on the month.
 
 import {
   HOME_OBJECTIVE_METRICS,
+  HOME_PROFILE_BRAND_SCOPE,
   type HomeObjective,
   type HomeProfileRow,
   resolveHomeObjectives,
 } from '@continuum/contracts';
+import type { AccountReadFailure, HomeAdAccount } from '@/lib/home/homeAccounts';
 import {
   type HomeAccountOverview,
   resultTotalsAcross,
   sumOverviews,
   totalsByCurrency,
 } from '@/lib/home/homeOverviewModel';
-import type { AccountReadFailure, HomeAdAccount } from '@/lib/home/homeAccounts';
 import { calendarDayIn, shiftDay } from '@/lib/paid-media/reportingWindow';
+import {
+  type GoalActiveTarget,
+  type GoalTargetStatus,
+  type GoalTargetsLoad,
+  goalTargetComparison,
+  goalTargetFor,
+  goalTargetPeriod,
+} from './goalTargetModel';
 
 /** The complete days of the month so far, inclusive on both ends. */
 export type GoalWindow = { since: string; until: string };
@@ -41,11 +50,15 @@ const dayLabel = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-/** "Nov 1 – Nov 2", or "Nov 1" for a single day: the days a month-to-date figure covers. */
+/** "Nov 1", for a `YYYY-MM-DD` day. */
+export function goalDayLabel(day: string): string {
+  return dayLabel.format(new Date(`${day}T00:00:00Z`));
+}
+
+/** "Nov 1 – Nov 2", or "Nov 1" for a single day: the days a figure covers. */
 export function goalWindowLabel(window: GoalWindow): string {
-  const since = dayLabel.format(new Date(`${window.since}T00:00:00Z`));
-  if (window.since === window.until) return since;
-  return `${since} – ${dayLabel.format(new Date(`${window.until}T00:00:00Z`))}`;
+  const since = goalDayLabel(window.since);
+  return window.since === window.until ? since : `${since} – ${goalDayLabel(window.until)}`;
 }
 
 /** One ad account's month to date, in the Home's words (Google already through its buckets). */
@@ -194,12 +207,14 @@ export type GoalTileView =
       others: GoalAmount[];
       secondaries: GoalFigure[];
       source: GoalSource;
+      /** The days the headline covers. */
+      figureWindow: GoalWindow;
+      target: GoalTargetStatus;
       /** Ad accounts whose read failed while others answered: not in any figure. */
       unanswered: number;
     };
 
-/** The honest line wherever a target would go: the team sets goal and period in the UI once the
- *  goals update lands. */
+/** The honest line wherever a target would go while the targets route is not deployed. */
 export const TARGETS_LATER = 'Targets and periods arrive with the goals update.';
 
 export const NO_ACCOUNT_SENTENCE =
@@ -214,41 +229,111 @@ function notCountedSentence(figure: GoalFigure): string {
     : `No ad account has counted ${goal} this month yet.`;
 }
 
+/** The primary goal's target and its period, once what names the primary has settled: the saved
+ *  goals or the month's results. Null while it has not, and when no target is set. */
+export function goalActiveTarget(input: {
+  targets: GoalTargetsLoad;
+  load: GoalLoad;
+  rows: HomeProfileRow[];
+  suggested: HomeObjective[];
+  now: Date;
+}): GoalActiveTarget | null {
+  const { targets, load } = input;
+  if (targets.status !== 'ready' || (load.status !== 'ready' && load.status !== 'idle')) {
+    return null;
+  }
+  const { primary } = goalObjectives({
+    scope: HOME_PROFILE_BRAND_SCOPE,
+    rows: input.rows,
+    reads: load.status === 'ready' ? load.reads : [],
+    suggested: input.suggested,
+  });
+  const target = goalTargetFor(targets.targets, primary);
+  return target ? { target, period: goalTargetPeriod(target, input.now) } : null;
+}
+
+const sameWindow = (a: GoalWindow, b: GoalWindow | null): boolean =>
+  a.since === b?.since && a.until === b.until;
+
+/** The days a target needs read apart from the month: null when the month's read already covers
+ *  them, or when it has no complete day. */
+export function goalPeriodReadWindow(
+  active: GoalActiveTarget | null,
+  monthWindow: GoalWindow | null,
+): GoalWindow | null {
+  const readWindow = active?.period.readWindow ?? null;
+  return readWindow && !sameWindow(readWindow, monthWindow) ? readWindow : null;
+}
+
+function targetStatusWithoutActive(targets: GoalTargetsLoad): GoalTargetStatus {
+  if (targets.status === 'ready') return { kind: 'none' };
+  return targets.status === 'unreadable' ? { kind: 'unreadable' } : { kind: 'unavailable' };
+}
+
 export function goalTileView(input: {
   accounts: HomeAdAccount[];
   window: GoalWindow | null;
   load: GoalLoad;
   rows: HomeProfileRow[];
   suggested: HomeObjective[];
+  targets: GoalTargetsLoad;
+  active: GoalActiveTarget | null;
+  periodLoad: GoalLoad;
 }): GoalTileView {
   if (input.accounts.length === 0) {
     return { state: 'missing', reason: 'no-account', sentence: NO_ACCOUNT_SENTENCE };
   }
-  if (!input.window) {
+  const { load, active } = input;
+  // Until the targets are in, the figure's window is not known: it never shows and then swaps.
+  if (input.targets.status === 'loading') return { state: 'loading' };
+  if (load.status === 'error') return { state: 'error' };
+  if (load.status === 'loading') return { state: 'loading' };
+
+  const running = active?.period.readWindow ? active : null;
+  const figureWindow = running?.period.readWindow ?? input.window;
+  if (!figureWindow) {
     return { state: 'missing', reason: 'month-start', sentence: MONTH_START_SENTENCE };
   }
-  const { load } = input;
-  if (load.status === 'error') return { state: 'error' };
-  if (load.status !== 'ready') return { state: 'loading' };
+  const source = goalPeriodReadWindow(active, input.window) ? input.periodLoad : load;
+  if (source.status === 'error') return { state: 'error' };
+  if (source.status !== 'ready') return { state: 'loading' };
 
+  const monthReads = load.status === 'ready' ? load.reads : [];
   const goals = goalObjectives({
-    scope: 'brand',
+    scope: HOME_PROFILE_BRAND_SCOPE,
     rows: input.rows,
-    reads: load.reads,
+    reads: monthReads,
     suggested: input.suggested,
   });
-  const primary = goalFigure(goals.primary, load.reads);
-  const [headline, ...others] = primary.amounts;
-  if (!headline) {
+  const primary = goalFigure(goals.primary, source.reads);
+  if (primary.amounts.length === 0) {
+    return { state: 'missing', reason: 'not-counted', sentence: notCountedSentence(primary) };
+  }
+  const target: GoalTargetStatus = running
+    ? goalTargetComparison(running, primary.amounts)
+    : active
+      ? { kind: 'not-running', ...active }
+      : targetStatusWithoutActive(input.targets);
+  // A target in a currency the brand also spends in leads with that currency's figure.
+  const compared = target.kind === 'compared' ? target.amount : null;
+  const [first, ...rest] = compared
+    ? [compared, ...primary.amounts.filter((amount) => amount !== compared)]
+    : primary.amounts;
+  if (!first) {
     return { state: 'missing', reason: 'not-counted', sentence: notCountedSentence(primary) };
   }
   return {
     state: 'ready',
     primary,
-    headline,
-    others,
-    secondaries: goals.secondaries.map((goal) => goalFigure(goal, load.reads)),
+    headline: first,
+    others: rest,
+    // On the 1st a running target has no month to read them from: nothing to say about them.
+    secondaries: monthReads.length
+      ? goals.secondaries.map((goal) => goalFigure(goal, monthReads))
+      : [],
     source: goals.source,
-    unanswered: load.failures.length,
+    figureWindow,
+    target,
+    unanswered: source.failures.length,
   };
 }

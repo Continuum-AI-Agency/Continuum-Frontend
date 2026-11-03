@@ -2,7 +2,7 @@
 // Nov 1–2). The Meta answers are SHAPED, not recorded: paidAccountOverviewSchema's keys with
 // figures in the range of Easy Fit's live MXN account and one of its USD accounts. The Google
 // answers are the REAL Pink Elephant recording (src/lib/home/__fixtures__), one read per result.
-import type { PaidAccountOverview } from '@continuum/contracts';
+import type { HomeGoalTarget, PaidAccountOverview } from '@continuum/contracts';
 import pink from '@/lib/home/__fixtures__/pink-google-account-overview.json';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 
@@ -91,3 +91,50 @@ export const GOOGLE_READS = {
   leads: pink.leads as PaidAccountOverview,
   purchases: pink.purchases as PaidAccountOverview,
 };
+
+export const BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+
+/** The same MXN account read over Nov 2 alone: the complete days of a week target on Nov 3. */
+export const MXN_WEEK_OVERVIEW: PaidAccountOverview = {
+  currency: 'MXN',
+  metrics: {
+    spend: 1620.25,
+    roas: 1.85,
+    ctr: 1.44,
+    clicks: 262,
+    impressions: 18_250,
+    purchases: 2,
+    purchase_value: 2997.46,
+    leads: 8,
+    conversations: 22,
+  },
+  comparison: { spend: { current: 1620.25, previous: 1500.25 } },
+  trends: [
+    {
+      date: '2026-11-02',
+      spend: 1620.25,
+      roas: 1.85,
+      clicks: 262,
+      impressions: 18_250,
+      leads: 8,
+      conversations: 22,
+      purchases: 2,
+    },
+  ],
+};
+
+export function goalTarget(overrides: Partial<HomeGoalTarget> = {}): HomeGoalTarget {
+  return {
+    scope: 'brand',
+    objectiveId: 'leads',
+    metric: 'leads',
+    target: 70,
+    period: 'week',
+    periodStart: null,
+    periodEnd: null,
+    currency: null,
+    updatedAt: '2026-11-02T12:00:00Z',
+    updatedBy: 'user-1',
+    ...overrides,
+  };
+}

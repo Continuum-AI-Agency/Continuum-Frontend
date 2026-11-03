@@ -4,22 +4,26 @@ import { googleOverviewForHome } from '@/lib/home/homeOverviewModel';
 import {
   GOOGLE_ACCOUNT,
   GOOGLE_READS,
+  goalTarget,
   MTD_NOW,
   MTD_WINDOW,
   MXN_ACCOUNT,
   MXN_OVERVIEW,
+  MXN_WEEK_OVERVIEW,
   USD_ACCOUNT,
   USD_OVERVIEW,
 } from './__fixtures__/monthToDate';
 import {
   type GoalAccountRead,
   type GoalLoad,
+  goalActiveTarget,
   goalFigure,
   goalObjectives,
   goalTileView,
   goalWindowLabel,
   monthToDateWindow,
 } from './goalModel';
+import { goalTargetPeriod } from './goalTargetModel';
 
 const objective = (
   metric: HomeObjective['metric'],
@@ -176,6 +180,9 @@ describe('goalTileView', () => {
     window: MTD_WINDOW,
     rows: [savedRow([objective('leads')])],
     suggested: [],
+    targets: { status: 'unavailable' } as const,
+    active: null,
+    periodLoad: { status: 'idle' } as const,
   };
   const ready = (reads: GoalAccountRead[]): GoalLoad => ({ status: 'ready', reads, failures: [] });
 
@@ -241,5 +248,159 @@ describe('goalTileView', () => {
 
   it('is loading only while the read is on its way', () => {
     expect(goalTileView({ ...base, load: { status: 'loading' } }).state).toBe('loading');
+  });
+
+  it('stays loading until the targets are in, so a figure never swaps window', () => {
+    expect(
+      goalTileView({ ...base, targets: { status: 'loading' }, load: ready([mxn]) }).state,
+    ).toBe('loading');
+  });
+
+  describe('with the targets', () => {
+    const weekly = goalTarget();
+    const active = { target: weekly, period: goalTargetPeriod(weekly, MTD_NOW, 'UTC') };
+    const targets = { status: 'ready', targets: [weekly] } as const;
+    const weekRead: GoalAccountRead = { account: MXN_ACCOUNT, overview: MXN_WEEK_OVERVIEW };
+
+    it('says the targets are not here yet when the route is not deployed', () => {
+      const view = goalTileView({ ...base, load: ready([mxn]) });
+      expect(view.state === 'ready' && view.target).toEqual({ kind: 'unavailable' });
+    });
+
+    it('says nothing is set when the route answers with no target for the goal', () => {
+      const view = goalTileView({
+        ...base,
+        targets: { status: 'ready', targets: [] },
+        load: ready([mxn]),
+      });
+      expect(view.state === 'ready' && view.target).toEqual({ kind: 'none' });
+    });
+
+    it('reads the figure over the target’s period, and keeps the secondaries on the month', () => {
+      const view = goalTileView({
+        ...base,
+        rows: [savedRow([objective('leads'), objective('conversations', 'secondary')])],
+        targets,
+        active,
+        load: ready([mxn]),
+        periodLoad: ready([weekRead]),
+      });
+      if (view.state !== 'ready') throw new Error(`expected ready, got ${view.state}`);
+      expect(view.headline.value).toBe(8);
+      expect(view.figureWindow).toEqual({ since: '2026-11-02', until: '2026-11-02' });
+      expect(view.target).toMatchObject({ kind: 'compared', actual: 8, expectedToDate: 10 });
+      expect(view.secondaries[0]?.amounts[0]?.value).toBe(41);
+    });
+
+    it('waits for the period read, never showing the month’s figure against the target', () => {
+      const view = goalTileView({
+        ...base,
+        targets,
+        active,
+        load: ready([mxn]),
+        periodLoad: { status: 'loading' },
+      });
+      expect(view.state).toBe('loading');
+    });
+
+    it('is an error when the period read fails', () => {
+      const view = goalTileView({
+        ...base,
+        targets,
+        active,
+        load: ready([mxn]),
+        periodLoad: { status: 'error', failures: [] },
+      });
+      expect(view.state).toBe('error');
+    });
+
+    it('uses the month read itself for a month target, reading nothing twice', () => {
+      const monthly = goalTarget({ period: 'month', target: 300 });
+      const view = goalTileView({
+        ...base,
+        targets: { status: 'ready', targets: [monthly] },
+        active: { target: monthly, period: goalTargetPeriod(monthly, MTD_NOW, 'UTC') },
+        load: ready([mxn]),
+      });
+      if (view.state !== 'ready') throw new Error(`expected ready, got ${view.state}`);
+      expect(view.target).toMatchObject({ kind: 'compared', actual: 14, expectedToDate: 20 });
+    });
+
+    it('moves the headline to the target’s currency when the brand has it', () => {
+      const usdTarget = goalTarget({
+        objectiveId: 'purchase_value',
+        metric: 'purchase_value',
+        period: 'month',
+        target: 600,
+        currency: 'USD',
+      });
+      const view = goalTileView({
+        ...base,
+        accounts: [MXN_ACCOUNT, USD_ACCOUNT],
+        rows: [savedRow([objective('purchase_value')])],
+        targets: { status: 'ready', targets: [usdTarget] },
+        active: { target: usdTarget, period: goalTargetPeriod(usdTarget, MTD_NOW, 'UTC') },
+        load: ready([mxn, usd]),
+      });
+      if (view.state !== 'ready') throw new Error(`expected ready, got ${view.state}`);
+      expect(view.headline).toMatchObject({ currency: 'USD', value: 300 });
+      expect(view.others.map(({ currency }) => currency)).toEqual(['MXN']);
+    });
+
+    it('shows the month’s figure while a target’s period has no complete day', () => {
+      const later = goalTarget({
+        period: 'custom',
+        periodStart: '2026-12-01',
+        periodEnd: '2026-12-31',
+      });
+      const view = goalTileView({
+        ...base,
+        targets: { status: 'ready', targets: [later] },
+        active: { target: later, period: goalTargetPeriod(later, MTD_NOW, 'UTC') },
+        load: ready([mxn]),
+      });
+      if (view.state !== 'ready') throw new Error(`expected ready, got ${view.state}`);
+      expect(view.headline.value).toBe(14);
+      expect(view.target).toMatchObject({ kind: 'not-running' });
+      expect(view.figureWindow).toEqual(MTD_WINDOW);
+    });
+
+    it('measures a running target on the 1st, when the month has no figure of its own', () => {
+      const quarter = goalTarget({ period: 'quarter', target: 900 });
+      const first = new Date('2026-11-01T15:00:00Z');
+      const view = goalTileView({
+        ...base,
+        window: null,
+        targets: { status: 'ready', targets: [quarter] },
+        active: { target: quarter, period: goalTargetPeriod(quarter, first, 'UTC') },
+        load: { status: 'idle' },
+        periodLoad: ready([mxn]),
+      });
+      expect(view.state).toBe('ready');
+    });
+  });
+
+  describe('goalActiveTarget', () => {
+    const weekly = goalTarget();
+    const input = {
+      targets: { status: 'ready', targets: [weekly] } as const,
+      load: ready([mxn]),
+      rows: base.rows,
+      suggested: [],
+      now: MTD_NOW,
+    };
+
+    it('finds the primary goal’s target once the month’s read has settled', () => {
+      expect(goalActiveTarget(input)?.target).toBe(weekly);
+    });
+
+    it('waits for the read and for the targets', () => {
+      expect(goalActiveTarget({ ...input, load: { status: 'loading' } })).toBeNull();
+      expect(goalActiveTarget({ ...input, targets: { status: 'loading' } })).toBeNull();
+    });
+
+    it('still finds it on the 1st, when the month has nothing to read', () => {
+      expect(goalActiveTarget({ ...input, load: { status: 'idle' } })?.target).toBe(weekly);
+    });
   });
 });
