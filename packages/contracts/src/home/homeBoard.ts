@@ -8,8 +8,8 @@
 // then draws is the tile's own read; the board only says why the tile is here, and a `why` is
 // written only when the signals hold the figure it cites. Otherwise it is null, never a guess.
 //
-// Score = impact on the goal × urgency × confidence. The mode's lead tile always opens the board;
-// the rest follow by score, capped at seven so the Home mounts at most seven reads.
+// Score = impact on the goal × urgency × confidence. The mode's lead tile opens the board when the
+// brand has it; the rest follow by score, capped at seven so the Home mounts at most seven reads.
 //
 // Pure: every tile and every sentence can be checked against its inputs (home:reading:bench).
 
@@ -95,6 +95,8 @@ const VERBS: Record<HomeMode, HomeBoardVerb> = {
   setup: { label: 'Start', done: 'Step started.' },
 };
 
+/** The tile the mode opens with, when the brand has it. A recommend brand has a client checklist
+ *  only where a client applies the changes (Pink Elephant); the rest open on their top score. */
 const LEAD_BY_MODE: Record<HomeMode, HomeTileId> = {
   operate: 'goals',
   approve: 'opps',
@@ -112,6 +114,9 @@ function candidatesOf(signals: HomeBrandSignals, reading: HomeBrandReading): Can
   // (every platform's writes off) there is no overnight log to show.
   const acting = active.filter(
     (portfolio) => portfolio.applyMode !== 'observe' && portfolio.canWrite !== false,
+  );
+  const clientApplied = active.filter(
+    (portfolio) => portfolio.applyMode !== 'observe' && portfolio.canWrite === false,
   );
   const waiting = reading.opportunities.reduce((sum, opportunity) => sum + opportunity.count, 0);
   const issues = reading.issues.length;
@@ -138,14 +143,18 @@ function candidatesOf(signals: HomeBrandSignals, reading: HomeBrandReading): Can
       urgency: waiting > 0 ? 3 : 1,
       confidence: active.length > 0 ? 0.9 : 0.5,
     });
-    out.push({ id: 'pacing', impact: 7, urgency: 2, confidence: active.length > 0 ? 0.8 : 0.4 });
     out.push({ id: 'creative', impact: 6, urgency: 2, confidence: 0.8 });
-    out.push({ id: 'brief', impact: 5, urgency: 1, confidence: 0.7 });
+    // A plan and a nightly read both belong to a portfolio: without one, these have no source.
+    if (active.length > 0) {
+      out.push({ id: 'pacing', impact: 7, urgency: 2, confidence: 0.8 });
+      out.push({ id: 'brief', impact: 5, urgency: 1, confidence: 0.7 });
+    }
     if (acting.length > 0) {
       out.push({ id: 'autopilot', impact: 6, urgency: 2, confidence: 0.9 });
     }
-    if (reading.mode === 'recommend') {
-      out.push({ id: 'checklist', impact: 8, urgency: waiting > 0 ? 3 : 2, confidence: 0.9 });
+    if (reading.mode === 'recommend' && clientApplied.length > 0) {
+      const open = clientApplied.some((portfolio) => portfolio.pendingRecommendations > 0);
+      out.push({ id: 'checklist', impact: 8, urgency: open ? 3 : 2, confidence: 0.9 });
     }
   }
   if (organic > 0) {
@@ -167,14 +176,14 @@ export function readHomeBoard(
 ): HomeBoard {
   const reading = options.reading ?? readBrand(signals);
   const language = options.language ?? 'es';
-  const lead = LEAD_BY_MODE[reading.mode];
+  const leadTile = LEAD_BY_MODE[reading.mode];
   const scored = candidatesOf(signals, reading).map((candidate) => ({
     ...candidate,
     score: Math.round(candidate.impact * candidate.urgency * candidate.confidence * (10 / 3)),
   }));
   const ordered = scored.sort((a, b) => {
-    if (a.id === lead) return -1;
-    if (b.id === lead) return 1;
+    if (a.id === leadTile) return -1;
+    if (b.id === leadTile) return 1;
     return (
       b.score - a.score ||
       HOME_TILE_MODULE_ORDER.indexOf(a.id) - HOME_TILE_MODULE_ORDER.indexOf(b.id)

@@ -28,8 +28,8 @@ const DASHBOARD_VIEWS: Record<
 > = {
   overview: {
     label: 'Overview',
-    title: 'Your account this week',
-    microcopy: 'Your goals, with paid, organic and creative results in one view.',
+    title: 'Your Home',
+    microcopy: 'What moves your goal first, read from your paid, organic and creative results.',
   },
   organic: {
     label: 'Organic',

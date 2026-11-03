@@ -173,6 +173,6 @@ describe('HomeBaseDashboard overview view', () => {
     expect(screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
-    expect(screen.getByText('Your account this week')).toBeTruthy();
+    expect(screen.getByText('Your Home')).toBeTruthy();
   });
 });

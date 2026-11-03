@@ -76,6 +76,33 @@ describe('readHomeBoard — the mode opens the board', () => {
   });
 });
 
+describe('readHomeBoard — a recommend brand with no client checklist', () => {
+  it('opens on its top score, not on an empty checklist, when Continuum reads and recommends', () => {
+    const board = readHomeBoard(brand());
+    expect(board.mode).toBe('recommend');
+    expect(ids(board.tiles)).not.toContain('checklist');
+    expect(board.tiles[0]).toMatchObject({ id: 'goals', size: 'l' });
+  });
+
+  it('opens an organic-only brand on its organic week', () => {
+    const board = readHomeBoard(brand({ accounts: { ads: 0, organic: 1 } }));
+    expect(board.mode).toBe('recommend');
+    expect(board.tiles[0]).toMatchObject({ id: 'organic', size: 'l' });
+  });
+
+  it('counts only what the client applies in the checklist sentence', () => {
+    const board = readHomeBoard(
+      brand({
+        portfolios: [
+          portfolio({ id: 'client', canWrite: false, pendingRecommendations: 2, pendingBudgetMoves: 4 }),
+          portfolio({ id: 'observed', applyMode: 'observe', canWrite: false, pendingRecommendations: 8 }),
+        ],
+      }),
+    );
+    expect(board.tiles[0]).toMatchObject({ id: 'checklist', why: '2 cambios para el cliente' });
+  });
+});
+
 describe('readHomeBoard — a tile only where its source exists', () => {
   it('promises no paid tile without an ad account', () => {
     const tiles = ids(readHomeBoard(brand({ accounts: { ads: 0, organic: 2 } })).tiles);
@@ -83,6 +110,17 @@ describe('readHomeBoard — a tile only where its source exists', () => {
       expect(tiles).not.toContain(paid);
     }
     expect(tiles).toContain('organic');
+  });
+
+  it('promises no pacing and no brief without an active portfolio', () => {
+    const tiles = ids(readHomeBoard(brand()).tiles);
+    expect(tiles).not.toContain('pacing');
+    expect(tiles).not.toContain('brief');
+    const withPortfolio = ids(
+      readHomeBoard(brand({ accounts: { ads: 1, organic: 0 }, portfolios: [portfolio()] })).tiles,
+    );
+    expect(withPortfolio).toContain('pacing');
+    expect(withPortfolio).toContain('brief');
   });
 
   it('promises no organic week without an organic profile', () => {

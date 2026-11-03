@@ -162,7 +162,7 @@ export default function GoalsTile({ ctx, tile }: HomeTileProps) {
     view.state === 'error' && refusal?.status === 'loading' ? 'loading' : view.state;
   const badge =
     view.state === 'ready'
-      ? `${formatFigure(view.headline.value, view.primary.unit, view.headline.currency)} ${view.primary.objective.label.toLowerCase()} this month`
+      ? `${view.primary.objective.label} this month: ${formatFigure(view.headline.value, view.primary.unit, view.headline.currency)}`
       : null;
 
   return (

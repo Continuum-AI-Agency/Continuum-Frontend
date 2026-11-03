@@ -19,6 +19,8 @@ type Facts = {
   accounts: number;
   issues: number;
   waiting: number;
+  /** Recommendations waiting on portfolios whose changes the client applies. */
+  forTheClient: number;
   autopilot: number;
   acting: number;
 };
@@ -35,7 +37,7 @@ const WHY: Record<
         : null,
     opps: (f) => (f.waiting > 0 ? `${count(f.waiting, 'espera', 'esperan')} tu decisión` : null),
     checklist: (f) =>
-      f.waiting > 0 ? `${count(f.waiting, 'cambio', 'cambios')} para el cliente` : null,
+      f.forTheClient > 0 ? `${count(f.forTheClient, 'cambio', 'cambios')} para el cliente` : null,
     autopilot: (f) =>
       f.autopilot > 0
         ? `Opera ${count(f.autopilot, 'portafolio', 'portafolios')} por su cuenta`
@@ -49,7 +51,7 @@ const WHY: Record<
       f.issues > 0 ? `${count(f.issues, 'problem blocks', 'problems block')} results` : null,
     opps: (f) => (f.waiting > 0 ? `${f.waiting} waiting for a decision` : null),
     checklist: (f) =>
-      f.waiting > 0 ? `${count(f.waiting, 'change', 'changes')} for the client` : null,
+      f.forTheClient > 0 ? `${count(f.forTheClient, 'change', 'changes')} for the client` : null,
     autopilot: (f) =>
       f.autopilot > 0
         ? `Runs ${count(f.autopilot, 'portfolio', 'portfolios')} on its own`
@@ -74,6 +76,9 @@ export function homeBoardWhy(
     accounts: signals.accounts.ads + signals.accounts.organic,
     issues: reading.issues.length,
     waiting: reading.opportunities.reduce((sum, opportunity) => sum + opportunity.count, 0),
+    forTheClient: active
+      .filter((portfolio) => portfolio.applyMode !== 'observe' && portfolio.canWrite === false)
+      .reduce((sum, portfolio) => sum + portfolio.pendingRecommendations, 0),
     autopilot: acting.filter((portfolio) => portfolio.applyMode === 'autopilot').length,
     acting: acting.length,
   };
