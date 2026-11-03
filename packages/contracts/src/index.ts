@@ -22,6 +22,7 @@ export * from './embedding/index';
 export * from './errors/integration-error';
 export * from './goals/index';
 export * from './home/index';
+export * from './home/reads/index';
 export * from './headless-content/concepts';
 export * from './headless-content/cutPlan';
 export * from './headless-content/effects';
