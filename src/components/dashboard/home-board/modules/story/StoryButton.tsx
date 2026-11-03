@@ -35,7 +35,7 @@ export default function StoryButton({ ctx }: { ctx: HomeBoardContext }) {
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent
-          className="w-full overflow-y-auto sm:max-w-lg"
+          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
           data-testid="home-story-sheet"
           side="right"
         >

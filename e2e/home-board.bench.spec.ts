@@ -129,6 +129,13 @@ const API_HOST = 'api.trycontinuum.ai';
 // silently: each class is counted and graded on its own line (WARN), and anything else is a FAIL.
 const CONSOLE_KNOWN: { id: string; pattern: RegExp; reason: string }[] = [
   {
+    id: 'goal-targets-not-deployed',
+    // The browser logs the 404 itself; the app's own code logs nothing and draws today's state.
+    pattern: /status of 404 .*@ https:\/\/api\.trycontinuum\.ai\/api\/home\/goal-targets/,
+    reason:
+      'Phase B has not deployed /api/home/goal-targets yet: the goal tile keeps its real figure and offers no target form; goes away once the Backend deploys',
+  },
+  {
     id: 'expired-meta-thumbnail',
     // The browser logs a failed <img> load; the app's own code logs nothing.
     pattern: /status of 403 .*@ https:\/\/[a-z0-9.-]*fbcdn\.net\//,
@@ -1281,6 +1288,9 @@ async function watchChunk404s(page: Page, phaseOf: () => string): Promise<Chunk4
   return seen;
 }
 
+/** Every loading placeholder the app draws (the Skeleton primitives, and a plain pulse). */
+const SKELETONS = '[data-slot="skeleton"], [data-slot="skeleton-text"], .animate-pulse';
+
 /** Closes a side sheet (Escape, then its close button) and waits until it is gone. */
 async function closeSheet(page: Page, sheet: Locator): Promise<void> {
   if (!(await sheet.isVisible())) return;
@@ -1429,6 +1439,10 @@ async function benchBrand(
   });
   let phase = 'load';
   const chunk404s = await watchChunk404s(page, () => phase);
+  let goalTargetsStatus: number | null = null;
+  page.on('response', (response) => {
+    if (response.url().includes('/api/home/goal-targets')) goalTargetsStatus = response.status();
+  });
   // What an edge said when it refused the browser: the console only says "failed to load".
   const edgeRefusals = new Map<string, string>();
   page.on('response', (response) => {
@@ -1610,19 +1624,21 @@ async function benchBrand(
         await open.first().click();
         const sheet = page.getByTestId(`home-tile-${id}-sheet`);
         await expect(sheet).toBeVisible({ timeout: 30_000 });
-        // Let the lazy module download and read: no pulse left, or 45 s.
-        await expect(sheet.locator('.animate-pulse'))
-          .toHaveCount(0, { timeout: 45_000 })
-          .catch(() => {
-            notes.push(`${scope}: ${id} sheet still showed a loading pulse after 45 s`);
-          });
         await page.waitForTimeout(500);
         mkdirSync(SHOTS_DIR, { recursive: true });
         let sheetText = '';
+        let moduleText = '';
+        let checklistItems = 0;
         let tileState: string | null = null;
         try {
+          // The panel has finished coming in, the lazy module has downloaded and its reads have
+          // settled: no skeleton left. A sheet still loading after 60 s is a hung module, a FAIL.
+          await expect(sheet).toHaveCSS('opacity', '1', { timeout: 30_000 });
+          await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
           await sheet.screenshot({ path: resolve(SHOTS_DIR, `${facts.key}-sheet-${id}.png`) });
           sheetText = (await sheet.innerText()).replace(/\s+/g, ' ');
+          moduleText = (await sheet.locator('[data-testid="home-tile-sheet-body"]').innerText()).trim();
+          checklistItems = await sheet.getByTestId('home-checklist-item').count();
           tileState = await page
             .locator(`[data-board-slot="${id}"] > [data-module-state]`)
             .getAttribute('data-module-state');
@@ -1632,6 +1648,12 @@ async function benchBrand(
         }
         expect(tileState, 'the tile fell into its error boundary').not.toBe('error');
         expect(sheetText).not.toMatch(/could not be drawn|Something went wrong|Application error/i);
+        // More than the sheet's own title and description: the module itself drew.
+        expect(moduleText.length, `${id}'s module drew nothing below its title`).toBeGreaterThan(20);
+        if (id === 'checklist') {
+          const headline = await page.getByTestId('home-tile-checklist-headline').getAttribute('data-value');
+          expect(String(checklistItems), 'checklist items against the tile headline').toBe(headline);
+        }
         const sheetErrors = consoleErrors.slice(errorsBefore);
         expect(
           sheetErrors,
@@ -1652,6 +1674,8 @@ async function benchBrand(
       let storyText = '';
       try {
         await expect(sheet.getByTestId('home-story')).toBeVisible({ timeout: 60_000 });
+        await expect(sheet).toHaveCSS('opacity', '1', { timeout: 30_000 });
+        await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
         slides = await sheet.getByTestId('home-story-slide').count();
         await sheet.screenshot({ path: resolve(SHOTS_DIR, `${facts.key}-story.png`) });
         storyText = (await sheet.innerText()).replace(/\s+/g, ' ');
@@ -1794,6 +1818,18 @@ async function benchBrand(
         grade(scope, `console: ${entry.id}`, 'WARN', `${lines.length} distinct: ${entry.reason}`);
       }
     }
+
+    // 3a. Goal targets. Writes are never exercised. While the route is undeployed, the tile must
+    // keep its real figure, say targets are coming, and never offer a form that cannot save.
+    await check(scope, 'goal targets: the tile is honest about the route', async () => {
+      if (goalTargetsStatus === null) return 'no targets read on this brand';
+      if (goalTargetsStatus !== 404) return `route answered ${goalTargetsStatus}: live`;
+      const goalTile = page.getByTestId('home-tile-goals');
+      if ((await goalTile.getAttribute('data-module-state')) !== 'ready') return 'tile not ready';
+      await expect(goalTile).toContainText('No target set yet');
+      await expect(goalTile).toContainText('Targets and periods arrive with the goals update');
+      return 'route 404: real figure kept, no target form';
+    });
 
     // 3b. The Ask bar: a suggestion opens Jaina with the question written in; nothing is sent.
     await check(scope, 'an Ask suggestion opens Jaina with the question pre-filled', async () => {

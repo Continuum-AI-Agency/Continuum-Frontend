@@ -117,7 +117,7 @@ export function HomeTileFrame({
       {expanded ? (
         <Sheet onOpenChange={setOpen} open={open}>
           <SheetContent
-            className="w-full overflow-y-auto sm:max-w-xl"
+            className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
             data-testid={`${homeTileTestId(tile)}-sheet`}
             side="right"
           >
@@ -127,7 +127,7 @@ export function HomeTileFrame({
                 <SheetDescription>{expandedDescription}</SheetDescription>
               ) : null}
             </SheetHeader>
-            <div className="min-w-0 px-4 pb-6">
+            <div className="min-w-0 px-4 pb-6" data-testid="home-tile-sheet-body">
               {open ? (
                 <Suspense fallback={<Skeleton className="h-48 w-full" />}>{expanded}</Suspense>
               ) : null}
