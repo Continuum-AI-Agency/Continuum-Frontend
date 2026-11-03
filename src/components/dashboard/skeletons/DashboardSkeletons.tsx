@@ -1,4 +1,3 @@
-import { ModuleCard } from '@/components/dashboard/overview/HomeOverview';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Skeletons mirror the flattened pane structure: a hairline-divided stack, no
@@ -27,35 +26,28 @@ export function DashboardShellSkeleton() {
         </div>
         <Skeleton className="h-7 w-64 rounded-md bg-muted/70" />
       </div>
-      <HomeOverviewSkeleton />
+      <HomeBoardSkeleton />
     </div>
   );
 }
 
-// HomeOverview as it first renders while its reads are in flight: the real module
-// cards with skeletons inside, so the hand-off to the client view is not a layout jump.
-export function HomeOverviewSkeleton() {
+// The Home board as it first renders while the brand is read: its header, the Ask bar and a
+// board of tiles at the board's usual sizes (l, m, m, then s), so the hand-off is not a jump.
+export function HomeBoardSkeleton() {
   return (
-    <div className="flex min-w-0 flex-col gap-4 px-[var(--card-pad)] py-4">
-      <div className="flex flex-col gap-1">
-        <Skeleton className="h-3.5 w-56 bg-muted/70" />
-        <Skeleton className="h-3 w-36 bg-muted/70" />
+    <div className="flex min-w-0 flex-col gap-3 px-[var(--card-pad)] py-4">
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-5 w-72 bg-muted/70" />
+        <Skeleton className="h-8 w-60 rounded-lg bg-muted/70" />
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Skeleton className="h-10 w-full rounded-lg bg-muted/70" />
+      <div className="grid grid-flow-row-dense grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Skeleton className="col-span-1 min-h-72 rounded-xl bg-muted/70 md:col-span-2 xl:row-span-2" />
+        <Skeleton className="col-span-1 min-h-44 rounded-xl bg-muted/70 md:col-span-2" />
+        <Skeleton className="col-span-1 min-h-44 rounded-xl bg-muted/70 md:col-span-2" />
         {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className="h-28 rounded-lg bg-muted/70" />
+          <Skeleton className="min-h-36 rounded-xl bg-muted/70" key={index} />
         ))}
-      </div>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <ModuleCard title="Performance +" accent="perf" href="/scale">
-          <Skeleton className="h-24 bg-muted/70" />
-        </ModuleCard>
-        <ModuleCard title="Organic +" accent="org" href="/organic?tab=metrics">
-          <Skeleton className="h-32 bg-muted/70" />
-        </ModuleCard>
-        <ModuleCard title="Creative +" accent="cre" href="/library">
-          <Skeleton className="h-40 bg-muted/70" />
-        </ModuleCard>
       </div>
     </div>
   );

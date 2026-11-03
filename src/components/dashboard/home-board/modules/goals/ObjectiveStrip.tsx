@@ -20,9 +20,9 @@ import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { formatFigure, formatMoney, formatRatio } from '@/lib/home/format';
+import type { ObjectiveFigure } from '@/lib/home/homeOverviewModel';
 import { cn } from '@/lib/utils';
-import { formatFigure, formatMoney, formatRatio } from './format';
-import type { ObjectiveFigure } from './homeOverviewModel';
 
 const METRICS = homeObjectiveMetricSchema.options;
 

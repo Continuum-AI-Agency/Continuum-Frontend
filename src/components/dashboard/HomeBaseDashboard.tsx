@@ -1,12 +1,10 @@
 'use client';
 
-import type { HomeBrandReading } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import React from 'react';
 import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
-import { HomeReadingStrip } from '@/components/dashboard/overview/HomeReadingStrip';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -16,8 +14,6 @@ type Props = {
   // Present + incomplete = surface the first-run guided setup.
   setup?: DashboardSetupState;
   brandBookRefreshedAt?: string | null;
-  /** How the Home reads a brand with nothing connected yet: it leads the setup checklist. */
-  reading?: HomeBrandReading | null;
 };
 
 type DashboardView = 'overview' | 'paid' | 'organic' | 'all';
@@ -57,7 +53,6 @@ export function HomeBaseDashboard({
   activeViewSlot,
   setup,
   brandBookRefreshedAt = null,
-  reading = null,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
@@ -68,7 +63,9 @@ export function HomeBaseDashboard({
   // Narrow to the value (not a boolean) so `firstRunSetup` is a concrete
   // DashboardSetupState wherever it is truthy — the FirstRunSetup prop is
   // non-optional and a boolean flag would not narrow `setup` at the call site.
-  const firstRunSetup = setup !== undefined && !setup.isComplete ? setup : null;
+  // A brand with nothing connected gets its checklist from the Home board's setup tile, so the
+  // separate checklist shows only for a brand that has data but has not finished setup.
+  const firstRunSetup = setup !== undefined && hasData && !setup.isComplete ? setup : null;
 
   const handleViewChange = React.useCallback(
     (nextView: DashboardView) => {
@@ -155,38 +152,28 @@ export function HomeBaseDashboard({
       {/* No inline padding: the panes inside own their own gutter, so adding one
           here charges the shell gutter a second time and misaligns nothing. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-        {!hasData && reading ? (
-          <div className="px-[var(--card-pad)] pt-4">
-            <HomeReadingStrip reading={reading} />
-          </div>
-        ) : null}
-
         {firstRunSetup ? (
           <FirstRunSetup setup={firstRunSetup} brandBookRefreshedAt={brandBookRefreshedAt} />
         ) : null}
 
-        {hasData ? (
-          <>
-            {firstRunSetup ? (
-              <div className="flex items-center gap-2 px-[var(--card-pad)]">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Your live data
-                </span>
-                <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
-              </div>
-            ) : null}
-            <motion.div
-              key={activeView}
-              data-dashboard-panel={activeView}
-              className="min-w-0"
-              initial={shouldReduceMotion ? false : { opacity: 0.96 }}
-              animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            >
-              {activeViewSlot}
-            </motion.div>
-          </>
+        {firstRunSetup ? (
+          <div className="flex items-center gap-2 px-[var(--card-pad)]">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Your live data
+            </span>
+            <span className="h-px flex-1 bg-border/70" aria-hidden="true" />
+          </div>
         ) : null}
+        <motion.div
+          key={activeView}
+          data-dashboard-panel={activeView}
+          className="min-w-0"
+          initial={shouldReduceMotion ? false : { opacity: 0.96 }}
+          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {activeViewSlot}
+        </motion.div>
       </div>
     </section>
   );

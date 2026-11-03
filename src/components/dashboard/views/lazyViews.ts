@@ -10,7 +10,7 @@ import dynamic from 'next/dynamic';
 //
 // The cost: a view loaded this way is NOT preloaded with the HTML. Its chunk is requested at
 // hydration, and until it lands the page's skeleton replaces the server-rendered view
-// (measured: ~0.3 s on slow 4G). So the default view, HomeOverview, is imported statically
+// (measured: ~0.3 s on slow 4G). So the default view, HomeBoard, is imported statically
 // by its wrapper; only the views opened with `?view=` live here.
 
 export const OrganicDashboardView = dynamic(() =>

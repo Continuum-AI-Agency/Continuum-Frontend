@@ -3,19 +3,17 @@ import { Suspense } from 'react';
 import { deriveDashboardSetup, hasAnyAccount } from '@/components/dashboard/first-run/setupState';
 import { HomeBaseDashboard } from '@/components/dashboard/HomeBaseDashboard';
 import { AllDashboardDataWrapper } from '@/components/dashboard/server/AllDashboardDataWrapper';
-import { HomeOverviewDataWrapper } from '@/components/dashboard/server/HomeOverviewDataWrapper';
+import { HomeBoardDataWrapper } from '@/components/dashboard/server/HomeBoardDataWrapper';
 import { OrganicDashboardDataWrapper } from '@/components/dashboard/server/OrganicDashboardDataWrapper';
 import {
-  HomeOverviewSkeleton,
+  HomeBoardSkeleton,
   PaidWidgetSkeleton,
   WidgetSkeleton,
 } from '@/components/dashboard/skeletons/DashboardSkeletons';
 import { PaidDashboardView } from '@/components/dashboard/views/lazyViews';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandBook } from '@/lib/brands/brandBook';
-import { loadBrandReading } from '@/lib/home/brandReading.server';
 import { hasReadableAccount } from '@/lib/home/brandSignals';
-import { loadHomeProfileRows } from '@/lib/home/homeProfile.server';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { fetchUserIntegrationSummary } from '@/lib/integrations/userIntegrations';
 
@@ -29,8 +27,7 @@ function resolveDashboardView(value: string | string[] | undefined) {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
-  const activeView = resolveDashboardView(params?.view);
-  const { activeBrandId, user } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, user } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect('/onboarding');
   }
@@ -51,16 +48,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     brandBook,
   });
 
-  // A brand with nothing connected shows only its setup; the reading still says what the Home
-  // learned from onboarding (its goal, from the Brand Book) above the checklist. With data, the
-  // overview reads the brand itself.
-  const setupReading = setup.hasConnectedData
-    ? null
-    : await loadBrandReading({
-        brandId: activeBrandId,
-        summary: brandIntegrations,
-        profileRows: await loadHomeProfileRows(activeBrandId),
-      });
+  // A brand with nothing connected shows the board in setup mode (its setup tile leads, read from
+  // what onboarding learned); views other than the Home wait for data.
+  const activeView = setup.hasConnectedData ? resolveDashboardView(params?.view) : 'overview';
+  const brandName = brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? null;
 
   const activeViewSlot =
     activeView === 'paid' ? (
@@ -76,8 +67,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <OrganicDashboardDataWrapper brandId={activeBrandId} />
       </Suspense>
     ) : (
-      <Suspense fallback={<HomeOverviewSkeleton />}>
-        <HomeOverviewDataWrapper brandId={activeBrandId} />
+      <Suspense fallback={<HomeBoardSkeleton />}>
+        <HomeBoardDataWrapper
+          brandBookRefreshedAt={brandBook?.refreshed_at ?? null}
+          brandId={activeBrandId}
+          brandName={brandName}
+          setup={setup}
+          userId={user?.id ?? null}
+        />
       </Suspense>
     );
 
@@ -87,7 +84,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       activeViewSlot={activeViewSlot}
       setup={setup}
       brandBookRefreshedAt={brandBook?.refreshed_at ?? null}
-      reading={setupReading}
     />
   );
 }

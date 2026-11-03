@@ -21,7 +21,6 @@ mock.module('@/components/providers/ActiveBrandProvider', () => ({
 }));
 
 const { HomeBaseDashboard } = await import('./HomeBaseDashboard');
-const { HealthCard, OpportunitiesCard } = await import('./overview/HomeOverview');
 
 afterEach(cleanup);
 
@@ -33,36 +32,6 @@ describe('touch targets that sit side by side', () => {
     render(<HomeBaseDashboard activeView="organic" activeViewSlot={<div>slot</div>} />);
     const nav = screen.getByRole('navigation', { name: 'Dashboard view options' });
     expect(classes(nav)).toContain('hit-area-row');
-  });
-
-  it("Home's module links get the pad, in a column that keeps them apart", () => {
-    render(
-      <>
-        <HealthCard
-          issues={[
-            {
-              portfolioId: 'p-1',
-              title: 'Tours Programados - Octubre lost the campaigns it manages',
-            },
-            { portfolioId: 'p-2', title: 'Leads lost the campaigns it manages' },
-          ]}
-        />
-        <OpportunitiesCard
-          opportunities={[
-            { portfolioId: 'p-1', title: 'Make variations', count: 6 },
-            { portfolioId: null, title: 'Group your campaigns', count: 0 },
-          ]}
-        />
-      </>,
-    );
-    for (const name of [
-      'Tours Programados - Octubre lost the campaigns it manages',
-      'Make variations',
-    ]) {
-      const link = screen.getByRole('link', { name });
-      expect(classes(link)).toContain('hit-area');
-      expect(classes(link.closest('ul'))).toContain('hit-area-column');
-    }
   });
 
   it("the Scale bar's right-hand controls are a row of pads, Creative Insights included", () => {

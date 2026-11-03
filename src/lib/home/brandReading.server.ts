@@ -5,10 +5,12 @@
 import 'server-only';
 
 import {
+  type HomeBoard,
   type HomeBrandReading,
   type HomeBrandSignals,
   type HomeProfileRow,
   readBrand,
+  readHomeBoard,
 } from '@continuum/contracts';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -72,21 +74,32 @@ async function loadBusiness(
   };
 }
 
-export async function loadBrandReading(input: {
+type ReadingInput = {
   brandId: string;
   summary: AccountBuckets;
   profileRows: HomeProfileRow[];
-}): Promise<HomeBrandReading> {
+};
+
+async function loadBrandSignals(input: ReadingInput): Promise<HomeBrandSignals> {
   const supabase = await createSupabaseServerClient();
   const [portfolioRows, { business, approvalRequired }] = await Promise.all([
     loadPortfolioRows(supabase, input.brandId),
     loadBusiness(supabase, input.brandId),
   ]);
-  return readBrand({
+  return {
     accounts: accountCountsFrom(input.summary),
     savedGoal: savedGoalFrom(input.profileRows),
     business,
     portfolios: portfolioSignalsFrom(portfolioRows),
     approvalRequired,
-  });
+  };
+}
+
+/** The brand's reading and the board it opens, read from the same signals in one pass. */
+export async function loadHomeBoard(
+  input: ReadingInput,
+): Promise<{ reading: HomeBrandReading; board: HomeBoard }> {
+  const signals = await loadBrandSignals(input);
+  const reading = readBrand(signals);
+  return { reading, board: readHomeBoard(signals, { reading }) };
 }
