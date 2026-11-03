@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "bun run --bun next dev --turbopack",
-    "build": "bun run typecheck:build && next build && bun run bundle:check",
+    "build": "bun run typecheck:build && next build && node scripts/compile-hints.mjs && bun run bundle:check",
     "start": "next start",
     "lint": "cd .. && bun run agent:check -- --scope Continuum-Frontend",
     "typecheck": "bunx tsc --noEmit",
@@ -194,8 +194,6 @@
     "@opentelemetry/resources": "^2.9.0",
     "@opentelemetry/sdk-logs": "^0.220.0",
     "@phosphor-icons/react": "^2.1.7",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "@rive-app/react-webgl2": "^4.27.0",
     "@shadcn/react": "^0.2.1",
     "@streamdown/cjk": "^1.0.2",
@@ -250,11 +248,9 @@
     "loomix": "^1.1.1",
     "lucide-react": "^1.27.0",
     "lz-string": "^1.5.0",
-    "maath": "^0.10.8",
     "maplibre-gl": "^5.19.0",
     "media-chrome": "^4.18.0",
     "mediabunny": "^1.44.2",
-    "mixpanel-browser": "^2.75.0",
     "motion": "^12.35.1",
     "nanoid": "^5.1.6",
     "next": "^16.3.1",
@@ -283,7 +279,7 @@
     "uuid": "^13.0.0",
     "vgpu": "^0.4.1",
     "world-atlas": "^2.0.2",
-    "zod": "^4.3.6",
+    "zod": "^4.6.7",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

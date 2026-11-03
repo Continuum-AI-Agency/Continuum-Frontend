@@ -41,7 +41,6 @@ Continuum-Frontend/
 │   │   └── validation/               # Graph validation, hierarchy relationship rules
 │   ├── components/                   # Shared and domain-specific React components
 │   │   ├── ai-studio/                # AI Studio UI (canvas integration, chat surface, hooks)
-│   │   ├── analytics/                # Analytics tracking components (Mixpanel)
 │   │   ├── auth/                     # Auth form components
 │   │   ├── brand-insights/           # Brand insights widgets
 │   │   ├── competitors/              # Competitor analysis UI
@@ -56,7 +55,7 @@ Continuum-Frontend/
 │   │   ├── realtime/                 # Supabase Realtime client components
 │   │   ├── settings/                 # Settings page components
 │   │   ├── ui/                       # Shared primitives (shadcn/ui recipes, Base UI wrappers)
-│   │   └── [misc]/                   # loader-animations, presence, site, strategic-analyses, etc.
+│   │   └── [misc]/                   # presence, site, strategic-analyses, etc.
 │   ├── hooks/                        # Shared React hooks (useAuth, useSession, useBrandIntegrations, etc.)
 │   ├── lib/                          # Business logic, API clients, schemas, utilities (no React)
 │   │   ├── ai-studio/                # AI Studio execution (GraphExecutor, inputResolution, portTypes, backend)
@@ -122,7 +121,7 @@ Continuum-Frontend/
 
 **`src/components/ui/`:**
 - Purpose: Shared primitive components — shadcn/ui recipes adapted to project design system, Base UI wrappers, generic utilities
-- Key files: `ClientOnly.tsx`, `TierAccessRedirect.tsx`, `ToastProvider.tsx`, `GalaxyBackground.tsx`
+- Key files: `ClientOnly.tsx`, `TierAccessRedirect.tsx`, `ToastProvider.tsx`
 
 **`src/lib/api/`:**
 - Purpose: All HTTP client code — typed wrappers around Route Handlers, split by rendering environment

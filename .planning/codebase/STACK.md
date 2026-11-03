@@ -72,7 +72,7 @@ Continuum is a Next.js 16 (App Router) application built with React 19, TypeScri
 - maplibre-gl ^5.19.0 — geographic maps
 
 **3D / Animation:**
-- @react-three/fiber ^9.5.0, @react-three/drei ^10.7.7, three ^0.182.0 — 3D scenes
+- three ^0.182.0 — 3D scenes (library model viewer, shader background)
 - framer-motion ^12.35.1, motion ^12.35.1 — animation variants
 
 **UI Utilities:**
@@ -96,7 +96,6 @@ Continuum is a Next.js 16 (App Router) application built with React 19, TypeScri
 - supabase ^2.77.0 — CLI (type generation)
 
 **Analytics:**
-- mixpanel-browser ^2.75.0 — product analytics (production only)
 - @vercel/analytics ^1.6.1 — Vercel Analytics
 - @vercel/speed-insights ^1.3.1 — Core Web Vitals tracking
 
@@ -155,7 +154,6 @@ Continuum is a Next.js 16 (App Router) application built with React 19, TypeScri
 - `tsconfig.json` is deleted in working tree (`D tsconfig.json` in git status). The project relies entirely on Next.js/Turbopack's internal TypeScript handling. No explicit path alias config is needed because Next.js handles `@/*`.
 - `vitest` and `vite` appear in devDependencies but the project uses **Bun's built-in test runner**, not Vitest. These are likely legacy or unused.
 - Both `framer-motion` and `motion` are listed separately — both are the same package family (Motion for React). This is redundant.
-- Mixpanel token is hardcoded in source (`src/components/analytics/MixpanelInit.tsx`) rather than using an env var.
 - `package-lock.json` exists alongside `bun.lock`, suggesting occasional npm usage but Bun is the canonical package manager.
 
 ---
