@@ -38,6 +38,10 @@ export type HomeTileFrameProps = {
   expandedDescription?: string;
   /** An extra header action (rare; most tiles act inside their expanded module). */
   action?: ReactNode;
+  /** Controls the expanded sheet when the tile opens it from its own button too; the frame
+   *  keeps its own state when these are omitted. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   children: ReactNode;
 };
@@ -54,10 +58,17 @@ export function HomeTileFrame({
   expandedDescription,
   action,
   className,
+  open: controlledOpen,
+  onOpenChange,
   children,
 }: HomeTileFrameProps) {
   const { isPinned, togglePin } = useHomeBoardChrome();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   const title = HOME_TILE_LABELS[tile.id];
   const pinned = isPinned(tile.id);
   const reason = tile.why ?? badge ?? undefined;

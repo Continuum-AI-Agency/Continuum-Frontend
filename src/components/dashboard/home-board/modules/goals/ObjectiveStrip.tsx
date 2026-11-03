@@ -1,10 +1,10 @@
 'use client';
 
-// The Home's goal tiles. Each tile shows one objective's figure for the week; a small pencil
-// opens a popover to rename it, measure something else, make it the main goal or remove it.
-// Every change is saved for the scope on screen, so the Home becomes the one the client wants.
-// A brand that spends in two currencies gets a strip per currency over the same goals; only the
-// first one carries the edit controls.
+// The goal editor in the Goal tile's expanded module. Each card shows one goal's figure for the
+// month so far; a small pencil opens a popover to rename it, measure something else, make it the
+// main goal or remove it. Every change is saved for the scope on screen, so the Home becomes the
+// one the client wants. A brand that spends in two currencies gets a strip per currency over the
+// same goals; only the first one carries the edit controls.
 
 import {
   HOME_OBJECTIVE_METRICS,
@@ -16,7 +16,6 @@ import {
 import { Pencil, Plus, Star } from 'lucide-react';
 import { useState } from 'react';
 import { Sparkline } from '@/components/paid-media/optimizer/components/Sparkline';
-import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -160,20 +159,18 @@ function ObjectiveTile({
   currency,
   onChange,
   editable,
+  unavailableNote,
 }: {
   figure: ObjectiveFigure;
   objectives: HomeObjective[];
   currency: string | null;
   onChange: (next: HomeObjective[]) => void;
   editable: boolean;
+  unavailableNote: string;
 }) {
   const { objective } = figure;
   const isPrimary = objective.role === 'primary';
   const cost = figure.cost;
-  const costChange =
-    cost && cost.previous !== null && cost.previous !== 0
-      ? ((cost.value - cost.previous) / Math.abs(cost.previous)) * 100
-      : null;
 
   return (
     <div
@@ -196,18 +193,15 @@ function ObjectiveTile({
       </div>
       {figure.available && figure.value !== null ? (
         <>
-          <div className="flex items-baseline gap-2">
-            <span
-              data-home-value
-              className={cn(
-                'font-semibold tabular-nums tracking-tight',
-                isPrimary ? 'text-3xl' : 'text-2xl',
-              )}
-            >
-              {formatFigure(figure.value, figure.unit, currency)}
-            </span>
-            {figure.deltaPct !== null ? <DeltaBadge value={figure.deltaPct} /> : null}
-          </div>
+          <span
+            data-home-value
+            className={cn(
+              'font-semibold tabular-nums tracking-tight',
+              isPrimary ? 'text-3xl' : 'text-2xl',
+            )}
+          >
+            {formatFigure(figure.value, figure.unit, currency)}
+          </span>
           <div className="flex min-h-4 items-center gap-1.5 text-xs text-muted-foreground">
             {cost ? (
               <>
@@ -217,12 +211,9 @@ function ObjectiveTile({
                     ? formatRatio(cost.value)
                     : formatMoney(cost.value, currency)}
                 </span>
-                {costChange !== null ? (
-                  <DeltaBadge value={costChange} goodWhenDown={cost.kind === 'money'} />
-                ) : null}
               </>
             ) : (
-              <span>Last 7 days</span>
+              <span>Month to date</span>
             )}
           </div>
           {figure.series.length > 1 ? (
@@ -237,9 +228,7 @@ function ObjectiveTile({
         </>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {figure.unreported
-            ? 'Google Ads doesn’t count this result.'
-            : 'Not counted for this account yet. It appears after the next data update.'}
+          {figure.unreported ? 'Google Ads doesn’t count this result.' : unavailableNote}
         </p>
       )}
     </div>
@@ -252,6 +241,7 @@ export function ObjectiveStrip({
   currency,
   onChange,
   editable = true,
+  unavailableNote = 'Not counted for this account yet. It appears after the next data update.',
 }: {
   figures: ObjectiveFigure[];
   objectives: HomeObjective[];
@@ -259,6 +249,8 @@ export function ObjectiveStrip({
   onChange: (next: HomeObjective[]) => void;
   /** False on every strip but the first: one set of goals, one set of controls. */
   editable?: boolean;
+  /** What a goal with no figure says (no month-to-date read yet, or none counted). */
+  unavailableNote?: string;
 }) {
   const used = new Set(objectives.map((objective) => objective.metric));
   const nextMetric: HomeObjectiveMetric | undefined = METRICS.find((metric) => !used.has(metric));
@@ -273,6 +265,7 @@ export function ObjectiveStrip({
           currency={currency}
           onChange={onChange}
           editable={editable}
+          unavailableNote={unavailableNote}
         />
       ))}
       {editable && objectives.length < 3 && nextMetric ? (
