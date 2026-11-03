@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+gha-creds-*.json
 /.pnp
 .pnp.*
 .yarn/*
