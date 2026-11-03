@@ -26,7 +26,7 @@ import {
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
+import { readEdgeError } from '@/lib/supabase/edgeErrorMessage';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 /** Every spending campaign of any account this product serves fits in one page; also the
@@ -44,15 +44,34 @@ export type GoogleReadTarget = {
   resultBucket?: GoogleResultBucket | null;
 };
 
+/** The platform rides in the URL as well as the body: the client time limit chooses by URL, and a
+ *  cold Google read needs the platform-read budget (supabaseTimeoutPolicy). */
 export async function invokeGoogleMetrics(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await createSupabaseBrowserClient().functions.invoke(
-    'paid-media-metrics',
+    'paid-media-metrics?platform=google-ads',
     { body: { platform: 'google-ads', ...body } },
   );
   if (error) {
-    throw new Error(await readEdgeErrorMessage(error, 'The Google Ads read did not answer.'));
+    const { message, code, status } = await readEdgeError(
+      error,
+      'The Google Ads read did not answer.',
+    );
+    throw new GoogleReadError(message, code, status);
   }
   return data;
+}
+
+/** A failed Google read, with the edge's typed code (`TOKEN_EXPIRED`: Google refused the login)
+ *  and its HTTP status (404: no access for this caller — see googleReadFailure). */
+export class GoogleReadError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+    readonly status: number | null = null,
+  ) {
+    super(message);
+    this.name = 'GoogleReadError';
+  }
 }
 
 export const rangeOf = (window: GoogleReadWindow) => ({

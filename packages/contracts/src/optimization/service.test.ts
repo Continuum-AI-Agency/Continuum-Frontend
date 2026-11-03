@@ -23,6 +23,7 @@ import {
   CycleRunReportSchema,
   EnrollRequestSchema,
   EnrollResultSchema,
+  GOAL_AS_COST_CAP_PLATFORMS,
   getOptimizationMetricDefinition,
   OptimizerAdsetInventoryEnvelopeSchema,
   OptimizerAdsetInventoryItemSchema,
@@ -30,6 +31,7 @@ import {
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
   PortfolioConfigSchema,
+  PortfolioGoalAsCostCapResultSchema,
   PortfolioListItemSchema,
   PortfolioRosterStateSchema,
   RecommendationRowSchema,
@@ -892,6 +894,48 @@ describe('ConvertCboRequestSchema / ConvertCboResponseSchema', () => {
     });
     expect(r.adset_budgets[0].daily_budget).toBe(1000);
   });
+  test('a real convert keeps its read-back verdict through the parse', () => {
+    const r = ConvertCboResponseSchema.parse({
+      ok: true,
+      dryRun: false,
+      verified: false,
+      read_back: {
+        verdict: 'mismatch',
+        campaign: { daily_budget: 3718, lifetime_budget: null },
+        adsets: [{ adset_id: 'as1', expected: 1859, observed: 1859 }],
+        problems: ['the campaign still holds a daily budget of 3718'],
+      },
+    });
+    expect(r.verified).toBe(false);
+    expect(r.read_back?.verdict).toBe('mismatch');
+    expect(r.read_back?.campaign?.daily_budget).toBe(3718);
+  });
+  test('a real convert carries the budgets the person approved in the preview', () => {
+    const approved = [
+      { adset_id: 'as1', daily_budget: 4200 },
+      { adset_id: 'as2', daily_budget: 1500 },
+    ];
+    const r = ConvertCboRequestSchema.parse({
+      brandId: UUID,
+      accountId: 'act_1',
+      campaignId: 'c1',
+      dryRun: false,
+      expectedAdsetBudgets: approved,
+    });
+    expect(r.expectedAdsetBudgets).toEqual(approved);
+  });
+  test('an approved budget is a whole, non-negative number of minor units', () => {
+    for (const daily_budget of [-1, 42.5]) {
+      const request = {
+        brandId: UUID,
+        accountId: 'act_1',
+        campaignId: 'c1',
+        dryRun: false,
+        expectedAdsetBudgets: [{ adset_id: 'as1', daily_budget }],
+      };
+      expect(ConvertCboRequestSchema.safeParse(request).success).toBe(false);
+    }
+  });
 });
 
 describe('SetAutopilotPausedRequestSchema — the kill-switch', () => {
@@ -1148,5 +1192,57 @@ describe('ParsedCycleRunReportSchema on real zero-conversion reports', () => {
     expect(CycleItemDiagnosticsSchema.safeParse({ ci }).success).toBe(true);
     expect(CycleItemDiagnosticsSchema.safeParse({ ci: { ...ci, lo: null } }).success).toBe(false);
     expect(CycleItemDiagnosticsSchema.safeParse({ ci: { ...ci, cpa: null } }).success).toBe(false);
+  });
+});
+
+describe("the portfolio CPA goal as the platforms' cost cap (migration 20261031120000)", () => {
+  const row = {
+    id: UUID,
+    name: 'Test — Google Ads (Easy Fit)',
+    ad_account_id: null,
+    objective: 'lead',
+    mode: 'balanced',
+    apply_mode: 'recommend',
+    daily_total: 500,
+    period_budget: null,
+    status: 'active',
+    next_realloc_at: '2026-10-09T06:00:00Z',
+    adset_count: 1,
+    pending_recommendations: 0,
+  };
+  const flag = (over: Record<string, unknown>) =>
+    PortfolioListItemSchema.parse({ ...row, ...over }).goal_as_platform_cost_cap;
+
+  test('optimizer_list_portfolios carries goal_as_platform_cost_cap; a row from before the migration reads off', () => {
+    expect(flag({ goal_as_platform_cost_cap: true })).toBe(true);
+    expect(flag({ goal_as_platform_cost_cap: false })).toBe(false);
+    expect(flag({})).toBe(false);
+    expect(flag({ goal_as_platform_cost_cap: 'yes' })).toBe(false);
+  });
+
+  test('the setter answers the flag and the allowed actions of every platform it touched', () => {
+    const on = PortfolioGoalAsCostCapResultSchema.parse({
+      goal_as_platform_cost_cap: true,
+      allowed_actions: { google_ads: ['set_bid_target', 'set_budget', 'set_status'] },
+    });
+    expect(on.allowed_actions.google_ads).toContain('set_bid_target');
+    const disagree = { goal_as_platform_cost_cap: false, allowed_actions: { google_ads: null } };
+    expect(
+      PortfolioGoalAsCostCapResultSchema.parse(disagree).allowed_actions.google_ads,
+    ).toBeNull();
+    const malformed = { goal_as_platform_cost_cap: true, allowed_actions: [] };
+    expect(PortfolioGoalAsCostCapResultSchema.safeParse(malformed).success).toBe(false);
+  });
+
+  test('the checkbox acts on Google Ads and Meta (20261031130000), not TikTok', () => {
+    expect([...GOAL_AS_COST_CAP_PLATFORMS]).toEqual(['google_ads', 'meta']);
+  });
+
+  test('the setter answer carries the Meta allowed_actions it changed', () => {
+    const on = PortfolioGoalAsCostCapResultSchema.parse({
+      goal_as_platform_cost_cap: true,
+      allowed_actions: { meta: ['set_bid_target', 'set_budget', 'set_status'] },
+    });
+    expect(on.allowed_actions.meta).toContain('set_bid_target');
   });
 });

@@ -7,6 +7,7 @@ import type {
   AccountCandidate,
   ActionRevertResponse,
   ActionRevertResult,
+  BidTargetField,
   NativeLevel,
   OptimizerAction,
   PlatformCard,
@@ -14,7 +15,7 @@ import type {
 } from '@continuum/contracts';
 import type { ApplyActionResult, ApplyActionsResponse } from '../../useOptimizerData';
 import { formatMinorExact } from '../crossPlatformMove/queuedMoveModel';
-import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
+import { type AdPlatform, PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import { bidTargetLabel, countLabel, isReadOnly, negativesLabel } from './platformCardModel';
 
 /** What a card needs to run its action: the portfolio the service scopes it to, the action, and
@@ -74,9 +75,11 @@ export function cardActionAvailability(
 ): CardActionAvailability {
   const write = cardWriteOf(target);
   if (write == null || isReadOnly(card)) return 'none';
-  // The service holds a Google applier only: a TikTok write has no connection to run through.
+  // The service writes Google, and on Meta a single write only for an ad set's cost cap (the
+  // other Meta writes run through apply.ts or a move); a TikTok write has no connection.
   if (write.ref.platform === 'tiktok_ads') return 'tiktok_not_connected';
-  if (write.ref.platform !== 'google_ads') return 'none';
+  const metaCostCap = write.ref.platform === 'meta' && write.kind === 'set_bid_target';
+  if (write.ref.platform !== 'google_ads' && !metaCostCap) return 'none';
   // Offering a write the service will refuse is a button that only ever fails.
   return target?.applyEnabled === false ? 'apply_disabled' : 'ready';
 }
@@ -121,8 +124,33 @@ function entityName(write: CardWrite): string {
 }
 
 // The platform's bid setting, named so it is never read as the portfolio's CPA goal.
-function bidName(field: 'target_cpa_micros' | 'target_roas'): string {
-  return field === 'target_cpa_micros' ? 'bid target (tCPA)' : 'bid target (tROAS)';
+function bidName(field: BidTargetField): string {
+  switch (field) {
+    case 'target_cpa_micros':
+      return 'bid target (tCPA)';
+    case 'target_roas':
+      return 'bid target (tROAS)';
+    case 'bid_amount_minor':
+      return 'cost cap (bid setting)';
+  }
+}
+
+/** The bid setting with its platform's name, for copy that does not name the platform already. */
+function platformBidName(field: BidTargetField): string {
+  return field === 'bid_amount_minor' ? 'Meta cost cap (bid setting)' : 'Google Ads bid target';
+}
+
+/** A bid value in the action's own units: tCPA in micros, tROAS as a ratio, a Meta cost cap
+ *  in minor units of the ad account's currency. */
+function bidValueLabel(field: BidTargetField, value: number, currency: string | null): string {
+  switch (field) {
+    case 'target_cpa_micros':
+      return bidTargetLabel(value / MICROS, 'target_cpa', currency);
+    case 'target_roas':
+      return bidTargetLabel(value, 'target_roas', currency);
+    case 'bid_amount_minor':
+      return formatMinorExact(value, currency);
+  }
 }
 
 /** The verb on the card's button. */
@@ -176,10 +204,7 @@ export function cardActionChange(write: CardWrite, currency: string | null): str
       return `${money(write.expectedMinor)} → ${money(write.targetMinor)}`;
     }
     case 'set_bid_target': {
-      const label = (value: number) =>
-        write.field === 'target_cpa_micros'
-          ? bidTargetLabel(value / MICROS, 'target_cpa', currency)
-          : bidTargetLabel(value, 'target_roas', currency);
+      const label = (value: number) => bidValueLabel(write.field, value, currency);
       return `${label(write.expected)} → ${label(write.target)}`;
     }
     case 'add_negatives':
@@ -277,16 +302,34 @@ function boundedMovePct(detail: string | undefined): number | null {
   return cap ? Math.round(Number(cap) * 100) : null;
 }
 
+/** Whose bid setting the bound held: the detail names the action's field first. */
+function boundedMoveBidName(detail: string | undefined): string {
+  return detail?.startsWith('bid_target_change: bid_amount_minor')
+    ? platformBidName('bid_amount_minor')
+    : platformBidName('target_cpa_micros');
+}
+
 function boundedMoveInWords(detail: string | undefined): string | null {
   const pct = boundedMovePct(detail);
   return pct == null
     ? null
-    : `Moves the Google Ads bid target more than ${pct}% in a day — not applied.`;
+    : `Moves the ${boundedMoveBidName(detail)} more than ${pct}% in a day — not applied.`;
+}
+
+/** A Meta ad set that no longer bids COST_CAP: its bid_amount is not a cost cap any more, and
+ *  switching the strategy back is a person's call in Ads Manager (the applier's guard). */
+function bidStrategyInWords(detail: string | undefined): string | null {
+  return detail?.startsWith('bid_strategy_not_cost_cap:')
+    ? 'This ad set no longer bids with a cost cap on Meta, so there is no cost cap to change. Switching its bid strategy is a call for a person in Ads Manager — not applied.'
+    : null;
 }
 
 function refusalInWords(result: ApplyActionResult, currency: string | null): string {
   const reason = bareReason(result.reason);
-  const bounded = reason === 'guardrail' ? boundedMoveInWords(result.detail) : null;
+  const bounded =
+    reason === 'guardrail'
+      ? (boundedMoveInWords(result.detail) ?? bidStrategyInWords(result.detail))
+      : null;
   if (bounded) return bounded;
   const why = reason ? (REFUSAL_WORDS[reason] ?? codeInWords(reason)) : 'it was not accepted';
   const google =
@@ -300,6 +343,7 @@ function refusalInWords(result: ApplyActionResult, currency: string | null): str
 export function previewVerdict(
   response: ApplyActionsResponse | null,
   currency: string | null,
+  platform: AdPlatform = 'google_ads',
 ): CardActionVerdict {
   const result = response?.results[0];
   if (!result) {
@@ -308,7 +352,10 @@ export function previewVerdict(
   if (result.status === 'would_apply') {
     return {
       tone: 'ok',
-      text: 'Google checked it (validate_only ok) and would accept it. Nothing changes until you confirm.',
+      text:
+        platform === 'meta'
+          ? 'Meta still holds the figures this change expects. Nothing changes until you confirm.'
+          : 'Google checked it (validate_only ok) and would accept it. Nothing changes until you confirm.',
     };
   }
   if (result.status === 'deduped') {
@@ -385,8 +432,11 @@ export function undoRestoresText(
   if (restores == null) return null;
   if ('minor' in restores) return `Back to ${formatMinorExact(restores.minor, restores.currency)}`;
   if ('status' in restores) return `Back to ${restores.status}`;
-  // Google's bid setting, never the portfolio's CPA goal: the copy names it as Google's.
+  // The platform's bid setting, never the portfolio's CPA goal: the copy names whose it is.
   if ('field' in restores) {
+    if (restores.field === 'bid_amount_minor') {
+      return `${platformBidName(restores.field)} back to ${formatMinorExact(restores.value, currency)}`;
+    }
     return restores.field === 'target_cpa_micros'
       ? `Google Ads bid target back to ${bidTargetLabel(restores.value / MICROS, 'target_cpa', currency)}`
       : `Google Ads target ROAS (bid setting) back to ${bidTargetLabel(restores.value, 'target_roas', currency)}`;
@@ -417,7 +467,7 @@ function undoRefusalInWords(reason: string | undefined, detail: string | undefin
   if (bare == null) return 'It was not accepted.';
   const pct = bare === 'guardrail' ? boundedMovePct(detail) : null;
   if (pct != null) {
-    return `Undoing it moves the Google Ads bid target more than ${pct}% in a day — not undone.`;
+    return `Undoing it moves the ${boundedMoveBidName(detail)} more than ${pct}% in a day — not undone.`;
   }
   return UNDO_REFUSAL_WORDS[bare] ?? `${capitalized(codeInWords(bare))}.`;
 }

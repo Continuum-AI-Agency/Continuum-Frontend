@@ -1,3 +1,4 @@
+import { ModuleCard } from '@/components/dashboard/overview/HomeOverview';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Skeletons mirror the flattened pane structure: a hairline-divided stack, no
@@ -13,17 +14,49 @@ function PaneHeaderSkeleton({ width = 'w-28' }: { width?: string }) {
   );
 }
 
+// The route's loading.tsx. Same header and body shape as HomeBaseDashboard on the
+// overview (the default view), so entering Home fills in place instead of swapping
+// through three different layouts on the way to the real one.
 export function DashboardShellSkeleton() {
   return (
     <div className="w-full">
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border bg-background px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
-        <div className="flex gap-4">
-          <Skeleton className="h-6 w-24 bg-muted/70" />
-          <Skeleton className="h-6 w-24 bg-muted/70" />
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border bg-muted/20 px-[var(--card-pad)] py-[var(--app-shell-pad-block)]">
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-3 w-40 bg-muted/70" />
+          <Skeleton className="h-3 w-64 bg-muted/70" />
         </div>
-        <Skeleton className="h-4 w-48 bg-muted/70" />
+        <Skeleton className="h-7 w-64 rounded-md bg-muted/70" />
       </div>
-      <WidgetSkeleton />
+      <HomeOverviewSkeleton />
+    </div>
+  );
+}
+
+// HomeOverview as it first renders while its reads are in flight: the real module
+// cards with skeletons inside, so the hand-off to the client view is not a layout jump.
+export function HomeOverviewSkeleton() {
+  return (
+    <div className="flex min-w-0 flex-col gap-4 px-[var(--card-pad)] py-4">
+      <div className="flex flex-col gap-1">
+        <Skeleton className="h-3.5 w-56 bg-muted/70" />
+        <Skeleton className="h-3 w-36 bg-muted/70" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => (
+          <Skeleton key={index} className="h-28 rounded-lg bg-muted/70" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <ModuleCard title="Performance +" accent="perf" href="/scale">
+          <Skeleton className="h-24 bg-muted/70" />
+        </ModuleCard>
+        <ModuleCard title="Organic +" accent="org" href="/organic?tab=metrics">
+          <Skeleton className="h-32 bg-muted/70" />
+        </ModuleCard>
+        <ModuleCard title="Creative +" accent="cre" href="/library">
+          <Skeleton className="h-40 bg-muted/70" />
+        </ModuleCard>
+      </div>
     </div>
   );
 }

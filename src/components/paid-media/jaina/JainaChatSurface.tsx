@@ -22,6 +22,7 @@ import {
   creativeCanvasUpdate,
 } from '@/lib/campaign-canvas/creativeGeneration';
 import { jainaOpeningSessionId } from '@/lib/jaina/deepLink';
+import { answersImplementTurn } from '@/lib/jaina/implementTurn';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 
 const AnimatedShaderBackground = dynamic(
@@ -38,11 +39,13 @@ import type {
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
+  LiveChangePreviewPayload,
   PaidScaffoldGate,
   PlatformId,
 } from '@continuum/contracts';
 import {
   AGENT_RUN_QUEUED,
+  approvalVariantsOf,
   isApprovalVariantOffered,
   JAINA_MAX_AD_ACCOUNTS,
   type JainaApprovalVariant,
@@ -108,16 +111,35 @@ import type {
 } from '@/lib/agent-references';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
-import { loadFailureMessage } from '@/lib/api/loadFailure';
+import { loadFailureMessage, loadFailureWhy } from '@/lib/api/loadFailure';
 import { READ_TIMEOUT_MS } from '@/lib/api/timeout';
 import {
   campaignCanvasActionsEnvelopeSchema,
   extractCampaignCanvasActionsEnvelope,
 } from '@/lib/campaign-canvas/agent-actions';
 import {
+  type LiveChangeDecision,
+  latestLiveChangeOf,
+  liveChangeByPartIdOf,
+} from '@/lib/campaign-canvas/liveChange';
+import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
+import {
+  campaignIdsOfPreview,
+  type PortfolioViewModel,
+  portfolioOfMessage,
+} from '@/lib/campaign-canvas/portfolio';
+import {
+  latestStructureDiffFor,
+  type ScaffoldStructureDiff,
+} from '@/lib/campaign-canvas/scaffoldDiff';
+import {
+  liveChangeVersionsOf,
+  scaffoldVersionsOf,
+  type VersionLine,
+} from '@/lib/campaign-canvas/versions';
 import { clearJainaMemory, stopJainaSession } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
@@ -161,6 +183,8 @@ import { JainaConversationSidebar } from './components/JainaConversationSidebar'
 import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
+import { JainaOutboxTurn } from './components/JainaOutboxTurn';
+import { JainaUnansweredNotice } from './components/JainaUnansweredNotice';
 
 /**
  * Tool name to database gate. The database enforces gate ORDER, so a wrong mapping
@@ -187,9 +211,56 @@ import {
   shouldQueueSubmission,
   updateQueuedMessageContent,
 } from './queueing';
+import { isRepeatSubmission, type SubmissionStamp, submissionKey } from './sendGuard';
 import type { JainaChatMessage } from './types';
 
 const HISTORY_TIMEOUT_MS = READ_TIMEOUT_MS * 3;
+
+/** One turn as the surface hands it to `dispatchMessage`. */
+type JainaDispatchInput = {
+  query: string;
+  canvas: boolean;
+  clarificationId?: string;
+  images?: Array<{ url: string; name?: string; mediaType?: string }>;
+  // Kept separate from `images` on purpose — that field is the pixels path, where
+  // Jaina's media resolver warns on anything that is not an image.
+  documents?: AgentDocumentAttachment[];
+  documentScopeKey?: string;
+  inlineTextContext?: string;
+  references?: AgentMentionReference[];
+  planAction?: JainaPlanAction;
+  scaffoldAction?: JainaScaffoldAction;
+  toolAction?: JainaToolAction;
+  operatorAction?: JainaOperatorAction;
+  forceReportArtifact?: boolean;
+  silentUserMessage?: boolean;
+  /**
+   * The caller shows a failed conversation setup itself, where the question was asked, so the
+   * toast would say it a second time — and for five seconds only.
+   */
+  setupFailureShownInline?: boolean;
+  onDispatchError?: (message: string) => void;
+};
+
+/** A queued message as the turn it becomes when it leaves the queue. */
+const dispatchInputOfQueued = (message: QueuedJainaMessage): JainaDispatchInput => ({
+  query: message.content,
+  canvas: message.canvas,
+  clarificationId: message.clarificationId,
+  images: message.images,
+  inlineTextContext: message.inlineTextContext,
+  references: message.references,
+  forceReportArtifact: message.forceReportArtifact,
+});
+
+/**
+ * A question on its way out that is not in the transcript yet: `sending` while its conversation
+ * is set up, `failed` when that setup failed — kept, with the reason, until it is retried or
+ * discarded (PP-DT-C-jaina-send-failure-is-silent).
+ */
+type OutboxTurn =
+  | { input: JainaDispatchInput; status: 'sending' }
+  | { input: JainaDispatchInput; status: 'failed'; reason: string };
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 
@@ -261,9 +332,49 @@ type JainaChatSurfaceProps = {
    * A host with a companion canvas beside the chat (the Scale page). Called with the thread's
    * latest scaffold — `proposed` when Jaina just proposed it, `thread` when a loaded thread
    * carries one, `expand` when a card's Expand asked for it — so the canvas shows what the
-   * conversation is about.
+   * conversation is about. `diff` is the Backend's per-node diff when the thread drew one for
+   * that scaffold (a campaign copy), so the canvas marks exactly what the copy adds.
    */
-  onScaffoldFocus?: (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => void;
+  onScaffoldFocus?: (
+    parentScaffoldId: string,
+    reason: 'proposed' | 'thread' | 'expand',
+    diff: ScaffoldStructureDiff | null,
+    /** The scaffold's versions the thread drew, for the canvas's version line. */
+    versions?: VersionLine | null,
+  ) => void;
+  /**
+   * A host with a companion canvas (the Scale page). Called with the thread's newest live-edit
+   * preview (`paid.live_change_preview`) and the decision on its approval, every time either
+   * changes. `opened` is true the first time a preview arrives live, so the host opens its
+   * canvas then and only then: a loaded thread or a later decision never reopens it.
+   */
+  onLiveChangeFocus?: (focus: {
+    preview: LiveChangePreviewPayload;
+    decision: LiveChangeDecision;
+    opened: boolean;
+    /** Every proposal the thread made for this campaign, for the canvas's version line. */
+    versions?: VersionLine | null;
+    /**
+     * Answers the preview's pending approval with the chat card's own decision and choice.
+     * Absent when the thread holds no approval to answer (a decided edit, a proposal).
+     */
+    onDecide?: (decision: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+    /** The decision already sent for this approval, from the card or the canvas. */
+    pendingDecision?: 'approve' | 'deny' | null;
+    /** The choices the gated tool's card offers (budget changes: apply, or pause for review). */
+    variants?: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
+  }) => void;
+  /**
+   * A host with a companion canvas. Called when a turn changes several campaigns at once (a
+   * portfolio): `opened` the first time such a turn arrives live, or when its card's "Open in
+   * canvas" asks. `versionsByRow` carries each row's version line across the thread.
+   */
+  onPortfolioFocus?: (focus: {
+    messageId: string;
+    portfolio: PortfolioViewModel;
+    versionsByRow: Record<string, VersionLine>;
+    opened: boolean;
+  }) => void;
   /**
    * A turn a button OUTSIDE the transcript sends as the person — the canvas's "Generate with
    * Jaina". Sent once per `id`, after any turn in flight ends. Spend inside it still stops at
@@ -271,6 +382,12 @@ type JainaChatSurfaceProps = {
    */
   autoSendPrompt?: { id: string; text: string } | null;
   onAutoSendConsumed?: () => void;
+  /**
+   * Whether a run, a queued turn or an unsent turn holds this conversation. A button outside the
+   * transcript that sends a turn stays disabled for as long, so its click is never sent into a
+   * busy conversation.
+   */
+  onRunInFlightChange?: (inFlight: boolean) => void;
   /**
    * Opens the optimizer's account read for a cited optimizer figure in an answer.
    *
@@ -762,7 +879,10 @@ export function JainaChatSurface({
   onOperatorActionSettled,
   onCanvasActionApplied,
   onScaffoldFocus,
+  onLiveChangeFocus,
+  onPortfolioFocus,
   autoSendPrompt = null,
+  onRunInFlightChange,
   onAutoSendConsumed,
   onOpenAccountRead,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
@@ -874,6 +994,7 @@ export function JainaChatSurface({
     setMessages: setUiMessages,
     resumeStream,
     clearError: clearChatError,
+    resumeSettledSessionId,
   } = useJainaChat({
     sessionId,
     initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
@@ -978,6 +1099,7 @@ export function JainaChatSurface({
     () => new Set(),
   );
   const [queuedMessages, setQueuedMessages] = React.useState<QueuedJainaMessage[]>([]);
+  const [outboxTurn, setOutboxTurn] = React.useState<OutboxTurn | null>(null);
   const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(null);
   const [queueEditDraft, setQueueEditDraft] = React.useState('');
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
@@ -991,10 +1113,17 @@ export function JainaChatSurface({
   const deepLinkSessionIdRef = React.useRef(initialSessionId ?? null);
   // A new-conversation deep link skips "most recent" exactly once, on first bootstrap.
   const startNewConversationRef = React.useRef(startNewConversation);
+  // Counts the conversations the reader chose or started ("+ New", a pick in the sidebar). The
+  // first load opens the latest conversation only if the reader has chosen none by the time it
+  // lands; otherwise it would put the old chat back over the one they just started.
+  const conversationChoiceRef = React.useRef(0);
   const activeResponseIdRef = React.useRef<string | null>(null);
   const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
   const queueDispatchInFlightRef = React.useRef(false);
+  // One click is one send (sendGuard.ts): the last submission and the ones still being set up.
+  const lastSubmissionRef = React.useRef<SubmissionStamp | null>(null);
+  const inFlightSubmissionKeysRef = React.useRef<Set<string>>(new Set());
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
   const mentionAdSetsCacheRef = React.useRef<Map<string, JainaMentionAdSet[]>>(new Map());
 
@@ -1361,7 +1490,13 @@ export function JainaChatSurface({
         { method: 'GET', cache: 'no-store' },
       );
       if (!response.ok) {
-        throw new Error('Failed to search conversations.');
+        // The status decides what the sidebar says (a 401 is an ended session); the server's
+        // own words ride along and are shown only when they read as a sentence.
+        const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        throw Object.assign(
+          new Error(typeof body?.error === 'string' ? body.error : `HTTP ${response.status}`),
+          { status: response.status },
+        );
       }
       const parsed = jainaConversationListResponseSchema.safeParse(
         await response.json().catch(() => null),
@@ -1502,6 +1637,7 @@ export function JainaChatSurface({
     async (targetSessionId: string, options?: { silent?: boolean }) => {
       if (!adAccountId) return;
 
+      conversationChoiceRef.current += 1;
       setIsConversationSwitching(true);
       try {
         const payload = await fetchConversationHistory(targetSessionId);
@@ -1602,13 +1738,15 @@ export function JainaChatSurface({
 
   // The planner names the conversation. Applied only when the session has no title yet, so a
   // later turn's plan cannot rename a conversation the reader has already learned to recognise.
+  // The canvas's implement turn is the exception: its plan is named after a machine-written order.
+  const answersImplement = answersImplementTurn(messages);
   React.useEffect(() => {
     const planTitle = normalizeSessionTitle(liveChatMessage?.plan?.title ?? null);
-    if (!planTitle) return;
+    if (!planTitle || answersImplement) return;
     setSessionTitleById((previous) =>
       previous[sessionId] === planTitle ? previous : { ...previous, [sessionId]: planTitle },
     );
-  }, [liveChatMessage?.plan?.title, sessionId]);
+  }, [answersImplement, liveChatMessage?.plan?.title, sessionId]);
 
   // Mirror the active run/response into refs so the realtime run-status handler
   // (which fires outside React's render) can match the in-flight run.
@@ -1797,6 +1935,7 @@ export function JainaChatSurface({
 
       setUiMessagesRef.current([]);
       setQueuedMessages([]);
+      setOutboxTurn(null);
       setEditingQueueMessageId(null);
       setQueueEditDraft('');
       setIsJainaProMode(false);
@@ -1809,6 +1948,8 @@ export function JainaChatSurface({
       persistedAssistantResponseIdsRef.current.clear();
       setIsHistoryLoading(true);
       setHistoryError(null);
+      const choiceAtStart = conversationChoiceRef.current;
+      const readerChoseMeanwhile = () => conversationChoiceRef.current !== choiceAtStart;
 
       try {
         const cachedSessions = getFreshConversationSessionsFromCache();
@@ -1846,6 +1987,7 @@ export function JainaChatSurface({
           return;
         }
 
+        if (readerChoseMeanwhile()) return;
         const conversationPayload = await fetchConversationHistory(targetSessionId);
         if (!conversationPayload || cancelled) return;
         setConversationSessionsWithCache(sortConversationSessions(conversationPayload.sessions));
@@ -1859,6 +2001,7 @@ export function JainaChatSurface({
           }
           return next;
         });
+        if (readerChoseMeanwhile()) return;
         showConversation(targetSessionId, conversationPayload.uiMessages);
         setEarlierCursor(conversationPayload.nextCursor ?? null);
         setShaderState(conversationPayload.uiMessages.length > 0 ? 'hidden' : 'visible');
@@ -1947,25 +2090,7 @@ export function JainaChatSurface({
   ]);
 
   const dispatchMessage = React.useCallback(
-    async (input: {
-      query: string;
-      canvas: boolean;
-      clarificationId?: string;
-      images?: Array<{ url: string; name?: string; mediaType?: string }>;
-      // Kept separate from `images` on purpose — that field is the pixels path, where
-      // Jaina's media resolver warns on anything that is not an image.
-      documents?: AgentDocumentAttachment[];
-      documentScopeKey?: string;
-      inlineTextContext?: string;
-      references?: AgentMentionReference[];
-      planAction?: JainaPlanAction;
-      scaffoldAction?: JainaScaffoldAction;
-      toolAction?: JainaToolAction;
-      operatorAction?: JainaOperatorAction;
-      forceReportArtifact?: boolean;
-      silentUserMessage?: boolean;
-      onDispatchError?: (message: string) => void;
-    }) => {
+    async (input: JainaDispatchInput) => {
       const query = input.query.trim();
       if (!query) return false;
 
@@ -1995,14 +2120,12 @@ export function JainaChatSurface({
           }
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to initialize conversation session.';
-        show({
-          title: 'Conversation setup failed',
-          description: message,
-          variant: 'error',
-        });
-        input.onDispatchError?.(message);
+        // In the product's words: the library's "Failed to fetch" is not a sentence for a person.
+        const why = loadFailureWhy(error) ?? "Jaina couldn't be reached.";
+        if (!input.setupFailureShownInline) {
+          show({ title: 'Not sent', description: `Not sent — ${why}`, variant: 'error' });
+        }
+        input.onDispatchError?.(why);
         return false;
       }
 
@@ -2162,12 +2285,59 @@ export function JainaChatSurface({
     [],
   );
 
+  /**
+   * Sends a turn the reader is waiting on. It shows as sending while its conversation is set up,
+   * and a setup that fails keeps it on screen as not sent, with the reason and Retry.
+   */
+  const dispatchFromOutbox = React.useCallback(
+    async (input: JainaDispatchInput): Promise<boolean> => {
+      setOutboxTurn({ input, status: 'sending' });
+      const failure: { reason: string | null } = { reason: null };
+      const started = await dispatchMessage({
+        ...input,
+        setupFailureShownInline: true,
+        onDispatchError: (reason) => {
+          failure.reason = reason;
+          input.onDispatchError?.(reason);
+        },
+      });
+      setOutboxTurn((current) => {
+        if (current?.input !== input) return current;
+        return started
+          ? null
+          : { input, status: 'failed', reason: failure.reason ?? "Jaina couldn't be reached." };
+      });
+      return started;
+    },
+    [dispatchMessage],
+  );
+
   const handleSubmit = React.useCallback(
     async (query: string, attachments?: Attachment[], references: AgentMentionReference[] = []) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) return;
 
       const submittedAttachments = attachments ?? [];
+      // Stamped before anything awaits: the second click of a double click arrives while the
+      // first is still creating its conversation, and has to find it already counted.
+      const submission = {
+        key: submissionKey(
+          normalizedQuery,
+          submittedAttachments.map((attachment) => attachment.id),
+          references,
+        ),
+        at: Date.now(),
+      };
+      if (
+        isRepeatSubmission({
+          next: submission,
+          previous: lastSubmissionRef.current,
+          inFlightKeys: inFlightSubmissionKeysRef.current,
+        })
+      ) {
+        return;
+      }
+      lastSubmissionRef.current = submission;
       const attachmentContext = buildAgentAttachmentContext(submittedAttachments, 'jaina');
       const resolvedReferences = mergeAttachmentReferences(
         references,
@@ -2217,14 +2387,21 @@ export function JainaChatSurface({
         return;
       }
 
-      const started = await dispatchMessage(input);
-      if (started && isJainaProMode) {
-        setIsJainaProMode(false);
+      inFlightSubmissionKeysRef.current.add(submission.key);
+      try {
+        const started = await dispatchFromOutbox(input);
+        if (started && isJainaProMode) {
+          setIsJainaProMode(false);
+        }
+        // A send that never left was not a send: the same click may be made again at once.
+        if (!started) lastSubmissionRef.current = null;
+      } finally {
+        inFlightSubmissionKeysRef.current.delete(submission.key);
       }
     },
     [
       activeResponseId,
-      dispatchMessage,
+      dispatchFromOutbox,
       queueMessageForLater,
       isConversationSwitching,
       isHistoryLoading,
@@ -2275,37 +2452,30 @@ export function JainaChatSurface({
     if (isViewedStreaming || activeResponseId) return;
     if (queuedMessages.length === 0) return;
     if (queueDispatchInFlightRef.current) return;
+    // A question being sent, or one that failed, goes first; the rest wait behind it.
+    if (outboxTurn) return;
 
     const nextQueuedMessage = queuedMessages[0];
     if (!nextQueuedMessage) return;
 
     queueDispatchInFlightRef.current = true;
+    // It leaves the queue as it leaves: if the send fails it is said as not sent with Retry,
+    // instead of sitting under "next will send now" for a send that already failed.
+    setQueuedMessages((previous) => removeQueuedMessage(previous, nextQueuedMessage.id));
+    if (editingQueueMessageId === nextQueuedMessage.id) {
+      setEditingQueueMessageId(null);
+      setQueueEditDraft('');
+    }
 
     void (async () => {
-      const started = await dispatchMessage({
-        query: nextQueuedMessage.content,
-        canvas: nextQueuedMessage.canvas,
-        clarificationId: nextQueuedMessage.clarificationId,
-        images: nextQueuedMessage.images,
-        inlineTextContext: nextQueuedMessage.inlineTextContext,
-        references: nextQueuedMessage.references,
-        forceReportArtifact: nextQueuedMessage.forceReportArtifact,
-      });
-
-      if (started) {
-        setQueuedMessages((previous) => removeQueuedMessage(previous, nextQueuedMessage.id));
-        if (editingQueueMessageId === nextQueuedMessage.id) {
-          setEditingQueueMessageId(null);
-          setQueueEditDraft('');
-        }
-      }
-
+      await dispatchFromOutbox(dispatchInputOfQueued(nextQueuedMessage));
       queueDispatchInFlightRef.current = false;
     })();
   }, [
     activeResponseId,
-    dispatchMessage,
+    dispatchFromOutbox,
     editingQueueMessageId,
+    outboxTurn,
     isConversationSwitching,
     isHistoryLoading,
     isViewedStreaming,
@@ -2318,9 +2488,11 @@ export function JainaChatSurface({
   // started. Switching conversation already only detaches; this now matches it, and the run's
   // completion toast still finds the reader. Stop is the one control that ends a run.
   const handleClearConversation = React.useCallback(() => {
+    conversationChoiceRef.current += 1;
     if (isStreaming) stopChat();
     setUiMessages([]);
     setQueuedMessages([]);
+    setOutboxTurn(null);
     setEditingQueueMessageId(null);
     setQueueEditDraft('');
     setIsJainaProMode(false);
@@ -2350,6 +2522,8 @@ export function JainaChatSurface({
       // Release the local reader before switching — the run keeps executing (Backend + store)
       // and the run row hydrates the completed result when the user returns.
       stopChat();
+      // A question not sent here belongs to the conversation being left.
+      setOutboxTurn(null);
       await loadConversationSession(targetSessionId);
     },
     [loadConversationSession, sessionId, stopChat],
@@ -2650,16 +2824,18 @@ export function JainaChatSurface({
     if (outcome) pending.settle(outcome);
   }, [isStreaming, messages]);
 
+  const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
   const consumedAutoSendRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     // Not before the thread has loaded: a panel opened BY this send would otherwise fire it into
     // the fresh session it mounted with, and the deep-linked thread would never see the turn.
-    if (!autoSendPrompt || !adAccountId || isStreaming) return;
+    if (!autoSendPrompt || !adAccountId || isQueueStreaming) return;
     if (!historyReady || isHistoryLoading || isConversationSwitching) return;
     if (consumedAutoSendRef.current === autoSendPrompt.id) return;
     consumedAutoSendRef.current = autoSendPrompt.id;
-    void handleSubmit(autoSendPrompt.text);
-    onAutoSendConsumed?.();
+    // Consumed once the turn has left, not when it starts to: the host keeps its button disabled
+    // until then, so there is no gap in which the same click can be made again.
+    void handleSubmit(autoSendPrompt.text).then(() => onAutoSendConsumed?.());
   }, [
     adAccountId,
     autoSendPrompt,
@@ -2667,9 +2843,14 @@ export function JainaChatSurface({
     historyReady,
     isConversationSwitching,
     isHistoryLoading,
-    isStreaming,
+    isQueueStreaming,
     onAutoSendConsumed,
   ]);
+
+  const runInFlight = isQueueStreaming || Boolean(outboxTurn) || queuedMessages.length > 0;
+  React.useEffect(() => {
+    onRunInFlightChange?.(runInFlight);
+  }, [onRunInFlightChange, runInFlight]);
 
   // A deep link that arrives AFTER mount — "Back to chat", or a run toast's View onto a Scale page
   // Next kept alive — switches the thread. It is handed to the bootstrap rather than opened here:
@@ -2687,12 +2868,22 @@ export function JainaChatSurface({
     retryHistory();
   }, [initialSessionId, retryHistory, stopChat]);
 
-  // The companion canvas follows the thread's latest scaffold, once per scaffold.
+  // The companion canvas follows the thread's latest scaffold, once per proposed VERSION: a
+  // second proposal (a new scaffold, or a new version of this one) is a new task for the
+  // canvas, while a later card of the same version (its deploy gate) is not. The diff a copy's
+  // structure part carries rides along, and a diff landing after its card re-points.
   const latestScaffold = React.useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       const parentScaffoldId = message?.scaffold?.parentScaffoldId;
-      if (message && parentScaffoldId) return { parentScaffoldId, messageId: message.id };
+      if (message && parentScaffoldId) {
+        return {
+          parentScaffoldId,
+          versionId: message.scaffold?.scaffoldId ?? parentScaffoldId,
+          messageId: message.id,
+          diff: latestStructureDiffFor(messages, parentScaffoldId),
+        };
+      }
     }
     return null;
   }, [messages]);
@@ -2707,25 +2898,163 @@ export function JainaChatSurface({
   const focusedScaffoldRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!onScaffoldFocus || !latestScaffold) return;
-    if (focusedScaffoldRef.current === latestScaffold.parentScaffoldId) return;
-    focusedScaffoldRef.current = latestScaffold.parentScaffoldId;
+    const key = `${latestScaffold.versionId}:${latestScaffold.diff?.scaffoldVersionId ?? ''}`;
+    if (focusedScaffoldRef.current === key) return;
+    focusedScaffoldRef.current = key;
     onScaffoldFocus(
       latestScaffold.parentScaffoldId,
       historyMessageIds.has(latestScaffold.messageId) ? 'thread' : 'proposed',
+      latestScaffold.diff,
+      scaffoldVersionsOf(messages, latestScaffold.parentScaffoldId),
     );
-  }, [historyMessageIds, latestScaffold, onScaffoldFocus]);
+  }, [historyMessageIds, latestScaffold, messages, onScaffoldFocus]);
 
+  // The companion canvas follows the thread's newest live edit too: it opens on the campaign
+  // a pending pause, budget or copy touches, and tracks the approval's decision after.
+  // What the canvas may do with a preview's approval: the card's own decision, its choices, and
+  // the decision already in flight (so a failed send re-enables the canvas and a click on the
+  // card disables it).
+  const confirmFocusOf = React.useCallback(
+    (
+      preview: LiveChangePreviewPayload,
+      decision: LiveChangeDecision,
+      thread: typeof messages,
+    ): {
+      onDecide?: (answer: 'approve' | 'deny', variant?: JainaApprovalVariant) => void;
+      pendingDecision: 'approve' | 'deny' | null;
+      variants: ReadonlyArray<{ variant: JainaApprovalVariant; label: string }> | null;
+    } => {
+      if (decision !== 'pending') return { pendingDecision: null, variants: null };
+      const approval = thread
+        .flatMap((entry) => entry.pendingToolApprovals ?? [])
+        .find((candidate) => candidate.approvalId === preview.approvalId);
+      const choices = approval ? approvalVariantsOf(approval.toolName) : null;
+      return {
+        pendingDecision: optimisticApprovalDecisions[preview.approvalId] ?? null,
+        variants: choices
+          ? choices.map((choice) => ({ variant: choice.variant, label: choice.label }))
+          : null,
+        ...(approval
+          ? {
+              onDecide: (answer, variant) =>
+                handleApprovalDecision(approval, answer, undefined, variant),
+            }
+          : {}),
+      };
+    },
+    [handleApprovalDecision, optimisticApprovalDecisions],
+  );
+  const confirmFocusRef = React.useRef(confirmFocusOf);
+  confirmFocusRef.current = confirmFocusOf;
+  const latestLiveChange = React.useMemo(() => latestLiveChangeOf(messages), [messages]);
+  const openedLiveChangeRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!onLiveChangeFocus || !latestLiveChange) return;
+    const { preview, decision, index } = latestLiveChange;
+    const message = messages[index];
+    // A turn that changes several campaigns opens its portfolio instead (below).
+    const inPortfolio = Boolean(message && portfolioOfMessage(message));
+    const fresh =
+      !inPortfolio &&
+      openedLiveChangeRef.current !== preview.partId &&
+      Boolean(message && !historyMessageIds.has(message.id));
+    if (fresh) openedLiveChangeRef.current = preview.partId;
+    const campaignId = campaignIdsOfPreview(preview)[0];
+    onLiveChangeFocus({
+      preview,
+      decision,
+      opened: fresh,
+      versions: campaignId ? liveChangeVersionsOf(messages, campaignId) : null,
+      ...confirmFocusOf(preview, decision, messages),
+    });
+  }, [confirmFocusOf, historyMessageIds, latestLiveChange, messages, onLiveChangeFocus]);
+
+  // A turn that changes several campaigns opens the canvas on its portfolio, once, live.
+  const portfolioFocusOf = React.useCallback(
+    (messageId: string, opened: boolean) => {
+      const message = messages.find((entry) => entry.id === messageId);
+      const portfolio = message ? portfolioOfMessage(message) : null;
+      if (!portfolio) return null;
+      const versionsByRow: Record<string, VersionLine> = {};
+      for (const row of portfolio.rows) {
+        versionsByRow[row.id] =
+          row.source.kind === 'live'
+            ? liveChangeVersionsOf(messages, row.source.campaignId)
+            : scaffoldVersionsOf(messages, row.source.parentScaffoldId);
+      }
+      return { messageId, portfolio, versionsByRow, opened };
+    },
+    [messages],
+  );
+  const openedPortfolioRef = React.useRef<{ messageId: string; parts: string } | null>(null);
+  React.useEffect(() => {
+    if (!onPortfolioFocus) return;
+    const message = messages.at(-1);
+    if (!message || historyMessageIds.has(message.id)) return;
+    // Re-read only when the turn's proposals change, not on every streamed token.
+    const parts = [
+      ...(message.campaignStructures ?? []).map((structure) => structure.partId),
+      ...(message.liveChangePreviews ?? []).map((preview) => preview.partId),
+    ].join('|');
+    const opened = openedPortfolioRef.current;
+    if (opened?.messageId === message.id && opened.parts === parts) return;
+    const focus = portfolioFocusOf(message.id, opened?.messageId !== message.id);
+    if (!focus) return;
+    openedPortfolioRef.current = { messageId: message.id, parts };
+    onPortfolioFocus(focus);
+  }, [historyMessageIds, messages, onPortfolioFocus, portfolioFocusOf]);
+  const portfolioFocusRef = React.useRef(portfolioFocusOf);
+  portfolioFocusRef.current = portfolioFocusOf;
+
+  // Read through a ref so the thread context (and every memoized message) does not change
+  // on each streamed token just to keep "Open in canvas" pointed at the latest messages.
+  const liveChangeMessagesRef = React.useRef(messages);
+  liveChangeMessagesRef.current = messages;
   const scaffoldThread = React.useMemo<ScaffoldThread>(
     () => ({
       sessionId,
       ...(onScaffoldFocus
         ? {
             onScaffoldFocus: (parentScaffoldId: string) =>
-              onScaffoldFocus(parentScaffoldId, 'expand'),
+              onScaffoldFocus(
+                parentScaffoldId,
+                'expand',
+                latestStructureDiffFor(liveChangeMessagesRef.current, parentScaffoldId),
+                scaffoldVersionsOf(liveChangeMessagesRef.current, parentScaffoldId),
+              ),
+          }
+        : {}),
+      ...(onLiveChangeFocus
+        ? {
+            onLiveChangeOpen: (partId: string) => {
+              const found = liveChangeByPartIdOf(liveChangeMessagesRef.current, partId);
+              const campaignId = found ? campaignIdsOfPreview(found.preview)[0] : undefined;
+              if (found)
+                onLiveChangeFocus({
+                  ...found,
+                  ...confirmFocusRef.current(
+                    found.preview,
+                    found.decision,
+                    liveChangeMessagesRef.current,
+                  ),
+                  opened: true,
+                  versions: campaignId
+                    ? liveChangeVersionsOf(liveChangeMessagesRef.current, campaignId)
+                    : null,
+                });
+            },
+          }
+        : {}),
+      ...(onPortfolioFocus
+        ? {
+            onPortfolioOpen: (messageId: string) => {
+              const focus = portfolioFocusRef.current(messageId, true);
+              if (focus) onPortfolioFocus(focus);
+            },
           }
         : {}),
     }),
-    [onScaffoldFocus, sessionId],
+    [onLiveChangeFocus, onPortfolioFocus, onScaffoldFocus, sessionId],
   );
 
   const consumedOperatorRequestRef = React.useRef<string | null>(null);
@@ -2868,8 +3197,23 @@ export function JainaChatSurface({
   }, [messages]);
 
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
-  const isQueueStreaming = isViewedStreaming || Boolean(activeResponseId);
-  const canStartQueuedNow = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
+  // A stored question with no answer and no run answering it — checked with the Backend, not
+  // assumed from a quiet stream (PP-DT-C-jaina-unanswered-run-blank-transcript).
+  const unansweredQuestion =
+    liveChatMessage?.role === 'user' &&
+    resumeSettledSessionId === sessionId &&
+    !isViewedStreaming &&
+    !chatError &&
+    !paymentRequired &&
+    !isInputDisabled &&
+    !outboxTurn &&
+    queuedMessages.length === 0
+      ? liveChatMessage.content
+      : null;
+  const canStartQueuedNow =
+    !isQueueStreaming && !isHistoryLoading && !isConversationSwitching && !outboxTurn;
+  // Retry waits for whatever holds the conversation, exactly as the queue does.
+  const canRetryOutboxTurn = !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
   const hasPendingReportArtifactRequest =
     Boolean(pendingReportArtifactResponseId) &&
     Boolean(activeResponseId) &&
@@ -3017,7 +3361,7 @@ export function JainaChatSurface({
                     />
                   ) : null}
 
-                  {!isConversationSwitching && messages.length === 0 && (
+                  {!isConversationSwitching && messages.length === 0 && !outboxTurn && (
                     <JainaEmptyState
                       adAccountId={adAccountId}
                       onExampleClick={(q) => handleSubmit(q)}
@@ -3058,6 +3402,23 @@ export function JainaChatSurface({
                       ))}
                     </React.Fragment>
                   ))}
+
+                  {unansweredQuestion ? (
+                    <JainaUnansweredNotice
+                      onAskAgain={() => void handleSubmit(unansweredQuestion)}
+                    />
+                  ) : null}
+
+                  {outboxTurn ? (
+                    <JainaOutboxTurn
+                      text={outboxTurn.input.query}
+                      status={outboxTurn.status}
+                      reason={outboxTurn.status === 'failed' ? outboxTurn.reason : undefined}
+                      canRetry={canRetryOutboxTurn}
+                      onRetry={() => void dispatchFromOutbox(outboxTurn.input)}
+                      onDiscard={() => setOutboxTurn(null)}
+                    />
+                  ) : null}
                 </ChatTranscript>
               </div>
 
@@ -3132,24 +3493,13 @@ export function JainaChatSurface({
                                                 onClick={() => {
                                                   if (queueDispatchInFlightRef.current) return;
                                                   queueDispatchInFlightRef.current = true;
+                                                  setQueuedMessages((previous) =>
+                                                    removeQueuedMessage(previous, queuedMessage.id),
+                                                  );
                                                   void (async () => {
-                                                    const started = await dispatchMessage({
-                                                      query: queuedMessage.content,
-                                                      canvas: queuedMessage.canvas,
-                                                      clarificationId:
-                                                        queuedMessage.clarificationId,
-                                                      references: queuedMessage.references,
-                                                      forceReportArtifact:
-                                                        queuedMessage.forceReportArtifact,
-                                                    });
-                                                    if (started) {
-                                                      setQueuedMessages((previous) =>
-                                                        removeQueuedMessage(
-                                                          previous,
-                                                          queuedMessage.id,
-                                                        ),
-                                                      );
-                                                    }
+                                                    await dispatchFromOutbox(
+                                                      dispatchInputOfQueued(queuedMessage),
+                                                    );
                                                     queueDispatchInFlightRef.current = false;
                                                   })();
                                                 }}

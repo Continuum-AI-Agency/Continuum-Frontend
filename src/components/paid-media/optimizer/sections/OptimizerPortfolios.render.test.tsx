@@ -317,6 +317,46 @@ describe('OptimizerPortfolios', () => {
     fireEvent.click(getByRole('button', { name: /All accounts/ }));
     expect(queryByTestId('portfolio-lead')).toBeNull();
   });
+
+  // Pink Elephant, 2026-11-01: "Evento Webinar 29 Octubre" is a Google portfolio stored in MXN,
+  // but the selected account's currency could not be read (Meta refused the account), and the
+  // row printed "100" — money with no code. A portfolio's money is in its own currency first.
+  it("prints a portfolio's money in its own currency when the account's is unknown", () => {
+    const { container } = renderList({
+      currency: null,
+      portfolios: [portfolio({ id: 'pink1', currency: 'MXN', daily_total: 100 })],
+    });
+
+    const daily = container.querySelector('[data-figure="portfolios.pink1.daily"]');
+    expect(daily?.textContent).toContain('MXN');
+  });
+
+  // Easy Fit, 2026-11-01: the selected account is the Meta one and both portfolios are Google
+  // ones, so the list opened on "Portfolios (0)" with the two behind "All accounts · 2" — a
+  // page that reads as "no portfolios". An empty account with portfolios elsewhere opens on them.
+  it('opens on all accounts when this account has none and others do, until the person picks', () => {
+    const { getByRole, getByText } = renderList({
+      portfolios: [],
+      brandPortfolioCount: 2,
+      brandGroups: [
+        {
+          accountId: '5251780631',
+          label: 'Easy Fit Google',
+          known: true,
+          isSelected: false,
+          portfolios: [
+            portfolio({ id: 'g1', name: 'Leads // Google Ads only', ad_account_id: '5251780631' }),
+            portfolio({ id: 'g2', name: 'Test — Google Ads', ad_account_id: '5251780631' }),
+          ],
+        },
+      ],
+    });
+
+    expect(getByText('Portfolios (2)')).toBeTruthy();
+    expect(getByText('Leads // Google Ads only')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: /This account/ }));
+    expect(getByText('Portfolios (0)')).toBeTruthy();
+  });
 });
 
 // The three production portfolios the live bench (stale:portfolios:live) named on 2026-09-23.

@@ -27,6 +27,7 @@ import { loadFailureMessage } from '@/lib/api/loadFailure';
 import type { CampaignIndexRecord } from '@/lib/paid-media/campaign-indexes';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow, PaidMediaPlatform } from '@/lib/paid-media/performance-types';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 import { consumePrefetchedIndexes } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
 import { AccountInsightsPanel } from './AccountInsightsPanel';
@@ -187,7 +188,7 @@ export function PaidMediaDashboard({
       const prefetched = consumePrefetchedIndexes(brandId, adAccountId);
       const payload = prefetched
         ? ((await prefetched) as { indexes?: CampaignIndexRecord[] })
-        : await fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then(
+        : await paidMediaRouteFetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then(
             async (response) => {
               if (!response.ok) {
                 throw new Error('Failed to load campaign indexes');
@@ -261,20 +262,23 @@ export function PaidMediaDashboard({
       setSavingIndex(true);
       try {
         if (draft.id) {
-          const updateResponse = await fetch(`/api/paid-media/campaign-indexes/${draft.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: draft.name,
-              campaignIds: draft.campaignIds,
-            }),
-          });
+          const updateResponse = await paidMediaRouteFetch(
+            `/api/paid-media/campaign-indexes/${draft.id}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: draft.name,
+                campaignIds: draft.campaignIds,
+              }),
+            },
+          );
 
           if (!updateResponse.ok) {
             throw new Error('Failed to update campaign index');
           }
         } else {
-          const createResponse = await fetch('/api/paid-media/campaign-indexes', {
+          const createResponse = await paidMediaRouteFetch('/api/paid-media/campaign-indexes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -310,7 +314,7 @@ export function PaidMediaDashboard({
     async (indexId: string) => {
       setSavingIndex(true);
       try {
-        const response = await fetch(`/api/paid-media/campaign-indexes/${indexId}`, {
+        const response = await paidMediaRouteFetch(`/api/paid-media/campaign-indexes/${indexId}`, {
           method: 'DELETE',
         });
 

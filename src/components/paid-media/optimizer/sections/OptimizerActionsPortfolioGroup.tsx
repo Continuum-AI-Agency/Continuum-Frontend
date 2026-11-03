@@ -66,6 +66,7 @@ import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { platformName } from '../entityNoun';
 import { figureProps, formatCurrency } from '../format';
 import { itemWritable, proposalsOnlyNote } from '../platformWrites';
+import { portfolioCurrency } from '../portfolioCurrency';
 import {
   actionRoute,
   applyModeExplainer,
@@ -120,9 +121,16 @@ import {
 } from './crossPlatformMove/queuedMoveModel';
 import { type ImplementTarget, implementTargets, predecessorAdIn } from './flashCreativesModel';
 import { KindTag, type KindTone, kindTone, kindWord } from './kindTag';
-import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { AppliedWriteRow, BudgetWritePreview } from './pages/actions/WritePreview';
+import {
+  autopilotNextRun,
+  budgetWriteState,
+  guardrailChecks,
+} from './pages/actions/writePreviewModel';
 import { cardActionsOf, cardRecommendationId } from './platformCards/platformCardActionModel';
+import { portfolioPlatforms } from './platforms/platformTabsModel';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { isStale, rosterLine, rosterTone, staleLine } from './portfolioStaleness';
 import { QueueTraySkeleton } from './QueueTraySkeleton';
 import { RecEvidenceChart } from './RecEvidenceChart';
@@ -861,6 +869,18 @@ export function OptimizerActionsPortfolioGroup({
   const selectableVisible = visibleRows.filter(isSelectableRow);
   const rowByKey = React.useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows]);
 
+  // The search scopes everything under it, not the item rows alone: the budget moves are searched
+  // the same way, and the blocks that describe the whole queue (the reallocation story, the
+  // platform cards) step aside while a query narrows it — a query that matched nothing left them
+  // on screen and shrank the list without a word (PP-DT-C-actions-search-leaves-budget-table-and-counts).
+  const searchTerm = search.trim();
+  const searching = searchTerm.length > 0;
+  const visibleMoveRows = React.useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return term ? moveRows.filter((row) => moveSearchText(row).includes(term)) : moveRows;
+  }, [moveRows, searchTerm]);
+  const shownCount = visibleRows.length + visibleMoveRows.length;
+
   const approvedBudgetCount = rows.filter((row) => row.route === 'budget' && row.approved).length;
   const approvedPauseCount = rows.filter((row) => row.route === 'pause' && row.approved).length;
 
@@ -914,9 +934,11 @@ export function OptimizerActionsPortfolioGroup({
   const [generatingIds, setGeneratingIds] = React.useState<ReadonlySet<string>>(new Set());
   const [generateNotes, setGenerateNotes] = React.useState<ReadonlyMap<string, string>>(new Map());
   const [implementingKey, setImplementingKey] = React.useState<string | null>(null);
-  // The portfolio's own account names its money: a Google portfolio listed beside the selected
-  // Meta account is in its Google customer's currency.
-  const currency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
+  // The portfolio names its own money: a Google portfolio listed beside the selected Meta account
+  // is in its Google customer's currency, which only the portfolio carries (the customer's asset
+  // row has none). Its own account's code is the fallback.
+  const accountCurrency = useAdAccountCurrency(brandId, portfolio.ad_account_id ?? adAccountId);
+  const currency = portfolioCurrency(portfolio, accountCurrency);
   const noteFor = React.useCallback((recId: string, note: string | null) => {
     setGenerateNotes((prev) => {
       const next = new Map(prev);
@@ -1225,6 +1247,18 @@ export function OptimizerActionsPortfolioGroup({
   const waitingCount = queueWaitingCount(rows, moveRows, platformCards.length);
   const sentence = queueSentence(waitingCount, summary, currency);
 
+  // The change preview (G12): the cycle's budget moves before → after, the guardrails they are
+  // held to, and the one action their state allows, on the queue's own approve and apply paths.
+  const budgetRows = rows.filter((row): row is BudgetQueueRow => row.route === 'budget');
+  const writeState = budgetWriteState(
+    budgetRows.map((row) => ({ key: row.key, approved: row.approved })),
+  );
+  const writeChecks = guardrailChecks({
+    portfolio,
+    moves: budgetRows.map((row) => row.item),
+    currency,
+  });
+
   return (
     <section className="@container space-y-3" data-testid="queue-tray">
       {/* The tray's one header line: whose queue, how much is waiting, how current it is. */}
@@ -1280,6 +1314,18 @@ export function OptimizerActionsPortfolioGroup({
         </p>
       ) : null}
 
+      {searching ? (
+        <p
+          className="text-muted-foreground text-xs"
+          data-testid="queue-search-status"
+          role="status"
+        >
+          {shownCount === 0
+            ? `No actions match “${searchTerm}”.`
+            : `${shownCount} ${shownCount === 1 ? 'action matches' : 'actions match'} “${searchTerm}”.`}
+        </p>
+      ) : null}
+
       <QueueToolbar
         activeFilters={routeFilters}
         allSelected={allSelected}
@@ -1321,9 +1367,31 @@ export function OptimizerActionsPortfolioGroup({
         </p>
       ) : null}
 
+      {!searching ? (
+        <BudgetWritePreview
+          autopilotRun={autopilotNextRun(portfolio, writeChecks)}
+          blockedReason={writesBlocked ? 'Observe mode writes nothing.' : null}
+          busy={busyApprove || applyApproved.isPending}
+          checks={writeChecks}
+          currency={currency}
+          moves={budgetRows.map((row) => ({
+            key: row.key,
+            entityId: row.adsetId,
+            name: row.name,
+            before: row.item.current_budget,
+            after: row.item.final_budget,
+          }))}
+          onApply={() => setConfirm('budget')}
+          onApprove={runApprove}
+          platforms={portfolioPlatforms(portfolio.platforms)}
+          state={writeState}
+          writesBlocked={writesBlocked}
+        />
+      ) : null}
+
       {/* Why the money is moving, before the list of moves: every ad set's cost per result
           against the target beside its budget going from now to proposed. */}
-      {(hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
+      {!searching && (hasBudgetRows || moves.line || moves.notes.size > 0) && report ? (
         <ReallocationStory
           className="border-border/60 border-t pt-3"
           currency={currency}
@@ -1346,12 +1414,12 @@ export function OptimizerActionsPortfolioGroup({
       ) : null}
       {/* Cross-platform moves lead the queue: the biggest decision, and the one a person
           should take even when autopilot could (decision 18). */}
-      {moveRows.length > 0 ? (
+      {visibleMoveRows.length > 0 ? (
         <ul
           className="divide-y divide-border/60 border-border/60 border-t"
           data-testid="budget-move-queue"
         >
-          {moveRows.map(({ key, rec, move }) => (
+          {visibleMoveRows.map(({ key, rec, move }) => (
             <BudgetMoveQueueRow
               busy={dismissingMove === rec.id}
               key={key}
@@ -1366,13 +1434,13 @@ export function OptimizerActionsPortfolioGroup({
           ))}
         </ul>
       ) : null}
-      {platformCards.length > 0 ? (
+      {!searching && platformCards.length > 0 ? (
         <div data-testid="queue-platform-cards">
           <AccountRead
             candidates={[...platformCards]}
             cardActions={cardActions}
             currency={currency}
-            dailySpend={portfolio.daily_total}
+            dailySpend={portfolioPlanPerDay(portfolio)}
             portfolioNames={NO_PORTFOLIO_NAMES}
           />
         </div>
@@ -1531,7 +1599,7 @@ function PortfolioRecentActions({
               move={item.move}
             />
           ) : (
-            <ActionRow
+            <AppliedWriteRow
               brandId={brandId}
               currency={currency}
               entityNames={entityNames}
@@ -1566,6 +1634,13 @@ function SelectionSweeper({
     }
   }, [keySet, selected, onSweep]);
   return null;
+}
+
+/** A budget move as the search reads it: what it is, and the names and ids on its legs. */
+function moveSearchText(row: MoveQueueRow): string {
+  return [row.rec.kind, row.rec.reason ?? '', 'budget move', JSON.stringify(row.move)]
+    .join(' ')
+    .toLowerCase();
 }
 
 function rowSearchText(row: QueueRow): string {

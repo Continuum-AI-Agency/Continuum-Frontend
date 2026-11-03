@@ -39,11 +39,25 @@ import { platformAccountNotes } from './wizard/wizardModel';
 // Explains an empty suggestion list precisely (Phase C diagnostic reason), so the wizard never
 // shows a bare "no suggestions yet". `hasProjections` keeps the all-CBO case from dead-ending:
 // when every ad set is held at the campaign level there ARE no ad-set budgets to pick.
+// `platform` is the selected account's: optimizer-suggest reads a Google account's campaigns, never
+// Meta ad sets, so its empty answer is said in campaigns (PP-DT-E-optimizer-meta-reads-on-google-account).
 export function suggestEmptyMessage(
   reason: string | null,
   level: PortfolioLevel,
-  { hasProjections = false }: { hasProjections?: boolean } = {},
+  {
+    hasProjections = false,
+    platform = 'meta',
+  }: { hasProjections?: boolean; platform?: 'meta' | 'google_ads' } = {},
 ): string {
+  if (platform === 'google_ads') {
+    if (reason === 'not_permitted') {
+      return "This Google Ads account isn't assigned to this brand, so the optimizer can't read its campaigns. Assign it in Settings → Integrations, then try again.";
+    }
+    if (reason === 'no_active') {
+      return 'No active campaigns found on this Google Ads account yet. Once campaigns are live, suggestions will appear here.';
+    }
+    return "No grouped suggestions yet — the optimizer groups this Google Ads account's campaigns once their metrics are available. Start from scratch in the meantime.";
+  }
   switch (reason) {
     case 'all_cbo':
       if (level === 'campaign') {
@@ -239,6 +253,7 @@ export function PortfolioSetup({
         suggestions={suggestions}
         suggestionsEmptyMessage={suggestEmptyMessage(suggestReason, level, {
           hasProjections: projectedConversions.length > 0,
+          platform: account && accountPlatform(account) === 'google_ads' ? 'google_ads' : 'meta',
         })}
         onRetrySuggestions={() => void suggestRead.refetch()}
         suggestionsFailure={

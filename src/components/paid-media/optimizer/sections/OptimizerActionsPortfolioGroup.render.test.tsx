@@ -146,6 +146,10 @@ let activeProposals: unknown[] = [];
 const RECENT_AUDIT_ID = '66666666-6666-4666-8666-666666666666';
 let recentActions: Record<string, unknown>[] = [];
 
+// The currency the account list carries for the portfolio's account (useAdAccountCurrency). A
+// Google customer's asset row carries none, so the Google-portfolio spec sets it to null.
+let activeAccountCurrency: string | null = 'USD';
+
 const requestApplyItemsMutate = mock(() => {});
 const setStatusesMutate = mock(() => {});
 const setStatusMutate = mock(() => {});
@@ -215,7 +219,7 @@ mock.module('../useOptimizerData', () => ({
     implement: { mutateAsync: async () => 'job', isPending: false },
     refreshPipelines: () => undefined,
   }),
-  useAdAccountCurrency: () => 'USD',
+  useAdAccountCurrency: () => activeAccountCurrency,
   fetchAdsetAds: async () => [],
   useOptimizerAudienceProposals: () => ({ data: activeProposals, isLoading: false }),
   useAudienceProposalMutations: () => ({
@@ -351,6 +355,7 @@ afterEach(() => {
   recentActions = [];
   activeRoster = null;
   activeEnrollments = [];
+  activeAccountCurrency = 'USD';
 });
 
 const portfolio = (over: Partial<PortfolioListItem> = {}): PortfolioListItem =>
@@ -609,6 +614,42 @@ describe("queueWaitingCount — the list read's definition", () => {
     renderGroup();
     const header = screen.getByTestId('queue-tray').querySelector('header');
     expect(header?.textContent).toContain('Prospecting4 waiting');
+  });
+});
+
+// PP-DT-C-actions-search-leaves-budget-table-and-counts: the search filtered the item rows only.
+// A query that matched nothing left the reallocation story ("Moving … from 7 ad sets") and the
+// budget moves on screen, shrank the list with no word, and never said nothing matched.
+describe('OptimizerActionsPortfolioGroup — searching the queue', () => {
+  const search = (value: string) =>
+    fireEvent.change(screen.getByPlaceholderText('Search name, id, kind, reason'), {
+      target: { value },
+    });
+
+  it('a search that matches nothing says so, and shows nothing it did not search', () => {
+    renderGroup();
+    expect(screen.getAllByText(/Budget Set/).length).toBeGreaterThan(0);
+
+    search('zzzz-nothing');
+
+    expect(screen.getByTestId('queue-search-status').textContent).toBe(
+      'No actions match “zzzz-nothing”.',
+    );
+    expect(screen.queryAllByText(/Budget Set/)).toHaveLength(0);
+    expect(screen.getByTestId('queue-rows').children).toHaveLength(0);
+  });
+
+  it('a search that matches says how many actions it shows', () => {
+    renderGroup();
+    search('Budget Set');
+    expect(screen.getByTestId('queue-search-status').textContent).toMatch(
+      /^\d+ actions? match(es)? “Budget Set”\.$/,
+    );
+  });
+
+  it('says nothing about a search before one is typed', () => {
+    renderGroup();
+    expect(screen.queryByTestId('queue-search-status')).toBeNull();
   });
 });
 
@@ -1884,5 +1925,140 @@ describe("a Google portfolio's pending platform card in its queue", () => {
     expect(screen.queryByTestId('queue-platform-cards')).toBeNull();
     expect(screen.getByTestId('queue-rows').children).toHaveLength(1);
     expect(waiting()).toBe('1 waiting');
+  });
+});
+
+// PP-DT-E-google-portfolio-money-without-currency (deep test 2026-10-31): a Google portfolio
+// stamped MXN printed its Actions money bare, because the group asked the ACCOUNT list for the
+// currency and a Google customer's asset row carries none. The portfolio's own code wins.
+describe("a portfolio's money is in the portfolio's own currency", () => {
+  it('prints a Google portfolio stamped MXN in MXN although its account row has no code', () => {
+    activeReport = rebalanceReport;
+    activeAccountCurrency = null;
+    const { container } = renderGroup({
+      ad_account_id: '5251780631',
+      currency: 'MXN',
+      platforms: ['google_ads'],
+    });
+    fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
+    expect(container.textContent).toContain('Before → after: $50.00 MXN → $65.00 MXN');
+  });
+
+  it("falls back on the portfolio's account when the portfolio carries no code", () => {
+    activeReport = rebalanceReport;
+    activeAccountCurrency = 'USD';
+    const { container } = renderGroup({ currency: null });
+    fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
+    expect(container.textContent).toContain('Before → after: $50.00 USD → $65.00 USD');
+  });
+});
+
+// G12: the queue opens with its change preview — the cycle's budget moves before → after, the
+// guardrails they are held to, and the action their state allows, on the queue's own paths.
+describe('the change preview at the head of the queue', () => {
+  it("draws the cycle's budget move before → after with its guardrails", () => {
+    renderGroup({ max_change_pct_per_cycle: 0.2, max_daily_apply_minor: 500_000 });
+    const preview = screen.getByTestId('write-preview');
+    expect(within(preview).getByTestId('write-bar').textContent).toBe(
+      'Budget Set$100 USD$130 USD+30%',
+    );
+    const checks = within(preview)
+      .getAllByRole('listitem')
+      .filter((item) => item.hasAttribute('data-check'));
+    expect(checks.map((item) => item.getAttribute('data-state'))).toEqual([
+      'wait',
+      'pass',
+      'pass',
+      'pass',
+    ]);
+    expect(checks[0]?.textContent).toContain('1 move is above it: autopilot would hold it too');
+  });
+
+  it('approves the move through the same RPC as the row, carrying its ad set id', () => {
+    renderGroup();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve 1 move' }));
+    expect(requestApplyItemsMutate).toHaveBeenCalledTimes(1);
+    const [payload] = requestApplyItemsMutate.mock.calls[0] as [
+      { run_id: string; adset_ids: string[] },
+    ];
+    expect(payload).toEqual({ run_id: RUN_ID, adset_ids: ['as-budget'] });
+  });
+
+  it('once approved, Apply now opens the same confirm, and only the confirm writes', () => {
+    activeReport = executableReport;
+    renderGroup();
+    expect(screen.queryByRole('button', { name: 'Approve 1 move' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply now' }));
+    expect(applyApprovedMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^apply budget moves$/i }));
+    expect(applyApprovedMutate).toHaveBeenCalledTimes(1);
+    const [payload] = applyApprovedMutate.mock.calls[0] as [{ dryRun: boolean }];
+    expect(payload.dryRun).toBe(false);
+  });
+
+  it('holds both actions in observe mode', () => {
+    renderGroup({ apply_mode: 'observe' });
+    const approve = screen.getByRole('button', { name: 'Approve 1 move' }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    expect(screen.getByTestId('write-state').textContent).toContain('Observe mode writes nothing.');
+  });
+
+  it('steps aside while a search narrows the queue', () => {
+    renderGroup();
+    fireEvent.change(screen.getByPlaceholderText('Search name, id, kind, reason'), {
+      target: { value: 'Pause Set' },
+    });
+    expect(screen.queryByTestId('write-preview')).toBeNull();
+  });
+
+  const ARMED = {
+    apply_mode: 'autopilot',
+    autopilot_paused: false,
+    autopilot_scopes: {
+      budget: true,
+      creative_swap: false,
+      audience_change: false,
+      new_audience: false,
+      new_creatives: false,
+    },
+    max_change_pct_per_cycle: 0.2,
+    max_daily_apply_minor: 500_000,
+    next_realloc_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
+    platforms: ['meta'],
+  };
+
+  it('says when an armed autopilot writes again on its own, inside its guardrails', () => {
+    renderGroup(ARMED);
+    expect(screen.getByTestId('write-autopilot-run').textContent).toContain('Queued for');
+    // The move above the 20% cap is the one that waits for a person.
+    expect(screen.getByRole('button', { name: 'Approve 1 move' })).toBeTruthy();
+  });
+
+  it('never says autopilot writes a Google portfolio: those moves stay proposals', () => {
+    renderGroup({ ...ARMED, platforms: ['google_ads'] });
+    expect(screen.queryByTestId('write-autopilot-run')).toBeNull();
+  });
+
+  it('draws a recently applied budget before → after, with its state and its undo', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        entity_id: 'as-budget',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    renderGroup();
+    const row = screen.getByTestId('applied-write');
+    expect(row.textContent).toContain('$50.00 USD$35.00 USD-30%');
+    expect(within(row).getByTestId('action-applied-state').textContent).toBe('Applied');
+    expect(within(row).getByRole('button', { name: 'Revert' })).toBeTruthy();
   });
 });

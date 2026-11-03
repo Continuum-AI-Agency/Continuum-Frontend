@@ -7,6 +7,8 @@ export * from './account-chart';
 // Account-level metrics across platforms for the Optimizer Overview (MP1).
 export * from './account-platform-metrics';
 export * from './account-strategy';
+// How the Optimizer reads one ad account: mode, result that counts, board modules and why.
+export * from './accountReading';
 // The platform-neutral optimizer action (set_status, set_budget, set_bid_target,
 // add_negatives, budget_move) and the applier's preflight refusal.
 export * from './action';
@@ -27,6 +29,8 @@ export * from './attribution-sheet';
 // Audience proposals: the daily audience analysis for F2/F3 ad sets, its approval, and
 // what the worker read back from Meta after creating the new ad set.
 export * from './audience-proposals';
+// What the adaptive board writes in the account's language (takeaways, reading notes).
+export * from './boardCopy';
 // Meta currency MAJOR->MINOR scaling, shared by the FE guardrail inputs, the apply
 // ledger/audit keys, and the Graph budget write. Never hardcode *100.
 export * from './currency';

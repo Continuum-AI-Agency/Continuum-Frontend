@@ -80,11 +80,13 @@ describe('AdAccountSelector', () => {
     );
 
     await waitFor(() => {
+      // The read carries the client time limit's signal (routeFetch, appRouteTimeoutPolicy).
       expect(global.fetch).toHaveBeenCalledWith('/api/paid-media/timeline/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId: 'brand_123' }),
         cache: 'no-store',
+        signal: expect.any(AbortSignal),
       });
     });
 
@@ -110,7 +112,9 @@ describe('AdAccountSelector', () => {
     });
   });
 
-  it('shows a Connect + Retry recovery path when no ad accounts resolve', async () => {
+  // Retry is offered for a failed read only; an answer with no account offers Connect alone
+  // (AdAccountSelector.recovery.render.test.tsx, PP-DT-E-scale-header-phone-overlap).
+  it('shows a Connect + Retry recovery path when the account read fails', async () => {
     mockUseBrandIntegrations.mockImplementation(() => ({
       integrations: { facebook: { accounts: [] } },
       isLoading: false,
@@ -120,8 +124,8 @@ describe('AdAccountSelector', () => {
 
     global.fetch = mock(() =>
       Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ accounts: [] }),
+        ok: false,
+        json: () => Promise.resolve({ error: 'failed' }),
       } as Response),
     );
 

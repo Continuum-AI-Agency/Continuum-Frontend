@@ -9,7 +9,6 @@ import {
   buildAgentSessionSearchExpression,
   normalizeAgentSessionTags,
   parseAgentSessionTagsParam,
-  sanitizeAgentSessionSearchTerm,
   updateAgentSessionTagsRequestSchema,
 } from './cross-agent';
 
@@ -72,25 +71,40 @@ describe('parseAgentSessionTagsParam', () => {
   });
 });
 
-describe('sanitizeAgentSessionSearchTerm', () => {
-  it('strips PostgREST and LIKE metacharacters', () => {
-    expect(sanitizeAgentSessionSearchTerm('spend, roas.(x)%_*')).toBe('spend roas x');
-  });
-
-  it('collapses to empty when the term is only metacharacters', () => {
-    expect(sanitizeAgentSessionSearchTerm('%%,,..')).toBe('');
-  });
-});
-
+// PP-DT-C-jaina-search-wildcards-and-firewall-500: the term was SANITIZED — `%`, `_`, `'`, `"`,
+// `(` and `\` replaced by spaces — so a search for "%" became no search at all and listed every
+// conversation, and "50% off" searched for "50 off". A search matches the text typed: the value
+// is quoted for PostgREST (prod PostgREST reads `"*\\%*"` as a literal percent: 0 rows, where
+// the bare `*%*` lists all 247 sessions) and LIKE's own wildcards are escaped.
 describe('buildAgentSessionSearchExpression', () => {
-  it('builds an ilike OR across the given columns', () => {
+  it('builds a quoted ilike OR across the given columns', () => {
     expect(buildAgentSessionSearchExpression('launch', ['title', 'preview'])).toBe(
-      'title.ilike.*launch*,preview.ilike.*launch*',
+      'title.ilike."*launch*",preview.ilike."*launch*"',
     );
   });
 
-  it('returns an empty expression when the term sanitizes away', () => {
-    expect(buildAgentSessionSearchExpression('%,%', ['title', 'preview'])).toBe('');
+  it('matches LIKE wildcards literally, never every session', () => {
+    expect(buildAgentSessionSearchExpression('%', ['title'])).toBe('title.ilike."*\\\\%*"');
+    expect(buildAgentSessionSearchExpression('_', ['title'])).toBe('title.ilike."*\\\\_*"');
+    expect(buildAgentSessionSearchExpression('50% off', ['title'])).toBe(
+      'title.ilike."*50\\\\% off*"',
+    );
+  });
+
+  it("keeps PostgREST's reserved characters as text inside the quotes", () => {
+    expect(buildAgentSessionSearchExpression('spend, roas.(x):', ['title'])).toBe(
+      'title.ilike."*spend, roas.(x):*"',
+    );
+    expect(buildAgentSessionSearchExpression('say "hi"', ['title'])).toBe(
+      'title.ilike."*say \\"hi\\"*"',
+    );
+    expect(buildAgentSessionSearchExpression('a\\b', ['title'])).toBe('title.ilike."*a\\\\\\\\b*"');
+    expect(buildAgentSessionSearchExpression("it's", ['title'])).toBe('title.ilike."*it\'s*"');
+  });
+
+  it("drops PostgREST's own wildcard and searches nothing for a term of only that", () => {
+    expect(buildAgentSessionSearchExpression('re*cap', ['title'])).toBe('title.ilike."*recap*"');
+    expect(buildAgentSessionSearchExpression(' * ', ['title'])).toBe('');
   });
 });
 
@@ -112,15 +126,17 @@ describe('buildAgentSessionFilterSteps', () => {
     );
 
     expect(steps).toEqual([
-      { op: 'or', expression: 'conversation_title.ilike.*launch*,preview.ilike.*launch*' },
+      { op: 'or', expression: 'conversation_title.ilike."*launch*",preview.ilike."*launch*"' },
       { op: 'eq', column: 'initiator', value: 'agent' },
       { op: 'eq', column: 'initiator_agent', value: 'organic' },
       { op: 'contains', column: 'tags', value: ['q4', 'budget'] },
     ]);
   });
 
-  it('omits the search step (rather than matching nothing) when q sanitizes away', () => {
-    expect(buildAgentSessionFilterSteps({ q: '%%' })).toEqual([]);
+  it('searches a wildcard-only q literally instead of dropping the search', () => {
+    expect(buildAgentSessionFilterSteps({ q: '%%' })).toEqual([
+      { op: 'or', expression: 'title.ilike."*\\\\%\\\\%*",preview.ilike."*\\\\%\\\\%*"' },
+    ]);
   });
 
   it('omits the tag step when every tag normalizes away', () => {
@@ -152,7 +168,7 @@ describe('applyAgentSessionFilterSteps', () => {
     );
 
     expect(calls).toEqual([
-      'or:title.ilike.*launch*,preview.ilike.*launch*',
+      'or:title.ilike."*launch*",preview.ilike."*launch*"',
       'eq:initiator=user',
       'contains:tags=q4',
     ]);

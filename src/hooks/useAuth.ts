@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import {
   logoutAction,
+  logoutEverywhereAction,
   sendMagicLinkAction,
   signInWithGoogleAction,
   signInWithPasswordAction,
@@ -27,7 +28,7 @@ export function useAuth(options?: UseAuthOptions) {
   const [isGooglePending, setIsGooglePending] = useState(false);
   const router = useRouter();
 
-  const logout = async (): Promise<boolean> => {
+  const endSessions = async (signOut: typeof logoutAction): Promise<boolean> => {
     setError(null);
 
     // Clear brand-scoped and user-ephemeral client state first so a different
@@ -42,7 +43,7 @@ export function useAuth(options?: UseAuthOptions) {
 
     return new Promise((resolve) => {
       startTransition(async () => {
-        const result = await logoutAction();
+        const result = await signOut();
 
         if (!result.success) {
           setError(result.error);
@@ -53,6 +54,12 @@ export function useAuth(options?: UseAuthOptions) {
       });
     });
   };
+
+  /** Signs out of this browser only. */
+  const logout = () => endSessions(logoutAction);
+
+  /** Signs out of every device the account is signed in on (Settings → Profile). */
+  const logoutEverywhere = () => endSessions(logoutEverywhereAction);
 
   const sendMagicLink = async (input: MagicLinkInput): Promise<boolean> => {
     setError(null);
@@ -165,6 +172,7 @@ export function useAuth(options?: UseAuthOptions) {
 
   return {
     logout,
+    logoutEverywhere,
     sendMagicLink,
     signInWithPassword,
     verifyEmailCode,

@@ -51,6 +51,7 @@ import {
   type PlatformCardAction,
 } from '../platformCards/platformCardActionModel';
 import {
+  blocksTheAccount,
   isReadOnly,
   ownsItsActions,
   PLATFORM_CARD_TYPE,
@@ -72,6 +73,29 @@ const TIER_LABEL = {
   medium: 'Medium',
   low: 'Low',
 } as const;
+
+type Tier = keyof typeof TIER_LABEL;
+
+/** A card's tier: its money against the account's daily spend — or, for a platform card that
+ *  prices no money (a delivery problem, a policy refusal), the severity the engine gave it. A
+ *  zero it never priced is not "Low": a suspended account was the least important card on the
+ *  Google tab by that measure (PP-DT-B-suspended-account-buried-as-low-card). */
+function cardTier(candidate: AccountCandidate, dailySpend: number | null, priced: boolean): Tier {
+  const severity = candidate.evidence.severity;
+  if (!priced && (severity === 'high' || severity === 'medium' || severity === 'low')) {
+    return severity;
+  }
+  return impactTier(candidate.impact_per_day, dailySpend);
+}
+
+/** The ranked cards, with any card that says the whole account shows no ad first: every
+ *  other card assumes the account serves. */
+function accountBlockersFirst(ranked: AccountCandidate[]): AccountCandidate[] {
+  const blocking = ranked.filter((candidate) => blocksTheAccount(platformCardOf(candidate)));
+  return blocking.length === 0
+    ? ranked
+    : [...blocking, ...ranked.filter((candidate) => !blocking.includes(candidate))];
+}
 
 export type AccountReadProps = {
   /** Guards included; the component splits them from the ranked list. */
@@ -153,11 +177,14 @@ function RecommendationCard({
   cardAction?: PlatformCardAction;
 }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
-  const tier = impactTier(candidate.impact_per_day, dailySpend);
   const title = candidate.title ?? accountCandidateTitle(candidate, currency);
   const action = candidate.action ?? accountCandidateAction(candidate, currency);
   // A Google or TikTok subject renders its own variant; absent, the generic card is unchanged.
   const platformCard = platformCardOf(candidate);
+  // A platform card the producer put no money on prints no money: "$0.00/mo" is a figure
+  // nobody computed.
+  const priced = platformCard == null || candidate.impact_per_day > 0;
+  const tier = cardTier(candidate, dailySpend, priced);
   const titleLine = platformCard
     ? platformCardTitle(platformCard)
     : title
@@ -218,7 +245,9 @@ function RecommendationCard({
               size="column"
             />
           )}
-          <MoneyLine candidate={candidate} currency={currency} figureKey={figureKey} />
+          {priced ? (
+            <MoneyLine candidate={candidate} currency={currency} figureKey={figureKey} />
+          ) : null}
           <p className="text-muted-foreground text-sm">{candidate.impact_basis}</p>
           <CapNote candidate={candidate} />
           <StateNote candidate={candidate} />
@@ -300,7 +329,7 @@ export function AccountRead({
 }: AccountReadProps) {
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
-  const ranked = rankAccountCandidates(candidates);
+  const ranked = accountBlockersFirst(rankAccountCandidates(candidates));
   const doubted = doubtedBy(guards);
 
   if (guards.length === 0 && ranked.length === 0) return null;

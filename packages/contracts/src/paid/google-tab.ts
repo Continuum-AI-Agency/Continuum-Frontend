@@ -9,7 +9,9 @@
 import { z } from 'zod';
 import { PlatformSignalsSchema } from '../optimization/platform-signals';
 
-/** G07: ±10% per target change. */
+/** The Google tab's Bidding panel: the ±10% range it draws around a Google Ads target CPA (bid
+ *  setting) for a hand change. The engine's G07 no longer reads it: G07 steps toward the
+ *  portfolio CPA goal by the portfolio's max_change_pct_per_cycle (signalRules.ts). */
 export const G07_STEP = 0.1;
 /** G07: Smart Bidding relearns after a target change; one change per this many days. */
 export const G07_COOLDOWN_DAYS = 14;

@@ -157,7 +157,7 @@ describe('F16 — the Google portfolio hero, rendered', () => {
     id: '00000000-0000-4000-8000-0000000000f1',
     adset_id: 'gads-campaign-1',
     adset_name: 'EF // Search — Brand',
-    kind: 'refresh_creative',
+    kind: 'creative_refresh',
     trigger: 'C1_fatigue',
     severity: 'medium',
     reason: 'Frequency above 4 on the brand campaign.',

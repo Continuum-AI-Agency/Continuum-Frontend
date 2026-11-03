@@ -6,18 +6,26 @@ import type {
   JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
 } from '@continuum/contracts';
+import { isImplementProposalTurn } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
+import { LiveChangeChatCard } from '@/CampaignCanvas/lectura/LiveChangeChatCard';
+import { PortfolioChatCard } from '@/CampaignCanvas/portfolio/PortfolioBand';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
 import { SentDocumentAttachments } from '@/components/chat/attachments';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
-import { JainaCampaignStructures } from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
+import {
+  isReadStructure,
+  JainaCampaignStructures,
+} from '@/components/paid-media/jaina/blocks/JainaCampaignStructure';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { useScaffoldThread } from '@/components/paid-media/jaina/scaffold/scaffoldThreadContext';
+import { portfolioOfMessage } from '@/lib/campaign-canvas/portfolio';
 import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import {
   type CreativeArtifact,
@@ -258,7 +266,28 @@ function JainaMessageItemImpl({
   const artifacts = message.artifacts;
   const optimizerCitations = message.optimizerCitations ?? [];
   const optimizerHyperframes = message.optimizerHyperframes ?? [];
-  const campaignStructures = message.campaignStructures ?? [];
+  // A copy's diff (or an outline) of the scaffold this message's card shows is drawn ON the
+  // card, in Read — one drawing of one campaign, not two stacked.
+  const cardStructure =
+    (scaffold &&
+      (message.campaignStructures ?? []).find(
+        (structure) => isReadStructure(structure) && structure.scaffoldId === scaffold.scaffoldId,
+      )) ||
+    null;
+  const campaignStructures = (message.campaignStructures ?? []).filter(
+    (structure) => structure !== cardStructure,
+  );
+  // Several campaigns in one turn read as one portfolio; one campaign keeps its own card.
+  const portfolio = React.useMemo(
+    () =>
+      portfolioOfMessage({
+        campaignStructures: message.campaignStructures,
+        liveChangePreviews: message.liveChangePreviews,
+      }),
+    [message.campaignStructures, message.liveChangePreviews],
+  );
+  const liveChangePreview = portfolio ? null : (message.liveChangePreviews?.at(-1) ?? null);
+  const { onLiveChangeOpen, onPortfolioOpen } = useScaffoldThread();
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -284,9 +313,19 @@ function JainaMessageItemImpl({
       >
         {message.role === 'user' ? (
           <>
-            <span className="text-sm font-medium whitespace-pre-wrap">
-              <MentionifiedText text={message.content} references={message.metadata?.references} />
-            </span>
+            {isImplementProposalTurn(message.content) ? (
+              // The canvas's button sends a machine-written order; the reader sees what it does.
+              <span className="text-sm font-medium text-muted-foreground">
+                Implementing the proposed changes…
+              </span>
+            ) : (
+              <span className="text-sm font-medium whitespace-pre-wrap">
+                <MentionifiedText
+                  text={message.content}
+                  references={message.metadata?.references}
+                />
+              </span>
+            )}
             <ChatMediaGrid
               items={mediaFromPersistedAttachments(message.id, message.metadata?.attachments)}
               lightboxTitle="Attachment"
@@ -378,9 +417,27 @@ function JainaMessageItemImpl({
               <JainaCampaignStructures structures={campaignStructures} />
             ) : null}
 
+            {portfolio ? (
+              <PortfolioChatCard
+                portfolio={portfolio}
+                onOpen={onPortfolioOpen ? () => onPortfolioOpen(message.id) : undefined}
+              />
+            ) : null}
+
+            {/* A live edit at chat size: the canvas's Read pieces, one click from the pane. */}
+            {liveChangePreview ? (
+              <LiveChangeChatCard
+                preview={liveChangePreview}
+                onOpen={
+                  onLiveChangeOpen ? () => onLiveChangeOpen(liveChangePreview.partId) : undefined
+                }
+              />
+            ) : null}
+
             {scaffold ? (
               <PaidScaffoldCard
                 scaffold={scaffold}
+                structure={cardStructure}
                 approval={scaffoldApproval}
                 resolution={scaffoldResolution}
                 denial={scaffoldDenial}

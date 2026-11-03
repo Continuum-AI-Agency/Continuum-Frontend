@@ -74,6 +74,14 @@ export function assignedAccountsForPlatform(
     .map((row) => ({ id: row.account_id, name: row.name ?? row.account_id }));
 }
 
+/** The platform Scale opens on: Meta while the brand has a Meta ad account, else Google when it
+ *  has a Google one — a Google-only brand opens on its own account, never on the connect gate. */
+export function openingPaidPlatform(rows: readonly AssignedAccountRow[]): PaidMediaPlatform {
+  if (assignedAccountsForPlatform(rows, 'meta').length > 0) return 'meta';
+  if (assignedAccountsForPlatform(rows, 'google-ads').length > 0) return 'google-ads';
+  return 'meta';
+}
+
 /** Bare account ids that hold the brand's active portfolios, the largest daily budget
  *  through them first, then the most portfolios. */
 export function rankPortfolioAccounts(portfolios: readonly PortfolioAccountRow[]): string[] {

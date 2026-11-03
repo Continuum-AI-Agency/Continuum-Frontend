@@ -4,6 +4,7 @@ import {
   accountsOn,
   connectedPlatforms,
   parsePlatformTab,
+  platformTabAfterKey,
   platformTabLabel,
   portfolioPlatforms,
   rendersManagedOverview,
@@ -64,5 +65,26 @@ describe('portfolioPlatforms', () => {
   it('reads a list from before the platforms field as Meta, the platform every portfolio was on', () => {
     expect(portfolioPlatforms(undefined)).toEqual(['meta']);
     expect(portfolioPlatforms([])).toEqual(['meta']);
+  });
+});
+
+// PP-DT-E-platform-tabs-no-arrow-keys: the platform row is a WAI-ARIA tablist.
+describe('platformTabAfterKey', () => {
+  it('moves along the row with the arrows, wrapping at both ends', () => {
+    expect(platformTabAfterKey('ArrowRight', 'all')).toBe('meta');
+    expect(platformTabAfterKey('ArrowRight', 'tiktok_ads')).toBe('all');
+    expect(platformTabAfterKey('ArrowLeft', 'meta')).toBe('all');
+    expect(platformTabAfterKey('ArrowLeft', 'all')).toBe('tiktok_ads');
+  });
+
+  it('jumps to the ends with Home and End', () => {
+    expect(platformTabAfterKey('Home', 'google_ads')).toBe('all');
+    expect(platformTabAfterKey('End', 'meta')).toBe('tiktok_ads');
+  });
+
+  it('leaves every other key, and a focus outside the row, alone', () => {
+    expect(platformTabAfterKey('Enter', 'meta')).toBeNull();
+    expect(platformTabAfterKey('ArrowDown', 'meta')).toBeNull();
+    expect(platformTabAfterKey('ArrowRight', undefined)).toBeNull();
   });
 });

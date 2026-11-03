@@ -1,4 +1,5 @@
 'use client';
+import type { IntegrationErrorCode } from '@continuum/contracts';
 import { PieChart, RotateCw } from 'lucide-react';
 
 import React, { useCallback, useState } from 'react';
@@ -15,6 +16,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { IntegrationErrorBanner } from '@/components/ui/IntegrationErrorBanner';
 import {
   Select,
   SelectContent,
@@ -24,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
+import { integrationErrorCodeOf } from '@/lib/paid-media/integrationErrorCode';
 import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
 import type { PaidMetricsResponse } from '@/lib/schemas/paidMetrics';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -74,8 +77,19 @@ type LoadState =
   | { status: 'loading-ad-accounts' }
   | { status: 'loading-campaigns' }
   | { status: 'loading-metrics' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; message: string; errorCode?: IntegrationErrorCode }
   | { status: 'success'; data: PaidMetricsResponse };
+
+/** A campaigns read the platform refused, with the typed code that words it for the person. */
+class IntegrationLoadError extends Error {
+  constructor(
+    message: string,
+    readonly errorCode: IntegrationErrorCode,
+  ) {
+    super(message);
+    this.name = 'IntegrationLoadError';
+  }
+}
 
 export type PaidPerformanceMetricKey = keyof PaidMetricsResponse['metrics'];
 type MetricKey = PaidPerformanceMetricKey;
@@ -409,6 +423,16 @@ export function PaidMediaReportingWidget({
             // Not JSON, use raw text
           }
 
+          // A typed integration refusal (Meta's #200, an expired token) is worded by its code,
+          // never by the platform's own message.
+          const integrationCode = integrationErrorCodeOf(parsedError);
+          if (integrationCode) {
+            throw new IntegrationLoadError(
+              parsedError?.error ?? 'Failed to load campaigns',
+              integrationCode,
+            );
+          }
+
           // Handle different error scenarios
           if (response.status === 404) {
             throw new Error(
@@ -444,6 +468,10 @@ export function PaidMediaReportingWidget({
         }
       } catch (error) {
         console.error('Error fetching campaigns:', error);
+        if (error instanceof IntegrationLoadError) {
+          setState({ status: 'error', message: error.message, errorCode: error.errorCode });
+          return;
+        }
         const errorMessage = error instanceof Error ? error.message : 'Failed to load campaigns';
 
         // Check if it's an access token issue
@@ -657,7 +685,13 @@ export function PaidMediaReportingWidget({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pt-4">
-          {state.status === 'error' ? (
+          {state.status === 'error' && state.errorCode ? (
+            <IntegrationErrorBanner
+              errorCode={state.errorCode}
+              message={state.message}
+              platform={platform === 'google-ads' ? 'google' : 'meta'}
+            />
+          ) : state.status === 'error' ? (
             <Alert variant="destructive">
               <AlertDescription>{state.message}</AlertDescription>
             </Alert>

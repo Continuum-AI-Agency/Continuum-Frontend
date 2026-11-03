@@ -43,16 +43,48 @@ export const SetBudgetActionSchema = z
   .refine((action) => action.budget.ownerRef.platform === action.ref.platform, ownerOnSamePlatform);
 export type SetBudgetAction = z.infer<typeof SetBudgetActionSchema>;
 
-/** tCPA travels in micros of the account currency, tROAS as a ratio (3.5 = 350%). */
-export const BidTargetFieldSchema = z.enum(['target_cpa_micros', 'target_roas']);
+/** Google: tCPA travels in micros of the account currency, tROAS as a ratio (3.5 = 350%).
+ *  Meta: `bid_amount_minor` is an ad set's `bid_amount` — the cost cap of a COST_CAP ad set —
+ *  in MINOR units of the ad account's currency (cents for MXN/USD, the unit itself for JPY),
+ *  exactly the integer Meta's Graph API reads and writes. */
+export const BidTargetFieldSchema = z.enum([
+  'target_cpa_micros',
+  'target_roas',
+  'bid_amount_minor',
+]);
+export type BidTargetField = z.infer<typeof BidTargetFieldSchema>;
 
-export const SetBidTargetActionSchema = z.object({
-  kind: z.literal('set_bid_target'),
-  ref: EntityRefSchema,
-  field: BidTargetFieldSchema,
-  expected: z.number().positive(),
-  target: z.number().positive(),
-});
+/** The bid field each platform carries: Meta's is its ad set's bid_amount, and nothing else. */
+const bidFieldFitsPlatform = (action: {
+  ref: { platform: string; level: string };
+  field: BidTargetField;
+  expected: number;
+  target: number;
+}): boolean => {
+  if (action.field !== 'bid_amount_minor') return action.ref.platform !== 'meta';
+  // Meta keeps bid_amount on the AD SET under ABO and CBO alike (the campaign holds only the
+  // strategy under CBO), and minor units are whole.
+  return (
+    action.ref.platform === 'meta' &&
+    action.ref.level === 'group' &&
+    Number.isInteger(action.expected) &&
+    Number.isInteger(action.target)
+  );
+};
+
+export const SetBidTargetActionSchema = z
+  .object({
+    kind: z.literal('set_bid_target'),
+    ref: EntityRefSchema,
+    field: BidTargetFieldSchema,
+    expected: z.number().positive(),
+    target: z.number().positive(),
+  })
+  .refine(bidFieldFitsPlatform, {
+    message:
+      'bid_amount_minor is a Meta ad set field in whole minor units; target_cpa_micros and target_roas are not Meta fields',
+    path: ['field'],
+  });
 export type SetBidTargetAction = z.infer<typeof SetBidTargetActionSchema>;
 
 export const NegativeMatchTypeSchema = z.enum(['EXACT', 'PHRASE', 'BROAD']);

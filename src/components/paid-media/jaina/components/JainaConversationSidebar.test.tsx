@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 mock.module('./JainaGoalsSidebarPanel', () => ({
   JainaGoalsSidebarPanel: () => <div>Goal list</div>,
@@ -208,5 +208,106 @@ describe('JainaConversationSidebar when the list could not be read', () => {
     );
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText('Budget review')).not.toBeNull();
+  });
+});
+
+// PP-DT-C-jaina-401-reads-as-no-conversations: the search hook kept the error, but the sidebar
+// only looked at the result count, so a failed filter — a 401 after the session was revoked, a
+// 500, a dropped connection — read "No conversations match these filters.", which a person can
+// take for lost history.
+describe('JainaConversationSidebar when a filter fails', () => {
+  const session = {
+    sessionId: 'session-2',
+    brandId: null,
+    adAccountId: null,
+    title: 'Weekly recap',
+    lastMessageRole: 'assistant' as const,
+    lastMessagePreview: 'Spend held steady.',
+    lastMessageAt: '2026-10-31T12:00:00.000Z',
+    createdAt: '2026-10-31T11:00:00.000Z',
+    updatedAt: '2026-10-31T12:00:00.000Z',
+  };
+
+  it('says the session ended and offers sign-in, never "no conversations match"', async () => {
+    const onSearchConversations = mock(() =>
+      Promise.reject(Object.assign(new Error('Failed to search conversations.'), { status: 401 })),
+    );
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[session]}
+        onSearchConversations={onSearchConversations}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Human' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/session ended/i);
+    expect(
+      within(alert)
+        .getByRole('link', { name: /sign in/i })
+        .getAttribute('href'),
+    ).toMatch(/^\/login\?redirectTo=/);
+    expect(screen.queryByText('No conversations match these filters.')).toBeNull();
+  });
+
+  it('names any other failure in words, with Retry that runs the filter again', async () => {
+    let calls = 0;
+    const onSearchConversations = mock(() => {
+      calls += 1;
+      return calls === 1 ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve([]);
+    });
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[session]}
+        onSearchConversations={onSearchConversations}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Human' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('no connection to the server');
+    expect(alert.textContent).not.toContain('Failed to fetch');
+    expect(screen.queryByText('No conversations match these filters.')).toBeNull();
+
+    fireEvent.click(within(alert).getByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(onSearchConversations).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('No conversations match these filters.')).toBeTruthy();
+  });
+});
+
+// PP-DT-C-jaina-delete-conversation-target-21px: the row's tag and Delete buttons are size-6
+// icon buttons (21.75 px at the 14.5 px root) without the shared 24 px hit pad, side by side —
+// past the edge of the 21 px Delete target a tap opened the conversation instead.
+describe('JainaConversationSidebar row actions', () => {
+  it('give Delete and the tag editor the 24 px hit pad, in a row that keeps the pads apart', () => {
+    render(
+      <JainaConversationSidebar
+        {...props}
+        goalsAccessEnabled
+        sessions={[
+          {
+            sessionId: 'session-2',
+            brandId: null,
+            adAccountId: null,
+            title: 'Weekly recap',
+            lastMessageRole: 'assistant',
+            lastMessagePreview: 'Spend held steady.',
+            lastMessageAt: '2026-10-31T12:00:00.000Z',
+            createdAt: '2026-10-31T11:00:00.000Z',
+            updatedAt: '2026-10-31T12:00:00.000Z',
+          },
+        ]}
+        onUpdateConversationTags={async (_sessionId: string, tags: string[]) => tags}
+      />,
+    );
+    const remove = screen.getByRole('button', { name: /^Delete conversation/ });
+    const tag = screen.getByRole('button', { name: /^Edit tags for conversation/ });
+    expect(remove.className.split(/\s+/)).toContain('hit-area');
+    expect(tag.className.split(/\s+/)).toContain('hit-area');
+    expect(remove.parentElement?.className.split(/\s+/)).toContain('hit-area-row');
   });
 });

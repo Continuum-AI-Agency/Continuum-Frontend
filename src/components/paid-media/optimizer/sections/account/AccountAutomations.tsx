@@ -1,28 +1,35 @@
 'use client';
 
-// Automations — what this account is allowed to do on its own, on a tab of its own.
+// Automations (G14) — what this account is allowed to do on its own, on a tab of its own.
 //
 // Two halves. The account-level ceilings first: what each family of action may do across
 // every portfolio here, which is the boundary every per-insight switch answers to. Then the
-// portfolios themselves — which ones run on autopilot, which wait on a person, and a way into
-// the one place that changes it. The tab shows autonomy at account level; it does not add a
-// second place to write a portfolio's apply mode, because two writers of one setting is how a
-// screen and a database come to disagree.
+// portfolios themselves, each with its autonomy dial (Observe → Recommend → Approve →
+// Autopilot), what blocks a level and why, the scopes autopilot may approve, its caps and its
+// kill switch.
+//
+// The dial writes through the very mutations the portfolio's Manage section writes with
+// (optimizer_update_portfolio, optimizer_set_autopilot_paused), and both read the one portfolio
+// list they invalidate, so the two places cannot come to disagree. What only Manage can do —
+// set the caps, preview the cycle autopilot would run — stays there, one click away.
 //
 // The ceilings need the defaults the read was composed under to say which value is actually
 // in force, so until the first read lands the section says so rather than guessing 'recommend'
 // and presenting the guess as a setting.
 
-import type { PortfolioListItem } from '@continuum/contracts';
-import { Button } from '@/components/ui/button';
-import { ApplyModePill } from '../../ApplyModePill';
-import { humanize } from '../../format';
+import type { AutopilotScope, PortfolioListItem } from '@continuum/contracts';
+import { cn } from '@/lib/utils';
 import { pendingWorkCount } from '../../reportModel';
 import {
   useAccountApprovals,
   useInsightApprovalMutations,
   useOptimizerAccountRead,
+  useOptimizerMutations,
 } from '../../useOptimizerData';
+import { boardPaletteClass } from '../board/palette';
+import { AutonomySummary } from '../pages/automations/AutonomySummary';
+import { type AutonomyLevel, levelCounts, patchForLevel } from '../pages/automations/autonomyModel';
+import { PortfolioAutonomyCard } from '../pages/automations/PortfolioAutonomyCard';
 import { staleCount } from '../portfolioStaleness';
 import { FamilyCeilings, FamilyCeilingsHeading } from './FamilyCeilings';
 
@@ -31,7 +38,7 @@ export type AccountAutomationsProps = {
   /** The account the ceilings are for. Null while no account is selected. */
   adAccountId: string | null;
   portfolios: PortfolioListItem[];
-  /** Opens the portfolio on its Manage section, where its own autonomy is written. */
+  /** Opens the portfolio on its Manage section, where its caps and the arming preview live. */
   onManagePortfolio: (portfolioId: string) => void;
 };
 
@@ -50,14 +57,29 @@ export function AccountAutomations({
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
   const approvals = useInsightApprovalMutations(brandId, adAccountId);
+  const { update, setPaused } = useOptimizerMutations(brandId, adAccountId);
   const defaults = accountRead.data?.read?.ceiling_defaults ?? null;
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
   const stopped = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
   // Autopilot that has missed a cycle runs nothing; the meta line says so beside "stopped".
   const stale = staleCount(autopilot);
 
+  const setLevel = (portfolioId: string, level: AutonomyLevel) =>
+    update.mutateAsync({ portfolio_id: portfolioId, patch: patchForLevel(level) });
+  const setScope = (portfolioId: string, scope: AutopilotScope, enabled: boolean) =>
+    update.mutateAsync({
+      portfolio_id: portfolioId,
+      patch: { autopilot_scopes: { [scope]: enabled } },
+    });
+  const setStopped = (portfolioId: string, paused: boolean) =>
+    setPaused.mutateAsync({
+      portfolio_id: portfolioId,
+      paused,
+      reason: paused ? 'Stopped from Automations' : undefined,
+    });
+
   return (
-    <div className="space-y-8">
+    <div className={cn(boardPaletteClass, 'space-y-8')}>
       {defaults && approvalMaps.data ? (
         <FamilyCeilings
           current={approvalMaps.data.families}
@@ -76,47 +98,32 @@ export function AccountAutomations({
         </section>
       )}
 
-      <section className="space-y-1" data-testid="portfolio-autonomy">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h3 className="font-semibold text-foreground text-sm">Per portfolio</h3>
-          <span
-            className="text-muted-foreground text-xs tabular-nums"
-            data-testid="portfolio-autonomy-meta"
-          >
-            {autopilot.length} of {portfolios.length} on autopilot
-            {stopped > 0 ? ` · ${stopped} stopped` : ''}
-            {stale > 0 ? ` · ${stale} stale` : ''}
-          </span>
-        </div>
-        <ul className="divide-y divide-border/60">
-          {portfolios.map((portfolio) => (
-            <li
-              className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2.5"
-              data-portfolio={portfolio.id}
-              key={portfolio.id}
+      <section className="space-y-3" data-testid="portfolio-autonomy">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h3 className="font-semibold text-foreground text-sm">Per portfolio</h3>
+            <span
+              className="text-muted-foreground text-xs tabular-nums"
+              data-testid="portfolio-autonomy-meta"
             >
-              <div className="min-w-0 flex-1 basis-40">
-                <p className="truncate font-medium text-foreground text-sm">{portfolio.name}</p>
-                <p className="text-muted-foreground text-xs">{humanize(portfolio.objective)}</p>
-              </div>
-              <ApplyModePill
-                applyMode={portfolio.apply_mode}
-                autopilotPaused={portfolio.autopilot_paused}
-                scopes={portfolio.autopilot_scopes ?? null}
-              />
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {waitingLine(portfolio)}
-              </span>
-              <Button
-                className="ml-auto h-7 px-2 text-xs"
-                onClick={() => onManagePortfolio(portfolio.id)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                Manage
-              </Button>
-            </li>
+              {autopilot.length} of {portfolios.length} on autopilot
+              {stopped > 0 ? ` · ${stopped} stopped` : ''}
+              {stale > 0 ? ` · ${stale} stale` : ''}
+            </span>
+          </div>
+          <AutonomySummary counts={levelCounts(portfolios)} />
+        </div>
+        <ul className="space-y-3">
+          {portfolios.map((portfolio) => (
+            <PortfolioAutonomyCard
+              key={portfolio.id}
+              onManage={() => onManagePortfolio(portfolio.id)}
+              onSetLevel={(level) => setLevel(portfolio.id, level)}
+              onSetScope={(scope, enabled) => setScope(portfolio.id, scope, enabled)}
+              onSetStopped={(paused) => setStopped(portfolio.id, paused)}
+              portfolio={portfolio}
+              waiting={waitingLine(portfolio)}
+            />
           ))}
         </ul>
       </section>

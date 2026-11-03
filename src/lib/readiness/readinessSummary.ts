@@ -9,6 +9,7 @@ import {
   deriveReadinessSummary,
   type ReadinessAnalysis,
   type ReadinessSummary,
+  readinessIsAssessable,
 } from '@continuum/contracts';
 
 export type { ReadinessBand, ReadinessSummary } from '@continuum/contracts';
@@ -23,8 +24,17 @@ export function extractReadiness(
   return book.assembled?.report?.readiness ?? book.composite?.readiness ?? null;
 }
 
+/**
+ * The book's readiness as the compact summary, or null when it was never scored (or could not be
+ * assessed). `deriveReadinessSummary` gives an unscored readiness a score of 0 — right for a
+ * prompt that only needs a number, wrong on screen: the Home printed "Readiness · 0" with a red
+ * pip beside "Brand Book ready" while onboarding said "Not scored yet"
+ * (PP-DT-C-unscored-readiness-shows-zero).
+ */
 export function selectReadinessSummary(
   book: BrandBookResponse | null | undefined,
-): ReadinessSummary {
-  return deriveReadinessSummary(extractReadiness(book));
+): ReadinessSummary | null {
+  const readiness = extractReadiness(book);
+  if (!readiness || !readinessIsAssessable(readiness)) return null;
+  return deriveReadinessSummary(readiness);
 }

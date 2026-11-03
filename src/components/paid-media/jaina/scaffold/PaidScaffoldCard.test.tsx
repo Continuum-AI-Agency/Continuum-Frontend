@@ -1,7 +1,7 @@
 /**
  * What a person reviewing a proposed campaign actually sees. The tree is seeded straight into the
- * query cache (the card reads Postgres, not the wire), and happy-dom measures every box at 0px —
- * which is the narrow floating panel on the canvas page, so the outline renders, not React Flow.
+ * query cache (the card reads Postgres, not the wire), and drawn on the canvas's own Read pieces
+ * at chat size (design C): changes first, the daily budget, "Open in canvas".
  *
  * Positive observables only: Frontend tests are not typechecked, so "it rendered" proves nothing.
  */
@@ -500,19 +500,21 @@ describe('PaidScaffoldCard', () => {
 
   it('links to the scaffold on the campaign canvas', () => {
     renderCard();
-    expect(screen.getByTestId('scaffold-open-canvas').getAttribute('href')).toBe(
+    expect(screen.getByTestId('lectura-open-in-canvas').getAttribute('href')).toBe(
       '/scale/campaign-canvas?scaffold=scaffold-1',
     );
   });
 
-  it('draws an outline, not an unreadable graph, in a narrow panel', () => {
+  it('draws the campaign in Read at chat size: each ad set with its budget, and the total', async () => {
     renderCard();
-    const outline = screen.getByTestId('scaffold-outline');
-    expect(outline.textContent).toContain('Easy Fit | Summer');
-    expect(outline.textContent).toContain('Prospecting');
+    const read = await screen.findByTestId('lectura-chat-card');
+    expect(read.textContent).toContain('Easy Fit | Summer');
+    const lines = [...read.querySelectorAll('[data-testid="lectura-chat-adsets"] li')].map(
+      (line) => line.textContent,
+    );
     // No account currency resolves without a brand, so the figure prints bare — never as $.
-    expect(outline.textContent).toContain('61.99/day');
-    expect(outline.textContent).toContain('30.00/day');
+    expect(lines).toEqual(['Prospecting61.99/day · 1 ad', 'Retargeting30.00/day · 1 ad']);
+    expect(read.textContent).toContain('Daily budget91.99/day');
   });
 });
 
@@ -663,16 +665,71 @@ describe('PaidScaffoldCard — every field, with who supplied it', () => {
     expect([...pills].sort()).toEqual(['Jaina asks', 'Jaina filled this', 'You gave this']);
   });
 
-  it('under CBO prints the campaign budget once, and its share — never an own budget — on its ad sets', () => {
+  it('under CBO prints the campaign budget once, and never an own budget on its ad sets', async () => {
     renderCard({}, { rows: P5_ROWS, plan: P5_PLAN, contentHash: HASH });
-    const outline = screen.getByTestId('scaffold-outline');
-    expect(outline.textContent).toContain('$250 USD/day');
-    expect(outline.textContent).toContain('All of the campaign budget (CBO) · $250 USD/day · 1 ad');
-    expect(outline.textContent).not.toContain('Placeholder budget');
-    fireEvent.click(screen.getByRole('button', { name: 'Table' }));
-    const table = screen.getByRole('table');
-    expect(table.textContent).toContain('All of the campaign budget (CBO) · $250 USD/day');
-    expect(table.textContent).not.toContain('Placeholder budget');
+    const read = await screen.findByTestId('lectura-chat-card');
+    expect(read.textContent).toContain('Daily budget$250 USD/day');
+    const lines = [...read.querySelectorAll('[data-testid="lectura-chat-adsets"] li')].map(
+      (line) => line.textContent,
+    );
+    expect(lines.every((line) => !line?.includes('/day'))).toBe(true);
+    expect(read.textContent).not.toContain('Placeholder budget');
+  });
+
+  it("marks a copy's new test ad sets from the Backend's diff, on the card that approves it", async () => {
+    renderCard(
+      {
+        structure: {
+          scaffoldId: VERSION,
+          parentScaffoldId: 'scaffold-1',
+          version: 1,
+          layout: 'diff',
+          partId: 'campaign-structure:scaffold-1:diff',
+          title: 'Easy Fit | Summer',
+          counts: { campaigns: 1, adSets: 2, ads: 2, userGave: 0, jainaFilled: 0, jainaAsks: 0 },
+          nodes: [],
+          truncated: false,
+          html: null,
+          diff: {
+            source: { kind: 'campaign', id: '120', name: 'Easy Fit | Spring' },
+            entries: [
+              {
+                path_key: 'c0/a0',
+                source_path_key: 'c0/a0',
+                level: 'adset',
+                name: 'Prospecting',
+                change: 'changed',
+                fields: [{ key: 'status', label: 'Status', before: 'ACTIVE', after: 'PAUSED' }],
+              },
+              {
+                path_key: 'c0/a1',
+                source_path_key: null,
+                level: 'adset',
+                name: 'Retargeting',
+                change: 'added',
+                fields: [
+                  { key: 'name', label: 'Name', before: 'Prospecting', after: 'Retargeting' },
+                  {
+                    key: 'advantage_audience',
+                    label: 'Advantage+ audience',
+                    before: 'off',
+                    after: 'on',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      { rows: READY_ROWS, plan: PLAN, contentHash: HASH },
+    );
+    const read = await screen.findByTestId('lectura-chat-card');
+    // A copied ad set is created paused — that alone is not a change; the new one is.
+    expect(read.querySelector('[data-testid="lectura-change-c0/a0"]')).toBeNull();
+    const added = read.querySelector('[data-testid="lectura-change-c0/a1"]');
+    expect(added?.getAttribute('data-mark')).toBe('added');
+    expect(added?.textContent).toContain('Advantage+ audience: off→on');
+    expect(added?.textContent).toContain('Based on Prospecting');
   });
 
   it('reads a version proposed before P5 as ABO, uncapped and unscheduled', () => {

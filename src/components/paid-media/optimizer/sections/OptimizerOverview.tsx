@@ -29,6 +29,11 @@
 // recommendation cards with their controls, the links to Actions and Activity, and its
 // portfolio rows — the same components, fed the brand's Google portfolios and cards whichever
 // ad account the page has selected.
+//
+// The Meta and Google tabs open on the adaptive board (O01, docs/optimizer-redesign/adaptive-15):
+// the account read into a mode, the result that counts and the modules the reading puts first.
+// "Adaptive · Today" switches a viewer back to the layout above, which renders exactly as it did
+// (board/BoardSwitch); the choice is remembered per viewer. "All" and "TikTok" stay as they are.
 
 import type { CycleRunPacing, PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
@@ -49,6 +54,7 @@ import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
 import { KpiDelta, KpiRow, KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
 import {
@@ -84,9 +90,10 @@ import {
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
+import { BoardSwitch } from './board/BoardSwitch';
 import { GoogleRecentChanges } from './google/GoogleRecentChanges';
 import { JainaEntryChips } from './JainaEntryChips';
-import { jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
+import { type JainaEntry, jainaTabEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import {
   AccountReadFreshnessSkeleton,
   HeadlineSkeleton,
@@ -106,11 +113,13 @@ import {
 import { connectedFromMetrics, platformTotals } from './platforms/accountPlatformMetricsModel';
 import { readComparisonHidden } from './platforms/comparisonPreference';
 import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { GoogleDeliveryStatus } from './platforms/GoogleDeliveryStatus';
 import { MultiPlatformUnavailable } from './platforms/MultiPlatformUnavailable';
 import { PlatformComparisonRow } from './platforms/PlatformComparisonRow';
 import { PlatformTabs } from './platforms/PlatformTabs';
 import {
   type AdPlatform,
+  accountsOn,
   connectedPlatforms,
   OPTIMIZER_MANAGED_PLATFORM,
   PLATFORM_NAMES,
@@ -123,6 +132,7 @@ import {
   useAccountPlatformMetrics,
 } from './platforms/useAccountPlatformMetrics';
 import { type PortfolioFigure, portfolioFigureFromReads } from './portfolioFigure';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { underManagement } from './portfolioStaleness';
 import { usePortfolioFigures } from './usePortfolioFigures';
 
@@ -279,7 +289,10 @@ export function OptimizerOverview({
   const kinds = useMemo(() => resultKinds(portfolios, windows), [portfolios, windows]);
   const autopilot = autopilotSummary(portfolios);
   const book = underManagement(portfolios);
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
   const portfoliosWithDecisions = portfolios.filter(
     (portfolio) => pendingWorkCount(portfolio) > 0,
   ).length;
@@ -345,9 +358,8 @@ export function OptimizerOverview({
     <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />
   );
   if (!rendersManagedOverview(platformTab)) {
-    return (
-      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
-        {tabs}
+    const platformBody = (
+      <>
         {jainaBand}
         <PlatformTab brandId={brandId} metrics={platformMetrics} platform={platformTab}>
           {platformTab === 'google_ads' && tabConnected ? (
@@ -362,6 +374,24 @@ export function OptimizerOverview({
             />
           ) : null}
         </PlatformTab>
+      </>
+    );
+    return (
+      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+        {tabs}
+        {platformTab === 'google_ads' && tabConnected ? (
+          <GoogleBoardSwitch
+            asks={jainaEntries}
+            brandId={brandId}
+            onCreatePortfolio={onCreatePortfolio}
+            onOpenActions={onOpenActions}
+            onOpenActivity={onOpenActivity}
+            onSelectPortfolio={onSelectPortfolio}
+            today={platformBody}
+          />
+        ) : (
+          platformBody
+        )}
       </div>
     );
   }
@@ -374,50 +404,8 @@ export function OptimizerOverview({
   const producerLoading = allFrame?.status === 'loading';
   const connectedCount = Object.values(connected).filter(Boolean).length;
 
-  return (
-    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
-      {tabs}
-      {chromeInShell ? null : (
-        <div className="flex flex-wrap items-center justify-end gap-2 px-1">
-          {pendingCount > 0 ? (
-            <Button
-              className="h-7 gap-1.5 px-2 text-xs"
-              onClick={onOpenActions}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              Review {pendingCount} pending
-              <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-            </Button>
-          ) : null}
-          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
-           *  prepared ask for this account, the way the band's questions do. */}
-          {adAccountId ? (
-            <a
-              className={cn(
-                buttonVariants({ size: 'sm', variant: 'outline' }),
-                'h-7 gap-1.5 px-2 text-xs',
-              )}
-              data-testid="overview-weekly-report"
-              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
-            >
-              <FileTextIcon aria-hidden="true" className="size-3.5" />
-              Weekly report
-            </a>
-          ) : null}
-          <Button
-            className="h-7 gap-1.5 px-2 text-xs"
-            onClick={onCreatePortfolio}
-            size="sm"
-            type="button"
-          >
-            <PlusIcon aria-hidden="true" className="size-3.5" />
-            New portfolio
-          </Button>
-        </div>
-      )}
-
+  const managedBody = (
+    <>
       {allFrame?.status === 'error' ? (
         <p
           className="px-1 text-muted-foreground text-xs"
@@ -670,12 +658,78 @@ export function OptimizerOverview({
           onSelectPortfolio={onSelectPortfolio}
           pacingById={pacingById}
           portfolios={portfolios}
-          rowCurrency={() => currency}
+          rowCurrency={(portfolio) => portfolioCurrency(portfolio, currency)}
           rowPlatforms={(portfolio) =>
             memberPlatforms(memberStates.get(portfolio.id), OPTIMIZER_MANAGED_PLATFORM)
           }
           windows={windows}
         />
+      )}
+    </>
+  );
+
+  return (
+    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+      {tabs}
+      {chromeInShell ? null : (
+        <div className="flex flex-wrap items-center justify-end gap-2 px-1">
+          {pendingCount > 0 ? (
+            <Button
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={onOpenActions}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              Review {pendingCount} pending
+              <ArrowRightIcon aria-hidden="true" className="size-3.5" />
+            </Button>
+          ) : null}
+          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
+           *  prepared ask for this account, the way the band's questions do. */}
+          {adAccountId ? (
+            <a
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 gap-1.5 px-2 text-xs',
+              )}
+              data-testid="overview-weekly-report"
+              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
+            >
+              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              Weekly report
+            </a>
+          ) : null}
+          <Button
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={onCreatePortfolio}
+            size="sm"
+            type="button"
+          >
+            <PlusIcon aria-hidden="true" className="size-3.5" />
+            New portfolio
+          </Button>
+        </div>
+      )}
+
+      {platformTab === 'meta' && tabConnected ? (
+        <BoardSwitch
+          asks={jainaEntries}
+          base={{
+            brandId,
+            platform: 'meta',
+            adAccountId,
+            currency: currency ?? null,
+            portfolios,
+            onOpenActions,
+            onOpenActivity,
+            onSelectPortfolio,
+            onCreatePortfolio,
+          }}
+          today={managedBody}
+        />
+      ) : (
+        managedBody
       )}
     </div>
   );
@@ -834,6 +888,54 @@ function oneCurrency(codes: readonly (string | null | undefined)[]): string | nu
 }
 
 /**
+ * The Google tab's board: the brand's Google portfolios, whichever ad account the page has
+ * selected (the Google tab's rows read the same list), in the granted Google account's currency.
+ * Today's tab for Google is `today`, rendered as it was.
+ */
+function GoogleBoardSwitch({
+  brandId,
+  asks,
+  today,
+  onOpenActions,
+  onOpenActivity,
+  onSelectPortfolio,
+  onCreatePortfolio,
+}: {
+  brandId: string;
+  asks: readonly JainaEntry[];
+  today: ReactNode;
+  onOpenActions: () => void;
+  onOpenActivity: () => void;
+  onSelectPortfolio: (portfolioId: string) => void;
+  onCreatePortfolio: () => void;
+}) {
+  const portfoliosQuery = useOptimizerPlatformPortfolios(brandId, 'google_ads');
+  const portfolios = portfoliosQuery.data;
+  const accounts = useOptimizerAdAccounts(brandId).data;
+  const currency =
+    accountsOn(accounts, 'google_ads')[0]?.currency ??
+    oneCurrency(portfolios.map((portfolio) => portfolio.currency));
+  return (
+    <BoardSwitch
+      asks={asks}
+      base={{
+        brandId,
+        platform: 'google_ads',
+        adAccountId: null,
+        currency,
+        portfolios,
+        onOpenActions,
+        onOpenActivity,
+        onSelectPortfolio,
+        onCreatePortfolio,
+      }}
+      pending={portfoliosQuery.isPending}
+      today={today}
+    />
+  );
+}
+
+/**
  * A platform tab's Optimizer half, under the platform's read: its pending cards with their
  * controls (optimizer_get_platform_cards), the links to Actions and Activity, and its portfolio
  * rows — every one of the brand's portfolios on the platform, not only those of the selected ad
@@ -904,7 +1006,10 @@ function PlatformPortfolioSections({
         bareAccountId(account.account_id) === bareAccountId(portfolio.ad_account_id),
     )?.currency ??
     null;
-  const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
+  const dailyTotal = portfolios.reduce(
+    (sum, portfolio) => sum + (portfolioPlanPerDay(portfolio) ?? 0),
+    0,
+  );
 
   // One paint once every read below has settled: a skeleton that collapses to nothing, or
   // rows that land before the cards, pushed what was already on screen (CLS 0.25 at 375).
@@ -988,6 +1093,20 @@ function PlatformTab({
    *  read landing above it never pushes it down. */
   children?: ReactNode;
 }) {
+  // When Google shows no ad anywhere in the account, that leads the tab — before any figure,
+  // every one of which assumes the account serves. The same cards read the sections below hold
+  // (one query); nothing renders while they load or when the account serves.
+  const cards = useOptimizerPlatformCards(brandId, platform);
+  const status =
+    platform === 'google_ads' && cards.status === 'ready' ? (
+      <GoogleDeliveryStatus cards={cards.cards} />
+    ) : null;
+  const withStatus = (body: ReactNode) => (
+    <>
+      {status}
+      {body}
+    </>
+  );
   // One window on the tab: the producer's when it answered, nothing while it is answering, else
   // the same 7 complete days ending yesterday the producer would read.
   const window =
@@ -1005,7 +1124,7 @@ function PlatformTab({
       <TikTokAdsTab advertiserId={null} brandId={brandId} />
     );
   if (metrics.status === 'unavailable') {
-    return (
+    return withStatus(
       <>
         <MultiPlatformUnavailable
           detail={
@@ -1013,7 +1132,7 @@ function PlatformTab({
           }
         />
         {fallback}
-      </>
+      </>,
     );
   }
   const row = metrics.status === 'ready' ? platformTotals(metrics.metrics, platform) : null;
@@ -1021,7 +1140,7 @@ function PlatformTab({
     // Google connected but not yet read by the Optimizer: Google's own read leads in full,
     // under a note that says what it is.
     const googleUnread = platform === 'google_ads' && row.spend == null;
-    return (
+    return withStatus(
       <>
         <PlatformMetricsSection
           liveBelow={googleUnread}
@@ -1040,11 +1159,11 @@ function PlatformTab({
         ) : (
           <TikTokAdsTab advertiserId={row.accounts[0]?.account_id ?? null} brandId={brandId} />
         )}
-      </>
+      </>,
     );
   }
   if (metrics.status === 'error') {
-    return (
+    return withStatus(
       <>
         <p
           className="px-1 text-muted-foreground text-xs"
@@ -1054,8 +1173,8 @@ function PlatformTab({
           {metrics.message}
         </p>
         {fallback}
-      </>
+      </>,
     );
   }
-  return fallback;
+  return withStatus(fallback);
 }

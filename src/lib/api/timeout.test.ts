@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  appRouteTimeoutPolicy,
   backendTimeoutPolicy,
   fetchWithTimeout,
   isRequestTimeout,
   LONG_OPERATION_TIMEOUT_MS,
+  PLATFORM_READ_TIMEOUT_MS,
   READ_TIMEOUT_MS,
   RequestTimeoutError,
   supabaseTimeoutPolicy,
@@ -61,7 +63,6 @@ describe('supabaseTimeoutPolicy', () => {
       LONG_OPERATION_TIMEOUT_MS,
     );
   });
-
 });
 
 describe('fetchWithTimeout', () => {
@@ -180,5 +181,36 @@ describe('withTimeout and isRequestTimeout', () => {
 
   it('is an abort to postgrest-js, which would otherwise retry a failed GET three times', () => {
     expect(new RequestTimeoutError('https://x/rest/v1/a', 10_000).code).toBe('ABORT_ERR');
+  });
+});
+
+// PP-DT-C-unfinished-dashboard-hang-and-raw-error, residual: the app's own /api routes get the same
+// one policy, by URL. A route that reads an ad platform through the reporting edges is a platform
+// read (cold, it goes live to Meta or Google); any other GET is a read; anything else may be a job.
+describe('appRouteTimeoutPolicy', () => {
+  it('gives the routes that read an ad platform the platform-read budget', () => {
+    for (const route of [
+      '/api/paid-media/account-insights',
+      '/api/paid-media/campaign-insights',
+      '/api/paid-media/budget-pacing',
+      '/api/paid-media/timeline',
+      '/api/paid-media/timeline/accounts',
+    ]) {
+      expect(appRouteTimeoutPolicy(route, 'POST')).toBe(PLATFORM_READ_TIMEOUT_MS);
+    }
+    expect(
+      appRouteTimeoutPolicy('http://localhost:3116/api/paid-media/budget-pacing', 'POST'),
+    ).toBe(PLATFORM_READ_TIMEOUT_MS);
+  });
+
+  it('reads the campaign indexes on the read budget and writes them on the long one', () => {
+    expect(appRouteTimeoutPolicy('/api/paid-media/campaign-indexes?brandId=b', 'GET')).toBe(
+      READ_TIMEOUT_MS,
+    );
+    for (const method of ['POST', 'PATCH', 'PUT', 'DELETE']) {
+      expect(appRouteTimeoutPolicy('/api/paid-media/campaign-indexes/i-1', method)).toBe(
+        LONG_OPERATION_TIMEOUT_MS,
+      );
+    }
   });
 });

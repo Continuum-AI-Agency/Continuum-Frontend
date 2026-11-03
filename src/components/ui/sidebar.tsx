@@ -30,6 +30,8 @@ const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
   open: boolean;
+  /** The explicit choice (click, keyboard), hover aside: the width the page makes room for. */
+  pinnedOpen: boolean;
   setOpen: (open: boolean) => void;
   openMobile: boolean;
   setOpenMobile: (open: boolean) => void;
@@ -136,10 +138,17 @@ const SidebarProvider = React.forwardRef<
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = open ? 'expanded' : 'collapsed';
 
+    // The width the page makes room for follows the pinned state only: a hover expands the panel
+    // OVER the page, so the fixed surfaces that offset by this width stay where they are
+    // (PP-DT-H-sidebar-hover-pushes-page: a hover moved the whole page 174 px right).
     React.useEffect(() => {
-      const nextWidth = isMobile ? '0px' : open ? providedSidebarWidth : providedSidebarWidthIcon;
+      const nextWidth = isMobile
+        ? '0px'
+        : pinnedOpen
+          ? providedSidebarWidth
+          : providedSidebarWidthIcon;
       document.documentElement.style.setProperty('--app-sidebar-width', nextWidth);
-    }, [isMobile, open, providedSidebarWidth, providedSidebarWidthIcon]);
+    }, [isMobile, pinnedOpen, providedSidebarWidth, providedSidebarWidthIcon]);
 
     React.useEffect(() => {
       return () => {
@@ -151,6 +160,7 @@ const SidebarProvider = React.forwardRef<
       () => ({
         state,
         open,
+        pinnedOpen,
         setOpen,
         isMobile,
         openMobile,
@@ -163,6 +173,7 @@ const SidebarProvider = React.forwardRef<
       [
         state,
         open,
+        pinnedOpen,
         setOpen,
         isMobile,
         openMobile,
@@ -219,7 +230,8 @@ const Sidebar = React.forwardRef<
     },
     ref,
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile, setHoverExpanded } = useSidebar();
+    const { isMobile, state, pinnedOpen, openMobile, setOpenMobile, setHoverExpanded } =
+      useSidebar();
     const reduce = useReducedMotion();
     const isIconCollapsible = collapsible === 'icon';
     // Hover-expand rail: a fixed icon-width footprint with an overlay panel
@@ -298,18 +310,20 @@ const Sidebar = React.forwardRef<
         ref={ref}
         className="group peer text-sidebar-foreground hidden md:block"
         data-state={state}
+        data-pinned={pinnedOpen ? 'expanded' : 'collapsed'}
         data-collapsible={state === 'collapsed' ? collapsible : ''}
         data-variant={variant}
         data-side={side}
       >
-        {/* This is what handles the sidebar gap on desktop */}
+        {/* This is what handles the sidebar gap on desktop. On the hover rail it follows the pinned
+          state: a hover expands the panel over the page and never moves the page. */}
         <div
           className={cn(
             'relative bg-transparent',
             isIconCollapsible
               ? variant === 'floating' || variant === 'inset'
                 ? 'w-[calc(var(--sidebar-width-icon)+(--spacing(4)))] group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
-                : 'w-(--sidebar-width-icon) group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
+                : 'w-(--sidebar-width-icon) group-data-[pinned=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear'
               : 'w-(--sidebar-width) transition-[width] duration-200 ease-linear',
             !isIconCollapsible && 'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',

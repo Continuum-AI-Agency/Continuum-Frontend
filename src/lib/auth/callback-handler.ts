@@ -2,6 +2,11 @@ import 'server-only';
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { resolveCallbackContext } from '@/lib/auth/callback-context';
+import {
+  IMPERSONATION_COOKIE,
+  IMPERSONATION_COOKIE_OPTIONS,
+  IMPERSONATION_COOKIE_VALUE,
+} from '@/lib/auth/impersonation';
 import { resolveAuthRedirectPath } from '@/lib/auth/redirect';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -150,11 +155,11 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   });
 
   if (isImpersonating) {
-    response.cookies.set('is_impersonating', 'true', {
-      path: '/',
-      maxAge: 3600,
-      sameSite: 'lax',
-    });
+    response.cookies.set(
+      IMPERSONATION_COOKIE,
+      IMPERSONATION_COOKIE_VALUE,
+      IMPERSONATION_COOKIE_OPTIONS,
+    );
   }
 
   response.cookies.delete('continuum_oauth_context');

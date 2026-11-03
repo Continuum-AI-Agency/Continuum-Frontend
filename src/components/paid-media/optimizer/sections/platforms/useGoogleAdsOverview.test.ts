@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from 'bun:test';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import recorded from './__fixtures__/google-vivo47-paid-media-metrics.json';
 import {
   ambiguousAccountOverview,
@@ -24,7 +25,9 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { fetchGoogleAdsOverview, portfolioGoalOf } = await import('./useGoogleAdsOverview');
+const { fetchGoogleAdsOverview, googleReadFailure, portfolioGoalOf } = await import(
+  './useGoogleAdsOverview'
+);
 
 const WINDOW = { since: '2026-09-30', until: '2026-10-06' };
 
@@ -39,9 +42,10 @@ describe('fetchGoogleAdsOverview', () => {
       since: '2026-09-30',
       until: '2026-10-06',
     });
+    // The platform rides in the URL too: the client time limit chooses by URL.
     expect(calls.map((call) => [call.name, call.body.platform, call.body.scope])).toEqual([
-      ['paid-media-metrics', 'google-ads', 'account_overview'],
-      ['paid-media-metrics', 'google-ads', 'top_campaigns'],
+      ['paid-media-metrics?platform=google-ads', 'google-ads', 'account_overview'],
+      ['paid-media-metrics?platform=google-ads', 'google-ads', 'top_campaigns'],
     ]);
     expect(calls[0]?.body).toMatchObject({ brandId: 'brand-1', accountId: '3710693645' });
     expect(calls[1]?.body).toMatchObject({ kpi: 'spend', limit: 50 });
@@ -67,6 +71,29 @@ describe('fetchGoogleAdsOverview', () => {
     await expect(fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW)).rejects.toThrow(
       'Google Ads account not configured or access token missing',
     );
+  });
+
+  it('keeps the edge’s error code, so a refused login can offer to reconnect', async () => {
+    invoke = async () => ({
+      data: null,
+      error: new FunctionsHttpError(
+        new Response(
+          JSON.stringify({
+            error:
+              'Google refused this connection’s login (revoked or expired). Reconnect Google in Settings → Integrations.',
+            errorCode: 'TOKEN_EXPIRED',
+            platform: 'google',
+          }),
+          { status: 409 },
+        ),
+      ),
+    });
+    const failure = await fetchGoogleAdsOverview('brand-1', '3710693645', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('Reconnect Google');
+    expect((failure as { code?: unknown }).code).toBe('TOKEN_EXPIRED');
   });
 
   it('reads an account with no single result instead of calling its shape unknown', async () => {
@@ -109,5 +136,82 @@ describe("the portfolios' goal result (Ramiro, 2026-10-28)", () => {
     expect(portfolioGoalOf([portfolio('lead'), portfolio('purchase')])).toBeNull();
     expect(portfolioGoalOf([portfolio('traffic')])).toBeNull();
     expect(portfolioGoalOf([])).toBeNull();
+  });
+});
+
+// PP-DT-B-google-error-states-conflated, residual (deep test 2026-10-31, lane K): the edge answers
+// one 404 "Google Ads account not configured or access token missing" both when the caller's role
+// cannot read Google (the token RPC admits owner, admin and operator) and when no live Google
+// grant reaches the brand's account. The two have different fixes — ask an owner, or grant the
+// account — so the tab tells them apart from the caller's own role on the brand.
+describe('a Google read the edge refused for no access', () => {
+  const noAccess = () =>
+    new FunctionsHttpError(
+      new Response(
+        JSON.stringify({ error: 'Google Ads account not configured or access token missing' }),
+        { status: 404 },
+      ),
+    );
+  const ACCOUNT = {
+    platform: 'google_ads',
+    account_id: '6619636193',
+    name: 'Pink Elephant',
+    status: null,
+    currency: 'MXN',
+  } as const;
+
+  it('keeps the HTTP status of the refusal', async () => {
+    invoke = async () => ({ data: null, error: noAccess() });
+    const failure = await fetchGoogleAdsOverview('brand-1', '6619636193', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    expect((failure as { status?: unknown }).status).toBe(404);
+  });
+
+  it('is a role a viewer lacks: ask an owner', async () => {
+    invoke = async () => ({ data: null, error: noAccess() });
+    const failure = await fetchGoogleAdsOverview('brand-1', '6619636193', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    expect(googleReadFailure(failure, ACCOUNT, 'viewer')).toEqual({
+      status: 'no-role',
+      account: ACCOUNT,
+    });
+  });
+
+  it('is a grant missing when the role can read Google: grant the account', async () => {
+    invoke = async () => ({ data: null, error: noAccess() });
+    const failure = await fetchGoogleAdsOverview('brand-1', '6619636193', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    for (const role of ['owner', 'admin', 'operator'] as const) {
+      expect(googleReadFailure(failure, ACCOUNT, role)).toEqual({
+        status: 'no-access',
+        account: ACCOUNT,
+      });
+    }
+  });
+
+  it('waits for the role, and keeps the edge’s words when the role cannot be read', async () => {
+    invoke = async () => ({ data: null, error: noAccess() });
+    const failure = await fetchGoogleAdsOverview('brand-1', '6619636193', WINDOW).catch(
+      (error: unknown) => error,
+    );
+    expect(googleReadFailure(failure, ACCOUNT, undefined)).toEqual({ status: 'loading' });
+    expect(googleReadFailure(failure, ACCOUNT, null)).toMatchObject({
+      status: 'error',
+      message: 'Google Ads account not configured or access token missing',
+    });
+  });
+
+  it('still offers to reconnect a login Google refused, whatever the role', () => {
+    const refused = Object.assign(new Error('Google refused this connection’s login.'), {
+      code: 'TOKEN_EXPIRED',
+      status: 409,
+    });
+    expect(googleReadFailure(refused, ACCOUNT, 'viewer')).toMatchObject({
+      status: 'error',
+      reconnect: true,
+    });
   });
 });

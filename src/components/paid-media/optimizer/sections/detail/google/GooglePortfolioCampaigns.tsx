@@ -288,7 +288,13 @@ function googleMembers(state: ReturnType<typeof usePortfolioMembers>): Portfolio
     : [];
 }
 
-type Props = { brandId: string; portfolio: PortfolioListItem };
+type Props = {
+  brandId: string;
+  portfolio: PortfolioListItem;
+  /** The portfolio's last complete day (its metrics window end, dated in the account's
+   *  calendar); null reads UTC days. */
+  lastCompleteDay?: string | null;
+};
 
 /** Reads nothing for a portfolio the list says holds no Google member. */
 export function GooglePortfolioCampaigns(props: Props) {
@@ -297,12 +303,12 @@ export function GooglePortfolioCampaigns(props: Props) {
   ) : null;
 }
 
-function GooglePortfolioCampaignsRead({ brandId, portfolio }: Props) {
+function GooglePortfolioCampaignsRead({ brandId, portfolio, lastCompleteDay = null }: Props) {
   const membersState = usePortfolioMembers(portfolio.id);
   const members = googleMembers(membersState);
   const accounts = useOptimizerAdAccounts(brandId).data;
   const customerId = members[0]?.accountId ?? '';
-  const window = completeDaysWindow(WINDOW_DAYS);
+  const window = completeDaysWindow(WINDOW_DAYS, new Date(), lastCompleteDay);
   const campaigns = useGoogleCampaigns({ brandId, customerId, window });
   const cardsState = useOptimizerPlatformCards(brandId, 'google_ads');
   const actionsState = usePortfolioPlatformActions(portfolio.id);

@@ -426,7 +426,14 @@ function inflatedPrimary(d: Detectors): Inflation {
 // V2 — brand vs non-brand.
 // ---------------------------------------------------------------------------
 
-function brandVsNonBrand(d: Detectors) {
+/**
+ * A search term carries Google's raw conversions — no counted rule reaches that read — so its
+ * price is "per conversion Google reports", never a cost per lead. When the account's reported
+ * conversions are mostly visits (`inflatedPrimary`), the card says so: Vivo 47's read "$8.95 MXN
+ * per conversion" beside a "$45.07 MXN per lead" headline, 85% of those conversions GA4 events
+ * (PP-DT-B-brand-split-card-counts-ga4-visits).
+ */
+function brandVsNonBrand(d: Detectors, inflation: Inflation) {
   const rule = ACCOUNT_DETECTOR_RULES.brand_vs_nonbrand;
   const brand = d.profile?.brand_terms ?? [];
   if (brand.length === 0) {
@@ -459,24 +466,33 @@ function brandVsNonBrand(d: Detectors) {
   const nonConv = sum(nonBrand, (t) => t.totals.conversions);
   const brandSpend = sum(brandTerms, (t) => t.totals.spend);
   const nonSpend = total - brandSpend;
-  const cpr = (s: number, c: number) => (c > 0 ? money(d.run, s / c) : 'no conversion');
+  const priceOf = (s: number, c: number) =>
+    c > 0 ? `${money(d.run, s / c)} per conversion Google reports` : 'no conversion Google reports';
   const source = d.profile?.brand_terms_source === 'stored' ? 'set by the team' : 'inferred';
   d.emit('brand_vs_nonbrand', {
     campaign: null,
     subject: 'account',
     severity: 'medium',
-    reason: `${pct(share)} of the search-term spend (${money(d.run, mixedBrand)}) buys people who typed the brand, inside ${plural(mixed.length, 'campaign', 'campaigns')} that also have to find new customers. Brand searches convert cheaply and crowd out the budget for new demand.`,
+    reason: `${pct(share)} of the search-term spend (${money(d.run, mixedBrand)}) buys people who typed the brand, inside ${plural(mixed.length, 'campaign', 'campaigns')} that also have to find new customers. ${inflation ? 'Brand searches crowd out the budget for new demand.' : 'Brand searches convert cheaply and crowd out the budget for new demand.'}`,
     card: {
       headline: `${pct(share)} of the spend buys people already looking for you`,
       facts: [
         {
           label: 'Brand spend',
-          value: `${money(d.run, brandSpend)} · ${cpr(brandSpend, brandConv)} per conversion`,
+          value: `${money(d.run, brandSpend)} · ${priceOf(brandSpend, brandConv)}`,
         },
         {
           label: 'Non-brand spend',
-          value: `${money(d.run, nonSpend)} · ${cpr(nonSpend, nonConv)} per conversion`,
+          value: `${money(d.run, nonSpend)} · ${priceOf(nonSpend, nonConv)}`,
         },
+        ...(inflation
+          ? [
+              {
+                label: 'Not cost per lead',
+                value: `${pct(inflation.engaged / inflation.reported)} of the conversions Google reports are visits or attention events`,
+              },
+            ]
+          : []),
         { label: `Brand terms (${source})`, value: brand.slice(0, 6).join(', ') },
       ],
       bars: [
@@ -1681,7 +1697,7 @@ export function evaluateAccountDetectors(run: Run, google: Google): void {
   if (P8_BLOCKS.every((block) => google[block] === undefined)) return;
   const d = new Detectors(run, google);
   const inflation = inflatedPrimary(d);
-  brandVsNonBrand(d);
+  brandVsNonBrand(d, inflation);
   cappedBudgetLocked(d, inflation);
   pmaxRescue(d);
   qualityScoreByService(d);

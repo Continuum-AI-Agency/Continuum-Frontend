@@ -37,6 +37,7 @@ import {
   humanize,
   portfolioLevelLabel,
 } from '../format';
+import { portfolioCurrency } from '../portfolioCurrency';
 import { pendingWorkCount } from '../reportModel';
 import {
   useOptimizerAccountRead,
@@ -65,6 +66,7 @@ import {
 import { portfolioPlatforms } from './platforms/platformTabsModel';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { pacingSideLabel, portfolioPacingLine } from './portfolioPacingLine';
+import { portfolioPlanPerDay } from './portfolioPlan';
 import { usePortfolioFigures } from './usePortfolioFigures';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
@@ -204,8 +206,8 @@ function PortfolioTableRow({
             currency={currency}
             figureKey={figureKey('daily')}
             narrowSuffix="/day"
-            raw={portfolio.daily_total}
-            text={formatCurrency(portfolio.daily_total, currency)}
+            raw={portfolioPlanPerDay(portfolio)}
+            text={formatCurrency(portfolioPlanPerDay(portfolio), currency)}
           />
           <FigureCell
             narrowSuffix={` ${memberNoun(portfolio.adset_count, portfolioPlatforms(portfolio.platforms))}`}
@@ -298,11 +300,11 @@ function ArchivedPortfolios({
                   <span
                     {...figureProps(
                       `portfolios.archived.${portfolio.id}.daily`,
-                      portfolio.daily_total,
+                      portfolioPlanPerDay(portfolio),
                       currency,
                     )}
                   >
-                    {formatCurrency(portfolio.daily_total, currency)}
+                    {formatCurrency(portfolioPlanPerDay(portfolio), currency)}
                   </span>
                   /d
                 </p>
@@ -344,7 +346,11 @@ export function OptimizerPortfolios({
   planOpen,
   onOpenAcrossAccounts,
 }: OptimizerPortfoliosProps) {
-  const [scope, setScope] = useState<PortfolioBrowseScope>('account');
+  // An account with no portfolios while others hold some opens on the others: "Portfolios (0)"
+  // with the rows one toggle away reads as "none". The person's own pick always wins.
+  const [pickedScope, setScope] = useState<PortfolioBrowseScope | null>(null);
+  const scope: PortfolioBrowseScope =
+    pickedScope ?? (portfolios.length === 0 && brandPortfolioCount > 0 ? 'brand' : 'account');
   // The SAME query keys the Overview warms, so arriving from there is a cache hit and this
   // view never asks twice. No approvals read beside them: the lead line prints figures, and
   // only a candidate's STATE moves under an approval.
@@ -418,7 +424,7 @@ export function OptimizerPortfolios({
               <PortfolioTableRow
                 key={portfolio.id}
                 portfolio={portfolio}
-                currency={currency}
+                currency={portfolioCurrency(portfolio, currency)}
                 window={windows.get(portfolio.id) ?? null}
                 pacing={pacingById.get(portfolio.id) ?? null}
                 lead={leads.get(portfolio.id) ?? null}

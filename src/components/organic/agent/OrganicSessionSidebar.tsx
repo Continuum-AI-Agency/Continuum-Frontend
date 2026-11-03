@@ -9,6 +9,7 @@ import {
   CollapseConversationsButton,
   CollapsedConversationsRail,
 } from '@/components/chat/collapsibleConversations';
+import { SessionSearchFailureNotice } from '@/components/chat/SessionSearchFailureNotice';
 import { SessionTagEditor } from '@/components/chat/SessionTagEditor';
 import { useSessionSearch } from '@/components/chat/useSessionSearch';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -150,7 +151,14 @@ export function OrganicSessionSidebar({
             <p className="px-2 py-3 text-xs text-muted-foreground">Loading conversations…</p>
           ) : null}
 
-          {search.isActive && !search.isSearching && visibleSessions.length === 0 ? (
+          {search.isActive && !search.isSearching && search.failure ? (
+            <SessionSearchFailureNotice failure={search.failure} onRetry={search.retry} />
+          ) : null}
+
+          {search.isActive &&
+          !search.isSearching &&
+          !search.failure &&
+          visibleSessions.length === 0 ? (
             <p className="px-2 py-3 text-xs text-muted-foreground">
               No conversations match these filters.
             </p>

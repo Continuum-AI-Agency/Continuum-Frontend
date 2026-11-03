@@ -443,9 +443,16 @@ describe('AccountRead — platform-specific cards', () => {
       />,
     );
     fireEvent.click(getByText(new RegExp(`${EVERY_CARD.length - 4} more`)));
+    // Money order, except the card saying the whole account shows no ad: it leads, since every
+    // other card assumes the account serves (PP-DT-B-suspended-account-buried-as-low-card).
+    const blocking = (card: (typeof EVERY_CARD)[number]) =>
+      card.variant === 'google_delivery_issue' && card.account_wide;
     expect(
       getAllByTestId('platform-card').map((node) => node.getAttribute('data-variant')),
-    ).toEqual(EVERY_CARD.map((card) => card.variant));
+    ).toEqual([
+      ...EVERY_CARD.filter(blocking).map((card) => card.variant),
+      ...EVERY_CARD.filter((card) => !blocking(card)).map((card) => card.variant),
+    ]);
   });
 
   it('offers no action button on a read-only Video card, only "Open in Google Ads"', () => {

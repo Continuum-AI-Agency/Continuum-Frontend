@@ -43,7 +43,7 @@ This repository contains the Continuum web application. The app code uses Next.j
 - React Hook Form + Zod for forms and validation
 - Supabase (Auth, Database, Storage)
 - Data fetching via Next.js server `fetch` with caching/revalidation, plus optional client-side stale-while-revalidate when needed
-- ESLint (Next config)
+- Biome for lint and format (`bun run lint`, config in the monorepo's `biome.jsonc`)
 
 ## Quick Start
 

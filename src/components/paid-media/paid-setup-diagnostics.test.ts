@@ -123,3 +123,43 @@ describe('countPlatformAccounts', () => {
     expect(countPlatformAccounts(undefined, 'meta')).toBe(0);
   });
 });
+
+// PP-DT-E-scale-gate-page-counts-as-ad-account (deep test 2026-10-31, lane E): Pink Elephant has a
+// Facebook Page and a Google Ads account, no Meta ad account. Scale blocked it with "Connect an ad
+// account to unlock Scale" under four green checks — "Meta Ads connected", "Ad account assigned to
+// brand" — because the facebook bucket holds Pages as well as ad accounts.
+describe('countPlatformAccounts — Pages and organisations are not ad accounts', () => {
+  const pageOnly = {
+    facebook: { accounts: [{ id: 'page-1', type: 'meta_page' }] },
+    googleAds: { accounts: [{ id: '6619636193', type: 'ads_customer' }] },
+    linkedin: { accounts: [{ id: 'org-1', type: 'linkedin_organization' }] },
+  } as unknown as BrandIntegrationSummary;
+
+  it('a Facebook Page alone is no Meta ad account', () => {
+    expect(countPlatformAccounts(pageOnly, 'meta')).toBe(0);
+  });
+
+  it('a LinkedIn organisation alone is no LinkedIn ad account', () => {
+    expect(countPlatformAccounts(pageOnly, 'linkedin')).toBe(0);
+  });
+
+  it('the checklist then asks to connect Meta Ads instead of ticking it', () => {
+    const steps = derivePaidSetupSteps({
+      platform: 'meta',
+      availableAccountCount: countPlatformAccounts(pageOnly, 'meta'),
+    });
+    expect(stepById(steps, 'connection').status).toBe('action_required');
+  });
+
+  it('an ad account beside a Page still counts once', () => {
+    const both = {
+      facebook: {
+        accounts: [
+          { id: 'page-1', type: 'meta_page' },
+          { id: 'act_1', type: 'meta_ad_account' },
+        ],
+      },
+    } as unknown as BrandIntegrationSummary;
+    expect(countPlatformAccounts(both, 'meta')).toBe(1);
+  });
+});

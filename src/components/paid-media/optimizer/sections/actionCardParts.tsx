@@ -10,10 +10,12 @@
 
 import {
   ArrowRightIcon,
+  CheckIcon,
   CoinsIcon,
   GavelIcon,
   SlidersHorizontalIcon,
   Undo2Icon,
+  XIcon,
 } from 'lucide-react';
 import type * as React from 'react';
 import { useState } from 'react';
@@ -24,6 +26,7 @@ import * as typeScale from '../typeScale';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type ActionChange,
+  actionOutcome,
   actionPlatform,
   actorLabel,
   minorToMajor,
@@ -209,6 +212,47 @@ export function ActionRevertControl({
     );
   }
   return revert.kind === 'reverted' ? <ActionRevertedBadge /> : null;
+}
+
+/**
+ * An applied write's state and its undo, as the change preview's footer reads it: "Applied"
+ * beside the undo the server allows (ActionRevertControl), "Not applied" for a write the row
+ * says stopped, and only the Reverted badge once it is undone. The control is always mounted,
+ * so an undo dialog that is open when the feed re-reads the row as reverted stays open.
+ */
+export function ActionAppliedState({
+  row,
+  brandId,
+  currency,
+}: {
+  row: OptimizerActionFeedRow;
+  brandId: string;
+  currency: string | null;
+}) {
+  const reverted = revertState(row).kind === 'reverted';
+  const stopped = actionOutcome(row) === 'stopped';
+  return (
+    <span className="inline-flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+      {reverted ? null : (
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-xs',
+            stopped ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success',
+          )}
+          data-state={stopped ? 'stopped' : 'applied'}
+          data-testid="action-applied-state"
+        >
+          {stopped ? (
+            <XIcon aria-hidden="true" className="size-3.5" />
+          ) : (
+            <CheckIcon aria-hidden="true" className="size-3.5" />
+          )}
+          {stopped ? 'Not applied' : 'Applied'}
+        </span>
+      )}
+      <ActionRevertControl brandId={brandId} currency={currency} row={row} />
+    </span>
+  );
 }
 
 export function ActionWhy({ text }: { text: string }) {

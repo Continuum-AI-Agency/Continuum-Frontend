@@ -1,0 +1,701 @@
+{
+ "piloto": {
+  "meses": [
+   "2026-11",
+   "2026-12",
+   "2027-01"
+  ],
+  "etiquetas": [
+   "Noviembre",
+   "Diciembre",
+   "Enero"
+  ],
+  "piso": [
+   662,
+   385,
+   662
+  ],
+  "objetivo": [
+   729,
+   486,
+   845
+  ],
+  "presupuesto": [
+   110000,
+   110000,
+   130000
+  ],
+  "cpa_obj": [
+   151,
+   226,
+   154
+  ],
+  "cpa_techo": [
+   166,
+   286,
+   196
+  ],
+  "cpa_anio_pasado": [
+   148,
+   269,
+   127
+  ],
+  "meta_obj": [
+   115,
+   90,
+   140
+  ],
+  "meta_cpa_obj": [
+   957,
+   1222,
+   929
+  ],
+  "ltv": 4240,
+  "ltv_sin_iva": 3650,
+  "cpa_12m": 161,
+  "cpa_ene_sep": 154,
+  "cpa_jul_oct": 170,
+  "ltv_curva": [
+   2759,
+   2919,
+   3111,
+   3260,
+   3398,
+   3531,
+   3655,
+   3762,
+   3859,
+   3965,
+   4102,
+   4239
+  ]
+ },
+ "historico": [
+  {
+   "mes": "2025-11",
+   "altas": 662,
+   "altas_meta": null,
+   "inv_meta": 97976.0,
+   "inv_google": 0.0,
+   "inv_total": 97976.0,
+   "exacta": false,
+   "cpa_total": 148.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2025-12",
+   "altas": 385,
+   "altas_meta": null,
+   "inv_meta": 103565.0,
+   "inv_google": 0.0,
+   "inv_total": 103565.0,
+   "exacta": false,
+   "cpa_total": 269.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-01",
+   "altas": 662,
+   "altas_meta": null,
+   "inv_meta": 84074.0,
+   "inv_google": 0.0,
+   "inv_total": 84074.0,
+   "exacta": false,
+   "cpa_total": 127.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-02",
+   "altas": 564,
+   "altas_meta": null,
+   "inv_meta": 78960.0,
+   "inv_google": 0.0,
+   "inv_total": 78960.0,
+   "exacta": false,
+   "cpa_total": 140.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-03",
+   "altas": 530,
+   "altas_meta": null,
+   "inv_meta": 84800.0,
+   "inv_google": 0.0,
+   "inv_total": 84800.0,
+   "exacta": false,
+   "cpa_total": 160.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-04",
+   "altas": 613,
+   "altas_meta": null,
+   "inv_meta": 82142.0,
+   "inv_google": 0.0,
+   "inv_total": 82142.0,
+   "exacta": false,
+   "cpa_total": 134.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-05",
+   "altas": 640,
+   "altas_meta": null,
+   "inv_meta": 93440.0,
+   "inv_google": 0.0,
+   "inv_total": 93440.0,
+   "exacta": false,
+   "cpa_total": 146.0,
+   "cpa_meta": null,
+   "pct_meta": null
+  },
+  {
+   "mes": "2026-06",
+   "altas": 644,
+   "altas_meta": 12,
+   "inv_meta": 112700.0,
+   "inv_google": 0.0,
+   "inv_total": 112700.0,
+   "exacta": false,
+   "cpa_total": 175.0,
+   "cpa_meta": 9392.0,
+   "pct_meta": 1.9
+  },
+  {
+   "mes": "2026-07",
+   "altas": 629,
+   "altas_meta": 63,
+   "inv_meta": 128418.0,
+   "inv_google": 0.0,
+   "inv_total": 128418.0,
+   "exacta": true,
+   "cpa_total": 204.0,
+   "cpa_meta": 2038.0,
+   "pct_meta": 10.0
+  },
+  {
+   "mes": "2026-08",
+   "altas": 707,
+   "altas_meta": 126,
+   "inv_meta": 125206.0,
+   "inv_google": 0.0,
+   "inv_total": 125206.0,
+   "exacta": true,
+   "cpa_total": 177.0,
+   "cpa_meta": 994.0,
+   "pct_meta": 17.8
+  },
+  {
+   "mes": "2026-09",
+   "altas": 666,
+   "altas_meta": 91,
+   "inv_meta": 82438.0,
+   "inv_google": 0.0,
+   "inv_total": 82438.0,
+   "exacta": true,
+   "cpa_total": 124.0,
+   "cpa_meta": 906.0,
+   "pct_meta": 13.7
+  },
+  {
+   "mes": "2026-10",
+   "altas": 439,
+   "altas_meta": 70,
+   "inv_meta": 88629.0,
+   "inv_google": 26899.0,
+   "inv_total": 115528.0,
+   "exacta": true,
+   "cpa_total": 263.0,
+   "cpa_meta": 1266.0,
+   "pct_meta": 15.9
+  }
+ ],
+ "nov_en_curso": {
+  "altas": 85,
+  "altas_meta": 19
+ },
+ "oct_quincenas": [
+  {
+   "q": "15–31 oct",
+   "altas": 184,
+   "altas_meta": 20,
+   "inv_meta": 46887.0,
+   "cpa_total": 255.0,
+   "cpa_meta": 2344.0
+  },
+  {
+   "q": "1–14 oct",
+   "altas": 255,
+   "altas_meta": 50,
+   "inv_meta": 41742.0,
+   "cpa_total": 164.0,
+   "cpa_meta": 835.0
+  }
+ ],
+ "sucursales": [
+  {
+   "nombre": "Aleira",
+   "altas": 530,
+   "altas_meta": 76,
+   "inv_meta": 101256.0,
+   "cpa_meta": 1332.0,
+   "pct_meta": 14.3,
+   "pct_anual_meta": 67.0
+  },
+  {
+   "nombre": "Ávila Camacho",
+   "altas": 563,
+   "altas_meta": 89,
+   "inv_meta": 109599.0,
+   "cpa_meta": 1231.0,
+   "pct_meta": 15.8,
+   "pct_anual_meta": 62.0
+  },
+  {
+   "nombre": "Cañadas",
+   "altas": 771,
+   "altas_meta": 107,
+   "inv_meta": 102288.0,
+   "cpa_meta": 956.0,
+   "pct_meta": 13.9,
+   "pct_anual_meta": 72.0
+  },
+  {
+   "nombre": "ITESO",
+   "altas": 577,
+   "altas_meta": 78,
+   "inv_meta": 99029.0,
+   "cpa_meta": 1270.0,
+   "pct_meta": 13.5,
+   "pct_anual_meta": 49.0
+  }
+ ],
+ "inv_general_jul_oct": 12521.0,
+ "altas_suc_mes": {
+  "meses": [
+   "2026-06",
+   "2026-07",
+   "2026-08",
+   "2026-09",
+   "2026-10",
+   "2026-11"
+  ],
+  "series": {
+   "Aleira": [
+    147,
+    144,
+    164,
+    132,
+    90,
+    12
+   ],
+   "Cañadas": [
+    203,
+    196,
+    199,
+    226,
+    150,
+    27
+   ],
+   "ITESO": [
+    155,
+    137,
+    183,
+    151,
+    106,
+    18
+   ],
+   "Ávila Camacho": [
+    139,
+    152,
+    161,
+    157,
+    93,
+    28
+   ]
+  }
+ },
+ "tipo_campana": [
+  {
+   "nombre": "Mensajes (clic a WhatsApp)",
+   "inversion": 331527.0,
+   "conversaciones_meta": 7352.0,
+   "leads_form": null,
+   "contactos": 6046,
+   "tours": 1116,
+   "altas": 197,
+   "cpa": 1683.0,
+   "costo_contacto": 55.0,
+   "altas_x100": 3.3,
+   "pct_anual": 55.0
+  },
+  {
+   "nombre": "Formulario",
+   "inversion": 74521.0,
+   "conversaciones_meta": null,
+   "leads_form": 1064.0,
+   "contactos": 546,
+   "tours": 465,
+   "altas": 32,
+   "cpa": 2329.0,
+   "costo_contacto": 136.0,
+   "altas_x100": 5.9,
+   "pct_anual": 75.0
+  },
+  {
+   "nombre": "Tours/Citas (Continuum)",
+   "inversion": 15790.0,
+   "conversaciones_meta": 137.0,
+   "leads_form": null,
+   "contactos": 147,
+   "tours": 20,
+   "altas": 3,
+   "cpa": 5263.0,
+   "costo_contacto": 107.0,
+   "altas_x100": 2.0,
+   "pct_anual": 100.0
+  }
+ ],
+ "sin_campana_altas": 92,
+ "formulario_mes": [
+  {
+   "mes": "2026-07",
+   "inversion": 38085.0,
+   "leads": 598.0,
+   "contactos": 318,
+   "tours": 281,
+   "altas": 22,
+   "cpl_form": 64.0,
+   "cpa": 1731.0
+  },
+  {
+   "mes": "2026-08",
+   "inversion": 22887.0,
+   "leads": 341.0,
+   "contactos": 161,
+   "tours": 150,
+   "altas": 6,
+   "cpl_form": 67.0,
+   "cpa": 3815.0
+  },
+  {
+   "mes": "2026-09",
+   "inversion": 9557.0,
+   "leads": 125.0,
+   "contactos": 51,
+   "tours": 28,
+   "altas": 4,
+   "cpl_form": 76.0,
+   "cpa": 2389.0
+  },
+  {
+   "mes": "2026-10",
+   "inversion": 3992.0,
+   "leads": null,
+   "contactos": 16,
+   "tours": 6,
+   "altas": 0,
+   "cpl_form": null,
+   "cpa": null
+  }
+ ],
+ "ofertas": [
+  {
+   "nombre": "Anualidad (descuento)",
+   "contactos": 1028,
+   "tours": 294,
+   "altas": 84,
+   "altas_x100": 8.2,
+   "pct_anual": 83.0,
+   "inversion": 79067.0,
+   "cpa": 941.0,
+   "costo_est": 47975.0,
+   "cpa_est": 571.0
+  },
+  {
+   "nombre": "Day pass / prueba gratis",
+   "contactos": 445,
+   "tours": 152,
+   "altas": 28,
+   "altas_x100": 6.3,
+   "pct_anual": 46.0,
+   "inversion": 34756.0,
+   "cpa": 1241.0,
+   "costo_est": 21802.0,
+   "cpa_est": 779.0
+  },
+  {
+   "nombre": "Primer mes $99",
+   "contactos": 219,
+   "tours": 46,
+   "altas": 11,
+   "altas_x100": 5.0,
+   "pct_anual": 55.0,
+   "inversion": null,
+   "cpa": null,
+   "costo_est": 11104.0,
+   "cpa_est": 1009.0
+  },
+  {
+   "nombre": "Mensualidad $333",
+   "contactos": 1334,
+   "tours": 334,
+   "altas": 65,
+   "altas_x100": 4.9,
+   "pct_anual": 69.0,
+   "inversion": 25153.0,
+   "cpa": 387.0,
+   "costo_est": 63912.0,
+   "cpa_est": 983.0
+  },
+  {
+   "nombre": "Primer mes $49",
+   "contactos": 385,
+   "tours": 142,
+   "altas": 18,
+   "altas_x100": 4.7,
+   "pct_anual": 50.0,
+   "inversion": 9325.0,
+   "cpa": 518.0,
+   "costo_est": 18446.0,
+   "cpa_est": 1025.0
+  },
+  {
+   "nombre": "Mensualidad $249",
+   "contactos": 598,
+   "tours": 174,
+   "altas": 16,
+   "altas_x100": 2.7,
+   "pct_anual": 69.0,
+   "inversion": 7332.0,
+   "cpa": 458.0,
+   "costo_est": 28203.0,
+   "cpa_est": 1763.0
+  },
+  {
+   "nombre": "Primer mes $31",
+   "contactos": 2522,
+   "tours": 377,
+   "altas": 47,
+   "altas_x100": 1.9,
+   "pct_anual": 17.0,
+   "inversion": 84602.0,
+   "cpa": 1800.0,
+   "costo_est": 142596.0,
+   "cpa_est": 3034.0
+  },
+  {
+   "nombre": "Primer mes $12",
+   "contactos": 1790,
+   "tours": 370,
+   "altas": 33,
+   "altas_x100": 1.8,
+   "pct_anual": 45.0,
+   "inversion": 63342.0,
+   "cpa": 1919.0,
+   "costo_est": 82310.0,
+   "cpa_est": 2494.0
+  }
+ ],
+ "anual_meta_mes": [
+  {
+   "mes": "2026-07",
+   "pct": 75.0,
+   "n": 63
+  },
+  {
+   "mes": "2026-08",
+   "pct": 74.0,
+   "n": 126
+  },
+  {
+   "mes": "2026-09",
+   "pct": 65.0,
+   "n": 91
+  },
+  {
+   "mes": "2026-10",
+   "pct": 31.0,
+   "n": 70
+  },
+  {
+   "mes": "2026-11",
+   "pct": 0.0,
+   "n": 19
+  }
+ ],
+ "audiencias": [
+  {
+   "nombre": "BAU (intereses fitness)",
+   "inversion": 49751.0,
+   "contactos": 778,
+   "tours": 133,
+   "altas": 17,
+   "cpa": 2927.0,
+   "altas_x100": 2.2
+  },
+  {
+   "nombre": "Broad (abierta)",
+   "inversion": 55139.0,
+   "contactos": 885,
+   "tours": 139,
+   "altas": 19,
+   "cpa": 2902.0,
+   "altas_x100": 2.1
+  },
+  {
+   "nombre": "Lookalike (inscritos)",
+   "inversion": 59247.0,
+   "contactos": 1050,
+   "tours": 151,
+   "altas": 14,
+   "cpa": 4232.0,
+   "altas_x100": 1.3
+  }
+ ],
+ "cohortes": [
+  {
+   "mes": "2026-07",
+   "inversion": 128418.0,
+   "conversaciones": 3101.0,
+   "contactos": 2680,
+   "tours": 795,
+   "altas": 135,
+   "altas_con_tour": 89,
+   "cpa": 951.0,
+   "madura": true
+  },
+  {
+   "mes": "2026-08",
+   "inversion": 125206.0,
+   "conversaciones": 3145.0,
+   "contactos": 2740,
+   "tours": 631,
+   "altas": 103,
+   "altas_con_tour": 70,
+   "cpa": 1216.0,
+   "madura": true
+  },
+  {
+   "mes": "2026-09",
+   "inversion": 82438.0,
+   "conversaciones": 1900.0,
+   "contactos": 1629,
+   "tours": 289,
+   "altas": 50,
+   "altas_con_tour": 30,
+   "cpa": 1649.0,
+   "madura": true
+  },
+  {
+   "mes": "2026-10",
+   "inversion": 88629.0,
+   "conversaciones": null,
+   "contactos": 1445,
+   "tours": 219,
+   "altas": 16,
+   "altas_con_tour": 10,
+   "cpa": 5539.0,
+   "madura": false
+  }
+ ],
+ "tour_palanca": {
+  "alta_si": 10.8,
+  "alta_no": 1.5
+ },
+ "grupos_oferta": {
+  "valor": {
+   "contactos": 2807,
+   "altas": 177,
+   "altas_x100": 6.3
+  },
+  "barato": {
+   "contactos": 4531,
+   "altas": 91,
+   "altas_x100": 2.0
+  }
+ },
+ "tours_lecturas": [
+  {
+   "mes": "2026-07",
+   "day_pass": 692,
+   "tour_agendado": 646,
+   "purchase_meta": 0.0
+  },
+  {
+   "mes": "2026-08",
+   "day_pass": 652,
+   "tour_agendado": 541,
+   "purchase_meta": 5.0
+  },
+  {
+   "mes": "2026-09",
+   "day_pass": 432,
+   "tour_agendado": 367,
+   "purchase_meta": 229.0
+  },
+  {
+   "mes": "2026-10",
+   "day_pass": 349,
+   "tour_agendado": 195,
+   "purchase_meta": 217
+  }
+ ],
+ "google": {
+  "inv_30d": 26898.9,
+  "inv_7d": 439.9,
+  "clics": 11019,
+  "cpc": 2.44,
+  "contactos_peaking": 20,
+  "altas": 0,
+  "campanas": [
+   [
+    "Search · Leads formulario",
+    6317,
+    722,
+    20
+   ],
+   [
+    "GA 1 EASY (Search)",
+    6196,
+    984,
+    5
+   ],
+   [
+    "Easy Fit (PMax)",
+    5578,
+    4756,
+    180
+   ],
+   [
+    "PMax · Octubre · Leads",
+    4721,
+    3223,
+    199
+   ],
+   [
+    "Search · Octubre",
+    4087,
+    1334,
+    8
+   ]
+  ]
+ },
+ "cuentas_meta": {
+  "con_gasto": [
+   "act_521903353286118 · Easyfit"
+  ],
+  "sin_gasto": 8
+ },
+ "otra_cuenta": {
+  "contactos": 1906,
+  "tours": 199,
+  "altas": 13
+ }
+}

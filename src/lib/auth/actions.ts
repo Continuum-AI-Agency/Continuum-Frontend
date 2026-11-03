@@ -5,6 +5,11 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveHeadersOrigin } from '@/lib/server/origin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  IMPERSONATION_COOKIE,
+  isImpersonationMarked,
+  SIGN_OUT_EVERYWHERE_REFUSED_WHILE_IMPERSONATING,
+} from './impersonation';
 import { buildAuthCallbackUrl, resolveAuthRedirectPath } from './redirect';
 import type { EmailCodeInput, MagicLinkInput, PasswordSignInInput } from './schemas';
 import { emailCodeSchema, magicLinkSchema, passwordSignInSchema } from './schemas';
@@ -44,12 +49,29 @@ function getSafeErrorMessage(error: Error | { message: string }): string {
   return 'An unexpected error occurred. Please try again';
 }
 
+// Sign out ends THIS browser's session only. auth-js defaults to 'global', which ended every
+// session of the account on every device — the customer's own devices too, when an admin pressed
+// it under an impersonation link (PP-DT-C-signout-ends-every-device).
 export async function logoutAction(): Promise<ActionResult> {
+  return endSessions('local');
+}
+
+// Sign out of all devices (Settings → Profile). A session opened from an impersonation link is
+// refused before anything is signed out: it would end the customer's sessions on their devices.
+export async function logoutEverywhereAction(): Promise<ActionResult> {
+  if (isImpersonationMarked(await cookies())) {
+    return { success: false, error: SIGN_OUT_EVERYWHERE_REFUSED_WHILE_IMPERSONATING };
+  }
+
+  return endSessions('global');
+}
+
+async function endSessions(scope: 'local' | 'global'): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const cookieStore = await cookies();
 
   try {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope });
 
     if (error) {
       return {
@@ -58,7 +80,7 @@ export async function logoutAction(): Promise<ActionResult> {
       };
     }
 
-    cookieStore.delete('is_impersonating');
+    cookieStore.delete(IMPERSONATION_COOKIE);
     revalidatePath('/', 'layout');
     redirect('/login');
   } catch (error) {

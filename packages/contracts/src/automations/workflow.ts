@@ -992,11 +992,12 @@ export const resolveAutomationAiStudioGenerateConfig = (
  * dashboard.
  *
  * `pause`, `resume`, `set_budget` and `replace_creative` never existed as writes:
- * ad pause is human-only, entity-addressed budget writes are not offered, and the
- * real creative convert is disabled (`REAL_CONVERT_ENABLED = false`). Every one of
- * them, if it happens at all, happens by a human approving a recommendation and the
- * optimizer applying it — so all four normalize to `apply_approved` rather than
- * being dropped, which would stop a stored config from parsing.
+ * ad pause is human-only, entity-addressed budget writes are not offered, and no
+ * convert is a workflow operation (a CBO convert runs only behind its own gates: the
+ * MCP confirm token and the dashboard's Apply). Every one of them, if it happens at
+ * all, happens by a human approving a recommendation and the optimizer applying it —
+ * so all four normalize to `apply_approved` rather than being dropped, which would
+ * stop a stored config from parsing.
  */
 export const automationPaidOptimizerOperationSchema = z.preprocess(
   (value) =>

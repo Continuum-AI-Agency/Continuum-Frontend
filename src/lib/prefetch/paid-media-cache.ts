@@ -4,6 +4,7 @@ import {
 } from '@/lib/paid-media/campaign-performance-loader';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
 import { lastCompleteDays } from '@/lib/paid-media/reportingWindow';
+import { paidMediaRouteFetch } from '@/lib/paid-media/routeFetch';
 
 export type CacheEntry = {
   promise: Promise<unknown>;
@@ -70,7 +71,9 @@ export function prefetchPaidMediaDashboard(params: { brandId: string; adAccountI
     remember(
       indexesCache,
       indexesKey,
-      fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then((r) => r.json()),
+      paidMediaRouteFetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then((r) =>
+        r.json(),
+      ),
     );
   }
 }

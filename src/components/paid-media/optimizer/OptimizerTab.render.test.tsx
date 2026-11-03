@@ -33,6 +33,9 @@ let onPlatform: Record<'google_ads' | 'tiktok_ads', PortfolioListItem[]> = {
   tiktok_ads: [],
 };
 let actionsProps: Record<string, unknown> | null = null;
+let portfoliosProps: Record<string, unknown> | null = null;
+/** The brand's assigned ad accounts (plugin_mcp.list_brand_ad_accounts rows). */
+let assignedAccounts: { platform: string; account_id: string; name: string | null }[] = [];
 
 mock.module('./useOptimizerData', () => ({
   ...realOptimizerData,
@@ -46,7 +49,7 @@ mock.module('./useOptimizerData', () => ({
   }),
   // Secondary reads: a pending one must never hold the surface.
   useOptimizerRenewals: () => ({ data: [], isLoading: pendingSecondaryRead }),
-  useOptimizerAdAccounts: () => ({ data: [], isLoading: pendingSecondaryRead }),
+  useOptimizerAdAccounts: () => ({ data: assignedAccounts, isLoading: pendingSecondaryRead }),
   useOptimizerPlatformPortfolios: (_brandId: string, platform: 'google_ads' | 'tiktok_ads') => ({
     data: onPlatform[platform],
   }),
@@ -91,7 +94,10 @@ mock.module('./sections/account/AccountAutomations', () => ({
   AccountAutomations: stub('automations-section'),
 }));
 mock.module('./sections/OptimizerPortfolios', () => ({
-  OptimizerPortfolios: stub('portfolios-section'),
+  OptimizerPortfolios: (props: Record<string, unknown>) => {
+    portfoliosProps = props;
+    return <div data-testid="portfolios-section" />;
+  },
 }));
 mock.module('./sections/OptimizerActions', () => ({
   OptimizerActions: (props: Record<string, unknown>) => {
@@ -113,6 +119,9 @@ mock.module('./sections/PortfolioDetailWorkspace', () => ({
 }));
 mock.module('./sections/OptimizerPortfolioBrowser', () => ({
   OptimizerPortfolioBrowser: stub('browser-section'),
+}));
+mock.module('./dashboard/EasyfitDashboard', () => ({
+  EasyfitDashboard: stub('easyfit-dashboard-section'),
 }));
 mock.module('@/components/settings/account/OptimizerNotificationsSection', () => ({
   OptimizerNotificationsSection: stub('notifications-section'),
@@ -149,8 +158,10 @@ beforeEach(() => {
   openPortfolioId = null;
   overviewProps = null;
   actionsProps = null;
+  portfoliosProps = null;
   onPlatform = { google_ads: [], tiktok_ads: [] };
   elsewhere = [];
+  assignedAccounts = [];
   setView.mockClear();
   setPlatform.mockClear();
   openCreate.mockClear();
@@ -268,6 +279,49 @@ describe('OptimizerTab second bar', () => {
       'tab=jaina',
     );
     expect(screen.getByRole('button', { name: 'New portfolio' })).toBeTruthy();
+  });
+
+  it('leads each platform in the switch with its own logo, muted while it is not connected', () => {
+    renderTab();
+
+    const logo = (platform: string) =>
+      screen.getByTestId(`platform-tab-${platform}`).querySelector('span[title]');
+    expect(logo('meta')?.getAttribute('title')).toBe('Meta');
+    expect(logo('google_ads')?.getAttribute('title')).toBe('Google Ads');
+    expect(logo('tiktok_ads')?.getAttribute('title')).toBe('TikTok');
+    expect(logo('tiktok_ads')?.className).toContain('grayscale');
+    expect(logo('meta')?.className).not.toContain('grayscale');
+    expect(screen.getByTestId('platform-tab-all').querySelector('svg')).toBeTruthy();
+  });
+
+  // PP-DT-E-platform-tabs-no-arrow-keys: the switch is a role=tablist, so a keyboard user
+  // expects one Tab stop and the arrows between platforms; ArrowRight used to do nothing.
+  it('is one Tab stop, and the arrow keys, Home and End move between platforms', () => {
+    renderTab();
+
+    const tab = (name: string) => screen.getByTestId(`platform-tab-${name}`);
+    expect(['all', 'meta', 'google_ads', 'tiktok_ads'].map((name) => tab(name).tabIndex)).toEqual([
+      0, -1, -1, -1,
+    ]);
+
+    tab('all').focus();
+    fireEvent.keyDown(tab('all'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('meta');
+    expect(document.activeElement).toBe(tab('meta'));
+
+    fireEvent.keyDown(tab('meta'), { key: 'End' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+    expect(document.activeElement).toBe(tab('tiktok_ads'));
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'ArrowRight' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+
+    fireEvent.keyDown(tab('all'), { key: 'ArrowLeft' });
+    expect(setPlatform).toHaveBeenLastCalledWith('tiktok_ads');
+
+    fireEvent.keyDown(tab('tiktok_ads'), { key: 'Home' });
+    expect(setPlatform).toHaveBeenLastCalledWith('all');
+    expect(document.activeElement).toBe(tab('all'));
   });
 
   it('keeps the Overview actions off a platform the Overview does not manage', () => {
@@ -402,5 +456,92 @@ describe('OptimizerTab — a brand whose portfolios are on another platform', ()
     expect(queued).toEqual([mixed.id, EASY_FIT_G1.id]);
     // 1 on the account's portfolio + 2 on the Google one: what the Actions tab renders.
     expect(screen.getByRole('tab', { name: /Actions/ }).textContent).toBe('Actions3');
+  });
+
+  // voltaic-salad 4.3: Easy Fit's account switcher lists only Meta accounts, so the Portfolios
+  // view, narrowed to the selected Meta account, never listed its Google-only portfolios
+  // (5aaf5931 "Test — Google Ads (Easy Fit)") on any account the person could pick.
+  it("lists the brand's Google-only portfolios in Portfolios beside the account's own, each once", () => {
+    const mixed = { ...PORTFOLIO, platforms: ['meta', 'google_ads'] } as PortfolioListItem;
+    const otherMetaAccount = {
+      ...PORTFOLIO,
+      id: '22222222-2222-4222-8222-222222222222',
+      ad_account_id: 'act_2',
+      platforms: ['meta'],
+    } as PortfolioListItem;
+    portfolios = { isLoading: false, isError: false, hasAnswer: true, data: [mixed] };
+    elsewhere = [otherMetaAccount, EASY_FIT_G1];
+    onPlatform = { google_ads: [mixed, EASY_FIT_G1], tiktok_ads: [] };
+    view = 'portfolios';
+    platformTab = 'google_ads';
+    renderTab();
+    const listed = (portfoliosProps?.portfolios as PortfolioListItem[]).map((p) => p.id);
+    expect(listed).toEqual([mixed.id, EASY_FIT_G1.id]);
+  });
+});
+
+// PP-DT-E-meta-tab-connected-on-google-account (deep test 2026-10-31, lane E): Pink Elephant has a
+// Google Ads account and no Meta ad account. Opened on its Google account, the switch read "Meta"
+// as connected — the selected account was taken for a Meta one — while TikTok said Connect.
+describe('OptimizerTab on a brand whose selected account is a Google one', () => {
+  it('reads Meta as not connected, Google as connected', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    const meta = screen.getByTestId('platform-tab-meta');
+    expect(meta.getAttribute('data-connected')).toBe('false');
+    expect(meta.textContent).toContain('Connect');
+    expect(screen.getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe(
+      'true',
+    );
+  });
+
+  it('still reads Meta as connected on a selected Meta account while the list loads', () => {
+    renderTab();
+    expect(screen.getByTestId('platform-tab-meta').getAttribute('data-connected')).toBe('true');
+  });
+});
+
+// PP-DT-E-google-only-lands-on-blank-all (deep test 2026-10-31, lane E): opened on Pink Elephant's
+// Google account, the Optimizer landed on "All", whose managed rows are Meta's: a greyed headline
+// over an empty page until the person found the Google tab.
+describe('OptimizerTab opened on a Google account', () => {
+  it('lands on the Google tab instead of an empty All', () => {
+    assignedAccounts = [
+      { platform: 'google_ads', account_id: '6619636193', name: 'Pink Elephant' },
+    ];
+    render(<OptimizerTab adAccountId="6619636193" brandId="brand-1" platform="google-ads" />);
+    expect(setPlatform).toHaveBeenCalledWith('google_ads');
+  });
+
+  it('leaves a Meta account on the tab the URL names', () => {
+    renderTab();
+    expect(setPlatform).not.toHaveBeenCalledWith('google_ads');
+  });
+});
+
+// The Easy Fit sign-ups dashboard is one brand's module: the tab exists only on that brand,
+// and a `dashboard` link opened on any other brand lands on the Overview, never a blank tab.
+describe('OptimizerTab Dashboard tab gating', () => {
+  const EASYFIT = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+  const renderFor = (brandId: string) =>
+    render(<OptimizerTab adAccountId="act_1" brandId={brandId} platform="meta" />);
+
+  it('offers the Dashboard tab on the Easy Fit brand and renders it when selected', () => {
+    view = 'dashboard';
+    renderFor(EASYFIT);
+
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toBeTruthy();
+    expect(screen.getByTestId('easyfit-dashboard-section')).toBeTruthy();
+  });
+
+  it('has no Dashboard tab on any other brand, and a dashboard link falls back to the Overview', () => {
+    view = 'dashboard';
+    renderFor('brand-1');
+
+    expect(screen.queryByRole('tab', { name: 'Dashboard' })).toBeNull();
+    expect(screen.queryByTestId('easyfit-dashboard-section')).toBeNull();
+    expect(screen.getByTestId('overview-section')).toBeTruthy();
   });
 });

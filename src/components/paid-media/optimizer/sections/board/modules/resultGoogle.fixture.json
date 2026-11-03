@@ -1,0 +1,856 @@
+{
+ "_source": "Real paid-media-metrics google-ads reads, 2026-11-02 (as ramibuisel@gmail.com, session revoked): account_overview and top_campaigns (kpi spend, limit 50) over 2026-10-26..2026-11-01, counting each brand's Google portfolio goal result, as fetchGoogleAdsOverview asks.",
+ "window": {
+  "since": "2026-10-26",
+  "until": "2026-11-01"
+ },
+ "easyFit": {
+  "account_overview": {
+   "scope": "account_overview",
+   "currency": "MXN",
+   "metrics": {
+    "spend": 0.2865,
+    "roas": 0,
+    "impressions": 5,
+    "clicks": 1,
+    "ctr": 20,
+    "cpc": 0.2865,
+    "cpa": 0,
+    "gaSessions": 0,
+    "gaConversions": 0
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to historical windows; historical goal-setting changes are not reconstructed."
+   ],
+   "coverage": {
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": false,
+    "reason": null
+   },
+   "comparison": {
+    "spend": {
+     "current": 0.2865,
+     "previous": 4317.931,
+     "percentageChange": -99.9934
+    },
+    "roas": {
+     "current": 0,
+     "previous": 0.0415,
+     "percentageChange": -100
+    },
+    "impressions": {
+     "current": 5,
+     "previous": 49505,
+     "percentageChange": -99.9899
+    },
+    "clicks": {
+     "current": 1,
+     "previous": 2964,
+     "percentageChange": -99.9663
+    },
+    "ctr": {
+     "current": 20,
+     "previous": 5.9873,
+     "percentageChange": 234.0404
+    },
+    "cpc": {
+     "current": 0.2865,
+     "previous": 1.4568,
+     "percentageChange": -80.3336
+    },
+    "cpa": {
+     "current": 0,
+     "previous": 24.1225,
+     "percentageChange": -100
+    }
+   },
+   "trends": [
+    {
+     "date": "2026-11-01",
+     "spend": 0.286481,
+     "clicks": 1,
+     "impressions": 5,
+     "conversions": 0,
+     "roas": 0,
+     "cpa": 0,
+     "gaSessions": 0,
+     "gaConversions": 0
+    }
+   ],
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   },
+   "previous_range": {
+    "since": "2026-10-19",
+    "until": "2026-10-25"
+   }
+  },
+  "top_campaigns": {
+   "scope": "top_campaigns",
+   "kpi": "spend",
+   "direction": "top",
+   "limit": 50,
+   "currency": "MXN",
+   "computed_at": "2026-11-02T20:01:16.996Z",
+   "total_rows_considered": 12,
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "coverage": {
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": true,
+    "reason": "row_limit"
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to the requested historical window; historical goal-setting changes are not reconstructed.",
+    "Ranking considered at most 50 entities, then returned 50; it is not a full account census."
+   ],
+   "rows": [
+    {
+     "id": "24321868026",
+     "name": "PMax | Octubre | Easy Fit | Leads",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "24321868026",
+       "name": "PMax | Octubre | Easy Fit | Leads"
+      }
+     },
+     "path_label": "PMax | Octubre | Easy Fit | Leads",
+     "labels": {
+      "channel_type": "PERFORMANCE_MAX"
+     },
+     "metrics": {
+      "spend": 0.2865,
+      "impressions": 5,
+      "clicks": 1,
+      "conversions": 0,
+      "conversionValue": 0,
+      "roas": 0,
+      "cpa": 0,
+      "costPerConversion": 0,
+      "ctr": 20,
+      "cpc": 0.2865,
+      "cpm": 57.2962,
+      "byResult": {
+       "leads": 0,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "ENABLED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": null,
+      "target_roas": null,
+      "budget_per_day": 320,
+      "search_impression_share": null,
+      "search_budget_lost_impression_share": null,
+      "search_rank_lost_impression_share": null
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "leads",
+      "unambiguous": true
+     },
+     "rank": 1,
+     "kpi": "spend",
+     "kpi_value": 0.2865,
+     "kpi_unit": "currency"
+    }
+   ],
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   }
+  }
+ },
+ "vivo47": {
+  "account_overview": {
+   "scope": "account_overview",
+   "currency": "MXN",
+   "metrics": {
+    "spend": 7622.3545,
+    "roas": 0.0013,
+    "impressions": 65929,
+    "clicks": 1799,
+    "ctr": 2.7287,
+    "cpc": 4.237,
+    "cpa": 762.2355,
+    "gaSessions": 0,
+    "gaConversions": 0
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to historical windows; historical goal-setting changes are not reconstructed."
+   ],
+   "coverage": {
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": false,
+    "reason": null
+   },
+   "comparison": {
+    "spend": {
+     "current": 7622.3545,
+     "previous": 10008.7631,
+     "percentageChange": -23.8432
+    },
+    "roas": {
+     "current": 0.0013,
+     "previous": 0.0016,
+     "percentageChange": -18.75
+    },
+    "impressions": {
+     "current": 65929,
+     "previous": 74478,
+     "percentageChange": -11.4786
+    },
+    "clicks": {
+     "current": 1799,
+     "previous": 2122,
+     "percentageChange": -15.2215
+    },
+    "ctr": {
+     "current": 2.7287,
+     "previous": 2.8492,
+     "percentageChange": -4.2293
+    },
+    "cpc": {
+     "current": 4.237,
+     "previous": 4.7167,
+     "percentageChange": -10.1702
+    },
+    "cpa": {
+     "current": 762.2355,
+     "previous": 625.5477,
+     "percentageChange": 21.8509
+    }
+   },
+   "trends": [
+    {
+     "date": "2026-10-26",
+     "spend": 1508.220014,
+     "clicks": 327,
+     "impressions": 12138,
+     "conversions": 0,
+     "roas": 0,
+     "cpa": 0,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-10-27",
+     "spend": 1240.673957,
+     "clicks": 282,
+     "impressions": 10100,
+     "conversions": 1,
+     "roas": 0.0008,
+     "cpa": 1240.674,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-10-28",
+     "spend": 1185.368858,
+     "clicks": 204,
+     "impressions": 9754,
+     "conversions": 1,
+     "roas": 0.0008,
+     "cpa": 1185.3689,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-10-29",
+     "spend": 1176.343335,
+     "clicks": 295,
+     "impressions": 11924,
+     "conversions": 2,
+     "roas": 0.0017,
+     "cpa": 588.1717,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-10-30",
+     "spend": 1409.54912,
+     "clicks": 271,
+     "impressions": 10416,
+     "conversions": 2,
+     "roas": 0.0014,
+     "cpa": 704.7746,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-10-31",
+     "spend": 869.661711,
+     "clicks": 343,
+     "impressions": 9151,
+     "conversions": 3,
+     "roas": 0.0034,
+     "cpa": 289.8872,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "date": "2026-11-01",
+     "spend": 232.537548,
+     "clicks": 77,
+     "impressions": 2446,
+     "conversions": 1,
+     "roas": 0.0043,
+     "cpa": 232.5375,
+     "gaSessions": 0,
+     "gaConversions": 0
+    }
+   ],
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   },
+   "previous_range": {
+    "since": "2026-10-19",
+    "until": "2026-10-25"
+   }
+  },
+  "top_campaigns": {
+   "scope": "top_campaigns",
+   "kpi": "spend",
+   "direction": "top",
+   "limit": 50,
+   "currency": "MXN",
+   "computed_at": "2026-11-02T20:01:24.322Z",
+   "total_rows_considered": 18,
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "coverage": {
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": true,
+    "reason": "row_limit"
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to the requested historical window; historical goal-setting changes are not reconstructed.",
+    "Ranking considered at most 50 entities, then returned 50; it is not a full account census."
+   ],
+   "rows": [
+    {
+     "id": "20775796216",
+     "name": "VIVO 47-EKATAR",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "20775796216",
+       "name": "VIVO 47-EKATAR"
+      }
+     },
+     "path_label": "VIVO 47-EKATAR",
+     "labels": {
+      "channel_type": "SEARCH"
+     },
+     "metrics": {
+      "spend": 6550.6834,
+      "impressions": 53156,
+      "clicks": 1213,
+      "conversions": 10,
+      "conversionValue": 10,
+      "roas": 0.0015,
+      "cpa": 655.0683,
+      "costPerConversion": 655.0683,
+      "ctr": 2.282,
+      "cpc": 5.4004,
+      "cpm": 123.2351,
+      "byResult": {
+       "leads": 10,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "ENABLED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": null,
+      "target_roas": null,
+      "budget_per_day": 1179,
+      "search_impression_share": 0.22775160146116788,
+      "search_budget_lost_impression_share": 0.7682248927947483,
+      "search_rank_lost_impression_share": 0.004023505744083858
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "leads",
+      "unambiguous": true
+     },
+     "rank": 1,
+     "kpi": "spend",
+     "kpi_value": 6550.6834,
+     "kpi_unit": "currency"
+    },
+    {
+     "id": "24331887298",
+     "name": "SALES-PMAX-OCTUBRE",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "24331887298",
+       "name": "SALES-PMAX-OCTUBRE"
+      }
+     },
+     "path_label": "SALES-PMAX-OCTUBRE",
+     "labels": {
+      "channel_type": "PERFORMANCE_MAX"
+     },
+     "metrics": {
+      "spend": 1071.6711,
+      "impressions": 12773,
+      "clicks": 586,
+      "conversions": 0,
+      "conversionValue": 0,
+      "roas": 0,
+      "cpa": 0,
+      "costPerConversion": 0,
+      "ctr": 4.5878,
+      "cpc": 1.8288,
+      "cpm": 83.9013,
+      "byResult": {
+       "leads": 0,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "PAUSED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": 400,
+      "target_roas": null,
+      "budget_per_day": 450,
+      "search_impression_share": 0.2064516129032258,
+      "search_budget_lost_impression_share": 0,
+      "search_rank_lost_impression_share": 0.7935483870967742
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "leads",
+      "unambiguous": true
+     },
+     "rank": 2,
+     "kpi": "spend",
+     "kpi_value": 1071.6711,
+     "kpi_unit": "currency"
+    }
+   ],
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   }
+  }
+ },
+ "pink": {
+  "account_overview": {
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   },
+   "scope": "account_overview",
+   "trends": [
+    {
+     "cpa": 0,
+     "date": "2026-10-26",
+     "roas": 0,
+     "spend": 235.537645,
+     "clicks": 26,
+     "conversions": 0,
+     "impressions": 768,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-10-27",
+     "roas": 0,
+     "spend": 945.511086,
+     "clicks": 74,
+     "conversions": 0,
+     "impressions": 1795,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-10-28",
+     "roas": 0,
+     "spend": 880.431087,
+     "clicks": 52,
+     "conversions": 0,
+     "impressions": 1528,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-10-29",
+     "roas": 0,
+     "spend": 574.670078,
+     "clicks": 39,
+     "conversions": 0,
+     "impressions": 1335,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-10-30",
+     "roas": 0,
+     "spend": 193.022424,
+     "clicks": 12,
+     "conversions": 0,
+     "impressions": 411,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-10-31",
+     "roas": 0,
+     "spend": 0,
+     "clicks": 0,
+     "conversions": 0,
+     "impressions": 32,
+     "gaSessions": 0,
+     "gaConversions": 0
+    },
+    {
+     "cpa": 0,
+     "date": "2026-11-01",
+     "roas": 0,
+     "spend": 0,
+     "clicks": 0,
+     "conversions": 0,
+     "impressions": 38,
+     "gaSessions": 0,
+     "gaConversions": 0
+    }
+   ],
+   "metrics": {
+    "cpa": 0,
+    "cpc": 13.9368,
+    "ctr": 3.4366,
+    "roas": 0,
+    "spend": 2829.1723,
+    "clicks": 203,
+    "impressions": 5907,
+    "gaSessions": 0,
+    "gaConversions": 0
+   },
+   "coverage": {
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "reason": null,
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": false
+   },
+   "currency": "MXN",
+   "comparison": {
+    "cpa": {
+     "current": 0,
+     "previous": 3772.5857,
+     "percentageChange": -100
+    },
+    "cpc": {
+     "current": 13.9368,
+     "previous": 12.3287,
+     "percentageChange": 13.0435
+    },
+    "ctr": {
+     "current": 3.4366,
+     "previous": 3.5185,
+     "percentageChange": -2.3277
+    },
+    "roas": {
+     "current": 0,
+     "previous": 0.1955,
+     "percentageChange": -100
+    },
+    "spend": {
+     "current": 2829.1723,
+     "previous": 3772.5857,
+     "percentageChange": -25.0071
+    },
+    "clicks": {
+     "current": 203,
+     "previous": 306,
+     "percentageChange": -33.6601
+    },
+    "impressions": {
+     "current": 5907,
+     "previous": 8697,
+     "percentageChange": -32.08
+    }
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to historical windows; historical goal-setting changes are not reconstructed."
+   ],
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "purchases",
+    "unambiguous": true
+   },
+   "previous_range": {
+    "since": "2026-10-19",
+    "until": "2026-10-25"
+   }
+  },
+  "top_campaigns": {
+   "scope": "top_campaigns",
+   "kpi": "spend",
+   "direction": "top",
+   "limit": 50,
+   "currency": "MXN",
+   "computed_at": "2026-11-02T20:01:30.835Z",
+   "total_rows_considered": 13,
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "purchases",
+    "unambiguous": true
+   },
+   "coverage": {
+    "requested": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "read": {
+     "since": "2026-10-26",
+     "until": "2026-11-01"
+    },
+    "truncated": true,
+    "reason": "row_limit"
+   },
+   "limitations": [
+    "Current conversion-action metadata is applied to the requested historical window; historical goal-setting changes are not reconstructed.",
+    "Ranking considered at most 50 entities, then returned 50; it is not a full account census."
+   ],
+   "rows": [
+    {
+     "id": "22550284746",
+     "name": "Cursos-pink-elephant-2025",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "22550284746",
+       "name": "Cursos-pink-elephant-2025"
+      }
+     },
+     "path_label": "Cursos-pink-elephant-2025",
+     "labels": {
+      "channel_type": "SEARCH"
+     },
+     "metrics": {
+      "spend": 1204.7624,
+      "impressions": 1963,
+      "clicks": 106,
+      "conversions": 0,
+      "conversionValue": 0,
+      "roas": 0,
+      "cpa": 0,
+      "costPerConversion": 0,
+      "ctr": 5.3999,
+      "cpc": 11.3657,
+      "cpm": 613.7353,
+      "byResult": {
+       "leads": 2,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "ENABLED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": null,
+      "target_roas": null,
+      "budget_per_day": 200,
+      "search_impression_share": 0.12391486978437412,
+      "search_budget_lost_impression_share": 0.23634836180341642,
+      "search_rank_lost_impression_share": 0.6397367684122095
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "purchases",
+      "unambiguous": true
+     },
+     "rank": 1,
+     "kpi": "spend",
+     "kpi_value": 1204.7624,
+     "kpi_unit": "currency"
+    },
+    {
+     "id": "24359269892",
+     "name": "ITSM 2026",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "24359269892",
+       "name": "ITSM 2026"
+      }
+     },
+     "path_label": "ITSM 2026",
+     "labels": {
+      "channel_type": "SEARCH"
+     },
+     "metrics": {
+      "spend": 992.845,
+      "impressions": 3478,
+      "clicks": 74,
+      "conversions": 0,
+      "conversionValue": 0,
+      "roas": 0,
+      "cpa": 0,
+      "costPerConversion": 0,
+      "ctr": 2.1277,
+      "cpc": 13.4168,
+      "cpm": 285.4643,
+      "byResult": {
+       "leads": 0,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "ENABLED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": null,
+      "target_roas": null,
+      "budget_per_day": 200,
+      "search_impression_share": 0.0999,
+      "search_budget_lost_impression_share": 0.20806201550387596,
+      "search_rank_lost_impression_share": 0.69984496124031
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "purchases",
+      "unambiguous": true
+     },
+     "rank": 2,
+     "kpi": "spend",
+     "kpi_value": 992.845,
+     "kpi_unit": "currency"
+    },
+    {
+     "id": "23921941100",
+     "name": "Eventos 2026",
+     "level": "campaign",
+     "hierarchy": {
+      "campaign": {
+       "id": "23921941100",
+       "name": "Eventos 2026"
+      }
+     },
+     "path_label": "Eventos 2026",
+     "labels": {
+      "channel_type": "SEARCH"
+     },
+     "metrics": {
+      "spend": 631.5649,
+      "impressions": 466,
+      "clicks": 23,
+      "conversions": 0,
+      "conversionValue": 0,
+      "roas": 0,
+      "cpa": 0,
+      "costPerConversion": 0,
+      "ctr": 4.9356,
+      "cpc": 27.4593,
+      "cpm": 1355.2895,
+      "byResult": {
+       "leads": 0,
+       "purchases": 0,
+       "signups": 0
+      }
+     },
+     "google": {
+      "status": "ENABLED",
+      "bidding_strategy_type": "MAXIMIZE_CONVERSIONS",
+      "bidding_strategy_system_status": "ENABLED",
+      "target_cpa": null,
+      "target_roas": null,
+      "budget_per_day": 100,
+      "search_impression_share": 0.1994627266621894,
+      "search_budget_lost_impression_share": 0.35057085292142376,
+      "search_rank_lost_impression_share": 0.44996642041638685
+     },
+     "result_basis": {
+      "rule": "google_conversion_rule_v1",
+      "bucket": "purchases",
+      "unambiguous": true
+     },
+     "rank": 3,
+     "kpi": "spend",
+     "kpi_value": 631.5649,
+     "kpi_unit": "currency"
+    }
+   ],
+   "range": {
+    "since": "2026-10-26",
+    "until": "2026-11-01",
+    "preset": "custom"
+   }
+  }
+ }
+}

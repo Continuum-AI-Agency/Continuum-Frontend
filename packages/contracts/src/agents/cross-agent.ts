@@ -264,30 +264,35 @@ export const agentSessionListFiltersSchema = z.object({
 export type AgentSessionListFilters = z.infer<typeof agentSessionListFiltersSchema>;
 
 /**
- * PostgREST's `or=` value is a comma-separated, dot-delimited micro-syntax, so a
- * raw user term containing `,` `.` `(` `)` or a LIKE wildcard would change the
- * meaning of the expression rather than be matched literally. Those characters
- * are replaced by spaces: trigram search does not need them, and dropping them
- * is strictly safer than quoting rules that differ per PostgREST version.
+ * A search term as a PostgREST `ilike` value that matches the text typed. `or=` is a
+ * comma-separated, dot-delimited micro-syntax, so the value is double-quoted (inside quotes `,`
+ * `.` `(` `)` `:` are text, and only `"` and `\` are escaped); LIKE's own wildcards `%` and `_`
+ * are escaped so they match themselves; `*`, PostgREST's alias for `%`, is dropped. The term
+ * used to be SANITIZED instead — those characters replaced by spaces — so a search for "%" became
+ * no search and listed every conversation (PP-DT-C-jaina-search-wildcards-and-firewall-500).
+ * Prod PostgREST reads `"*\\%*"` as a literal percent (0 rows, where `*%*` matched all 247).
+ * Empty when nothing is left to search for, which callers read as "apply no search filter".
  */
-export const sanitizeAgentSessionSearchTerm = (term: string): string =>
-  term
-    .replace(/[,.()"'\\%_*:]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+export const quoteAgentSessionSearchTerm = (term: string): string => {
+  const text = term.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  if (text.length === 0) return '';
+  const likePattern = text.replace(/[\\%_]/g, (character) => `\\${character}`);
+  const quoted = likePattern.replace(/[\\"]/g, (character) => `\\${character}`);
+  return `"*${quoted}*"`;
+};
 
 /**
  * The PostgREST `or` expression for a search term across the given columns:
- * `title.ilike.*term*,preview.ilike.*term*`. Empty when the term sanitizes away,
- * which callers must read as "apply no search filter" (never "match nothing").
+ * `title.ilike."*term*",preview.ilike."*term*"`. Empty when nothing is left to search for,
+ * which callers must read as "apply no search filter".
  */
 export const buildAgentSessionSearchExpression = (
   term: string,
   columns: readonly string[],
 ): string => {
-  const sanitized = sanitizeAgentSessionSearchTerm(term);
-  if (sanitized.length === 0 || columns.length === 0) return '';
-  return columns.map((column) => `${column}.ilike.*${sanitized}*`).join(',');
+  const value = quoteAgentSessionSearchTerm(term);
+  if (value.length === 0 || columns.length === 0) return '';
+  return columns.map((column) => `${column}.ilike.${value}`).join(',');
 };
 
 /** Column names differ per agent (organic `title` vs Jaina `conversation_title`). */

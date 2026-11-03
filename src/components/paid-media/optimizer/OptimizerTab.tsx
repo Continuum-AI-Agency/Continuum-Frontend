@@ -17,7 +17,6 @@
 import type { PortfolioListItem } from '@continuum/contracts';
 import { ArrowRightIcon, ChevronLeftIcon, FileTextIcon, LayersIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +24,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { cn } from '@/lib/utils';
+import { EasyfitDashboard } from './dashboard/EasyfitDashboard';
+import { isEasyfitBrand } from './dashboard/easyfitBrand';
+import { useDashboardCopy } from './dashboard/i18n/useDashboardLocale';
 import { pendingWorkCount } from './reportModel';
 import { AccountAutomations } from './sections/account/AccountAutomations';
 import { jainaWeeklyReportPrompt } from './sections/jainaEntryModel';
@@ -39,6 +41,8 @@ import { OptimizerPortfolios } from './sections/OptimizerPortfolios';
 import { PortfolioCreateView } from './sections/PortfolioCreateView';
 import { PortfolioDetailWorkspace } from './sections/PortfolioDetailWorkspace';
 import { connectedFromMetrics } from './sections/platforms/accountPlatformMetricsModel';
+import { PlatformIcon } from './sections/platforms/PlatformChip';
+import { platformTabKeyHandler } from './sections/platforms/PlatformTabs';
 import {
   type AdPlatform,
   connectedPlatforms,
@@ -109,25 +113,35 @@ function OptimizerSkeleton() {
 }
 
 /** Whether each platform reads as connected for the platform switch. Either source saying so is
- *  enough: the brand's granted accounts, or the multi-platform producer having read it. The
- *  selected account is a Meta account the brand already reads, so Meta is connected even while
- *  the account list is still loading or failed. */
-function useConnectedPlatforms(brandId: string, adAccountId: string): Record<AdPlatform, boolean> {
+ *  enough: the brand's granted accounts, or the multi-platform producer having read it. A selected
+ *  account on Scale's Meta platform is a Meta account the brand already reads, so Meta is connected
+ *  even while the account list is still loading or failed — but only on Meta: a Google-only brand
+ *  opens Scale on its Google account, and that account says nothing about Meta. */
+function useConnectedPlatforms(
+  brandId: string,
+  adAccountId: string,
+  scalePlatform: PaidMediaPlatform,
+): Record<AdPlatform, boolean> {
   const accounts = useOptimizerAdAccounts(brandId);
   const metrics = useAccountPlatformMetrics(brandId);
   return useMemo(() => {
     const granted = connectedPlatforms(accounts.data);
     const read = metrics.status === 'ready' ? connectedFromMetrics(metrics.metrics) : null;
+    const selectedMeta = scalePlatform === 'meta' && Boolean(adAccountId);
+    const selectedGoogle = scalePlatform === 'google-ads' && Boolean(adAccountId);
     return {
-      meta: granted.meta || Boolean(adAccountId) || Boolean(read?.meta),
-      google_ads: granted.google_ads || Boolean(read?.google_ads),
+      meta: granted.meta || selectedMeta || Boolean(read?.meta),
+      google_ads: granted.google_ads || selectedGoogle || Boolean(read?.google_ads),
       tiktok_ads: granted.tiktok_ads || Boolean(read?.tiktok_ads),
     };
-  }, [accounts.data, adAccountId, metrics]);
+  }, [accounts.data, adAccountId, metrics, scalePlatform]);
 }
 
-/** All · Meta · Google · TikTok as one segmented control. A platform without a connection stays
- *  and says "Connect" — a missing tab reads as "we don't do TikTok", not "not connected yet". */
+/** All · Meta · Google · TikTok as one segmented control, each platform led by its own logo. A
+ *  platform without a connection stays and says "Connect" — a missing tab reads as "we don't do
+ *  TikTok", not "not connected yet" — and its logo is muted, so the row still reads at a glance.
+ *  It is a tablist, so the keyboard meets it as one: a single Tab stop on the picked platform,
+ *  and the arrows pick the next one. */
 function PlatformSwitch({
   value,
   onChange,
@@ -142,6 +156,7 @@ function PlatformSwitch({
       aria-label="Ad platform"
       className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-[3px]"
       data-testid="platform-tabs"
+      onKeyDown={platformTabKeyHandler(onChange)}
       role="tablist"
     >
       {PLATFORM_TABS.map((tab) => {
@@ -152,7 +167,7 @@ function PlatformSwitch({
           <button
             aria-selected={active}
             className={cn(
-              'hit-area inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors',
+              'hit-area inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active
                 ? 'bg-background text-foreground shadow-sm'
@@ -164,8 +179,17 @@ function PlatformSwitch({
             key={tab}
             onClick={() => onChange(tab)}
             role="tab"
+            tabIndex={active ? 0 : -1}
             type="button"
           >
+            {platform ? (
+              <PlatformIcon
+                className={cn('size-4', disconnected && 'opacity-50 grayscale')}
+                platform={platform}
+              />
+            ) : (
+              <LayersIcon aria-hidden="true" className="size-4 shrink-0" />
+            )}
             {platformTabLabel(tab)}
             {disconnected ? (
               <span className="font-normal text-muted-foreground">· Connect</span>
@@ -284,7 +308,8 @@ export function OptimizerTab({
   const currency = useAdAccountCurrency(brandId, adAccountId);
   const prefetchPortfolioDetail = usePrefetchPortfolioDetail(brandId);
   const warmActionsQueue = useWarmActionsQueue(brandId);
-  const connected = useConnectedPlatforms(brandId, adAccountId);
+  const connected = useConnectedPlatforms(brandId, adAccountId, platform);
+  const dashboardCopy = useDashboardCopy().t;
 
   const googlePortfolios = useOptimizerPlatformPortfolios(brandId, 'google_ads').data;
   const tiktokPortfolios = useOptimizerPlatformPortfolios(brandId, 'tiktok_ads').data;
@@ -292,13 +317,14 @@ export function OptimizerTab({
   const portfolios = portfoliosQuery.data;
   const pendingCount = totalPending(portfolios);
   const renewalCount = renewalsQuery.data.length;
-  // Actions is the brand's queue for this account AND every Google or TikTok portfolio, so its
-  // badge counts the same list the tab renders.
-  const actionPortfolios = useMemo(
+  // Actions and Portfolios list this account's portfolios AND every Google or TikTok one: the
+  // account picker lists Meta accounts only, so a Google-only portfolio is on no account a person
+  // can select. The Actions badge counts the same list the tab renders.
+  const accountAndPlatformPortfolios = useMemo(
     () => withPlatformPortfolios(portfolios, googlePortfolios, tiktokPortfolios),
     [portfolios, googlePortfolios, tiktokPortfolios],
   );
-  const actionsPending = totalPending(actionPortfolios);
+  const actionsPending = totalPending(accountAndPlatformPortfolios);
   const landingPlatform: AdPlatform | null =
     googlePortfolios.length > 0 ? 'google_ads' : tiktokPortfolios.length > 0 ? 'tiktok_ads' : null;
 
@@ -312,6 +338,15 @@ export function OptimizerTab({
     landedOnPlatform.current = true;
     if (rendersManagedOverview(platformTab)) setPlatform(landingPlatform);
   }, [accountIsEmpty, landingPlatform, platformTab, setPlatform]);
+
+  // Scale opened on a Google account (a brand whose ad accounts are all Google's): its Overview is
+  // the Google tab. "All" lists the managed Meta rows and showed a greyed headline over nothing.
+  const landedOnGoogle = useRef(false);
+  useEffect(() => {
+    if (landedOnGoogle.current || platform !== 'google-ads') return;
+    landedOnGoogle.current = true;
+    if (platformTab === 'all') setPlatform('google_ads');
+  }, [platform, platformTab, setPlatform]);
 
   // Only reachable when the selected account has NO portfolios — the tabbed view (and its
   // own scope toggle) never renders in that state, so the notice hands off to here instead.
@@ -501,7 +536,6 @@ export function OptimizerTab({
         <PortfolioDetailWorkspace
           adAccountId={adAccountId}
           brandId={brandId}
-          currency={currency}
           chartMetric={metric}
           onClose={closePortfolio}
           onMetricChange={setMetric}
@@ -517,7 +551,11 @@ export function OptimizerTab({
     );
   }
 
-  const showsOverviewChrome = view === 'overview';
+  // The Easy Fit dashboard exists for one brand; a `dashboard` link opened on any other brand
+  // lands on the Overview instead of an empty tab.
+  const showsDashboard = isEasyfitBrand(brandId);
+  const activeView = view === 'dashboard' && !showsDashboard ? 'overview' : view;
+  const showsOverviewChrome = activeView === 'overview';
   // The line variant hangs its underline 5px below the trigger; here it sits on the bar's hairline.
   const subTab = 'h-9 flex-none px-0 text-xs group-data-horizontal/tabs:after:bottom-0';
   return (
@@ -525,7 +563,7 @@ export function OptimizerTab({
     // the bar wraps and the five tabs scroll inside it: the tab list alone is wider than a 390px
     // screen, and it used to widen the whole surface past the viewport.
     <Tabs
-      value={view}
+      value={activeView}
       onValueChange={(value) => setView(value as typeof view)}
       className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden"
     >
@@ -544,8 +582,8 @@ export function OptimizerTab({
             <TabsTrigger
               value="actions"
               className={subTab}
-              onMouseEnter={() => warmActionsQueue(actionPortfolios)}
-              onFocus={() => warmActionsQueue(actionPortfolios)}
+              onMouseEnter={() => warmActionsQueue(accountAndPlatformPortfolios)}
+              onFocus={() => warmActionsQueue(accountAndPlatformPortfolios)}
             >
               Actions
               {actionsPending + renewalCount > 0 ? (
@@ -560,6 +598,11 @@ export function OptimizerTab({
             <TabsTrigger value="logs" className={subTab}>
               Activity
             </TabsTrigger>
+            {showsDashboard ? (
+              <TabsTrigger value="dashboard" className={subTab}>
+                {dashboardCopy.tab}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
           {portfoliosQuery.isError ? (
             <RefreshFailedNotice onRetry={() => void portfoliosQuery.refetch()} />
@@ -618,7 +661,7 @@ export function OptimizerTab({
         <OptimizerPortfolios
           brandId={brandId}
           adAccountId={adAccountId}
-          portfolios={portfolios}
+          portfolios={accountAndPlatformPortfolios}
           currency={currency}
           onCreate={openCreate}
           onOpenDetail={openPortfolio}
@@ -637,7 +680,7 @@ export function OptimizerTab({
         <OptimizerActions
           brandId={brandId}
           adAccountId={adAccountId}
-          portfolios={actionPortfolios}
+          portfolios={accountAndPlatformPortfolios}
           renewals={renewalsQuery.data}
           onBrowsePortfolios={() => setView('portfolios')}
         />
@@ -648,16 +691,16 @@ export function OptimizerTab({
         className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
       >
         <OptimizerActivity brandId={brandId} />
-        <div className="mt-4 border-t border-border/60 pt-4">
-          <SectionHeader title="Notifications" />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Get a Slack message when the optimizer moves budget, instead of checking this log.
-          </p>
-          <div className="mt-3">
-            <OptimizerNotificationsSection brandId={brandId} />
-          </div>
-        </div>
       </TabsContent>
+
+      {showsDashboard ? (
+        <TabsContent
+          value="dashboard"
+          className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-3"
+        >
+          <EasyfitDashboard brandId={brandId} />
+        </TabsContent>
+      ) : null}
     </Tabs>
   );
 }

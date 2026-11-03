@@ -53,6 +53,48 @@ describe('resolveHomeObjectives', () => {
     expect(resolved.source).toBe('inferred');
     expect(resolved.objectives[0]?.metric).toBe('leads');
   });
+
+  const suggested = [
+    {
+      id: 'purchase_value',
+      label: 'Revenue',
+      metric: 'purchase_value' as const,
+      role: 'primary' as const,
+    },
+  ];
+
+  it("leads with the business's suggested goals while the account has no result", () => {
+    const resolved = resolveHomeObjectives({
+      scope: 'brand',
+      rows: [],
+      totals: { spend: 120, clicks: 40 },
+      suggested,
+    });
+    expect(resolved.objectives).toEqual(suggested);
+    expect(resolved.source).toBe('inferred');
+    expect(resolved.fromSuggestion).toBe(true);
+  });
+
+  it('lets a real result outrank the suggestion', () => {
+    const resolved = resolveHomeObjectives({
+      scope: 'brand',
+      rows: [],
+      totals: { leads: 2 },
+      suggested,
+    });
+    expect(resolved.objectives[0]?.metric).toBe('leads');
+    expect(resolved.fromSuggestion).toBe(false);
+  });
+
+  it('never lets a suggestion outrank what the team saved', () => {
+    const resolved = resolveHomeObjectives({
+      scope: 'brand',
+      rows: [brandRow],
+      totals: {},
+      suggested,
+    });
+    expect(resolved.objectives[0]?.label).toBe('Tours booked');
+  });
 });
 
 describe('objective list rules', () => {

@@ -65,6 +65,13 @@ export const briefGrowthSchema = z.object({
   as_of: z.string(),
   currency: z.string().nullable().default(null),
   result_label: z.string(),
+  /**
+   * False when no read covered the window: `spend` and `results` are 0 only because nothing
+   * was measured, never because nothing was spent. A Google portfolio's brief once read "No
+   * spend and no leads" from an empty Meta snapshot table while the page read 4,332 MXN and
+   * 176 leads (G8 F16). Absent on briefs written before the field: those were measured.
+   */
+  measured: z.boolean().optional(),
 });
 export type BriefGrowth = z.infer<typeof briefGrowthSchema>;
 
@@ -341,6 +348,7 @@ function headlineFor(c: BriefCandidate, currency: string | null, resultLabel: st
 }
 
 export function growthSentence(growth: BriefGrowth): string {
+  if (growth.measured === false) return `No read of the last ${growth.window.slice(1)} days yet`;
   const parts: string[] = [];
   const pct = (v: number | null) =>
     v == null ? null : `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
@@ -486,7 +494,12 @@ export function calmHero(args: {
       ? standing.confidence !== 'low'
       : growth.results >= STANDING_EVENT_FLOOR;
 
-  if (growth.results === 0) {
+  if (growth.measured === false) {
+    // Unread is not idle: zeros here are the absence of a read, and "no spend" would be a
+    // claim nobody measured.
+    headline = `No read of the last ${days} days yet`;
+    why = `This portfolio's figures for the window have not been read yet, so nothing is said about its spend or ${label}.`;
+  } else if (growth.results === 0) {
     headline =
       growth.spend <= 0
         ? `No spend and no ${label} in ${days} days`
@@ -541,17 +554,17 @@ export function deterministicBrief(args: {
   const heroIsTop = top !== undefined && heroThresholdMet(ranked, args.dailyTotal);
   const hero: BriefHero = heroIsTop
     ? {
-          module: top.module,
-          candidate_id: top.id,
-          headline: headlineFor(top, args.growth.currency, args.growth.result_label),
-          why: (top.reason ?? top.impact_basis).slice(0, 240),
-          impact_per_day: top.impact_per_day,
-          impact_unit: 'currency',
-          impact_basis: top.impact_basis,
-          justification: null,
-          confidence_note: null,
-          cta: top.cta,
-        }
+        module: top.module,
+        candidate_id: top.id,
+        headline: headlineFor(top, args.growth.currency, args.growth.result_label),
+        why: (top.reason ?? top.impact_basis).slice(0, 240),
+        impact_per_day: top.impact_per_day,
+        impact_unit: 'currency',
+        impact_basis: top.impact_basis,
+        justification: null,
+        confidence_note: null,
+        cta: top.cta,
+      }
     : calmHero({
         growth: args.growth,
         candidates: ranked,

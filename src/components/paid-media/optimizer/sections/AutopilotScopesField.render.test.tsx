@@ -125,3 +125,74 @@ describe('AutopilotScopesField', () => {
     expect(container.textContent).toContain('needs a person to act as');
   });
 });
+
+// The Automations page's shape: the same switches as a row of chips under each portfolio's dial,
+// what each one does on hover, the same partial patch and the same refusal handling.
+describe('AutopilotScopesField — chips', () => {
+  it('names every scope it is shown, saves one as a partial patch, and keeps its body on hover', () => {
+    const changes: Array<[string, boolean]> = [];
+    const { container, getByRole } = render(
+      <AutopilotScopesField
+        noActor={false}
+        onChange={(scope, enabled) => {
+          changes.push([scope, enabled]);
+        }}
+        portfolioId="p1"
+        savingScope={null}
+        scopes={DEFAULT_AUTOPILOT_SCOPES}
+        shown={(scope) => scope !== 'budget_move'}
+        variant="chips"
+      />,
+    );
+    const chips = Array.from(container.querySelectorAll('[data-scope]'));
+    expect(chips.map((chip) => chip.getAttribute('data-scope'))).toEqual([
+      'budget',
+      'creative_swap',
+      'audience_change',
+      'new_audience',
+      'new_creatives',
+    ]);
+    expect(chips[0]?.getAttribute('title')).toBe('Applied automatically within the guardrails.');
+    expect(getByRole('switch', { name: 'Budget moves' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(getByRole('switch', { name: 'Add an audience' }));
+    expect(changes).toEqual([['new_audience', true]]);
+  });
+
+  it('holds every switch while one saves', () => {
+    const { getByRole } = render(
+      <AutopilotScopesField
+        noActor={false}
+        onChange={() => undefined}
+        portfolioId="p1"
+        savingScope="budget"
+        scopes={DEFAULT_AUTOPILOT_SCOPES}
+        variant="chips"
+      />,
+    );
+    const swap = getByRole('switch', { name: 'Creative rotation' });
+    expect(
+      swap.hasAttribute('data-disabled') || swap.getAttribute('aria-disabled') === 'true',
+    ).toBe(true);
+  });
+
+  it('says "not available yet" under the chips when the backend rejects the key', async () => {
+    const { getByRole, getByTestId } = render(
+      <AutopilotScopesField
+        noActor={false}
+        onChange={() =>
+          Promise.reject(new OptimizerRpcError('Could not update the portfolio.', '23514'))
+        }
+        portfolioId="p1"
+        savingScope={null}
+        scopes={DEFAULT_AUTOPILOT_SCOPES}
+        variant="chips"
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(getByRole('switch', { name: 'Move budget between platforms' }));
+    });
+    await waitFor(() =>
+      expect(getByTestId('budget-move-unavailable').textContent).toContain('not available yet'),
+    );
+  });
+});

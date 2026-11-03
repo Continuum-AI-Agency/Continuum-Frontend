@@ -373,6 +373,20 @@ export const GOOGLE_ACCOUNT_NEGATIVES = parse({
   blocked: 'GHL → WooCommerce: no connector, so sales per term are not measured yet.',
 });
 
+/** An ABO ad set on COST_CAP at 400 MXN against a 300 MXN portfolio goal: a 20% step to 320. */
+export const META_COST_CAP = parse({
+  variant: 'meta_cost_cap',
+  ad_set_name: 'Leads | Prospecting',
+  campaign_name: 'Leads',
+  currency: 'MXN',
+  strategy_owner: 'adset',
+  current_cap: 400,
+  proposed_cap: 320,
+  portfolio_goal: 300,
+  max_change_pct: 0.2,
+  days_since_last_change: null,
+});
+
 export const EVERY_CARD = [
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_PMAX,
@@ -396,4 +410,5 @@ export const EVERY_CARD = [
   GOOGLE_AUDIENCE_SATURATION,
   GOOGLE_PMAX_ASSETS,
   GOOGLE_ACCOUNT_COURSE_SPLIT,
+  META_COST_CAP,
 ] as const;

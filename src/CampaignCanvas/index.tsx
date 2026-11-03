@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import Link from 'next/link';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -24,7 +24,31 @@ import { CampaignCanvas } from './components/CampaignCanvas';
 import { CampaignCreativeActionsProvider } from './components/CampaignCreativeActions';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import { useCanvasChatBridge } from './hooks/useCanvasChatBridge';
+import { CanvasViewToggle, useCanvasView } from './lectura/CanvasViewToggle';
+import { StoreLectura } from './lectura/StoreLectura';
 import { useCampaignStore } from './stores/useCampaignStore';
+
+/** The room Read leaves above itself for the floating bar: the bar's bottom edge plus a gap. */
+export const barClearancePx = (bar: { offsetTop: number; offsetHeight: number }): number =>
+  Math.ceil(bar.offsetTop + bar.offsetHeight + 12);
+
+/**
+ * The floating bar is one row on a wide screen, two with a loaded proposal, and wraps further on
+ * a phone; Read (drawn under it) needs its live height, so the page measures it as it changes.
+ */
+function useBarClearance(bar: React.RefObject<HTMLDivElement | null>): number | null {
+  const [clearance, setClearance] = useState<number | null>(null);
+  useEffect(() => {
+    const element = bar.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const update = () => setClearance(barClearancePx(element));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [bar]);
+  return clearance;
+}
 
 /** Where "Back to chat" leads: the thread that opened this canvas, else the Jaina tab. */
 export const jainaThreadHref = (sessionId: string | null): string =>
@@ -44,7 +68,16 @@ const CampaignFlowCanvasPage = ({
   const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
+  // The full page is where people build by hand: auto opens the Map, Read is one click away,
+  // and the pick is remembered with the companion's own manual pick (canvasView.ts).
+  const { view, setView, isPhone, startEditing, openByHand } = useCanvasView('manual');
+  const isDirty = useCampaignStore((store) => store.isDirty);
+  React.useEffect(() => {
+    if (isDirty) startEditing();
+  }, [isDirty, startEditing]);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const barClearance = useBarClearance(barRef);
 
   const { activeBrandId, brandSummaries, user } = useActiveBrandContext();
   const brandName = useMemo(
@@ -101,14 +134,13 @@ const CampaignFlowCanvasPage = ({
       <ReactFlowProvider>
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
-          <CanvasJainaContext.Provider value={bridge.canvasJaina}>
-            <CampaignCreativeActionsProvider value={handleGenerateCreative}>
-              <CampaignCanvas />
-            </CampaignCreativeActionsProvider>
-          </CanvasJainaContext.Provider>
-
           {/* The record this canvas is showing, and the one way forward from it. */}
-          <div className="pointer-events-none absolute top-3 left-1/2 z-40 flex -translate-x-1/2 items-start gap-2">
+          {/* A phone wraps the bar inside the screen; centring it there pushed Back to chat
+              and the Map/Read switch off both edges. */}
+          <div
+            ref={barRef}
+            className="pointer-events-none absolute inset-x-2 top-3 z-40 flex flex-wrap items-start justify-center gap-2 lg:inset-x-auto lg:left-1/2 lg:flex-nowrap lg:-translate-x-1/2"
+          >
             {/* Back to the conversation this canvas was opened from. */}
             <Link
               href={jainaThreadHref(requestedSessionId)}
@@ -131,7 +163,35 @@ const CampaignFlowCanvasPage = ({
               onDeploy={bridge.deployInChat}
               deployInFlight={deploy.inFlight}
               deployRefusal={deploy.refusal}
+              onScaffoldPicked={openByHand}
             />
+            <div className="pointer-events-auto shrink-0 rounded-lg bg-background/90 shadow-sm backdrop-blur">
+              <CanvasViewToggle view={view} onChange={setView} mapDisabled={isPhone} />
+            </div>
+          </div>
+
+          {view === 'lectura' ? (
+            <div
+              className="absolute inset-0 z-30 bg-background"
+              data-testid="canvas-page-read"
+              style={
+                barClearance === null
+                  ? undefined
+                  : ({ '--canvas-bar-clearance': `${barClearance}px` } as React.CSSProperties)
+              }
+            >
+              <StoreLectura size="page" />
+            </div>
+          ) : null}
+
+          {/* The Map last in the DOM, so Tab reaches the bar before any node or edge; inert while
+              Read covers it, so a keyboard never wanders through what it cannot see. */}
+          <div className="h-full w-full" inert={view === 'lectura'}>
+            <CanvasJainaContext.Provider value={bridge.canvasJaina}>
+              <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                <CampaignCanvas />
+              </CampaignCreativeActionsProvider>
+            </CanvasJainaContext.Provider>
           </div>
 
           {/* Jaina Floating Chat */}

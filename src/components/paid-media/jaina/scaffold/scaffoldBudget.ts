@@ -34,12 +34,3 @@ export const formatCampaignBudgetShare = (
   );
   return `${fraction} · ${whole ? '' : '≈ '}${amount}`;
 };
-
-/** One ad set's budget as every view says it: its share of the campaign's under CBO, else its own. */
-export const formatAdSetBudget = (
-  adSet: { dailyBudgetMinorUnits: number | null; campaignBudgetShare: CampaignBudgetShare | null },
-  currency: string | null,
-): string =>
-  adSet.campaignBudgetShare
-    ? formatCampaignBudgetShare(adSet.campaignBudgetShare, currency)
-    : formatDailyBudget(adSet.dailyBudgetMinorUnits, currency);

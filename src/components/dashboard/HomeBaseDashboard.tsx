@@ -1,10 +1,12 @@
 'use client';
 
+import type { HomeBrandReading } from '@continuum/contracts';
 import { motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import React from 'react';
 import { FirstRunSetup } from '@/components/dashboard/first-run/FirstRunSetup';
 import type { DashboardSetupState } from '@/components/dashboard/first-run/setupState';
+import { HomeReadingStrip } from '@/components/dashboard/overview/HomeReadingStrip';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -14,6 +16,8 @@ type Props = {
   // Present + incomplete = surface the first-run guided setup.
   setup?: DashboardSetupState;
   brandBookRefreshedAt?: string | null;
+  /** How the Home reads a brand with nothing connected yet: it leads the setup checklist. */
+  reading?: HomeBrandReading | null;
 };
 
 type DashboardView = 'overview' | 'paid' | 'organic' | 'all';
@@ -53,6 +57,7 @@ export function HomeBaseDashboard({
   activeViewSlot,
   setup,
   brandBookRefreshedAt = null,
+  reading = null,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
@@ -107,8 +112,10 @@ export function HomeBaseDashboard({
               <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Dashboard view
               </span>
+              {/* The segments touch, so the row caps each pad at its own edge: under a coarse
+                  pointer a 44 px pad reached into the next segment's drawn box. */}
               <nav
-                className="inline-flex rounded-md border border-border bg-background p-0.5"
+                className="hit-area-row inline-flex rounded-md border border-border bg-background p-0.5"
                 aria-label="Dashboard view options"
               >
                 {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
@@ -148,6 +155,12 @@ export function HomeBaseDashboard({
       {/* No inline padding: the panes inside own their own gutter, so adding one
           here charges the shell gutter a second time and misaligns nothing. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        {!hasData && reading ? (
+          <div className="px-[var(--card-pad)] pt-4">
+            <HomeReadingStrip reading={reading} />
+          </div>
+        ) : null}
+
         {firstRunSetup ? (
           <FirstRunSetup setup={firstRunSetup} brandBookRefreshedAt={brandBookRefreshedAt} />
         ) : null}

@@ -191,6 +191,41 @@ describe('P8 account detectors', () => {
     ).not.toContain('acct_brand_vs_nonbrand');
   });
 
+  test('brand vs non-brand: its price is per conversion GOOGLE reports, and says when those are visits', () => {
+    // PP-DT-B-brand-split-card-counts-ga4-visits (deep test 2026-10-31): Vivo 47's card read
+    // "$8.95 MXN per conversion" beside a "$45.07 MXN per lead" headline, off search-term
+    // conversions 85% of which the account's GA4 events made.
+    const terms = [
+      { term: 'acme club', spend: 600, conv: 20 },
+      { term: 'gimnasio cerca', spend: 400, conv: 2 },
+    ].map((t) => ({
+      term: t.term,
+      campaign_id: '1',
+      ad_group_id: '11',
+      status: 'NONE' as const,
+      matched_keyword: null,
+      totals: totals(t.spend, t.conv),
+    }));
+    const factsOf = (s: PlatformSignals) => {
+      const card = fired(s).recommendations.find((r) => r.rule === 'acct_brand_vs_nonbrand');
+      return card?.platform_card.variant === 'google_account_finding'
+        ? card.platform_card.facts
+        : [];
+    };
+    const inflated = factsOf(signals({ search_terms: terms, conversion_actions: inflatedActions }));
+    for (const fact of inflated.filter((f) => /spend/i.test(f.label)))
+      expect(fact.value).toMatch(/per conversion Google reports$/);
+    expect(inflated).toContainEqual({
+      label: 'Not cost per lead',
+      value: '85% of the conversions Google reports are visits or attention events',
+    });
+    const clean = factsOf(signals({ search_terms: terms }));
+    expect(clean.find((f) => f.label === 'Brand spend')?.value).toMatch(
+      /per conversion Google reports$/,
+    );
+    expect(clean.some((f) => f.label === 'Not cost per lead')).toBe(false);
+  });
+
   test('pmax rescue: dear PMax with weak assets fires and speaks for G18 coverage', () => {
     const pmax = campaign('9', 'PMAX OCT', {
       channel_type: 'PERFORMANCE_MAX',

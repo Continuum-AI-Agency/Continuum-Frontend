@@ -22,6 +22,7 @@ import {
   type DefinedState,
   expectDefinedState,
 } from './support/l1Invariants';
+import { pinTodayOverview } from './support/overviewLayout';
 import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 import {
   formatVisualViolations,
@@ -749,6 +750,7 @@ async function themedContext(
   theme: VisualTheme,
 ): Promise<BrowserContext> {
   const context = await browser.newContext({ storageState, viewport, hasTouch: TOUCH });
+  await pinTodayOverview(context);
   await installVisualProbes(context);
   await seedTheme(context, theme);
   return context;

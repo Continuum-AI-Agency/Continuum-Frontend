@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { DEFAULT_COOKIE_OPTIONS } from '@supabase/ssr';
 import type { NextRequest } from 'next/server';
 
 const mockExchangeCodeForSession = mock(() =>
@@ -50,6 +51,20 @@ describe('handleAuthCallbackRequest impersonation', () => {
 
     const html = await response.text();
     expect(html).toContain('https://app.trycontinuum.ai/dashboard');
+  });
+
+  // The marker keeps Sign out of all devices from ending the customer's other sessions, so it
+  // lasts as long as the session cookie it marks (only a sign-out ends either), not an hour.
+  it('keeps the impersonation cookie as long as the session cookie', async () => {
+    const response = await handleAuthCallbackRequest(
+      createRequest(
+        'https://app.trycontinuum.ai/auth/callback?code=test-code&next=/dashboard&impersonate=true',
+      ),
+    );
+
+    const marker = response.cookies.get('is_impersonating');
+    expect(marker?.maxAge).toBe(DEFAULT_COOKIE_OPTIONS.maxAge);
+    expect(marker?.path).toBe('/');
   });
 
   it('does not set impersonation cookie for normal callbacks', async () => {

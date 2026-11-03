@@ -25,6 +25,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ReactNode } from 'react';
 import * as React from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import { useAgentRunStore } from '@/lib/agents/runStore';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 
@@ -58,6 +59,8 @@ const MOTION_ONLY_PROPS = new Set([
 ]);
 
 let chatStatus: ChatStatus = 'ready';
+/** Whether the hook has finished asking the Backend for a run to resume on this session. */
+let resumeChecked = true;
 /** Handle onto the mocked hook's real React state, so a test can push a frame into the transcript. */
 let pushMessages: ((next: JainaUIMessage[]) => void) | null = null;
 
@@ -173,6 +176,7 @@ mock.module('@/hooks/useJainaChat', () => ({
     pushMessages = setMessages;
     return {
       messages,
+      resumeSettledSessionId: resumeChecked ? sessionId : null,
       status: chatStatus,
       error: undefined,
       sendTurn: sendTurnMock,
@@ -314,21 +318,44 @@ mock.module('./components/JainaHeader', () => ({
   JainaHeader: () => <div data-testid="jaina-header" />,
 }));
 
+/** The "Weekly Recap" starter's prompt, as the real grid sends it. */
+const STARTER_PROMPT =
+  'Create a client-ready weekly recap for the current ad account with results, changes, and next steps.';
+
 mock.module('./components/JainaEmptyState', () => ({
-  JainaEmptyState: () => <div data-testid="jaina-empty-state" />,
+  JainaEmptyState: ({
+    onExampleClick,
+  }: {
+    onExampleClick?: (query: string, attachments: unknown[]) => void;
+  }) => (
+    <div data-testid="jaina-empty-state">
+      <button
+        type="button"
+        data-testid="jaina-starter"
+        onClick={() => onExampleClick?.(STARTER_PROMPT, [])}
+      >
+        Weekly Recap
+      </button>
+    </div>
+  ),
 }));
 
 mock.module('./components/JainaConversationSidebar', () => ({
   JainaConversationSidebar: ({
     sessions,
     onSelectConversation,
+    onCreateConversation,
     loadError,
   }: {
     sessions: { sessionId: string; title?: string | null }[];
     onSelectConversation: (sessionId: string) => void;
+    onCreateConversation: () => void;
     loadError?: string | null;
   }) => (
     <div data-testid="conversation-sidebar">
+      <button type="button" data-testid="create-session" onClick={onCreateConversation}>
+        New
+      </button>
       {loadError ? <span data-testid="jaina-conversations-error">{loadError}</span> : null}
       {sessions.map((session) => (
         <button
@@ -551,7 +578,9 @@ describe('JainaChatSurface integration', () => {
 
   beforeEach(() => {
     cleanup();
+    useAgentRunStore.getState().reset();
     chatStatus = 'ready';
+    resumeChecked = true;
     pushMessages = null;
     itemRenders.clear();
     useJainaConversationSidebarStore.getState().clear();
@@ -1140,6 +1169,128 @@ describe('JainaChatSurface integration', () => {
     ]);
   });
 
+  describe('a turn sent from outside the transcript (the canvas Implement button)', () => {
+    const turn = {
+      id: 'implement-1',
+      text: 'Implement this proposal now.\n1. Pause campaign «X» (id 1).',
+    };
+    const runningRun = (sessionId: string) => ({
+      runId: 'run_analysis',
+      agent: 'jaina' as const,
+      sessionId,
+      status: 'running' as const,
+      createdAt: '2026-11-02T00:00:00.000Z',
+    });
+
+    it('waits for the run in flight and sends the turn once it ends, not before and not twice', async () => {
+      global.fetch = emptyHistoryFetch();
+      chatStatus = 'streaming';
+      const consumed = mock(() => {});
+      const withTurn = () =>
+        React.cloneElement(surface, { autoSendPrompt: turn, onAutoSendConsumed: consumed });
+      const view = render(withTurn(), { wrapper: withQueryClient });
+      await screen.findByTestId('jaina-empty-state', undefined, { timeout: 2000 }).catch(() => {});
+      expect(sendTurnMock).not.toHaveBeenCalled();
+      expect(consumed).not.toHaveBeenCalled();
+
+      chatStatus = 'ready';
+      view.rerender(withTurn());
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+
+      view.rerender(withTurn());
+      view.rerender(withTurn());
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('also waits for a run the conversation holds elsewhere (analysis still finishing)', async () => {
+      // "Thinking… Handoff complete": this reader is not streaming, but the run is not over.
+      global.fetch = emptyHistoryFetch();
+      act(() => {
+        useAgentRunStore.getState().upsertRun(runningRun('session-x'));
+      });
+      const consumed = mock(() => {});
+      render(
+        React.cloneElement(surface, {
+          initialSessionId: 'session-x',
+          autoSendPrompt: turn,
+          onAutoSendConsumed: consumed,
+        }),
+        { wrapper: withQueryClient },
+      );
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      expect(sendTurnMock).not.toHaveBeenCalled();
+      expect(consumed).not.toHaveBeenCalled();
+
+      act(() => {
+        useAgentRunStore.getState().upsertRun({ ...runningRun('session-x'), status: 'completed' });
+      });
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({ query: turn.text });
+    });
+
+    it('tells the host when a run holds the conversation, so its button can stay disabled', async () => {
+      global.fetch = emptyHistoryFetch();
+      chatStatus = 'streaming';
+      const busy = mock((_value: boolean) => {});
+      const withBusy = () => React.cloneElement(surface, { onRunInFlightChange: busy });
+      const view = render(withBusy(), { wrapper: withQueryClient });
+      await waitFor(() => expect(busy).toHaveBeenLastCalledWith(true));
+      chatStatus = 'ready';
+      view.rerender(withBusy());
+      await waitFor(() => expect(busy).toHaveBeenLastCalledWith(false));
+    });
+  });
+
+  it('opens nothing when the reader started a new conversation while the latest one was loading', async () => {
+    // Production, 2026-11-02: "+ New" tapped while the most recent conversation's history was
+    // still in flight. The load finished after it and put the old conversation back on screen,
+    // so the first question of the "new" chat landed in the last one.
+    const session = {
+      sessionId: 'session-a',
+      brandId: 'brand-1',
+      adAccountId: 'act-1',
+      title: 'First',
+      lastMessageRole: 'assistant',
+      lastMessagePreview: 'First',
+      lastMessageAt: '2026-04-17T16:30:00.000Z',
+      createdAt: '2026-04-17T16:20:00.000Z',
+      updatedAt: '2026-04-17T16:30:00.000Z',
+    };
+    let releaseHistory: () => void = () => {};
+    const historyHeld = new Promise<void>((resolve) => {
+      releaseHistory = resolve;
+    });
+    global.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (!url.includes('/api/agents/jaina/chat/conversations?')) {
+        return { ok: false, text: () => Promise.resolve('Unhandled') } as MockFetchResponse;
+      }
+      if (!new URL(url, 'http://localhost').searchParams.get('sessionId')) {
+        return jsonResponse({ sessions: [session], uiMessages: [] });
+      }
+      await historyHeld;
+      return jsonResponse({
+        sessions: [session],
+        uiMessages: [uiMessage('a-user', 'user', [textPart('question in session-a')])],
+      });
+    }) as typeof fetch;
+
+    render(surface, { wrapper: withQueryClient });
+    await screen.findByTestId('select-session-a');
+    fireEvent.click(screen.getByTestId('create-session'));
+    await act(async () => {
+      releaseHistory();
+      await historyHeld;
+    });
+
+    await waitFor(() => expect(screen.queryByTestId('jaina-starter')).not.toBeNull());
+    expect(screen.queryAllByTestId('user-content')).toEqual([]);
+  });
+
   it('says a failed history load once, inline in the sidebar, never as a toast over the composer', async () => {
     // PP-L1V-covered-controls-actions-jaina-manage: the sidebar already reads "Couldn't load
     // conversations … Retry". The same failure ALSO raised a toast, whose description <p> sat
@@ -1179,5 +1330,231 @@ describe('JainaChatSurface integration', () => {
     });
     // A user turn has no report and no delivery to acknowledge.
     expect(screen.getAllByTestId('user-delivery-source').at(-1)?.textContent).toBe('');
+  });
+  describe('a send is one send per click (PP-DT-C-jaina-starter-double-click-sends-twice)', () => {
+    const conversationCreates = (fetchMock: typeof fetch) =>
+      (fetchMock as unknown as ReturnType<typeof mock>).mock.calls.filter((call) => {
+        const [input, init] = call as [RequestInfo | URL, RequestInit | undefined];
+        const url = typeof input === 'string' ? input : input.toString();
+        return init?.method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations');
+      });
+
+    it('sends a double-clicked starter once: one conversation, one turn', async () => {
+      const fetchMock = emptyHistoryFetch();
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+      await waitFor(() =>
+        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+      );
+
+      const starter = screen.getByTestId('jaina-starter');
+      // A double click is two clicks before the first send has had time to answer.
+      fireEvent.click(starter);
+      fireEvent.click(starter);
+
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+      expect(conversationCreates(fetchMock)).toHaveLength(1);
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+    });
+
+    it('queues a starter double-clicked while the conversation loads once, and sends it once', async () => {
+      let releaseHistory: () => void = () => {};
+      const historyHeld = new Promise<void>((resolve) => {
+        releaseHistory = resolve;
+      });
+      const answer = emptyHistoryFetch();
+      global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (
+          (init?.method ?? 'GET') === 'GET' &&
+          url.includes('/api/agents/jaina/chat/conversations?')
+        ) {
+          return historyHeld.then(() => answer(input, init));
+        }
+        return answer(input, init);
+      }) as typeof fetch;
+
+      render(surface, { wrapper: withQueryClient });
+      const starter = await screen.findByTestId('jaina-starter');
+      fireEvent.click(starter);
+      fireEvent.click(starter);
+
+      await waitFor(() => expect(screen.getAllByText(STARTER_PROMPT)).toHaveLength(1));
+
+      releaseHistory();
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('a send that fails says so where it was asked (PP-DT-C-jaina-send-failure-is-silent)', () => {
+    /** History answers at once (or when released); the conversation create fails until `heal`. */
+    const failingCreateFetch = (options: { holdHistory?: Promise<void> } = {}) => {
+      const state = { failing: true };
+      const answer = emptyHistoryFetch();
+      const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = init?.method ?? 'GET';
+        if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+          return (options.holdHistory ?? Promise.resolve()).then(() => answer(input, init));
+        }
+        if (
+          method === 'POST' &&
+          url.endsWith('/api/agents/jaina/chat/conversations') &&
+          state.failing
+        ) {
+          // What a dropped connection looks like to the page.
+          return Promise.reject(new TypeError('Failed to fetch'));
+        }
+        return answer(input, init);
+      }) as typeof fetch;
+      return { fetchMock, heal: () => (state.failing = false) };
+    };
+
+    const unsentNotice = () =>
+      screen.queryAllByRole('alert').find((node) => node.textContent?.includes(STARTER_PROMPT)) ??
+      null;
+
+    it('keeps the question on screen as not sent, in words, and Retry sends it', async () => {
+      const { fetchMock, heal } = failingCreateFetch();
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+      await waitFor(() =>
+        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+      );
+
+      fireEvent.click(screen.getByTestId('jaina-starter'));
+
+      await waitFor(() => expect(unsentNotice()).not.toBeNull());
+      const notice = unsentNotice() as HTMLElement;
+      expect(notice.textContent).toMatch(/not sent/i);
+      expect(notice.textContent).toContain('no connection to the server');
+      expect(notice.textContent).not.toContain('Failed to fetch');
+      // The grid is not offered again as if nothing had been clicked, and the failure is said
+      // once, here — not also in a toast that leaves after five seconds.
+      expect(screen.queryByTestId('jaina-empty-state')).toBeNull();
+      expect(toastShowMock).not.toHaveBeenCalled();
+      expect(sendTurnMock).not.toHaveBeenCalled();
+
+      heal();
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+      await waitFor(() => expect(unsentNotice()).toBeNull());
+    });
+
+    it('a queued question whose send fails stops waiting and says so with Retry', async () => {
+      let releaseHistory: () => void = () => {};
+      const holdHistory = new Promise<void>((resolve) => {
+        releaseHistory = resolve;
+      });
+      const { fetchMock, heal } = failingCreateFetch({ holdHistory });
+      global.fetch = fetchMock;
+      render(surface, { wrapper: withQueryClient });
+
+      // Clicked while the conversation still loads: the question waits in the queue.
+      fireEvent.click(await screen.findByTestId('jaina-starter'));
+      await screen.findByText(STARTER_PROMPT);
+
+      releaseHistory();
+
+      await waitFor(() => expect(unsentNotice()).not.toBeNull());
+      expect(unsentNotice()?.textContent).toContain('no connection to the server');
+      // Not left in a queue that reads "next will send now" for a send that already failed.
+      expect(screen.queryByText('next will send now')).toBeNull();
+      expect(screen.getAllByText(STARTER_PROMPT)).toHaveLength(1);
+
+      heal();
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(STARTER_PROMPT);
+    });
+  });
+  describe('a question whose run never answered (PP-DT-C-jaina-unanswered-run-blank-transcript)', () => {
+    const QUESTION =
+      'Give me a full performance breakdown across campaigns with charts, and recommend next actions.';
+    const unansweredHistoryFetch = () =>
+      mock((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const method = init?.method ?? 'GET';
+        if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+          return Promise.resolve(
+            jsonResponse({
+              sessions: [
+                {
+                  sessionId: 'session-unanswered',
+                  brandId: 'brand-1',
+                  adAccountId: 'act-1',
+                  title: null,
+                  lastMessageRole: 'user',
+                  lastMessagePreview: QUESTION,
+                  lastMessageAt: '2026-10-29T05:44:36.642Z',
+                  createdAt: '2026-10-29T05:44:36.219Z',
+                  updatedAt: '2026-10-29T05:44:36.642Z',
+                },
+              ],
+              // Only the question was stored: the run that should have answered it never did.
+              uiMessages: [uiMessage('question-1', 'user', [textPart(QUESTION)])],
+            }),
+          );
+        }
+        if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+          return Promise.resolve(
+            jsonResponse({
+              session_id: 'session-unanswered',
+              brand_id: 'brand-1',
+              ad_account_id: 'act-1',
+              conversation_title: null,
+            }),
+          );
+        }
+        return Promise.resolve({
+          ok: false,
+          text: () => Promise.resolve('Unhandled fetch route'),
+        } as MockFetchResponse);
+      }) as typeof fetch;
+
+    it('says the answer did not finish, and Ask again sends the question again', async () => {
+      global.fetch = unansweredHistoryFetch();
+      render(surface, { wrapper: withQueryClient });
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('user-content').at(-1)?.textContent).toBe(QUESTION),
+      );
+      expect(await screen.findByText(/did not finish/i)).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: /ask again/i }));
+      await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+      expect((sendTurnMock.mock.calls[0]?.[0] as { query?: string }).query).toBe(QUESTION);
+    });
+
+    it('says nothing of the kind while the question is still being answered', async () => {
+      chatStatus = 'streaming';
+      global.fetch = unansweredHistoryFetch();
+      render(surface, { wrapper: withQueryClient });
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('user-content').at(-1)?.textContent).toBe(QUESTION),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.queryByText(/did not finish/i)).toBeNull();
+    });
+
+    it('waits for the resume check before calling a run unfinished', async () => {
+      // Until the Backend has said no run is in flight, the run may still be answering on
+      // another tab or device — the transcript is not yet one without an answer.
+      resumeChecked = false;
+      global.fetch = unansweredHistoryFetch();
+      render(surface, { wrapper: withQueryClient });
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId('user-content').at(-1)?.textContent).toBe(QUESTION),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.queryByText(/did not finish/i)).toBeNull();
+    });
   });
 });

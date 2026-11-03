@@ -234,6 +234,34 @@ export function readActionChange(row: OptimizerActionFeedRow): ActionChange {
   }
 }
 
+/** A money change's two sides in MAJOR units of `currency`, the scale a before → after bar is
+ *  drawn on. Null when the change is not money, or when either side is missing: a bar from a
+ *  guessed side would draw a move nobody made. */
+export function changeAmounts(
+  change: ActionChange,
+  currency: string | null,
+): { before: number; after: number } | null {
+  if (change.unit === 'text') return null;
+  const major = (value: string | number | null): number | null => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return change.unit === 'money' ? minorToMajor(value, currency) : value;
+  };
+  const before = major(change.before);
+  const after = major(change.after);
+  return before == null || after == null ? null : { before, after };
+}
+
+const STOPPED_OUTCOMES = new Set(['failed', 'refused', 'error']);
+
+/** Whether the write landed, when the row says: 'stopped' for a failed or refused write, null
+ *  when the row carries no outcome (optimizer_list_actions sends none today, so every row it
+ *  lists reads as the write it records). */
+export function actionOutcome(row: OptimizerActionFeedRow): 'applied' | 'stopped' | null {
+  const raw = (row as Record<string, unknown>).outcome;
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  return STOPPED_OUTCOMES.has(raw.toLowerCase()) ? 'stopped' : 'applied';
+}
+
 /** Who authorized it. `actor_kind` comes straight from the RPC — 'autopilot' when the
  *  scheduler wrote it, 'human' when a person did, 'system' when nothing was recorded. */
 export function actorLabel(row: OptimizerActionFeedRow): string {

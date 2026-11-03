@@ -9,6 +9,7 @@ import { BookOpenText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ScoreBadge } from '@/components/onboarding/v2/readiness/ScoreBadge';
 import { EmptyState } from '@/components/shared/state';
+import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { freshnessFromSyncedAt } from '@/lib/freshness/freshnessMeta';
 import type { DashboardSetupState } from './setupState';
@@ -120,9 +121,17 @@ export function BrandBookMilestoneCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-foreground">Brand Book ready</p>
-              <ScoreBadge label="Readiness" score={setup.readiness.score} />
+              {setup.readiness ? (
+                <ScoreBadge label="Readiness" score={setup.readiness.score} />
+              ) : (
+                // Never scored is not a 0: said as onboarding says it, in a muted badge.
+                <Badge variant="muted" className="gap-1.5" data-testid="readiness-not-scored">
+                  <span className="font-medium">Readiness</span>
+                  <span>· not scored yet</span>
+                </Badge>
+              )}
             </div>
-            {setup.readiness.next_action ? (
+            {setup.readiness?.next_action ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">Next: </span>
                 {setup.readiness.next_action}
@@ -132,7 +141,9 @@ export function BrandBookMilestoneCard({
                 Voice, creative, trends, and reporting are grounded in your brand.
               </p>
             )}
-            {age ? <p className="mt-0.5 text-xs text-muted-foreground/80">Updated {age}</p> : null}
+            {/* The ink token at full strength: at 80% it measured 4.03:1 on the page
+                (PP-DT-H-first-run-checklist-contrast). */}
+            {age ? <p className="mt-0.5 text-xs text-muted-foreground">Updated {age}</p> : null}
           </div>
         </div>
         <ViewButton />

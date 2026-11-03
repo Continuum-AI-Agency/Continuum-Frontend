@@ -3,10 +3,10 @@
 // The Google tab's one read: the brand's granted Google Ads customer through the same edge the
 // dashboard already uses for google-ads (paid-media-metrics), scopes `account_overview` and
 // `top_campaigns`, counting the result the brand's Google portfolios are held to (their goal,
-// Ramiro 2026-10-28; none when they name no single one). When it cannot read, it says WHICH of
-// the three reasons holds — no Google login at all, a login whose Ads customer is not granted to
-// this brand, or the API's own error — because each one has a different fix and "No data" names
-// none of them.
+// Ramiro 2026-10-28; none when they name no single one). When it cannot read, it says WHICH
+// reason holds — no Google login at all, a login whose Ads customer is not granted to this brand,
+// a role that cannot read Google, an account no live grant reaches, a login Google refused, or
+// the API's own error — because each one has a different fix and "No data" names none of them.
 
 import {
   type AdAccount,
@@ -14,6 +14,7 @@ import {
   googlePortfolioResult,
 } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
+import { type BrandRole, useBrandRole } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useOptimizerAdAccounts, useOptimizerPlatformPortfolios } from '../../useOptimizerData';
 import {
@@ -38,7 +39,17 @@ export type GoogleAdsOverviewState =
   | { status: 'loading' }
   | { status: 'no-connection' }
   | { status: 'no-grant' }
-  | { status: 'error'; account: AdAccount | null; message: string }
+  /** The caller's role on the brand cannot read Google Ads (a viewer): an owner can change it. */
+  | { status: 'no-role'; account: AdAccount }
+  /** The brand lists the account but no live Google grant reaches it: grant it again. */
+  | { status: 'no-access'; account: AdAccount }
+  | {
+      status: 'error';
+      account: AdAccount | null;
+      message: string;
+      /** Google refused the login (revoked or expired): the fix is to reconnect Google. */
+      reconnect?: boolean;
+    }
   | {
       status: 'ready';
       account: AdAccount;
@@ -125,6 +136,9 @@ export function useGoogleAdsOverview(
     staleTime: FIVE_MINUTES,
     retry: 1,
   });
+  // The caller's role is read only when a read was refused for no access: it is what tells a
+  // role that cannot read Google from an account no grant reaches.
+  const role = useBrandRole(overview.isError && isGoogleNoAccess(overview.error) ? brandId : null);
   const login = useQuery({
     queryKey: googleAdsQueryKeys.connection(),
     queryFn: fetchHasGoogleLogin,
@@ -154,12 +168,59 @@ export function useGoogleAdsOverview(
     ...granted,
     currency: granted.currency ?? overview.data?.currency ?? null,
   };
-  if (overview.isError) {
-    const message = overview.error instanceof Error ? overview.error.message : 'Unknown error';
-    return { status: 'error', account, message };
-  }
+  if (overview.isError) return googleReadFailure(overview.error, account, role);
   if (!overview.data) return { status: 'loading' };
   return { status: 'ready', account, overview: overview.data, resultBucket };
+}
+
+/** The roles the token RPC (resolve_google_integration_token_context) lets read Google Ads. */
+const READS_GOOGLE: ReadonlySet<BrandRole> = new Set(['owner', 'admin', 'operator']);
+
+/** The edge refused the read for no access: its 404, typed INTEGRATION_NOT_LINKED once deployed. */
+export function isGoogleNoAccess(error: unknown): boolean {
+  const { code, status } = (error ?? {}) as { code?: unknown; status?: unknown };
+  return code === 'INTEGRATION_NOT_LINKED' || (code !== 'TOKEN_EXPIRED' && status === 404);
+}
+
+/** The edge answered why it would not read — no access, or a login Google refused — so asking
+ *  again changes nothing until a role, a grant or the login does. */
+export function isGoogleRefusal(error: unknown): boolean {
+  const { code } = (error ?? {}) as { code?: unknown };
+  return code === 'TOKEN_EXPIRED' || isGoogleNoAccess(error);
+}
+
+/** What a failed Google read is: waiting for the caller's role, a role or a grant missing, or an
+ *  error (a refused login among them, which offers to reconnect). */
+export type GoogleReadFailureState = Extract<
+  GoogleAdsOverviewState,
+  { status: 'loading' | 'no-role' | 'no-access' | 'error' }
+>;
+
+/**
+ * What a failed Google read means for the person reading. Google refused the login: reconnect.
+ * No access (the edge's 404, typed INTEGRATION_NOT_LINKED once deployed): the token RPC answers
+ * nothing both for a role that cannot read Google and for an account no live grant reaches, so
+ * the caller's own role (brand_role, the same permissions row the RPC checks) tells them apart;
+ * while it loads the tab waits, and when it cannot be read the edge's own words stand. Anything
+ * else is the API's own error.
+ */
+export function googleReadFailure(
+  error: unknown,
+  account: AdAccount,
+  role: BrandRole | null | undefined,
+): GoogleReadFailureState {
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  const { code } = (error ?? {}) as { code?: unknown };
+  if (code === 'TOKEN_EXPIRED') return { status: 'error', account, message, reconnect: true };
+  if (isGoogleNoAccess(error)) {
+    if (role === undefined) return { status: 'loading' };
+    if (role !== null) {
+      return READS_GOOGLE.has(role)
+        ? { status: 'no-access', account }
+        : { status: 'no-role', account };
+    }
+  }
+  return { status: 'error', account, message };
 }
 
 /** The goal result of the brand's live Google portfolios (an archived one holds nothing). */

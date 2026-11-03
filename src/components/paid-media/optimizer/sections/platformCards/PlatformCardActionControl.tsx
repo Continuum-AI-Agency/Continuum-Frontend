@@ -173,7 +173,7 @@ export function PlatformCardActionControl({
     setCanConfirm(false);
     try {
       const response = await send(true);
-      setPreview(previewVerdict(response, currency));
+      setPreview(previewVerdict(response, currency, write.ref.platform));
       setCanConfirm(response?.results[0]?.status === 'would_apply');
     } catch {
       setPreview(UNREACHABLE);

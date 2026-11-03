@@ -28,6 +28,7 @@ import {
   CAMPAIGN_TYPE_LABELS,
   campaignTypeOf,
   NO_SINGLE_RESULT,
+  pricedPerResult,
 } from '../platforms/googleAdsOverviewModel';
 import { campaignField } from './googleReads';
 
@@ -158,8 +159,9 @@ function figureOf<K extends keyof GoogleCampaignFields>(
   return field.reason === null ? known(field.value) : missing(field.reason);
 }
 
+/** Spend per conversion; null under one conversion (pricedPerResult's floor). */
 export function costOf(spend: number, conversions: number | null): number | null {
-  return conversions != null && conversions > 0 ? spend / conversions : null;
+  return pricedPerResult(spend, conversions);
 }
 
 /** Every campaign of the read by spend, each priced against the goal of the portfolio holding it. */

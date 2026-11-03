@@ -119,6 +119,7 @@ export { buildConversionDescriptor } from './wizard/conversionDescriptor';
 
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
+import { GoalCostCapField } from './goalCostCap/GoalCostCapField';
 import { PlatformActionsField } from './platformActions/PlatformActionsField';
 import { PlatformCapsField } from './platformCaps/PlatformCapsField';
 import {
@@ -909,6 +910,13 @@ export function PortfolioManagePanel({
                 Scale mode grows the budget only while the portfolio beats this. Blank means the
                 engine&rsquo;s default target, not &ldquo;no target&rdquo;.
               </p>
+              <GoalCostCapField
+                enabled={portfolio.goal_as_platform_cost_cap === true}
+                goal={toStored('cpa_target', values.cpa_target, formUnit)}
+                maxChangePctPerCycle={capPct ?? portfolio.max_change_pct_per_cycle}
+                portfolioId={portfolio.id}
+                targetMetric={effectiveTargetMetric}
+              />
             </NumberField>
           </Section>
 

@@ -30,7 +30,6 @@ import {
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
   type AdsetTargeting,
-  type InactiveAdsetWindows,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -66,6 +65,7 @@ import {
   type EnrollResult,
   EnrollResultSchema,
   flightOf,
+  type InactiveAdsetWindows,
   type InsightState,
   OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
@@ -113,13 +113,14 @@ import { z } from 'zod';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { PLATFORM_READ_TIMEOUT_MS, READ_TIMEOUT_MS, withTimeout } from '@/lib/api/timeout';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import { isAdsManagerAccount } from '@/lib/paid-media/adsManager';
 import { retryUnlessTimeout } from '@/lib/react-query/retry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
 import { recommendationInsightKey } from './insightKey';
 import { hasPendingWork } from './reportModel';
 import { isMissingRpcError, MissingRpcError } from './sections/platforms/multiplatformRead';
-import { accountsOn } from './sections/platforms/platformTabsModel';
+import { accountPlatform, accountsOn } from './sections/platforms/platformTabsModel';
 import { type CurrentMoves, currentMoves } from './sections/portfolioStaleness';
 import { type AccountSnapshotsResult, parseOptimizerSnapshotEnvelope } from './snapshotEnvelope';
 
@@ -379,10 +380,14 @@ async function fetchAdAccounts(brandId: string): Promise<AdAccount[]> {
     p_brand_id: brandId,
   });
   if (error) throw new Error('list_brand_ad_accounts unreachable');
+  // A Google Ads manager is listed beside the brand's accounts and is none of them: Scale opened
+  // The Sound Vault on its MCC and the portfolio wizard offered it
+  // (PP-DT-E-home-setup-mode-mcc-mismatch). Every reader of this list gets ad accounts only.
   return z
     .array(AdAccountSchema)
     .catch([])
-    .parse(data ?? []);
+    .parse(data ?? [])
+    .filter((account) => !isAdsManagerAccount(account));
 }
 
 async function fetchPerformance(portfolioId: string): Promise<CycleRunReport | null> {
@@ -895,8 +900,10 @@ function cachedLatestRunId(queryClient: QueryClient, portfolioId: string): strin
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
  *  the optimizer-convert-cbo edge. `dryRun` (default true) returns the per-ad-set
- *  budgets that WOULD be set with ZERO writes to Meta — the FE previews them before
- *  the real convert is un-gated. Returns null when the response is malformed. */
+ *  budgets that WOULD be set with ZERO writes to Meta. A real convert (`dryRun:false`)
+ *  carries the budgets the person approved in that preview (`expectedAdsetBudgets`), so
+ *  the edge writes exactly those or answers `preview_changed`. Returns null when the
+ *  response is malformed. */
 async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboResponse | null> {
   const { data, error } = await getClient().functions.invoke('optimizer-convert-cbo', {
     body: {
@@ -904,6 +911,9 @@ async function convertCbo(request: ConvertCboRequest): Promise<ConvertCboRespons
       accountId: request.accountId,
       campaignId: request.campaignId,
       dryRun: request.dryRun ?? true,
+      ...(request.expectedAdsetBudgets
+        ? { expectedAdsetBudgets: request.expectedAdsetBudgets }
+        : {}),
     },
   });
   if (error) throw new Error('optimizer-convert-cbo unreachable');
@@ -1302,6 +1312,42 @@ export function useOptimizerAdAccounts(brandId: string) {
     enabled: Boolean(brandId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+/**
+ * The account a Meta-only read (ad-set or campaign snapshots, the ad-set inventory) may post, or
+ * null. paid-media-metrics reads whatever id it is handed as a Meta ad account, and Scale selects
+ * a Google customer on its Google platform: every Optimizer view under it posted that id to the
+ * Meta reader, two or three 404s on each Pink Elephant and Tangassi page
+ * (PP-DT-E-optimizer-meta-reads-on-google-account). The brand's account list names each account's
+ * platform, so an account it names on any other platform is never posted. An account it does not
+ * name (one a portfolio still holds after it was unassigned) is read as before, and so is every
+ * account when the list could not be read: `accounts` null.
+ */
+export function metaReadAccountId(
+  adAccountId: string | null,
+  accounts: readonly AdAccount[] | null,
+): string | null {
+  if (!adAccountId) return null;
+  const wanted = bareAccountId(adAccountId);
+  const listed = accounts?.find((account) => bareAccountId(account.account_id) === wanted);
+  return listed && accountPlatform(listed) !== 'meta' ? null : adAccountId;
+}
+
+/** `metaReadAccountId` for a hook: nothing is posted until the brand's account list has answered
+ *  (`settled`), so a Google customer is never read as Meta on the first render either. */
+export function useMetaReadAccount(
+  brandId: string,
+  adAccountId: string | null,
+): { accountId: string | null; settled: boolean } {
+  const accounts = useOptimizerAdAccounts(brandId);
+  const settled = accounts.isSuccess || accounts.isError;
+  return {
+    accountId: settled
+      ? metaReadAccountId(adAccountId, accounts.isSuccess ? accounts.data : null)
+      : null,
+    settled,
+  };
 }
 
 const EMPTY_PORTFOLIOS: PortfolioListItem[] = [];
@@ -2228,7 +2274,10 @@ export function useOptimizerAccountSnapshots(
     () => optimizerQueryKeys.accountSnapshots(brandId, adAccountId, level),
     [brandId, adAccountId, level],
   );
-  const enabled = Boolean(brandId && adAccountId);
+  // A Google customer selected on Scale's Google platform has no Meta snapshots to read.
+  const target = useMetaReadAccount(brandId, adAccountId);
+  const enabled = Boolean(brandId && target.accountId);
+  const awaitingAccounts = Boolean(brandId && adAccountId) && !target.settled;
 
   const query = useQuery({
     ...accountSnapshotsQuery(brandId, adAccountId as string, level),
@@ -2251,7 +2300,7 @@ export function useOptimizerAccountSnapshots(
   const canRefresh = enabled && !inCooldown && !query.isFetching;
 
   const refresh = useCallback(() => {
-    if (!brandId || !adAccountId || Date.now() < cooldownUntil) return;
+    if (!enabled || !adAccountId || Date.now() < cooldownUntil) return;
     setCooldownUntil(Date.now() + SNAPSHOTS_REFRESH_COOLDOWN_MS);
     // fetchQuery on the shared key forces a fresh (forceRefresh:true) edge read and
     // writes the result into the same cache both observers render from.
@@ -2260,10 +2309,12 @@ export function useOptimizerAccountSnapshots(
       queryFn: () => withReadTimeout(fetchAccountSnapshots(brandId, adAccountId, scope, true)),
       staleTime: 0,
     });
-  }, [brandId, adAccountId, scope, cooldownUntil, queryClient, queryKey]);
+  }, [enabled, brandId, adAccountId, scope, cooldownUntil, queryClient, queryKey]);
 
   return {
     ...query,
+    // Still deciding whether this account has Meta snapshots at all is still loading them.
+    isLoading: query.isLoading || awaitingAccounts,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
     targeting: query.data?.targeting ?? EMPTY_TARGETING,
     inactiveWindows: query.data?.inactiveWindows ?? EMPTY_INACTIVE_WINDOWS,
@@ -2288,7 +2339,10 @@ export function useOptimizerAdsetInventory(
     () => optimizerQueryKeys.adsetInventory(brandId, adAccountId),
     [brandId, adAccountId],
   );
-  const canQuery = enabled && Boolean(brandId && adAccountId);
+  // A Google customer selected on Scale's Google platform has no Meta ad sets to list.
+  const target = useMetaReadAccount(brandId, adAccountId);
+  const canQuery = enabled && Boolean(brandId && target.accountId);
+  const awaitingAccounts = enabled && Boolean(brandId && adAccountId) && !target.settled;
   const query = useQuery({
     queryKey,
     queryFn: () => withReadTimeout(fetchAdsetInventory(brandId, adAccountId as string, false)),
@@ -2324,6 +2378,7 @@ export function useOptimizerAdsetInventory(
 
   return {
     ...query,
+    isLoading: query.isLoading || awaitingAccounts,
     data: (query.data?.adsets ?? []) as OptimizerAdsetInventoryItem[],
     fetchedAt: query.data?.fetchedAt ?? null,
     partial: query.data?.partial ?? false,
@@ -2793,11 +2848,11 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
 }
 
 /** Preview or apply a CBO→ABO conversion for one campaign. Instantiated PER CBO
- *  campaign row so each keeps its own pending/preview/error state. The FE only ever
- *  calls it with `dryRun:true` today (a working preview); a real conversion
- *  (`dryRun:false`, un-gated after the sandbox bench) makes the campaign's ad sets
- *  ABO — so a real success marks the account snapshots + suggestions stale so the
- *  now-optimizable ad sets reappear. A dry-run preview writes nothing and skips it. */
+ *  campaign row so each keeps its own pending/preview/error state. The convert dialog
+ *  previews with `dryRun:true`; its Apply sends the real conversion (`dryRun:false`, bound
+ *  to the previewed budgets), which makes the campaign's ad sets ABO — so a real success
+ *  marks the account snapshots + suggestions stale so the now-optimizable ad sets
+ *  reappear. A dry-run preview writes nothing and skips it. */
 export function useConvertCbo(_brandId: string) {
   const queryClient = useQueryClient();
   return useMutation({

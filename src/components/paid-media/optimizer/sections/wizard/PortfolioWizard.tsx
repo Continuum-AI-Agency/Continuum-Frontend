@@ -34,6 +34,7 @@ import {
   useOptimizerAdsetInventory,
   useOptimizerMutations,
 } from '../../useOptimizerData';
+import { saveGoalAsCostCap } from '../goalCostCap/useGoalAsCostCap';
 import { StepAssets } from './StepAssets';
 import { StepGoal } from './StepGoal';
 import { StepPlan } from './StepPlan';
@@ -47,6 +48,7 @@ import {
   effectiveTargetMetric,
   emptyDraft,
   enrollLabel,
+  goalCostCapRequested,
   MODE_COPY,
   memberPayload,
   platformHost,
@@ -123,6 +125,8 @@ export function PortfolioWizard({
   const [completed, setCompleted] = useState<Set<WizardStep>>(new Set());
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [costCapFailure, setCostCapFailure] = useState<string | null>(null);
+  const [savingCostCap, setSavingCostCap] = useState(false);
 
   const { create, enroll, createPlatform, addMembers, run } = useOptimizerMutations(
     brandId,
@@ -189,7 +193,11 @@ export function PortfolioWizard({
   const stepIndex = STEP_ORDER.indexOf(step);
   const isLast = stepIndex === STEP_ORDER.length - 1;
   const busy =
-    create.isPending || enroll.isPending || createPlatform.isPending || addMembers.isPending;
+    create.isPending ||
+    enroll.isPending ||
+    createPlatform.isPending ||
+    addMembers.isPending ||
+    savingCostCap;
 
   function goTo(next: WizardStep) {
     setStep(next);
@@ -249,7 +257,7 @@ export function PortfolioWizard({
   }
 
   async function submit() {
-    if (issues.length > 0 || busy) return;
+    if (issues.length > 0 || busy || costCapFailure) return;
     setFailure(null);
     const config = buildCreateConfig(draft, {
       currency,
@@ -275,6 +283,26 @@ export function PortfolioWizard({
       if (!host) await enrollMeta(portfolio_id);
       if (members.length > 0) {
         await addMembers.mutateAsync({ portfolio_id, members: memberPayload(members) });
+      }
+      // After the members, so the setter finds the Google accounts it allows set_bid_target on,
+      // and before the first cycle, so that cycle already reads the box. A failure leaves a
+      // working portfolio with the box off (the side that never touches a bid setting), so it
+      // is said and the person moves on rather than creating again.
+      if (goalCostCapRequested(draft)) {
+        setSavingCostCap(true);
+        try {
+          await saveGoalAsCostCap(portfolio_id, true);
+        } catch (err) {
+          setCostCapFailure(
+            `The portfolio was created, but its goal wasn't set as the cost cap on the ad platforms. ${
+              err instanceof Error ? err.message : ''
+            } You can turn it on in the portfolio's settings.`,
+          );
+          run.mutate(portfolio_id);
+          return;
+        } finally {
+          setSavingCostCap(false);
+        }
       }
       run.mutate(portfolio_id);
       onCreated?.(portfolio_id);
@@ -384,7 +412,7 @@ export function PortfolioWizard({
                 {isLast ? (
                   <Button
                     className="gap-1.5"
-                    disabled={issues.length > 0 || busy}
+                    disabled={issues.length > 0 || busy || costCapFailure !== null}
                     onClick={() => void submit()}
                     size="sm"
                     type="button"
@@ -409,7 +437,19 @@ export function PortfolioWizard({
                   </Button>
                 )}
               </div>
-              {failure ? (
+              {costCapFailure && createdId ? (
+                <div className="space-y-2" role="alert">
+                  <p className="text-destructive text-xs">{costCapFailure}</p>
+                  <Button
+                    onClick={() => onCreated?.(createdId)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Open the portfolio
+                  </Button>
+                </div>
+              ) : failure ? (
                 <p className="text-destructive text-xs" role="alert">
                   {failure}
                   {createdId

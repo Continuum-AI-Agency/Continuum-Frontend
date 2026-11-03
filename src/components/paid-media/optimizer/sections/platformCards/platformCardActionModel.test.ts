@@ -5,15 +5,18 @@ import {
   ADD_GOOGLE_KEYWORD,
   ADD_GOOGLE_NEGATIVES,
   LOWER_GOOGLE_TCPA,
+  LOWER_META_COST_CAP,
   PAUSE_GOOGLE_CAMPAIGN,
   PAUSE_TIKTOK_AD_GROUP,
   PORTFOLIO_ID,
   RAISE_GOOGLE_BUDGET,
+  RAISE_META_BUDGET,
 } from './__fixtures__/platformCardActions';
 import {
   GOOGLE_BUDGET_LIMITED,
   GOOGLE_DELIVERY_ONE_CAMPAIGN,
   GOOGLE_VIDEO,
+  META_COST_CAP,
   TIKTOK_ATTRIBUTION_WINDOW,
   TIKTOK_BUDGET_BELOW_LEARNING,
 } from './__fixtures__/platformCards';
@@ -476,5 +479,74 @@ describe('undoResultVerdict', () => {
     expect(
       undoResultVerdict(undoAnswer({ status: 'refused', reason: 'already_reverted' }, false)).text,
     ).toBe('This change was already undone. Nothing was written.');
+  });
+});
+
+describe('the Meta cost cap (bid setting)', () => {
+  const costCap = write(LOWER_META_COST_CAP);
+  const bidAnswer = (result: Record<string, unknown>, dryRun = true) =>
+    answer({ kind: 'set_bid_target', ...result }, dryRun);
+
+  it('opens the approval flow for a Meta cost cap, and for no other single Meta write', () => {
+    expect(cardActionAvailability(META_COST_CAP, target(costCap))).toBe('ready');
+    expect(cardActionAvailability(META_COST_CAP, target(write(RAISE_META_BUDGET)))).toBe('none');
+    expect(
+      cardActionAvailability(META_COST_CAP, { ...target(costCap), applyEnabled: false }),
+    ).toBe('apply_disabled');
+  });
+
+  it("names Meta's bid setting, never the portfolio's goal, in the action's minor units", () => {
+    expect(cardActionLabel(costCap)).toBe('Apply new cost cap (bid setting)');
+    expect(cardActionTitle(costCap)).toBe(
+      'Change the cost cap (bid setting) of "Leads | Prospecting" on Meta',
+    );
+    expect(cardActionChange(costCap, 'MXN')).toBe('$400.00 MXN → $320.00 MXN');
+  });
+
+  it("says Meta's own check passed, not Google's validate_only", () => {
+    expect(previewVerdict(bidAnswer({ status: 'would_apply' }), 'MXN', 'meta').text).toBe(
+      'Meta still holds the figures this change expects. Nothing changes until you confirm.',
+    );
+    expect(previewVerdict(bidAnswer({ status: 'would_apply' }), 'MXN').text).toStartWith(
+      'Google checked it',
+    );
+  });
+
+  it('names the Meta cost cap when the per-cycle bound holds it', () => {
+    const verdict = previewVerdict(
+      bidAnswer({
+        status: 'refused',
+        reason: 'guardrail',
+        detail:
+          'bid_target_change: bid_amount_minor 40000 to 25000 moves 0.3750, over max_change_pct_per_cycle 0.2',
+      }),
+      'MXN',
+      'meta',
+    );
+    expect(verdict.text).toBe(
+      'Moves the Meta cost cap (bid setting) more than 20% in a day — not applied. Nothing was written.',
+    );
+  });
+
+  it('says a strategy switch is a person’s call when the ad set left COST_CAP', () => {
+    const verdict = previewVerdict(
+      bidAnswer({
+        status: 'refused',
+        reason: 'guardrail',
+        detail:
+          'bid_strategy_not_cost_cap: 120200000000000901 bids LOWEST_COST_WITHOUT_CAP (held by the ad set); its bid_amount is not a cost cap',
+      }),
+      'MXN',
+      'meta',
+    );
+    expect(verdict.tone).toBe('refused');
+    expect(verdict.text).toStartWith('This ad set no longer bids with a cost cap on Meta');
+    expect(verdict.text).toEndWith('Nothing was written.');
+  });
+
+  it('undoes back to the Meta cost cap in currency units', () => {
+    expect(
+      undoRestoresText({ field: 'bid_amount_minor', value: 40_000 }, 'set_bid_target', 'MXN'),
+    ).toBe('Meta cost cap (bid setting) back to $400.00 MXN');
   });
 });

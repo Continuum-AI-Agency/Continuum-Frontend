@@ -1,0 +1,1024 @@
+{
+ "_source": "Real reads, 2026-11-02 (as ramibuisel@gmail.com, session revoked): optimizer_get_cpa_series (p_limit 30) for the Easy Fit agency brand 148583e0 portfolios on act_521903353286118, and paid-media-reporting/metrics account_overview over 2026-09-27..2026-11-01 for the Google customers. Trends trimmed to date, spend and conversions.",
+ "easyFitMetaSeries": {
+  "94ca5d79-77cd-4973-9d9d-4ae55ccd7ec4": {
+   "name": "Leads // Google Ads only",
+   "points": [
+    {
+     "adsets": 6,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 1,
+     "cycle_ts": "2026-10-21T03:00:45.221+00:00",
+     "spend_d3": 7096.22,
+     "spend_d7": 11165.78,
+     "spend_d14": 17443.94
+    },
+    {
+     "adsets": 6,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 1,
+     "cycle_ts": "2026-10-22T03:02:03.447+00:00",
+     "spend_d3": 7635.26,
+     "spend_d7": 13012.09,
+     "spend_d14": 18360.129999999997
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 1,
+     "cycle_ts": "2026-10-23T03:01:29.796+00:00",
+     "spend_d3": 6598.7,
+     "spend_d7": 12427.589999999998,
+     "spend_d14": 17252.32
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 1,
+     "cycle_ts": "2026-10-23T16:57:42.362+00:00",
+     "spend_d3": 6252.46,
+     "spend_d7": 13625.87,
+     "spend_d14": 18488.280000000002
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 1,
+     "cycle_ts": "2026-10-24T03:02:26.824+00:00",
+     "spend_d3": 6255.78,
+     "spend_d7": 13629.19,
+     "spend_d14": 18491.600000000002
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-25T03:02:19.625+00:00",
+     "spend_d3": 6235.86,
+     "spend_d7": 14379.609999999999,
+     "spend_d14": 20037.37
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-26T03:03:12.902+00:00",
+     "spend_d3": 6254.63,
+     "spend_d7": 14853.02,
+     "spend_d14": 21553.97
+    },
+    {
+     "adsets": 6,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-27T03:02:57.822+00:00",
+     "spend_d3": 6406.320000000001,
+     "spend_d7": 16266.939999999999,
+     "spend_d14": 25358.31
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-27T20:21:40.004+00:00",
+     "spend_d3": 1638.8899999999999,
+     "spend_d7": 3417.75,
+     "spend_d14": 6147.45
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-28T20:20:11.087+00:00",
+     "spend_d3": 2391.02,
+     "spend_d7": 3656.08,
+     "spend_d14": 7053.450000000001
+    },
+    {
+     "adsets": 1,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-29T05:03:45.821+00:00",
+     "spend_d3": 0,
+     "spend_d7": 0,
+     "spend_d14": 0
+    },
+    {
+     "adsets": 1,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-30T05:04:55.188+00:00",
+     "spend_d3": 0,
+     "spend_d7": 0,
+     "spend_d14": 0
+    },
+    {
+     "adsets": 1,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-10-31T05:04:55.688+00:00",
+     "spend_d3": 0,
+     "spend_d7": 0,
+     "spend_d14": 0
+    },
+    {
+     "adsets": 1,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-11-01T05:05:48.787+00:00",
+     "spend_d3": 0,
+     "spend_d7": 0,
+     "spend_d14": 0
+    },
+    {
+     "adsets": 1,
+     "conv_d3": 0,
+     "conv_d7": 0,
+     "conv_d14": 0,
+     "cycle_ts": "2026-11-02T05:06:35.255+00:00",
+     "spend_d3": 0,
+     "spend_d7": 0,
+     "spend_d14": 0
+    }
+   ]
+  },
+  "0fd6f383-6a70-4ce1-baf8-c869bc5d4aec": {
+   "name": "Conversaciones Whatsapp",
+   "points": [
+    {
+     "adsets": 7,
+     "conv_d3": 67,
+     "conv_d7": 209,
+     "conv_d14": 510,
+     "cycle_ts": "2026-10-13T17:06:35.233+00:00",
+     "spend_d3": 3577.13,
+     "spend_d7": 9916.91,
+     "spend_d14": 23099.18
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 67,
+     "conv_d7": 209,
+     "conv_d14": 510,
+     "cycle_ts": "2026-10-13T17:06:40.342+00:00",
+     "spend_d3": 3577.13,
+     "spend_d7": 9916.91,
+     "spend_d14": 23099.18
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 51,
+     "conv_d7": 96,
+     "conv_d14": 270,
+     "cycle_ts": "2026-10-14T17:07:32.79+00:00",
+     "spend_d3": 1839.92,
+     "spend_d7": 4228.14,
+     "spend_d14": 10378.869999999999
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 58,
+     "conv_d7": 99,
+     "conv_d14": 273,
+     "cycle_ts": "2026-10-15T17:07:55.433+00:00",
+     "spend_d3": 2006.1999999999998,
+     "spend_d7": 4187.36,
+     "spend_d14": 10356.08
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 49,
+     "conv_d7": 97,
+     "conv_d14": 261,
+     "cycle_ts": "2026-10-16T17:08:55.666+00:00",
+     "spend_d3": 2225.0899999999997,
+     "spend_d7": 4426.02,
+     "spend_d14": 10388.98
+    },
+    {
+     "adsets": 5,
+     "conv_d3": 62,
+     "conv_d7": 129,
+     "conv_d14": 352,
+     "cycle_ts": "2026-10-17T17:09:27.551+00:00",
+     "spend_d3": 3120.1,
+     "spend_d7": 6454.37,
+     "spend_d14": 15516.77
+    },
+    {
+     "adsets": 6,
+     "conv_d3": 75,
+     "conv_d7": 163,
+     "conv_d14": 397,
+     "cycle_ts": "2026-10-18T17:09:44.568+00:00",
+     "spend_d3": 4462.12,
+     "spend_d7": 8280.85,
+     "spend_d14": 18531.25
+    },
+    {
+     "adsets": 6,
+     "conv_d3": 127,
+     "conv_d7": 209,
+     "conv_d14": 416,
+     "cycle_ts": "2026-10-19T17:09:57.877+00:00",
+     "spend_d3": 6378.3099999999995,
+     "spend_d7": 9972.7,
+     "spend_d14": 19529.96
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 152,
+     "conv_d7": 241,
+     "conv_d14": 467,
+     "cycle_ts": "2026-10-19T20:19:11.811+00:00",
+     "spend_d3": 7219.11,
+     "spend_d7": 11120.84,
+     "spend_d14": 21434.36
+    },
+    {
+     "adsets": 6,
+     "conv_d3": 178,
+     "conv_d7": 266,
+     "conv_d14": 443,
+     "cycle_ts": "2026-10-20T20:19:33.758+00:00",
+     "spend_d3": 8057.37,
+     "spend_d7": 12199.65,
+     "spend_d14": 19826.41
+    },
+    {
+     "adsets": 2,
+     "conv_d3": 3,
+     "conv_d7": 21,
+     "conv_d14": 52,
+     "cycle_ts": "2026-10-27T03:03:44.14+00:00",
+     "spend_d3": 0,
+     "spend_d7": 883.47,
+     "spend_d14": 2916.4700000000003
+    },
+    {
+     "adsets": 2,
+     "conv_d3": 14,
+     "conv_d7": 20,
+     "conv_d14": 57,
+     "cycle_ts": "2026-10-28T03:03:25.773+00:00",
+     "spend_d3": 1022.18,
+     "spend_d7": 1163.02,
+     "spend_d14": 3520.96
+    },
+    {
+     "adsets": 2,
+     "conv_d3": 31,
+     "conv_d7": 34,
+     "conv_d14": 72,
+     "cycle_ts": "2026-10-29T03:03:44.123+00:00",
+     "spend_d3": 1991.95,
+     "spend_d7": 1991.95,
+     "spend_d14": 4339.64
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 224,
+     "conv_d7": 486,
+     "conv_d14": 808,
+     "cycle_ts": "2026-10-29T05:02:18.735+00:00",
+     "spend_d3": 10501.84,
+     "spend_d7": 19244.16,
+     "spend_d14": 34604.07
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 224,
+     "conv_d7": 486,
+     "conv_d14": 808,
+     "cycle_ts": "2026-10-29T05:03:06.029+00:00",
+     "spend_d3": 10501.84,
+     "spend_d7": 19244.16,
+     "spend_d14": 34604.07
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 226,
+     "conv_d7": 467,
+     "conv_d14": 844,
+     "cycle_ts": "2026-10-30T05:03:15.658+00:00",
+     "spend_d3": 11368.02,
+     "spend_d7": 20005.92,
+     "spend_d14": 36854.130000000005
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 199,
+     "conv_d7": 483,
+     "conv_d14": 900,
+     "cycle_ts": "2026-10-31T05:03:29.487+00:00",
+     "spend_d3": 10449.45,
+     "spend_d7": 21485.3,
+     "spend_d14": 39452.03
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 201,
+     "conv_d7": 474,
+     "conv_d14": 936,
+     "cycle_ts": "2026-11-01T05:04:11.558+00:00",
+     "spend_d3": 10700.4,
+     "spend_d7": 23277.51,
+     "spend_d14": 41683.01
+    },
+    {
+     "adsets": 7,
+     "conv_d3": 178,
+     "conv_d7": 462,
+     "conv_d14": 931,
+     "cycle_ts": "2026-11-02T05:04:55.126+00:00",
+     "spend_d3": 10910.050000000001,
+     "spend_d7": 24543.57,
+     "spend_d14": 42636.170000000006
+    }
+   ]
+  },
+  "ec956b3d-c9b1-48ea-b55b-bda303e68f79": {
+   "name": "Tours Programados - Octubre",
+   "points": [
+    {
+     "adsets": 3,
+     "conv_d3": 5,
+     "conv_d7": 17,
+     "conv_d14": 29,
+     "cycle_ts": "2026-10-13T16:57:15.932+00:00",
+     "spend_d3": 1164.94,
+     "spend_d7": 3973.34,
+     "spend_d14": 8593.62
+    },
+    {
+     "adsets": 3,
+     "conv_d3": 5,
+     "conv_d7": 17,
+     "conv_d14": 29,
+     "cycle_ts": "2026-10-13T16:57:18.99+00:00",
+     "spend_d3": 1164.94,
+     "spend_d7": 3973.34,
+     "spend_d14": 8593.62
+    },
+    {
+     "adsets": 2,
+     "conv_d3": 4,
+     "conv_d7": 10,
+     "conv_d14": 27,
+     "cycle_ts": "2026-10-14T16:58:08.965+00:00",
+     "spend_d3": 1037.8899999999999,
+     "spend_d7": 2647.34,
+     "spend_d14": 7420.300000000001
+    }
+   ]
+  }
+ },
+ "google": {
+  "easyFit5251780631Leads": {
+   "range": {
+    "since": "2026-09-27",
+    "until": "2026-11-01"
+   },
+   "currency": "MXN",
+   "metrics": {
+    "spend": 26898.3649,
+    "cpa": 64.9664
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "trends": [
+    {
+     "date": "2026-10-08",
+     "spend": 5099.5993,
+     "conversions": 37
+    },
+    {
+     "date": "2026-10-09",
+     "spend": 5098.9803,
+     "conversions": 48.1003
+    },
+    {
+     "date": "2026-10-10",
+     "spend": 4719.2388,
+     "conversions": 47.9349
+    },
+    {
+     "date": "2026-10-11",
+     "spend": 4693.5275,
+     "conversions": 24
+    },
+    {
+     "date": "2026-10-12",
+     "spend": 2931.1947,
+     "conversions": 74
+    },
+    {
+     "date": "2026-10-13",
+     "spend": 36.1771,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-14",
+     "spend": 1.4297,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-20",
+     "spend": 765.714,
+     "conversions": 11.3333
+    },
+    {
+     "date": "2026-10-21",
+     "spend": 882.9207,
+     "conversions": 47.6667
+    },
+    {
+     "date": "2026-10-22",
+     "spend": 1029.1291,
+     "conversions": 46
+    },
+    {
+     "date": "2026-10-23",
+     "spend": 1201.1314,
+     "conversions": 56
+    },
+    {
+     "date": "2026-10-24",
+     "spend": 409.9413,
+     "conversions": 17
+    },
+    {
+     "date": "2026-10-25",
+     "spend": 29.0945,
+     "conversions": 1
+    },
+    {
+     "date": "2026-11-01",
+     "spend": 0.2865,
+     "conversions": 0
+    }
+   ]
+  },
+  "vivo47_3710693645Leads": {
+   "range": {
+    "since": "2026-09-27",
+    "until": "2026-11-01"
+   },
+   "currency": "MXN",
+   "metrics": {
+    "spend": 47084.6801,
+    "cpa": 941.6936
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "trends": [
+    {
+     "date": "2026-09-27",
+     "spend": 979.45,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-28",
+     "spend": 965.555,
+     "conversions": 2.0088
+    },
+    {
+     "date": "2026-09-29",
+     "spend": 905.5535,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-30",
+     "spend": 876.7966,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-01",
+     "spend": 1260.9943,
+     "conversions": 1.9912
+    },
+    {
+     "date": "2026-10-02",
+     "spend": 1233.065,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-03",
+     "spend": 1129.945,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-04",
+     "spend": 1163.5267,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-05",
+     "spend": 1451.6703,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-06",
+     "spend": 1429.2034,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-07",
+     "spend": 1428.4119,
+     "conversions": 4
+    },
+    {
+     "date": "2026-10-08",
+     "spend": 1313.3768,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-09",
+     "spend": 799.24,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-10",
+     "spend": 609.59,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-11",
+     "spend": 938.0385,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-12",
+     "spend": 1835.755,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-13",
+     "spend": 2329.676,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-14",
+     "spend": 1990.6841,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-15",
+     "spend": 2030.7035,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-16",
+     "spend": 2312.5059,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-17",
+     "spend": 1170.3138,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-18",
+     "spend": 1299.5072,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-19",
+     "spend": 1397.6776,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-20",
+     "spend": 1441.6749,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-21",
+     "spend": 1239.3101,
+     "conversions": 4
+    },
+    {
+     "date": "2026-10-22",
+     "spend": 1218.8357,
+     "conversions": 3
+    },
+    {
+     "date": "2026-10-23",
+     "spend": 1921.4316,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-24",
+     "spend": 1158.7965,
+     "conversions": 3
+    },
+    {
+     "date": "2026-10-25",
+     "spend": 1631.0368,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-26",
+     "spend": 1508.22,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-27",
+     "spend": 1240.674,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-28",
+     "spend": 1185.3689,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-29",
+     "spend": 1176.3433,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-30",
+     "spend": 1409.5491,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-31",
+     "spend": 869.6617,
+     "conversions": 3
+    },
+    {
+     "date": "2026-11-01",
+     "spend": 232.5375,
+     "conversions": 1
+    }
+   ]
+  },
+  "pink6619636193Purchases": {
+   "range": {
+    "since": "2026-09-27",
+    "until": "2026-11-01"
+   },
+   "currency": "MXN",
+   "metrics": {
+    "spend": 11114.5577,
+    "cpa": 11114.5577
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "purchases",
+    "unambiguous": true
+   },
+   "trends": [
+    {
+     "date": "2026-09-28",
+     "spend": 408.0843,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-29",
+     "spend": 999.1701,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-30",
+     "spend": 199.8107,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-01",
+     "spend": 0.2641,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-02",
+     "spend": 365.4057,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-05",
+     "spend": 961.5109,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-06",
+     "spend": 326.9544,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-07",
+     "spend": 2.2853,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-08",
+     "spend": 2.0538,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-09",
+     "spend": 2.5896,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-12",
+     "spend": 34.2711,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-13",
+     "spend": 109.5587,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-14",
+     "spend": 217.2929,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-15",
+     "spend": 360.8305,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-16",
+     "spend": 324.6244,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-17",
+     "spend": 15.46,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-18",
+     "spend": 182.6331,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-19",
+     "spend": 685.2576,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-20",
+     "spend": 757.4501,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-21",
+     "spend": 806.7088,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-22",
+     "spend": 647.4696,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-23",
+     "spend": 605.2857,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-24",
+     "spend": 103.1648,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-25",
+     "spend": 167.2491,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-26",
+     "spend": 235.5376,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-27",
+     "spend": 945.5111,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-28",
+     "spend": 880.4311,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-29",
+     "spend": 574.6701,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-30",
+     "spend": 193.0224,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-31",
+     "spend": 0,
+     "conversions": 0
+    },
+    {
+     "date": "2026-11-01",
+     "spend": 0,
+     "conversions": 0
+    }
+   ]
+  },
+  "pink6619636193Leads": {
+   "range": {
+    "since": "2026-09-27",
+    "until": "2026-11-01"
+   },
+   "currency": "MXN",
+   "metrics": {
+    "spend": 11114.5577,
+    "cpa": 1010.4143
+   },
+   "result_basis": {
+    "rule": "google_conversion_rule_v1",
+    "bucket": "leads",
+    "unambiguous": true
+   },
+   "trends": [
+    {
+     "date": "2026-09-28",
+     "spend": 408.0843,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-29",
+     "spend": 999.1701,
+     "conversions": 0
+    },
+    {
+     "date": "2026-09-30",
+     "spend": 199.8107,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-01",
+     "spend": 0.2641,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-02",
+     "spend": 365.4057,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-05",
+     "spend": 961.5109,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-06",
+     "spend": 326.9544,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-07",
+     "spend": 2.2853,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-08",
+     "spend": 2.0538,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-09",
+     "spend": 2.5896,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-12",
+     "spend": 34.2711,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-13",
+     "spend": 109.5587,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-14",
+     "spend": 217.2929,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-15",
+     "spend": 360.8305,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-16",
+     "spend": 324.6244,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-17",
+     "spend": 15.46,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-18",
+     "spend": 182.6331,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-19",
+     "spend": 685.2576,
+     "conversions": 3
+    },
+    {
+     "date": "2026-10-20",
+     "spend": 757.4501,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-21",
+     "spend": 806.7088,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-22",
+     "spend": 647.4696,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-23",
+     "spend": 605.2857,
+     "conversions": 1
+    },
+    {
+     "date": "2026-10-24",
+     "spend": 103.1648,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-25",
+     "spend": 167.2491,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-26",
+     "spend": 235.5376,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-27",
+     "spend": 945.5111,
+     "conversions": 2
+    },
+    {
+     "date": "2026-10-28",
+     "spend": 880.4311,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-29",
+     "spend": 574.6701,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-30",
+     "spend": 193.0224,
+     "conversions": 0
+    },
+    {
+     "date": "2026-10-31",
+     "spend": 0,
+     "conversions": 0
+    },
+    {
+     "date": "2026-11-01",
+     "spend": 0,
+     "conversions": 0
+    }
+   ]
+  }
+ }
+}

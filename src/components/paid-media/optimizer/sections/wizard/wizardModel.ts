@@ -28,6 +28,7 @@ import {
   toMinorUnits,
 } from '@continuum/contracts';
 import { humanize } from '../../format';
+import { goalCostCapAvailability } from '../goalCostCap/goalCostCapModel';
 import { PLATFORM_NAMES } from '../platforms/platformTabsModel';
 import {
   buildConversionDescriptor,
@@ -91,6 +92,8 @@ export type WizardDraft = {
   scaleGrowthPct: string;
   scaleCadenceDays: string;
   scaleMaxDaily: string;
+  /** "Use this goal as the cost cap on the ad platforms", saved right after the create. */
+  goalAsPlatformCostCap: boolean;
 };
 
 export const MODE_COPY: Record<OptimizationModeDto, { title: string; body: string }> = {
@@ -138,6 +141,7 @@ export function emptyDraft(): WizardDraft {
     scaleGrowthPct: '',
     scaleCadenceDays: '',
     scaleMaxDaily: '',
+    goalAsPlatformCostCap: false,
   };
 }
 
@@ -268,9 +272,32 @@ export function selectedMembersBudget(
   return selectedMembers(draft).reduce((sum, member) => sum + (member.daily_budget ?? 0), 0);
 }
 
-function num(value: string): number | null {
-  const parsed = Number.parseFloat(value.trim());
+/** Digits with an optional decimal point: the only shape a typed amount is read in. */
+const PLAIN_AMOUNT = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
+
+/** A typed amount, or null when blank, not positive, or not a plain number. Number.parseFloat
+ *  stopped at the first character it could not read, so "1,500" was created as 1 a day and
+ *  "1.500,00" as 1.5; an amount with separators, signs or symbols is refused and named in the
+ *  step's issues, never guessed. */
+export function parseTypedAmount(value: string): number | null {
+  const trimmed = value.trim();
+  if (!PLAIN_AMOUNT.test(trimmed)) return null;
+  const parsed = Number(trimmed);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function num(value: string): number | null {
+  return parseTypedAmount(value);
+}
+
+/** Something was typed and it is not a plain number. */
+function unreadableAmount(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== '' && !PLAIN_AMOUNT.test(trimmed);
+}
+
+function digitsOnly(field: string, example: string): string {
+  return `${field}: write it with digits only, like ${example} — no commas, spaces or currency signs.`;
 }
 
 /** A suggestion seeds the draft. The target arrives priced per result and is shown in the
@@ -440,6 +467,16 @@ export function suggestionPlatformCounts(
 }
 
 /** The objective's own metric unless a still-allowed alternative was chosen. */
+/** Whether the create should also tick the cost-cap checkbox: ticked, AND the goal still
+ *  qualifies (a box ticked before the objective changed to a CPM is not a request). */
+export function goalCostCapRequested(draft: WizardDraft): boolean {
+  return (
+    draft.goalAsPlatformCostCap &&
+    goalCostCapAvailability({ targetMetric: effectiveTargetMetric(draft), goal: num(draft.target) })
+      .available
+  );
+}
+
 export function effectiveTargetMetric(draft: Pick<WizardDraft, 'objective' | 'targetMetric'>) {
   const allowed = allowedTargetMetrics(draft.objective);
   return draft.targetMetric && allowed.includes(draft.targetMetric)
@@ -485,6 +522,7 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
       }
       break;
     case 'goal': {
+      if (unreadableAmount(draft.target)) issues.push(digitsOnly('Target', '45.50'));
       if (draft.objective === 'custom') {
         const built = buildConversionDescriptor(draft.conversion);
         if ('error' in built) issues.push(built.error);
@@ -502,6 +540,12 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
     }
     case 'plan': {
       if (draft.name.trim().length === 0) issues.push('Give the portfolio a name.');
+      if (unreadableAmount(draft.dailyTotal)) issues.push(digitsOnly('Daily budget', '1500'));
+      if (unreadableAmount(draft.budgetAmount)) issues.push(digitsOnly('Budget', '45000'));
+      if (unreadableAmount(draft.maxDailyApply))
+        issues.push(digitsOnly('Max autopilot spend/day', '2400'));
+      if (unreadableAmount(draft.maxChangePct))
+        issues.push(digitsOnly('Max change per cycle', '20'));
       const daily =
         num(draft.dailyTotal) ?? (ctx.selectedBudgetSum > 0 ? ctx.selectedBudgetSum : null);
       if (daily == null)

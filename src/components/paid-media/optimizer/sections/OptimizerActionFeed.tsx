@@ -13,6 +13,10 @@
 // dot for how it went, the change, its portfolio and why, and the undo on the right.
 // `ActionRow` is the same change as a quiet row, for the portfolio queue's Recently applied.
 //
+// On the Activity page the host narrows it by hand (Optimizer, Team, Platform), lists what the
+// platform did beside the writes (pages/activity/activityModel), and lights the entry its chart
+// points at — every entry carries the event id its dot carries, so the two always meet.
+//
 // Revert is gated on the row's own `reversible` flag from the RPC — never on a client guess —
 // and a row that has already been undone renders as "reverted" instead of offering the button
 // again.
@@ -23,6 +27,7 @@ import { ArrowRightIcon, ListChecksIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
+import { cn } from '@/lib/utils';
 import {
   enrolledAdsetsQuery,
   type OptimizerActionFeedRow,
@@ -46,7 +51,7 @@ import {
   readReceiptTrace,
 } from './actionRows';
 import { MoveDecisionCard } from './crossPlatformMove/MoveDecisionCard';
-import { groupActionFeed } from './crossPlatformMove/moveDecisionModel';
+import { type ActionFeedItem, groupActionFeed } from './crossPlatformMove/moveDecisionModel';
 import { FeedFooter, FeedSkeleton, formatWhen, PortfolioFilter, ReceiptToken } from './feedChrome';
 import {
   FeedToolbar,
@@ -55,16 +60,39 @@ import {
   TimelineEntry,
   type TimelineTone,
 } from './feedTimeline';
-import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
+import { ALL_PORTFOLIOS, distinctPortfolioNames } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
+import {
+  type ActivityPlatformItem,
+  type ActivitySourceFilter,
+  actionEventId,
+  filterActions,
+  filterPlatformItems,
+  moveEventId,
+  SOURCE_COPY,
+} from './pages/activity/activityModel';
+import { PlatformEventEntry } from './pages/activity/PlatformEventEntry';
 import { PlatformChip } from './platforms/PlatformChip';
 
 type OptimizerActionFeedProps = {
   brandId: string;
   windowDays?: OptimizerFeedWindowDays;
-  /** The host's filters (feed switch, window), drawn on the same line as the portfolio filter. */
-  controls?: ReactNode;
+  /** Drawn under the feed once it has answered — never under the loading skeleton, which the
+   *  timeline replaces at another height and would push it down (CLS on a phone). */
+  footer?: ReactNode;
+  /** Which hand's changes to list (the Activity page's source filter). */
+  source?: ActivitySourceFilter;
+  /** The portfolio narrowing, when the host holds it (so its chart narrows with the list). */
+  portfolio?: string;
+  onPortfolioChange?: (portfolio: string) => void;
+  /** What the platform did in the window, listed by time beside the actions. */
+  platformItems?: readonly ActivityPlatformItem[];
+  /** The entry the host's chart points at, lit in the list; a hovered entry is reported back. */
+  highlightedId?: string | null;
+  onHighlight?: (id: string | null) => void;
 };
+
+const NO_PLATFORM_ITEMS: readonly ActivityPlatformItem[] = [];
 
 const FAMILY_LABEL: Record<string, string> = {
   money: 'Ad account',
@@ -227,11 +255,13 @@ function ActionTimelineEntry({
   brandId,
   currency,
   entityNames,
+  highlighted,
 }: {
   row: OptimizerActionFeedRow;
   brandId: string;
   currency: string | null;
   entityNames: ActionEntityNames;
+  highlighted: boolean;
 }) {
   const change = readActionChange(row);
   const entity = actionEntity(row, entityNames);
@@ -243,7 +273,10 @@ function ActionTimelineEntry({
   return (
     <TimelineEntry
       action={<ActionRevertControl row={row} brandId={brandId} currency={currency} />}
+      className={cn('-mx-2 rounded-md px-2 transition-colors', highlighted && 'bg-muted/70')}
       data-action-id={row.id}
+      data-event-id={actionEventId(row)}
+      data-highlighted={highlighted ? 'true' : undefined}
       tone={actionTone(row)}
       ts={row.ts}
     >
@@ -298,98 +331,178 @@ function useActionCurrency(brandId: string): (row: OptimizerActionFeedRow) => st
   );
 }
 
-function ActionTimeline({ rows, brandId }: { rows: OptimizerActionFeedRow[]; brandId: string }) {
+type TimelineItem = ActionFeedItem | { kind: 'platform'; item: ActivityPlatformItem };
+
+function itemTs(item: TimelineItem): string {
+  if (item.kind === 'platform') return item.item.ts;
+  return item.kind === 'move' ? item.move.ts : item.row.ts;
+}
+
+/** The actions, a cross-platform move folded into one entry where its newest write stood, then
+ *  the platform's events placed by time among them. Both arrive newest first; the merge keeps
+ *  each one's own order, so a day still appears once. */
+function mergeTimeline(
+  rows: OptimizerActionFeedRow[],
+  platform: readonly ActivityPlatformItem[],
+): TimelineItem[] {
+  const actions: TimelineItem[] = groupActionFeed(rows);
+  if (platform.length === 0) return actions;
+  const pending = platform.map((item): TimelineItem => ({ kind: 'platform', item }));
+  const merged: TimelineItem[] = [];
+  let next = 0;
+  for (const item of actions) {
+    const at = Date.parse(itemTs(item));
+    for (; next < pending.length && Date.parse(itemTs(pending[next])) > at; next += 1) {
+      merged.push(pending[next]);
+    }
+    merged.push(item);
+  }
+  return merged.concat(pending.slice(next));
+}
+
+function ActionTimeline({
+  rows,
+  platformItems,
+  brandId,
+  highlightedId,
+  onHighlight,
+}: {
+  rows: OptimizerActionFeedRow[];
+  platformItems: readonly ActivityPlatformItem[];
+  brandId: string;
+  highlightedId: string | null;
+  onHighlight?: (id: string | null) => void;
+}) {
   const entityNames = useActionEntityNames(rows);
   const currencyOf = useActionCurrency(brandId);
-  // A cross-platform move is ONE decision, however many writes it took: its legs fold into a
-  // single entry where its newest write stood.
-  const items = groupActionFeed(rows);
-  const days = groupByDay(items, (item) => (item.kind === 'move' ? item.move.ts : item.row.ts));
+  const days = groupByDay(mergeTimeline(rows, platformItems), itemTs);
+  // A hovered entry lights its dot on the chart: one listener for the whole list, reading the
+  // entry under the pointer by its event id.
+  const reportHover = onHighlight
+    ? (target: EventTarget) => {
+        const entry = target instanceof Element ? target.closest('[data-event-id]') : null;
+        onHighlight(entry?.getAttribute('data-event-id') ?? null);
+      }
+    : undefined;
   return (
-    <div data-testid="action-timeline">
+    <div
+      data-testid="action-timeline"
+      onPointerLeave={onHighlight ? () => onHighlight(null) : undefined}
+      onPointerOver={reportHover ? (event) => reportHover(event.target) : undefined}
+    >
       {days.map((day) => (
         <TimelineDay key={day.label} label={day.label} testId="action-day">
-          {day.items.map((item) =>
-            item.kind === 'move' ? (
-              <MoveDecisionCard
-                className="space-y-2 rounded-none border-0 bg-transparent py-2 pr-0 pl-[4.75rem]"
-                currency={currencyOf(item.move.actorRow)}
-                key={item.move.moveId}
-                move={item.move}
-              />
-            ) : (
+          {day.items.map((item) => {
+            if (item.kind === 'platform') {
+              return (
+                <PlatformEventEntry
+                  highlighted={item.item.id === highlightedId}
+                  item={item.item}
+                  key={item.item.id}
+                />
+              );
+            }
+            if (item.kind === 'move') {
+              return (
+                <MoveDecisionCard
+                  className={cn(
+                    'space-y-2 rounded-none border-0 bg-transparent py-2 pr-0 pl-[4.75rem] transition-colors',
+                    moveEventId(item.move.moveId) === highlightedId && 'rounded-md bg-muted/70',
+                  )}
+                  currency={currencyOf(item.move.actorRow)}
+                  key={item.move.moveId}
+                  move={item.move}
+                />
+              );
+            }
+            return (
               <ActionTimelineEntry
                 brandId={brandId}
                 currency={currencyOf(item.row)}
                 entityNames={entityNames}
+                highlighted={actionEventId(item.row) === highlightedId}
                 key={item.row.id}
                 row={item.row}
               />
-            ),
-          )}
+            );
+          })}
         </TimelineDay>
       ))}
     </div>
   );
 }
 
+/** What the list says when the narrowing leaves nothing of what has loaded. */
+function emptyNarrowingLine(source: ActivitySourceFilter, portfolio: string): string {
+  if (source !== 'all') {
+    return `Nothing from ${SOURCE_COPY[source].label.toLowerCase()} in what has loaded${
+      portfolio === ALL_PORTFOLIOS ? '' : ' for this portfolio'
+    }.`;
+  }
+  return 'No actions for this portfolio in what has loaded.';
+}
+
 export function OptimizerActionFeed({
   brandId,
   windowDays = 7,
-  controls,
+  footer,
+  source = 'all',
+  portfolio: heldPortfolio,
+  onPortfolioChange,
+  platformItems = NO_PLATFORM_ITEMS,
+  highlightedId = null,
+  onHighlight,
 }: OptimizerActionFeedProps) {
   const actionsQuery = useOptimizerActions(brandId, windowDays);
-  const [portfolio, setPortfolio] = useState<string>(ALL_PORTFOLIOS);
+  const [ownPortfolio, setOwnPortfolio] = useState<string>(ALL_PORTFOLIOS);
+  const portfolio = heldPortfolio ?? ownPortfolio;
+  const setPortfolio = onPortfolioChange ?? setOwnPortfolio;
 
-  if (actionsQuery.isLoading) {
-    return (
-      <div className="space-y-3">
-        <FeedToolbar controls={controls} />
-        <FeedSkeleton />
-      </div>
-    );
-  }
+  if (actionsQuery.isLoading) return <FeedSkeleton />;
 
   // A failed read must never render as "nothing has happened" — the outage and the genuinely
   // quiet brand look identical otherwise.
   if (actionsQuery.isError) {
     return (
       <div className="space-y-3">
-        <FeedToolbar controls={controls} />
         <OptimizerReadError
           error={actionsQuery.error}
           onRetry={() => void actionsQuery.refetch()}
           subject="the action feed"
         />
+        {footer}
       </div>
     );
   }
 
   const actions = actionsQuery.data;
-  if (actions.length === 0) {
+  if (actions.length === 0 && platformItems.length === 0) {
     return (
       <div className="space-y-3">
-        <FeedToolbar controls={controls} />
         <EmptyState
           headline="Nothing has changed yet"
           media={<ListChecksIcon aria-hidden="true" />}
           description="Budget writes, pauses, setting edits and recommendation decisions appear here with their before, their after, and a one-click undo."
         />
+        {footer}
       </div>
     );
   }
 
-  const portfolioNames = distinctPortfolioNames(
-    actions.map((row) => ({ portfolio_name: row.portfolio_name ?? null })),
-  );
+  const portfolioNames = distinctPortfolioNames([
+    ...actions.map((row) => ({ portfolio_name: row.portfolio_name ?? null })),
+    ...platformItems.map((item) => ({ portfolio_name: item.portfolioName })),
+  ]);
   // A previously-chosen portfolio can vanish after a refetch; fall back to "all" so the feed
   // never silently renders empty against a stale selection.
   const effectivePortfolio = portfolioNames.includes(portfolio) ? portfolio : ALL_PORTFOLIOS;
-  const visible = filterByPortfolio(actions, effectivePortfolio);
+  const filter = { source, portfolio: effectivePortfolio };
+  const visible = filterActions(actions, filter);
+  const visiblePlatform = filterPlatformItems(platformItems, filter);
 
   return (
     <div className="space-y-2">
-      <FeedToolbar controls={controls}>
+      <FeedToolbar>
         <PortfolioFilter
           names={portfolioNames}
           value={effectivePortfolio}
@@ -397,12 +510,18 @@ export function OptimizerActionFeed({
           label="Filter actions by portfolio"
         />
       </FeedToolbar>
-      {visible.length === 0 ? (
+      {visible.length === 0 && visiblePlatform.length === 0 ? (
         <p className="py-6 text-center text-muted-foreground text-xs">
-          No actions for this portfolio in what has loaded.
+          {emptyNarrowingLine(source, effectivePortfolio)}
         </p>
       ) : (
-        <ActionTimeline rows={visible} brandId={brandId} />
+        <ActionTimeline
+          brandId={brandId}
+          highlightedId={highlightedId}
+          onHighlight={onHighlight}
+          platformItems={visiblePlatform}
+          rows={visible}
+        />
       )}
       <FeedFooter
         loaded={actions.length}
@@ -411,6 +530,7 @@ export function OptimizerActionFeed({
         onLoadMore={() => void actionsQuery.fetchNextPage()}
         noun="actions"
       />
+      {footer}
     </div>
   );
 }

@@ -54,13 +54,19 @@ function platformSummaryKey(platform: PaidMediaPlatform): keyof BrandIntegration
   return 'facebook';
 }
 
+// The facebook and linkedin buckets hold Pages and organisations beside ad accounts; neither runs
+// ads, so neither may tick "connected" or "assigned" on a surface that needs an ad account.
+const NOT_AN_AD_ACCOUNT = new Set(['meta_page', 'meta_instagram_account', 'linkedin_organization']);
+
 // How many ad accounts are assigned to this brand for the given platform.
 export function countPlatformAccounts(
   summary: BrandIntegrationSummary | undefined,
   platform: PaidMediaPlatform,
 ): number {
   if (!summary) return 0;
-  return summary[platformSummaryKey(platform)]?.accounts?.length ?? 0;
+  const accounts: readonly { type?: string | null }[] =
+    summary[platformSummaryKey(platform)]?.accounts ?? [];
+  return accounts.filter((account) => !NOT_AN_AD_ACCOUNT.has(account.type ?? '')).length;
 }
 
 function deriveSyncStep(input: PaidSetupInput, hasAccounts: boolean): PaidSetupStep {

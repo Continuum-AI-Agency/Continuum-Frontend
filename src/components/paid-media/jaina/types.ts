@@ -7,6 +7,7 @@ import type {
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
+  LiveChangePreviewPayload,
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
@@ -67,6 +68,8 @@ export type JainaChatMessage = {
   optimizerHyperframes?: JainaHyperframeSet[];
   /** The proposed scaffold drawn in the chat, one entry per layout (P5 structure designs). */
   campaignStructures?: CampaignStructurePayload[];
+  /** The live campaign under each pending edit, for the companion canvas (read-only). */
+  liveChangePreviews?: LiveChangePreviewPayload[];
   pendingClarification?: {
     id?: string;
     /** Exactly as Jaina asked it — in the question's language, never translated or relabelled. */

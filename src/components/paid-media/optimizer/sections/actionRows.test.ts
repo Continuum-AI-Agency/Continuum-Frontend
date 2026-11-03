@@ -2,8 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   actionCurrency,
+  actionOutcome,
   actionPlatform,
   actorLabel,
+  changeAmounts,
   minorToMajor,
   readActionChange,
   readReceiptTrace,
@@ -391,5 +393,34 @@ describe("actionCurrency reads the row's own portfolio or account, never the pag
   it('a row with no portfolio and no account in its receipt records nothing', () => {
     expect(actionCurrency(action({ portfolio_id: null }), [stamped], [META])).toBeNull();
     expect(actionCurrency(action(), [unstamped], [])).toBeNull();
+  });
+});
+
+// The change preview (G12) draws an applied write's money as two bars on one scale.
+describe("changeAmounts reads a money change's two sides in major units", () => {
+  it('a budget in minor units, by the currency exponent', () => {
+    const change = readActionChange(
+      action({ before: { minor: 18_000 }, after: { minor: 21_500 } }),
+    );
+    expect(changeAmounts(change, 'MXN')).toEqual({ before: 180, after: 215 });
+    expect(changeAmounts(change, 'JPY')).toEqual({ before: 18_000, after: 21_500 });
+  });
+
+  it('no bars for a change that is not money, or that misses a side', () => {
+    const status = readActionChange(
+      action({ op: 'status', before: { status: 'ACTIVE' }, after: { status: 'PAUSED' } }),
+    );
+    expect(changeAmounts(status, 'MXN')).toBeNull();
+    const half = readActionChange(action({ before: null, after: { minor: 21_500 } }));
+    expect(changeAmounts(half, 'MXN')).toBeNull();
+  });
+});
+
+describe('actionOutcome says whether the write landed, only when the row says', () => {
+  it('stopped for a failed or refused write, applied otherwise, null when it carries none', () => {
+    expect(actionOutcome(action({ outcome: 'failed' } as never))).toBe('stopped');
+    expect(actionOutcome(action({ outcome: 'REFUSED' } as never))).toBe('stopped');
+    expect(actionOutcome(action({ outcome: 'applied' } as never))).toBe('applied');
+    expect(actionOutcome(action())).toBeNull();
   });
 });

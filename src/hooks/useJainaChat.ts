@@ -25,7 +25,7 @@
 import { useChat } from '@ai-sdk/react';
 import type { BillingPaymentRequired, JainaUIMessage } from '@continuum/contracts';
 import { DefaultChatTransport, type UIMessageChunk } from 'ai';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { backendTimeoutPolicy, fetchWithTimeout } from '@/lib/api/timeout';
@@ -60,6 +60,7 @@ class JainaChatTransport extends DefaultChatTransport<JainaUIMessage> {
   constructor(
     init: TransportInit,
     private readonly currentMessages: () => readonly JainaUIMessage[],
+    private readonly onResumeChecked: (chatId: string) => void,
   ) {
     super(init);
   }
@@ -72,9 +73,17 @@ class JainaChatTransport extends DefaultChatTransport<JainaUIMessage> {
   override async reconnectToStream(
     options: ReconnectOptions,
   ): Promise<ReadableStream<UIMessageChunk> | null> {
-    const stream = await super.reconnectToStream(options);
-    if (!stream) return null;
-    return dropOrphanToolChunks(stream, continuedToolCallIds(this.currentMessages()), reportOrphan);
+    try {
+      const stream = await super.reconnectToStream(options);
+      if (!stream) return null;
+      return dropOrphanToolChunks(
+        stream,
+        continuedToolCallIds(this.currentMessages()),
+        reportOrphan,
+      );
+    } finally {
+      this.onResumeChecked(options.chatId);
+    }
   }
 }
 
@@ -124,6 +133,10 @@ export function useJainaChat({
   const dispatchErrorRef = useRef<((message: string) => void) | null>(null);
   // The transcript the SDK resumes onto, for the transport's reconnect (which is not handed it).
   const messagesRef = useRef<readonly JainaUIMessage[]>(initialMessages ?? []);
+  // The chat whose resume check has answered. While that GET is out the SDK keeps the status
+  // `ready`, so a transcript ending in the reader's question looks unanswered even when a run on
+  // another tab or device is still answering it; only after this is "no answer" a fact.
+  const [resumeSettledSessionId, setResumeSettledSessionId] = useState<string | null>(null);
 
   const transport = useMemo(() => {
     const api = `${getApiBaseUrl()}${STREAM_PATH}`;
@@ -167,6 +180,7 @@ export function useJainaChat({
         }),
       },
       () => messagesRef.current,
+      setResumeSettledSessionId,
     );
   }, []);
 
@@ -228,5 +242,5 @@ export function useJainaChat({
     [sendMessage],
   );
 
-  return { ...chat, sendTurn };
+  return { ...chat, sendTurn, resumeSettledSessionId };
 }
