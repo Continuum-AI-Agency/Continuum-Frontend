@@ -521,16 +521,21 @@ describe('OptimizerTab opened on a Google account', () => {
   });
 });
 
-// The Easy Fit sign-ups dashboard is one brand's module: the tab exists only on that brand,
-// and a `dashboard` link opened on any other brand lands on the Overview, never a blank tab.
+// The Easy Fit sign-ups dashboard is one client's module: the tab exists only on the two Easy Fit
+// brands (both read the one dataset), and a `dashboard` link opened on any other brand lands on
+// the Overview, never a blank tab.
 describe('OptimizerTab Dashboard tab gating', () => {
-  const EASYFIT = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+  const EASYFIT_2026 = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
+  const EASYFIT_VIVO47_AGENCY = '148583e0-5538-462b-8d3a-acd25b80344e';
   const renderFor = (brandId: string) =>
     render(<OptimizerTab adAccountId="act_1" brandId={brandId} platform="meta" />);
 
-  it('offers the Dashboard tab on the Easy Fit brand and renders it when selected', () => {
+  it.each([
+    ['Easy Fit 2026', EASYFIT_2026],
+    ['Easyfit (Vivo47 agency)', EASYFIT_VIVO47_AGENCY],
+  ])('offers the Dashboard tab on %s and renders it when selected', (_name, brandId) => {
     view = 'dashboard';
-    renderFor(EASYFIT);
+    renderFor(brandId);
 
     expect(screen.getByRole('tab', { name: 'Dashboard' })).toBeTruthy();
     expect(screen.getByTestId('easyfit-dashboard-section')).toBeTruthy();

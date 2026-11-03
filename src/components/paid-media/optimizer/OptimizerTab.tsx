@@ -551,8 +551,8 @@ export function OptimizerTab({
     );
   }
 
-  // The Easy Fit dashboard exists for one brand; a `dashboard` link opened on any other brand
-  // lands on the Overview instead of an empty tab.
+  // The Easy Fit dashboard exists only on the Easy Fit brands; a `dashboard` link opened on any
+  // other brand lands on the Overview instead of an empty tab.
   const showsDashboard = isEasyfitBrand(brandId);
   const activeView = view === 'dashboard' && !showsDashboard ? 'overview' : view;
   const showsOverviewChrome = activeView === 'overview';

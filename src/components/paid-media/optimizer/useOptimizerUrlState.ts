@@ -7,7 +7,7 @@ import { type PlatformTab, parsePlatformTab } from './sections/platforms/platfor
 
 // `automations` sits first in the tablist: it is where the account-level autonomy controls
 // live, and they used to be a strip inside Overview that nobody could find again.
-// `dashboard` is the Easy Fit sign-ups dashboard; OptimizerTab offers it only on that brand.
+// `dashboard` is the Easy Fit sign-ups dashboard; OptimizerTab offers it only on the Easy Fit brands.
 const VIEWS = [
   'automations',
   'overview',

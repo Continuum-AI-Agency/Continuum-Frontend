@@ -3,6 +3,7 @@ import type { EasyfitDashboardPayload } from './dashboard-payload';
 import type { EasyfitEngineInput } from './engine-input';
 
 export * from './attribution';
+export * from './brands';
 export * from './config';
 export * from './dashboard-payload';
 export * from './engine-input';
