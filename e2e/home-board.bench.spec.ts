@@ -1824,10 +1824,25 @@ async function benchBrand(
     await check(scope, 'goal targets: the tile is honest about the route', async () => {
       if (goalTargetsStatus === null) return 'no targets read on this brand';
       if (goalTargetsStatus !== 404) return `route answered ${goalTargetsStatus}: live`;
+      // This runs after the pin's reload, so the tile may still be reading: let it settle first.
       const goalTile = page.getByTestId('home-tile-goals');
-      if ((await goalTile.getAttribute('data-module-state')) !== 'ready') return 'tile not ready';
+      await expect(goalTile).toHaveAttribute('data-module-state', /^(ready|missing)$/, {
+        timeout: SETTLE_MS,
+      });
+      if ((await goalTile.getAttribute('data-module-state')) === 'missing') {
+        return 'route 404: tile missing, so it offers no target either';
+      }
       await expect(goalTile).toContainText('No target set yet');
-      await expect(goalTile).toContainText('Targets and periods arrive with the goals update');
+      await page.getByTestId('home-tile-goals-open').click();
+      const sheet = page.getByTestId('home-tile-goals-sheet');
+      try {
+        await expect(sheet).toBeVisible({ timeout: 30_000 });
+        await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
+        await expect(sheet).toContainText('No target set yet');
+        await expect(sheet.getByTestId('home-goals-target-form')).toHaveCount(0);
+      } finally {
+        await closeSheet(page, sheet);
+      }
       return 'route 404: real figure kept, no target form';
     });
 
