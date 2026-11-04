@@ -1642,7 +1642,7 @@ export function TemplateAuthoringEditor({
         }
         committed = await authoringLifecycle.reviewAndCommit({
           origin: { tool: 'Forge editor', button: saveTo === 'this_variant'
-            ? 'Review and publish revision' : onVariant ? 'Review and publish new variant' : 'Review and publish variant' },
+            ? 'Review and publish revision' : onVariant ? 'Review and publish new variant' : 'Review and publish as new variant' },
           saveTo,
           parentRevisionId,
           expectedHeadRevisionId: saveTo === 'this_variant'
@@ -1764,7 +1764,7 @@ export function TemplateAuthoringEditor({
             {!lineage ? <span role="status" className="text-xs text-muted-foreground">{variants.isPending ? 'Checking source revision…' : variants.isError ? 'Revision registry unavailable' : 'This exact source version has no registered Forge revision'}</span> : null}
             {lineage?.role === 'golden' ? (
               <Pill variant="warning">
-                <Lock className="size-3" aria-hidden /> Golden source
+                <Lock className="size-3" aria-hidden /> Original
               </Pill>
             ) : null}
             {onVariant ? (
@@ -1775,8 +1775,8 @@ export function TemplateAuthoringEditor({
             {lineage ? (
               <p className="text-xs text-muted-foreground">
                 {onVariant
-                  ? 'Save writes this variant’s next revision.'
-                  : 'Your original upload stays intact. Publishing creates a variant.'}
+                  ? 'Publishing saves this variant’s next revision. The original stays unchanged.'
+                  : 'Your original stays unchanged. Publishing creates a new variant.'}
               </p>
             ) : null}
           </div>
@@ -2839,7 +2839,7 @@ export function TemplateAuthoringEditor({
               {saving && !onVariant ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : null}
-              {onVariant ? 'Review and publish new variant' : 'Review and publish variant'}
+              {onVariant ? 'Review and publish new variant' : 'Review and publish as new variant'}
             </Button>
           </form>
           {savedVariant ? (

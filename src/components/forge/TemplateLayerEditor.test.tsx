@@ -1019,7 +1019,7 @@ describe('TemplateLayerEditor', () => {
     expect(authoringHistoryWrites.mock.calls.flatMap(call => call[3]).some(event =>
       event.command === 'forge_authoring_command' && (event.changes.command as TemplateAuthoringCommand).type === 'artboard.resize')).toBe(true);
     await waitFor(() => expect(document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox')).toBe('0 0 640 360'));
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
     await waitFor(() => expect(document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox')).toBe('0 0 400 300'));
@@ -1582,7 +1582,7 @@ describe('TemplateLayerEditor', () => {
     expect(screen.getByText('private-template.aep')).toBeTruthy();
     expect(screen.getByTestId('preparation-next-step').textContent).toMatch(/Open Fonts check to resolve the exact listed faces/i);
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Open Fonts check' }));
     expect(openFontRepair).toHaveBeenCalledTimes(1);
     const createTools = screen.getByRole('button', { name: 'Create and artboard tools' });
@@ -1672,7 +1672,7 @@ describe('TemplateLayerEditor', () => {
     expect(createTools.getAttribute('aria-expanded')).toBe('true');
     expect(screen.queryByRole('button', { name: /pin .*library image/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -1729,9 +1729,9 @@ describe('TemplateLayerEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
 
     await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), { timeout: 2500 });
-    await waitForAuthoringReadyToPublish('Review and publish variant');
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    const publish = screen.getByRole('button', { name: 'Review and publish variant' });
+    const publish = screen.getByRole('button', { name: 'Review and publish as new variant' });
     fireEvent.click(publish);
     fireEvent.click(publish);
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
@@ -1747,7 +1747,7 @@ describe('TemplateLayerEditor', () => {
     });
     await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'));
     expect(saves).not.toHaveBeenCalled();
-    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish variant' });
+    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish as new variant' });
   });
 
   test('does not commit after the draft changes while exact-package review is in flight', async () => {
@@ -1765,8 +1765,8 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
       expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
 
     fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
@@ -1805,7 +1805,7 @@ describe('TemplateLayerEditor', () => {
     expect(revisionVariants).toHaveBeenCalledWith(BRAND, 'a');
     expect(screen.getByRole('button', { name: 'Review and publish revision' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Review and publish new variant' })).toBeTruthy();
-    expect(screen.queryByText('Golden source', { exact: true })).toBeNull();
+    expect(screen.queryByText('Original', { exact: true })).toBeNull();
     expect(inventories).not.toHaveBeenCalled();
   });
 
@@ -2373,7 +2373,7 @@ describe('TemplateLayerEditor', () => {
       },
       size: [320, 180],
     });
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -2915,8 +2915,8 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
       expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '10' } });
     fireEvent.blur(screen.getByLabelText('Rotation'));
@@ -2962,13 +2962,13 @@ describe('TemplateLayerEditor', () => {
     enableVerifiedAuthoringFixture();
     const onOpenVariant = mock((_id: string) => {});
     editor(onOpenVariant);
-    await screen.findByText('Golden source');
+    await screen.findByText('Original', { exact: true });
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     const x = await screen.findByLabelText('Position X');
     fireEvent.change(x, { target: { value: '140' } });
     fireEvent.blur(x);
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
     expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({ saveTo: 'new_variant', name: 'Card B variant' });
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
@@ -3148,7 +3148,7 @@ describe('TemplateLayerEditor', () => {
     expect(await screen.findByRole('status', { name: 'Reading template layers…' })).toBeTruthy();
     await waitFor(() => expect(container.querySelector('[data-layer-id="114"]')).toBeTruthy());
     expect(
-      (screen.getByRole('button', { name: 'Review and publish variant' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Review and publish as new variant' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     land(inventory);
     expect(await screen.findByRole('list', { name: 'Layers' })).toBeTruthy();
