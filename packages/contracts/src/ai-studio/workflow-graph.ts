@@ -265,10 +265,10 @@ const VEO_RETIRED_NOTE = 'Retired by Google · runs on Omni';
 export const VIDEO_MODEL_INFO: Record<VideoGeneratorModel, { status: ModelStatus; note?: string }> =
   {
     'gemini-omni-flash': { status: 'available' },
-    // Google retired Veo on the Gemini API (2026-10-23). A saved Veo node keeps its model
-    // and its frame edges, and the Backend renders it on Omni; it just cannot be picked anew.
-    'veo-3.1': { status: 'unavailable', note: VEO_RETIRED_NOTE },
-    'veo-3.1-fast': { status: 'unavailable', note: VEO_RETIRED_NOTE },
+    // Google retired Veo on the Gemini API (2026-10-23). Veo 3.1 and Fast run on Vertex again;
+    // Lite stays retired — a saved Lite node keeps its model and frame edges and renders on Omni.
+    'veo-3.1': { status: 'available' },
+    'veo-3.1-fast': { status: 'available' },
     'veo-3.1-lite': { status: 'unavailable', note: VEO_RETIRED_NOTE },
     'kling-omni': { status: 'unavailable' },
     'pixverse-v6': { status: 'unavailable' },
@@ -1994,6 +1994,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           label: 'HyperFrames Agent',
           model: 'gemini-3.5-flash-lite',
           prompt: '',
+          energy: 'balanced',
           aspectRatio: '16:9',
           durationSeconds: 10,
           fps: 30,

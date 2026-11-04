@@ -7,7 +7,7 @@
 //
 // Bytes go straight from the browser to Supabase Storage rather than through the API
 // route, because Vercel Functions cap a request body at 4.5 MB and documents run to
-// 25 MB. The route only records metadata afterwards, which is why the orphan cleanup
+// 50 MB. The route only records metadata afterwards, which is why the orphan cleanup
 // below matters: a successful upload followed by a failed POST would otherwise leave
 // a file nobody owns. There are 18 such orphans in prod from before this existed.
 
@@ -23,7 +23,12 @@ import { createBrandId } from '@/lib/onboarding/state';
 import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { resumableStorageUpload, TUS_CHUNK_SIZE_BYTES } from '@/lib/library/resumableStorageUpload';
-import { isAcceptedDocumentMime, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_MB } from './uploadLimits';
+import {
+  DOCUMENT_TOO_LARGE_ERROR,
+  isAcceptedDocumentMime,
+  MAX_DOCUMENT_BYTES,
+  presentationExportError,
+} from './uploadLimits';
 
 export const BRAND_DOCS_BUCKET = 'brand-docs';
 
@@ -86,8 +91,10 @@ export async function uploadBrandDocument({
   replace,
 }: UploadBrandDocumentParams): Promise<UploadBrandDocumentResult> {
   if (file.size > MAX_DOCUMENT_BYTES) {
-    throw new Error(`File exceeds ${MAX_DOCUMENT_MB} MB limit`);
+    throw new Error(DOCUMENT_TOO_LARGE_ERROR);
   }
+  const exportError = presentationExportError(file.name);
+  if (exportError) throw new Error(exportError);
   if (!isAcceptedDocumentMime(file.type)) {
     throw new Error(`Unsupported file type: ${file.type || 'unknown'}`);
   }

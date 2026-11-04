@@ -340,6 +340,23 @@ export async function attachAssetPreview(params: {
     return 'ready';
   }
 
+  // A HEIC this browser cannot decode (Chrome): the server converts it and stores the still.
+  // Asked only after the pending state is written, so it can never overwrite the ready row.
+  if (
+    sharePreviewRoleFor({ fileName: params.file.name, mimeType: params.file.type }) ===
+    'preview_image'
+  ) {
+    await markPreviewState({
+      ...params,
+      client,
+      state: 'awaiting_companion',
+      errorCode: 'server_preview_pending',
+      errorMessage: 'Building the preview on our servers. It will appear here shortly.',
+    });
+    requestServerPreview(params, 'server image preview');
+    return 'awaiting_companion';
+  }
+
   await markPreviewState({
     ...params,
     client,
