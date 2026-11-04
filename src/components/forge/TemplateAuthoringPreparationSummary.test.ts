@@ -124,7 +124,7 @@ describe('templatePreparationSummary', () => {
       false,
       dependencies,
     );
-    expect(compiling.label).toBe('Building package');
+    expect(compiling.label).toBe('Checking your edit…');
   });
 
   test('does not call a package ready when native proof is missing and publishing is disabled', () => {
@@ -135,7 +135,7 @@ describe('templatePreparationSummary', () => {
       dependencies,
     );
 
-    expect(result.label).toBe('Native render pending');
+    expect(result.label).toBe('Waiting for After Effects to check your edit');
     expect(result.detail).toContain('Native sample frames have not been verified');
     expect(result.action).toBe('checks');
   });
