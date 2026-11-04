@@ -16,25 +16,38 @@ import { http } from '@/lib/api/http';
 export const EASYFIT_DASHBOARD_PATH = '/easyfit/dashboard';
 export const EASYFIT_CONFIG_PATH = '/easyfit/config';
 
-export function getEasyfitDashboard(signal?: AbortSignal): Promise<EasyfitDashboardResponse> {
+/** Every route is scoped by the `brandId` query: the Backend checks access against that brand. */
+const forBrand = (path: string, brandId: string): string =>
+  `${path}?${new URLSearchParams({ brandId })}`;
+
+export function getEasyfitDashboard(
+  brandId: string,
+  signal?: AbortSignal,
+): Promise<EasyfitDashboardResponse> {
   return http.request({
-    path: EASYFIT_DASHBOARD_PATH,
+    path: forBrand(EASYFIT_DASHBOARD_PATH, brandId),
     schema: easyfitDashboardResponseSchema,
     signal,
   });
 }
 
-export function getEasyfitConfig(signal?: AbortSignal): Promise<EasyfitConfigResponse> {
+export function getEasyfitConfig(
+  brandId: string,
+  signal?: AbortSignal,
+): Promise<EasyfitConfigResponse> {
   return http.request({
-    path: EASYFIT_CONFIG_PATH,
+    path: forBrand(EASYFIT_CONFIG_PATH, brandId),
     schema: easyfitConfigResponseSchema,
     signal,
   });
 }
 
-export function putEasyfitConfig(config: EasyfitPilotConfig): Promise<EasyfitConfigResponse> {
+export function putEasyfitConfig(
+  brandId: string,
+  config: EasyfitPilotConfig,
+): Promise<EasyfitConfigResponse> {
   return http.request({
-    path: EASYFIT_CONFIG_PATH,
+    path: forBrand(EASYFIT_CONFIG_PATH, brandId),
     method: 'PUT',
     body: easyfitConfigRequestSchema.parse(config),
     schema: easyfitConfigResponseSchema,
