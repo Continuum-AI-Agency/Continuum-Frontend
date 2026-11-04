@@ -2,6 +2,7 @@
 
 import type {
   ApiRenderJob,
+  FigmaImportedAsset,
   TemplatePreview,
   TemplateRevisionVariant,
   TemplateSourceSummary,
@@ -333,6 +334,7 @@ export function TemplateGallery({
   onFonts,
   onRejected,
   onPresentationCreated,
+  onFigmaImported,
 }: {
   brandId: string;
   brandName?: string;
@@ -355,6 +357,7 @@ export function TemplateGallery({
   onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
   onPresentationCreated?: (assetId: string) => Promise<void>;
+  onFigmaImported?: (assets: FigmaImportedAsset[]) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -634,6 +637,7 @@ export function TemplateGallery({
         <ForgeProjectDrop
           brandId={brandId}
           onPresentationCreated={onPresentationCreated}
+          onFigmaImported={onFigmaImported}
           compact
           onFiles={onFiles}
           onFonts={onFonts}

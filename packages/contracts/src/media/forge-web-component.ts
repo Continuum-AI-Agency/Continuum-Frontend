@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { forgeDesignPaths, forgeDesignSchema } from './forge-design';
 import { templateParseSchema } from './template-source';
 
-export const webComponentFrameworkSchema = z.enum(['three', 'r3f', 'pixi', 'dom']);
+/** `design` is a static layout document (`forge-design.ts`), drawn by the runtime's own player. */
+export const webComponentFrameworkSchema = z.enum(['three', 'r3f', 'pixi', 'dom', 'design']);
 export const webComponentBase64Schema = z
   .string()
   .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/);
@@ -116,7 +118,40 @@ export const webComponentProjectSchema = webComponentManifestSchema
         path: ['overrides'],
         message: 'Override properties must be unique per node',
       });
+    if (project.framework === 'design') checkDesignProject(project, ctx);
   });
+
+/** A design package is its design document plus the files it names, and no code. */
+function checkDesignProject(
+  project: { entry: string; files: Record<string, string>; assets: Array<{ path: string }> },
+  ctx: z.RefinementCtx,
+): void {
+  const path = ['files', project.entry];
+  if (Object.keys(project.files).length !== 1 || !project.entry.endsWith('.json')) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['files'],
+      message: 'A design carries one source file, its design JSON, and no code',
+    });
+    return;
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(project.files[project.entry] ?? '');
+  } catch {
+    ctx.addIssue({ code: 'custom', path, message: 'The design is not valid JSON' });
+    return;
+  }
+  const design = forgeDesignSchema.safeParse(json);
+  if (!design.success) {
+    for (const issue of design.error.issues.slice(0, 5))
+      ctx.addIssue({ code: 'custom', path: [...path, ...issue.path], message: issue.message });
+    return;
+  }
+  const carried = new Set(project.assets.map((asset) => asset.path));
+  for (const missing of forgeDesignPaths(design.data).filter((file) => !carried.has(file)))
+    ctx.addIssue({ code: 'custom', path, message: `The design names ${missing}, which the package does not carry` });
+}
 export const webComponentRenderServiceRequestSchema = z
   .object({
     files: z.record(webComponentPathSchema, webComponentBase64Schema),

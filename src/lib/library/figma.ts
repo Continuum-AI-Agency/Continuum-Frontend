@@ -37,13 +37,88 @@ async function requestJson(
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const code =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? String(payload.error)
-        : `http_${response.status}`;
-    throw new Error(code);
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+    throw new FigmaApiError(
+      typeof body.error === 'string' ? body.error : `http_${response.status}`,
+      Array.isArray(body.missingFonts) ? body.missingFonts.map(String) : [],
+      typeof body.retryAfterSec === 'number' ? body.retryAfterSec : null,
+    );
   }
   return payload;
+}
+
+/** A refusal from the Figma routes: its code, plus what the backend says to fix. */
+export class FigmaApiError extends Error {
+  constructor(
+    readonly code: string,
+    readonly missingFonts: string[] = [],
+    readonly retryAfterSec: number | null = null,
+  ) {
+    super(code);
+  }
+}
+
+/** What a person reads for a Figma refusal, and whether connecting Figma is the fix. */
+export function figmaErrorMessage(error: unknown): { message: string; reconnect: boolean } {
+  const code =
+    error instanceof FigmaApiError
+      ? error.code
+      : error instanceof Error
+        ? error.message
+        : 'operation_failed';
+  switch (code) {
+    case 'invalid_link':
+      return { message: 'Paste a link to a Figma design file or frame.', reconnect: false };
+    case 'invalid_configuration':
+      return { message: 'Figma is not configured for this environment.', reconnect: false };
+    case 'figma_not_connected':
+      return { message: 'Connect Figma, then try again.', reconnect: true };
+    case 'provider_unavailable':
+      return { message: "Figma didn't answer. Try again in a moment.", reconnect: false };
+    case 'figma_file_forbidden':
+      return {
+        message: "The connected Figma account can't open this file. Connect one that can.",
+        reconnect: true,
+      };
+    case 'figma_not_found':
+      return {
+        message: "Figma couldn't find that file or frame. Check the link.",
+        reconnect: false,
+      };
+    case 'figma_node_not_a_frame':
+      return {
+        message:
+          'That link points at a page or a layer, not a frame. Pick frames from the file below.',
+        reconnect: false,
+      };
+    case 'figma_fonts_missing': {
+      const fonts = error instanceof FigmaApiError ? error.missingFonts.join(', ') : '';
+      return {
+        message: `Add ${fonts || 'the missing fonts'} to the brand first (drop the .ttf or .otf files on the Forge), then import again.`,
+        reconnect: false,
+      };
+    }
+    case 'rate_limited': {
+      const wait =
+        error instanceof FigmaApiError && error.retryAfterSec
+          ? ` Try again in ${Math.ceil(error.retryAfterSec / 60)} min.`
+          : '';
+      return {
+        message: `Figma's API limit for this account is used up.${wait} View and Collab seats get about 20 file reads a month; a Dev or Full seat lifts it.`,
+        reconnect: false,
+      };
+    }
+    case 'http_502':
+    case 'http_504':
+      // The proxy gave up on a long import; the backend carries on, and a retry joins it.
+      return {
+        message:
+          'The import is still running. Import again in a minute: it picks up the same import.',
+        reconnect: false,
+      };
+    default:
+      return { message: `The import failed (${code}).`, reconnect: false };
+  }
 }
 
 export async function beginFigmaConnection(input: {

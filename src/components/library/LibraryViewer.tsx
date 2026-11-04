@@ -58,7 +58,6 @@ import {
   useDesignTemplateImports,
 } from '@/components/forge/DesignTemplateImports';
 import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
-import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -102,6 +101,7 @@ import { useProjects } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
+import { FigmaImportDialog } from './FigmaImportDialog';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
@@ -1007,26 +1007,7 @@ export function LibraryViewer({
                       />
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {/* Still disabled, and deliberately. The dialog and the whole importer
-                        are written, but POST /figma/import answers 501 by design until its
-                        live bench and product review are accepted
-                        (integrations-ts/src/figma.ts). Rendering the dialog over that would
-                        trade an honest "not yet" for a button that fails on click. The
-                        structural parse behind it is wired and tested, so parity ships the
-                        day that route opens. */}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled
-                        title="Figma import is work in progress"
-                      >
-                        <FigmaIcon className="size-4" />
-                        <span className="hidden sm:inline">Figma</span>
-                        <span className="rounded bg-muted px-1 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          WIP
-                        </span>
-                      </Button>
+                      <FigmaImportDialog brandId={brandId} onImported={refreshAssets} />
                       <Button
                         type="button"
                         variant={showBoundingBoxes ? 'secondary' : 'outline'}
