@@ -40,7 +40,6 @@ import {
   Plus,
   RectangleHorizontal,
   Redo2,
-  RotateCcw,
   Sparkles,
   Trash2,
   Type,
@@ -72,6 +71,7 @@ import {
   updateLayerHistory,
 } from '@/components/forge/layerHistory';
 import type { PreviewEdits } from '@/components/forge/layerPreviewSvg';
+import { DiscardEditsButton } from '@/components/forge/DiscardEditsButton';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { TemplateDownloadButtons, type TemplateOriginalFile } from '@/components/forge/TemplateDownloadButtons';
 import {
@@ -2513,9 +2513,10 @@ export function TemplateLayerEditor({
             >
               <Redo2 aria-hidden />
             </Button>
-            <Button size="sm" variant="ghost" disabled={saving || !dirty} onClick={reset}>
-              <RotateCcw data-icon="inline-start" aria-hidden /> Reset
-            </Button>
+            <DiscardEditsButton
+              disabled={saving || (!dirty && authoringCommands.length === 0)}
+              onDiscard={reset}
+            />
           </div>
         </header>
 

@@ -2764,7 +2764,8 @@ describe('TemplateLayerEditor', () => {
     expect(draft?.dirty).toBe(false);
     fireEvent.change(x, { target: { value: '160' } });
     await waitFor(() => expect(draft?.dirty).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard edits' }));
     await waitFor(() => expect(draft?.dirty).toBe(false));
   });
 

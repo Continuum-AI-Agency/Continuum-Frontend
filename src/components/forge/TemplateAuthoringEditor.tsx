@@ -26,7 +26,7 @@ import {
 import type { MediaAsset } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { CircleHelp, ChevronDown, Copy, GitFork, Layers, Loader2, Lock, Plus, Redo2, RotateCcw, RectangleHorizontal, Circle, Image as ImageIcon, Type, Trash2, Undo2 } from 'lucide-react';
+import { CircleHelp, ChevronDown, Copy, GitFork, Layers, Loader2, Lock, Plus, Redo2, RectangleHorizontal, Circle, Image as ImageIcon, Type, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -64,6 +64,7 @@ import {
 import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 import { templateAuthoringWorkspaceIdentity, useTemplateAuthoringDraft } from '@/components/forge/useTemplateAuthoringDraft';
 import { compareTemplateDrafts } from '@/components/forge/templateDraftComparison';
+import { DiscardEditsButton } from '@/components/forge/DiscardEditsButton';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { TemplateLayerInspector } from '@/components/forge/AuthoringTemplateLayerInspector';
@@ -1830,9 +1831,10 @@ export function TemplateAuthoringEditor({
             >
               <Redo2 aria-hidden />
             </Button>
-            <Button size="sm" variant="ghost" disabled={saving || !dirty} onClick={reset}>
-              <RotateCcw data-icon="inline-start" aria-hidden /> Reset
-            </Button>
+            <DiscardEditsButton
+              disabled={saving || (!dirty && authoringCommands.length === 0)}
+              onDiscard={reset}
+            />
           </div>
         </header>
 
