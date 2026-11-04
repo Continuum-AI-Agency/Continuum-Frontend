@@ -688,6 +688,11 @@ export function ForgeWorkbench({
             await refreshTemplate();
             open(assetId);
           }}
+          onFigmaImported={async (assets) => {
+            await refreshTemplate();
+            // One frame opens like any new template; a batch stays on the list it joined.
+            if (assets.length === 1 && assets[0]) open(assets[0].assetId);
+          }}
           onRejected={(files) =>
             toast.error(
               `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd, .ai or .blend, and .ttf or .otf for fonts.`,

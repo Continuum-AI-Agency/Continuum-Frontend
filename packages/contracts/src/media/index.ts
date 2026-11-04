@@ -29,6 +29,7 @@ export * from './font-match';
 export * from './font-names';
 export * from './fonts';
 export * from './forge-output';
+export * from './forge-design';
 export * from './forge-web-component';
 export * from './hyperframes';
 export * from './hyperframes-fonts';

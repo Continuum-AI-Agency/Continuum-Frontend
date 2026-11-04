@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type FigmaImportedAsset,
   FORGE_PROJECT_FILE_MAX_MB,
   LIBRARY_PRESENTATION_MAX_BYTES,
   type TemplateSourceSummary,
@@ -8,6 +9,7 @@ import {
 import { FileUp, FolderUp } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { NewPresentationButton } from '@/components/forge/presentations/NewPresentationButton';
+import { FigmaImportDialog } from '@/components/library/FigmaImportDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import {
@@ -122,6 +124,7 @@ export function ForgeProjectDrop({
   onRejected,
   brandId,
   onPresentationCreated,
+  onFigmaImported,
 }: {
   compact?: boolean;
   onFiles: (files: File[]) => void;
@@ -129,6 +132,7 @@ export function ForgeProjectDrop({
   onRejected: (files: File[]) => void;
   brandId?: string;
   onPresentationCreated?: (assetId: string) => Promise<void>;
+  onFigmaImported?: (assets: FigmaImportedAsset[]) => Promise<void>;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -253,6 +257,14 @@ export function ForgeProjectDrop({
       </Button>
       {brandId && onPresentationCreated ? (
         <NewPresentationButton brandId={brandId} onCreated={onPresentationCreated} />
+      ) : null}
+      {brandId && onFigmaImported ? (
+        <FigmaImportDialog
+          brandId={brandId}
+          label="Import from Figma"
+          size="default"
+          onImported={(assets) => void onFigmaImported(assets)}
+        />
       ) : null}
       {compact ? null : (
         <>

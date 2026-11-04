@@ -1,6 +1,13 @@
 'use client';
 
-import type { FigmaFile, FigmaFolder, FigmaFrame } from '@continuum/contracts';
+import {
+  FIGMA_IMPORT_MAX_FRAMES,
+  type FigmaFile,
+  type FigmaFolder,
+  type FigmaFrame,
+  type FigmaImportedAsset,
+  parseFigmaLink,
+} from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { FigmaIcon } from '@/components/shared/icons';
@@ -24,6 +31,8 @@ import {
 import { toast } from '@/components/ui/toast-imperative';
 import {
   beginFigmaConnection,
+  FigmaApiError,
+  figmaErrorMessage,
   importFigmaFrames,
   listFigmaFiles,
   listFigmaFolders,
@@ -35,11 +44,16 @@ type BusyState = 'folders' | 'files' | 'frames' | 'import' | 'connect' | null;
 export function FigmaImportDialog({
   brandId,
   onImported,
+  label = 'Figma',
+  size = 'sm',
 }: {
   brandId: string;
-  onImported: () => void;
+  onImported: (assets: FigmaImportedAsset[]) => void;
+  label?: string;
+  size?: 'sm' | 'default';
 }) {
   const [open, setOpen] = useState(false);
+  const [link, setLink] = useState('');
   const [teamId, setTeamId] = useState('');
   // Every folder seen so far; choosing one adds its subfolders, so nesting needs no extra UI.
   const [folders, setFolders] = useState<FigmaFolder[]>([]);
@@ -49,7 +63,8 @@ export function FigmaImportDialog({
   const [frames, setFrames] = useState<FigmaFrame[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState<BusyState>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const failure = error ? figmaErrorMessage(error) : null;
 
   const folderLabel = (folder: FigmaFolder): string => {
     const parent = folders.find((candidate) => candidate.id === folder.parentFolderId);
@@ -57,7 +72,7 @@ export function FigmaImportDialog({
   };
 
   async function loadFolders() {
-    if (!teamId.trim()) return;
+    if (!teamId.trim() || busy !== null) return;
     setBusy('folders');
     setError(null);
     try {
@@ -66,7 +81,7 @@ export function FigmaImportDialog({
       setFiles([]);
       setFrames([]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(cause);
     } finally {
       setBusy(null);
     }
@@ -76,6 +91,7 @@ export function FigmaImportDialog({
     setFolderId(value);
     setFileKey('');
     setFrames([]);
+    setSelected([]);
     setBusy('files');
     setError(null);
     try {
@@ -89,24 +105,47 @@ export function FigmaImportDialog({
       ]);
       setFiles(found);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(cause);
     } finally {
       setBusy(null);
     }
   }
 
-  async function chooseFile(value: string) {
+  async function chooseFile(value: string, keep: string[] = []) {
     setFileKey(value);
+    setFrames([]);
     setSelected([]);
     setBusy('frames');
     setError(null);
     try {
-      setFrames((await listFigmaFrames(brandId, value)).frames);
+      const listed = (await listFigmaFrames(brandId, value)).frames;
+      setFrames(listed);
+      // Only what can be seen can be unchecked: a linked page or layer is not kept.
+      setSelected(keep.filter((id) => listed.some((frame) => frame.id === id)));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'provider_unavailable');
+      setError(cause);
     } finally {
       setBusy(null);
     }
+  }
+
+  // A link to a frame imports that frame with no listing: every Figma read counts against the
+  // account's monthly limit. A link to a file lists its frames.
+  async function openLink() {
+    if (busy !== null) return;
+    const parsed = parseFigmaLink(link);
+    if (!parsed) {
+      setError(new FigmaApiError('invalid_link'));
+      return;
+    }
+    setError(null);
+    if (parsed.nodeId) {
+      setFileKey(parsed.fileKey);
+      setFrames([]);
+      setSelected([parsed.nodeId]);
+      return;
+    }
+    await chooseFile(parsed.fileKey);
   }
 
   async function connect() {
@@ -116,7 +155,7 @@ export function FigmaImportDialog({
       const url = await beginFigmaConnection({ brandId, callbackUrl });
       window.open(url, 'continuum-figma-oauth', 'popup,width=720,height=760');
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : 'Could not connect Figma');
+      toast.error(figmaErrorMessage(cause).message);
     } finally {
       setBusy(null);
     }
@@ -131,24 +170,36 @@ export function FigmaImportDialog({
       const created = assets.filter((asset) => asset.status !== 'exists').length;
       const unchanged = assets.length - created;
       toast.success(
-        `${created} Figma frame${created === 1 ? '' : 's'} imported${unchanged ? ` · ${unchanged} already current` : ''}`,
+        `${created} Figma frame${created === 1 ? '' : 's'} imported${unchanged ? ` · ${unchanged} already current` : ''}. The Forge is building ${created === 1 ? 'it' : 'them'}.`,
       );
-      onImported();
+      onImported(assets);
       setOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'operation_failed');
+      setError(cause);
+      // A link copied from a page (or a layer) names no frame: show the file's frames to pick.
+      if (
+        cause instanceof FigmaApiError &&
+        cause.code === 'figma_node_not_a_frame' &&
+        !frames.length
+      ) {
+        setBusy(null);
+        await chooseFile(fileKey);
+        setError(cause);
+      }
     } finally {
       setBusy(null);
     }
   }
 
+  const linkedOnly = Boolean(fileKey && !frames.length && selected.length && busy === null);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button type="button" variant="outline" size="sm">
+          <Button type="button" variant="outline" size={size}>
             <FigmaIcon className="size-4" />
-            <span className="hidden sm:inline">Figma</span>
+            <span className="hidden sm:inline">{label}</span>
           </Button>
         }
       />
@@ -156,100 +207,142 @@ export function FigmaImportDialog({
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle>Import from Figma</DialogTitle>
           <DialogDescription>
-            Select frames to store as private, versioned Library assets with refreshable provenance.
+            Each frame becomes a design template. Its text becomes fields, and it is ready to
+            render as soon as it is imported.
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
           <div className="flex gap-2">
             <Input
-              value={teamId}
-              onChange={(event) => setTeamId(event.target.value)}
-              placeholder="Figma team ID"
-              aria-label="Figma team ID"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="Paste a Figma link (Share → Copy link)"
+              aria-label="Figma link"
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void loadFolders();
+                if (event.key === 'Enter') void openLink();
               }}
             />
             <Button
               type="button"
               variant="secondary"
-              disabled={!teamId.trim() || busy !== null}
-              onClick={() => void loadFolders()}
+              disabled={!link.trim() || busy !== null}
+              onClick={() => void openLink()}
             >
-              {busy === 'folders' ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              Browse
+              Open
             </Button>
           </div>
 
-          {error ? (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs text-muted-foreground">
+              Browse a team instead
+            </summary>
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Input
+                  value={teamId}
+                  onChange={(event) => setTeamId(event.target.value)}
+                  placeholder="Figma team ID (the number after /team/ in a team link)"
+                  aria-label="Figma team ID"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void loadFolders();
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!teamId.trim() || busy !== null}
+                  onClick={() => void loadFolders()}
+                >
+                  {busy === 'folders' ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  Browse
+                </Button>
+              </div>
+              {folders.length ? (
+                <Select
+                  value={folderId}
+                  disabled={busy !== null}
+                  onValueChange={(value) => void chooseFolder(value)}
+                >
+                  <SelectTrigger aria-label="Figma folder">
+                    <SelectValue placeholder="Choose a folder" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {folders
+                      .map((folder) => ({ id: folder.id, label: folderLabel(folder) }))
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((folder) => (
+                        <SelectItem key={folder.id} value={folder.id}>
+                          {folder.label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              {files.length ? (
+                <Select
+                  value={fileKey}
+                  disabled={busy !== null}
+                  onValueChange={(value) => void chooseFile(value)}
+                >
+                  <SelectTrigger aria-label="Figma file">
+                    <SelectValue placeholder="Choose a file" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {files.map((file) => (
+                      <SelectItem key={file.key} value={file.key}>
+                        {file.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+          </details>
+
+          {failure ? (
             <div
               role="alert"
               className="flex items-center justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm"
             >
-              <span>
-                {error === 'invalid_configuration'
-                  ? 'Figma is not configured for this environment.'
-                  : error === 'provider_unavailable' || error.includes('not_connected')
-                    ? 'Connect Figma, then browse again.'
-                    : error}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={busy !== null}
-                onClick={() => void connect()}
-              >
-                {busy === 'connect' ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <FigmaIcon className="size-4" />
-                )}
-                Connect
-              </Button>
+              <span>{failure.message}</span>
+              {failure.reconnect ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() => void connect()}
+                >
+                  {busy === 'connect' ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <FigmaIcon className="size-4" />
+                  )}
+                  Connect
+                </Button>
+              ) : null}
             </div>
-          ) : null}
-
-          {folders.length ? (
-            <Select value={folderId} onValueChange={(value) => void chooseFolder(value)}>
-              <SelectTrigger aria-label="Figma folder">
-                <SelectValue placeholder="Choose a folder" />
-              </SelectTrigger>
-              <SelectContent>
-                {folders
-                  .map((folder) => ({ id: folder.id, label: folderLabel(folder) }))
-                  .sort((a, b) => a.label.localeCompare(b.label))
-                  .map((folder) => (
-                    <SelectItem key={folder.id} value={folder.id}>
-                      {folder.label}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-
-          {files.length ? (
-            <Select value={fileKey} onValueChange={(value) => void chooseFile(value)}>
-              <SelectTrigger aria-label="Figma file">
-                <SelectValue placeholder="Choose a file" />
-              </SelectTrigger>
-              <SelectContent>
-                {files.map((file) => (
-                  <SelectItem key={file.key} value={file.key}>
-                    {file.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           ) : null}
 
           {busy === 'files' || busy === 'frames' ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" /> Loading from Figma…
+            </div>
+          ) : linkedOnly ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary bg-primary/5 px-3 py-2 text-sm">
+              <span>The linked frame is ready to import.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void chooseFile(fileKey, selected)}
+              >
+                Show all frames in this file
+              </Button>
             </div>
           ) : frames.length ? (
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -265,12 +358,12 @@ export function FigmaImportDialog({
                       type="checkbox"
                       className="sr-only"
                       checked={checked}
-                      disabled={!checked && selected.length >= 50}
+                      disabled={!checked && selected.length >= FIGMA_IMPORT_MAX_FRAMES}
                       onChange={() =>
                         setSelected((current) =>
                           checked
                             ? current.filter((id) => id !== frame.id)
-                            : current.length < 50
+                            : current.length < FIGMA_IMPORT_MAX_FRAMES
                               ? [...current, frame.id]
                               : current,
                         )
@@ -294,15 +387,17 @@ export function FigmaImportDialog({
                 );
               })}
             </fieldset>
-          ) : fileKey && busy === null ? (
+          ) : fileKey && busy === null && !failure ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              No top-level frames found in this file.
+              No frames found in this file.
             </p>
           ) : null}
         </div>
         <div className="flex items-center justify-between border-t border-border px-5 py-3">
           <p className="text-xs text-muted-foreground">
-            {selected.length ? `${selected.length} selected` : 'Select up to 50 frames'}
+            {selected.length
+              ? `${selected.length} selected`
+              : `Select up to ${FIGMA_IMPORT_MAX_FRAMES} frames`}
           </p>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
@@ -318,7 +413,7 @@ export function FigmaImportDialog({
               ) : (
                 <FigmaIcon className="size-4" />
               )}
-              Import
+              {busy === 'import' ? 'Importing…' : 'Import'}
             </Button>
           </div>
         </div>
