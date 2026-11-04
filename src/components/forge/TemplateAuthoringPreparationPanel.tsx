@@ -234,8 +234,8 @@ export function templatePreparationSummary(
   }
   if (syncStatus === 'saving' || syncStatus === 'unsaved' || draftDirty) {
     return {
-      label: 'Saving edits',
-      detail: 'The private draft must finish saving before preparation can continue.',
+      label: 'Saving your edit…',
+      detail: 'Nothing to do yet. Checks start as soon as the private draft is saved.',
       action: 'save',
     };
   }
@@ -288,22 +288,22 @@ export function templatePreparationSummary(
 
   if (workflow.state === 'compiling') {
     return {
-      label: 'Building package',
-      detail: 'Creating a private package from the saved draft.',
+      label: 'Checking your edit…',
+      detail: 'Nothing to do yet. The edited file is being built from your saved draft; keep editing or wait.',
       action: null,
     };
   }
   if (workflow.state === 'preparing') {
     return {
-      label: 'Checking package',
-      detail: 'Verifying package contents and preserving the original source.',
+      label: 'Preparing the edited file…',
+      detail: 'Nothing to do yet. Verifying the file and that your original is untouched.',
       action: null,
     };
   }
   if (workflow.state === 'rendering') {
     return {
-      label: 'Rendering samples',
-      detail: 'Requesting native sample frames for the delivery compositions.',
+      label: 'Waiting for After Effects to check your edit…',
+      detail: 'Nothing to do yet. After Effects is rendering sample frames of this exact file.',
       action: null,
     };
   }
@@ -311,7 +311,7 @@ export function templatePreparationSummary(
   if (workflow.artifact && workflow.artifact.verification.nativeAfterEffects !== 'passed') {
     const providerPending = preflight?.providerActivation === 'pending';
     return {
-      label: 'Native render pending',
+      label: 'Waiting for After Effects to check your edit',
       detail: providerPending
         ? 'Package checks are complete; native sample frames are waiting for the configured render provider.'
         : workflow.state === 'needs-input'
@@ -508,7 +508,8 @@ export function TemplateAuthoringPreparationPanel({
           >
             Private package preparation
           </h3>
-          <p role="status" className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+          {/* Descriptive only: the editor footer is the one live status that names the stage. */}
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
             {stateDescription}
           </p>
         </div>

@@ -29,12 +29,15 @@ export function TemplateDownloadButtons({
   original,
   edited,
   hasEdits,
+  paused = false,
 }: {
   brandId: string;
   templateName: string;
   original: TemplateOriginalFile | null;
   edited: TemplateAuthoringArtifact | null;
   hasEdits: boolean;
+  /** Preparation stopped and needs the person (see the editor's next step). */
+  paused?: boolean;
 }) {
   const hintId = useId();
   const [busy, setBusy] = useState<'original' | 'edited' | null>(null);
@@ -71,7 +74,13 @@ export function TemplateDownloadButtons({
     }
   };
 
-  const hint = edited ? null : hasEdits ? 'Preparing edited file…' : 'Make an edit to download it';
+  const hint = edited
+    ? null
+    : !hasEdits
+      ? 'Make an edit to download it'
+      : paused
+        ? 'Preparing edited file is paused: see the next step below'
+        : 'Preparing edited file…';
   return (
     <div className="flex items-center gap-2">
       <Button

@@ -1793,7 +1793,6 @@ export function TemplateAuthoringEditor({
             {authoringDraft.status !== 'saved' || authoringDraft.revision > 0 ? (
               <span role="status" aria-live="polite" className="text-2xs text-muted-foreground">
                 {authoringDraft.status === 'loading' ? 'Loading private draft…' : null}
-                {authoringDraft.status === 'saving' ? 'Saving private draft…' : null}
                 {authoringDraft.status === 'saved' ? `Draft saved${authoringDraft.revision ? ` · revision ${authoringDraft.revision}` : ''}` : null}
                 {authoringDraft.status === 'unsaved' || authoringDraft.status === 'error'
                   ? 'Draft not saved'
