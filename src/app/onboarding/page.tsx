@@ -1,7 +1,8 @@
-import { claimsIdentityOf } from '@/lib/auth/claims';
 import { redirect } from 'next/navigation';
 import { OnboardingExperience } from '@/components/onboarding/v2/OnboardingExperience';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
+import { claimsIdentityOf } from '@/lib/auth/claims';
+import { isStaffUser } from '@/lib/auth/staff';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { isOnboardingComplete } from '@/lib/onboarding/state';
@@ -25,14 +26,15 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   const { brand: brandIdParam } = (searchParams ? await searchParams : {}) as { brand?: string };
-  const { brandSummaries, permissions } = await getActiveBrandContext();
+  const { activeBrandId, brandAccess, brandSummaries, permissions } = await getActiveBrandContext();
   const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
   if (isOnboardingComplete(state)) {
     redirect('/dashboard');
   }
-  // The brand being onboarded, which need not be the active one (?brand=).
-  const { billingLive } = await readBrandAccess(brandId);
+  // Whether billing is live does not depend on the brand, so the read the brand context already
+  // made answers it; only a user with no active brand yet needs one of its own.
+  const { billingLive } = activeBrandId ? brandAccess : await readBrandAccess(brandId);
 
   const defaultUrl = inferDomainFromEmail(user.email);
 
@@ -48,6 +50,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
         initialState={state}
         defaultUrl={defaultUrl}
         planRequired={billingLive}
+        staff={isStaffUser(user)}
       />
     </ActiveBrandProvider>
   );

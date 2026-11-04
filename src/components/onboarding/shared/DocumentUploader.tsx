@@ -3,7 +3,13 @@
 import { DocumentManager } from '@/components/documents';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 
-export function DocumentUploader() {
+export function DocumentUploader({
+  initialFiles,
+  onInitialFilesTaken,
+}: {
+  initialFiles?: File[];
+  onInitialFilesTaken?: () => void;
+}) {
   const { brandId, state, updateState } = useOnboarding();
   return (
     <DocumentManager
@@ -11,6 +17,8 @@ export function DocumentUploader() {
       seed={state.documents ?? []}
       density="compact"
       onStateChange={(next) => void updateState({ documents: next.documents })}
+      initialFiles={initialFiles}
+      onInitialFilesTaken={onInitialFilesTaken}
     />
   );
 }

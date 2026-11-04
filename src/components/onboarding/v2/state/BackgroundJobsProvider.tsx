@@ -63,9 +63,16 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
     } catch (error) {
       if (ctrl.signal.aborted || controllers.current[key] !== ctrl) return null;
       const message = error instanceof Error ? error.message : 'Unknown error';
+      // A job that streamed partial data (the Brand DNA cards) keeps it: one failure must
+      // not blank what already arrived.
       setJobs((prev) => ({
         ...prev,
-        [key]: { status: 'error', data: null, error: message, startedAt: prev[key].startedAt },
+        [key]: {
+          status: 'error',
+          data: prev[key].data,
+          error: message,
+          startedAt: prev[key].startedAt,
+        },
       }));
       return null;
     }

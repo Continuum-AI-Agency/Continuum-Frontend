@@ -58,6 +58,9 @@ type DocumentManagerProps = {
   density: DocumentDensity;
   onStateChange?: (state: OnboardingState) => void;
   emptyHint?: string;
+  /** Files picked before this list mounted (onboarding's first screen); uploaded once on mount. */
+  initialFiles?: File[];
+  onInitialFilesTaken?: () => void;
 };
 
 export function DocumentManager({
@@ -66,6 +69,8 @@ export function DocumentManager({
   density,
   onStateChange,
   emptyHint = 'PDFs, slides, sheets, docs, and images become brand context once indexed.',
+  initialFiles,
+  onInitialFilesTaken,
 }: DocumentManagerProps) {
   const { show } = useToast();
   const reduceMotion = useReducedMotion();
@@ -127,6 +132,15 @@ export function DocumentManager({
       });
     }
   };
+
+  const initialFilesTakenRef = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: upload the handed-over files once, on mount.
+  useEffect(() => {
+    if (initialFilesTakenRef.current || !initialFiles?.length) return;
+    initialFilesTakenRef.current = true;
+    onInitialFilesTaken?.();
+    void handleFiles(initialFiles);
+  }, []);
 
   const handleDownload = async (storagePath: string) => {
     if (!storagePath) return;

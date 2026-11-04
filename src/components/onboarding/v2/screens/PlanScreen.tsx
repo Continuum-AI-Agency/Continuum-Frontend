@@ -21,7 +21,8 @@ import { cn } from '@/lib/utils';
 
 // The last onboarding step once billing is live: the brand needs at least one product — a plan
 // bought through Stripe Checkout, or a Contract our team applies — before onboarding completes.
-// There is no skip; `completeOnboardingAction` refuses a brand with no product as well.
+// Only Continuum staff may skip it; `completeOnboardingAction` refuses anyone else a brand with no
+// product, and re-verifies staff itself.
 //
 // Stripe confirms a payment before our webhook grants the plan, so a Checkout return polls the
 // entitlements (bounded by CHANGE_POLL_WINDOW_MS) and completes the moment a product shows up.
@@ -31,12 +32,20 @@ type PlanScreenProps = {
   onBack: () => void;
   /** Completes onboarding and goes to the dashboard. Called once, when a product is present. */
   onComplete: () => void;
+  /** Present for Continuum staff only: completes onboarding without a plan. */
+  onStaffSkip?: () => void;
   completing: boolean;
 };
 
 type Wait = 'idle' | 'confirming' | 'timed_out' | 'checking';
 
-export function PlanScreen({ brandId, onBack, onComplete, completing }: PlanScreenProps) {
+export function PlanScreen({
+  brandId,
+  onBack,
+  onComplete,
+  onStaffSkip,
+  completing,
+}: PlanScreenProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -210,9 +219,23 @@ export function PlanScreen({ brandId, onBack, onComplete, completing }: PlanScre
       )}
 
       <footer className="fixed inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background px-4 py-3 md:px-8">
-        <Button variant="outline" size="sm" onClick={onBack} disabled={busy || redirecting}>
-          Back
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onBack} disabled={busy || redirecting}>
+            Back
+          </Button>
+          {onStaffSkip && products.length === 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="plan-staff-skip"
+              onClick={onStaffSkip}
+              disabled={busy || redirecting}
+              aria-busy={completing}
+            >
+              {completing ? 'Finishing…' : 'Skip (internal)'}
+            </Button>
+          ) : null}
+        </div>
         <div className="flex items-center gap-3">
           {selected.length > 0 ? (
             <span className="font-mono text-sm tabular-nums text-muted-foreground">

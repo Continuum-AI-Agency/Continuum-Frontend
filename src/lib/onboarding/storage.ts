@@ -1,9 +1,9 @@
-import { claimsIdentityOf } from '@/lib/auth/claims';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthIdentity } from '@/lib/auth/identity';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { PlatformKey } from '@/components/onboarding/platforms';
+import { claimsIdentityOf } from '@/lib/auth/claims';
+import type { AuthIdentity } from '@/lib/auth/identity';
 import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
@@ -78,6 +78,16 @@ function resolveBrandProfileName(state?: OnboardingState): string {
     return candidate;
   }
   return 'Untitled Brand';
+}
+
+/** The state fields ensureBrandProfileRecord writes to the brand row. */
+function brandRowFields(state: OnboardingState): string {
+  return JSON.stringify([
+    resolveBrandProfileName(state),
+    state.brand?.logoPath ?? null,
+    state.completedAt ?? null,
+    state.emailReportOptIn ?? true,
+  ]);
 }
 
 /**
@@ -761,18 +771,16 @@ async function loadOnboardingContext(requestedBrandId?: string): Promise<Onboard
     await persistMetadata(supabase, user, normalizedMetadata);
   }
 
-  const documentsDirty = await syncBrandDocuments(supabase, normalizedMetadata, brandId);
+  // Independent reads: the brand row check only reads the state's name, logo, completion and
+  // email opt-in, none of which the documents sync touches.
+  const [documentsDirty, resolvedBrandId] = await Promise.all([
+    syncBrandDocuments(supabase, normalizedMetadata, brandId),
+    ensureBrandProfileRecord(supabase, brandId, owner, normalizedMetadata.brands[brandId]),
+  ]);
 
   if (documentsDirty) {
     await persistMetadata(supabase, user, normalizedMetadata);
   }
-
-  const resolvedBrandId = await ensureBrandProfileRecord(
-    supabase,
-    brandId,
-    owner,
-    normalizedMetadata.brands[brandId],
-  );
 
   if (resolvedBrandId !== brandId) {
     // ensureBrandProfileRecord found an existing brand matching this
@@ -842,7 +850,11 @@ async function updateBrandState(
   const nextState = mutate(context.state);
   context.metadata.brands[context.brandId] = nextState;
   await persistBrandState(context.supabase, context.user.id, context.brandId, nextState);
-  await ensureBrandProfileRecord(context.supabase, context.brandId, context.owner, nextState);
+  // Loading the context already synced the brand row to the old state; most patches (a step, a
+  // document) leave the row's fields alone and need no second read.
+  if (brandRowFields(nextState) !== brandRowFields(context.state)) {
+    await ensureBrandProfileRecord(context.supabase, context.brandId, context.owner, nextState);
+  }
   return nextState;
 }
 

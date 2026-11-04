@@ -21,12 +21,17 @@ type DocumentsScreenProps = {
    * a few seconds later.
    */
   onDesignSystemBusyChange?: (busy: boolean) => void;
+  /** Brand files dropped on the first screen, uploaded as soon as this step mounts. */
+  initialFiles?: File[];
+  onInitialFilesTaken?: () => void;
 };
 
 export function DocumentsScreen({
   totalSteps,
   brandId,
   onDesignSystemBusyChange,
+  initialFiles,
+  onInitialFilesTaken,
 }: DocumentsScreenProps) {
   const { state } = useOnboarding();
   return (
@@ -68,7 +73,7 @@ export function DocumentsScreen({
           />
         ) : null}
 
-        <DocumentUploader />
+        <DocumentUploader initialFiles={initialFiles} onInitialFilesTaken={onInitialFilesTaken} />
       </div>
     </div>
   );

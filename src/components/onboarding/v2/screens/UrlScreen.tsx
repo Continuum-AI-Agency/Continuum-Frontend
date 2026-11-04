@@ -5,73 +5,90 @@ import {
   onboardingIntakeSchema,
   onboardingSocialInputSchema,
 } from '@continuum/contracts';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Controller, useForm } from 'react-hook-form';
-import { z } from 'zod';
+import {
+  ArrowRight,
+  CaretDown,
+  CircleNotch,
+  Files,
+  Globe,
+  Paperclip,
+  TextAlignLeft,
+  WarningCircle,
+  X,
+} from '@phosphor-icons/react';
+import { type ReactNode, useId, useRef, useState } from 'react';
+import { FacebookIcon, InstagramIcon } from '@/components/shared/icons';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
+import { ACCEPTED_DOCUMENT_EXTENSIONS } from '@/lib/documents/uploadLimits';
+import { type DetectedIntake, detectIntakeKind } from '@/lib/onboarding/detectIntakeKind';
 import { resolveWebsiteDraftUrl } from '@/lib/onboarding/websiteDraft';
+import { cn } from '@/lib/utils';
 
-const formSchema = z
-  .object({
-    mode: z.enum(['website', 'social', 'documents', 'description']),
-    brandName: z.string().trim(),
-    url: z.string().trim(),
-    description: z.string().trim(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.mode !== 'website' && !data.brandName) {
-      ctx.addIssue({ code: 'custom', path: ['brandName'], message: 'Enter your brand name.' });
-    }
-    if (
-      data.mode === 'website' &&
-      (!resolveWebsiteDraftUrl(data.url) || onboardingSocialInputSchema.safeParse(data.url).success)
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: 'Enter your website URL, or choose Social profile.',
-      });
-    }
-    if (data.mode === 'social' && !onboardingSocialInputSchema.safeParse(data.url).success) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['url'],
-        message: 'Enter an Instagram profile or Facebook business Page URL.',
-      });
-    }
-    if (data.mode === 'description' && !data.description) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['description'],
-        message: 'Tell us what your business does and who it serves.',
-      });
-    }
-    if (data.mode === 'description' && data.description.length > 8000)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['description'],
-        message: 'Keep your business description within 8,000 characters.',
-      });
-    if ((data.mode === 'website' || data.mode === 'social') && data.url.length > 2048)
-      ctx.addIssue({ code: 'custom', path: ['url'], message: 'That URL is too long.' });
-  });
+// One input instead of a source picker: paste a site or a social handle, drop brand files, or
+// just describe the business. The kind is detected as the user types and shown as a chip they
+// can override; the intake it produces is exactly what the four-radio form produced.
 
-const OPTIONS = [
-  ['website', 'Website'],
-  ['social', 'Social profile'],
-  ['documents', 'Brand documents'],
-  ['description', 'Describe your business'],
-] as const;
+type Mode = 'website' | 'social' | 'description' | 'documents';
+
+const MODE_OPTIONS: Array<{ mode: Mode; label: string; icon: ReactNode }> = [
+  { mode: 'website', label: 'Website', icon: <Globe aria-hidden /> },
+  { mode: 'social', label: 'Social profile', icon: <InstagramIcon aria-hidden /> },
+  { mode: 'description', label: 'Description', icon: <TextAlignLeft aria-hidden /> },
+  { mode: 'documents', label: 'Brand documents', icon: <Files aria-hidden /> },
+];
+
+const HELP: Record<Mode | 'empty', string> = {
+  empty: 'Press Enter to analyze. Shift + Enter adds a new line.',
+  website: 'We’ll read your site to understand your brand.',
+  social: 'We’ll read your public Instagram profile or Facebook Page.',
+  description: 'A few sentences is plenty: what you sell, and who it’s for.',
+  documents: 'You’ll add a brand guide, deck, or product doc on the next step.',
+};
+
+// Says what will happen with what was given — including a link kept as context beside files, and
+// a post or group link before Enter rejects it.
+function helpFor(
+  mode: Mode | null,
+  detected: DetectedIntake | null,
+  fileCount: number,
+  overridden: boolean,
+): string {
+  if (fileCount > 0) {
+    return detected?.kind === 'website' || detected?.kind === 'instagram'
+      ? `We’ll read these files on the next step, with ${new URL(detected.url).hostname.replace(/^www\./, '')} as context.`
+      : 'We’ll read these files on the next step.';
+  }
+  if (detected?.kind === 'unsupported_social' && !overridden)
+    return 'That looks like a post or group. Use an Instagram profile or a Facebook business Page.';
+  return HELP[mode ?? 'empty'];
+}
+
+function modeOf(detected: DetectedIntake | null): Mode | null {
+  if (!detected) return null;
+  if (detected.kind === 'website' || detected.kind === 'description') return detected.kind;
+  return 'social';
+}
 
 type UrlScreenProps = {
   defaultUrl?: string | null;
   defaultIntake?: OnboardingIntake | null;
   defaultBrandName?: string;
-  onSubmit: (intake: OnboardingIntake) => Promise<void> | void;
+  /** `files` are brand documents dropped here; the documents step uploads them. */
+  onSubmit: (intake: OnboardingIntake, files?: File[]) => Promise<void> | void;
   error?: string | null;
   retrying?: boolean;
   onRetry?: () => void;
@@ -86,164 +103,384 @@ export function UrlScreen({
   retrying,
   onRetry,
 }: UrlScreenProps) {
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      mode:
-        defaultIntake?.kind === 'instagram' || defaultIntake?.kind === 'facebook'
-          ? 'social'
-          : (defaultIntake?.kind ?? 'website'),
-      brandName: defaultIntake?.brand_name ?? defaultBrandName ?? '',
-      url: defaultIntake?.url ?? defaultIntake?.reference_url ?? defaultUrl ?? '',
-      description: defaultIntake?.description ?? '',
-    },
-  });
-  const mode = form.watch('mode');
-  const fieldError =
-    form.formState.errors.brandName?.message ||
-    form.formState.errors.url?.message ||
-    form.formState.errors.description?.message;
-  const busy = retrying || form.formState.isSubmitting;
+  const ids = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState(
+    defaultIntake?.kind === 'description'
+      ? (defaultIntake.description ?? '')
+      : (defaultIntake?.url ?? defaultIntake?.reference_url ?? defaultUrl ?? ''),
+  );
+  // An override applies to the text it was chosen for; editing the text re-detects.
+  const [override, setOverride] = useState<Mode | null>(
+    defaultIntake?.kind === 'documents' ? 'documents' : null,
+  );
+  const [files, setFiles] = useState<File[]>([]);
+  const [brandName, setBrandName] = useState(defaultIntake?.brand_name ?? defaultBrandName ?? '');
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const detected = detectIntakeKind(text);
+  const mode: Mode | null = files.length > 0 ? 'documents' : (override ?? modeOf(detected));
+  const busy = Boolean(retrying) || submitting;
+  const message = fieldError ?? error ?? null;
+  const helpId = `${ids}-help`;
+  const errorId = `${ids}-error`;
+
+  const addFiles = (list: FileList | null) => {
+    if (!list?.length) return;
+    setFiles((current) => [...current, ...Array.from(list)]);
+    setFieldError(null);
+  };
+
+  const describeInstead = () => {
+    setOverride('description');
+    setFiles([]);
+    setText('');
+    setFieldError(null);
+    textareaRef.current?.focus();
+  };
+
+  const validate = (): string | null => {
+    const value = text.trim();
+    if (!mode) return 'Paste a link, add brand files, or describe your business.';
+    if (mode !== 'website' && !brandName.trim()) return 'Enter your brand name.';
+    if ((mode === 'website' || mode === 'social') && value.length > 2048)
+      return 'That link is too long.';
+    if (
+      mode === 'website' &&
+      (!resolveWebsiteDraftUrl(value) || onboardingSocialInputSchema.safeParse(value).success)
+    )
+      return 'Enter your website address, or describe your business instead.';
+    if (mode === 'social' && !onboardingSocialInputSchema.safeParse(value).success)
+      return 'Use an Instagram profile or a Facebook business Page link, not a post or group.';
+    if (mode === 'description' && !value)
+      return 'Tell us what your business does and who it serves.';
+    if (mode === 'description' && value.length > 8000)
+      return 'Keep your business description within 8,000 characters.';
+    return null;
+  };
+
+  const submit = async () => {
+    if (busy) return;
+    const problem = validate();
+    setFieldError(problem);
+    if (problem || !mode) return;
+    const value = text.trim();
+    const social = mode === 'social' ? onboardingSocialInputSchema.parse(value) : null;
+    // A link typed beside files, or given before switching to documents or a description, stays
+    // as context.
+    const typedLink =
+      detected?.kind === 'website' ||
+      detected?.kind === 'instagram' ||
+      detected?.kind === 'facebook'
+        ? detected.url
+        : null;
+    const remembered = defaultIntake?.reference_url ?? defaultIntake?.url ?? null;
+    const referenceUrl =
+      mode === 'documents'
+        ? (typedLink ?? remembered)
+        : mode === 'description'
+          ? remembered
+          : defaultIntake?.reference_url;
+    const intake = onboardingIntakeSchema.parse({
+      kind: social?.kind ?? mode,
+      brand_name: brandName.trim() || defaultBrandName || 'My Brand',
+      url: social?.url ?? (mode === 'website' ? resolveWebsiteDraftUrl(value) : null),
+      description: mode === 'description' ? value : null,
+      ...(referenceUrl ? { reference_url: referenceUrl } : {}),
+    });
+    setSubmitting(true);
+    try {
+      await onSubmit(intake, files.length > 0 ? files : undefined);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12 md:px-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-3 text-balance text-center text-3xl font-bold leading-tight tracking-tight text-foreground md:text-5xl">
           Start with your brand
         </h1>
-        <p className="mb-8 text-center text-muted-foreground">
-          Use what you already have. You don’t need a website to get started.
+        <p className="mx-auto mb-8 max-w-md text-balance text-center text-muted-foreground">
+          Paste a link, drop in brand files, or describe what you do. You don’t need a website.
         </p>
         <form
-          className="space-y-5"
-          onSubmit={form.handleSubmit(async (data) => {
-            const social =
-              data.mode === 'social' ? onboardingSocialInputSchema.parse(data.url) : null;
-            const rememberedSocial = onboardingSocialInputSchema.safeParse(data.url);
-            const referenceUrl =
-              data.mode === 'documents' || data.mode === 'description'
-                ? (defaultIntake?.reference_url ??
-                  defaultIntake?.url ??
-                  (rememberedSocial.success
-                    ? rememberedSocial.data.url
-                    : resolveWebsiteDraftUrl(data.url)))
-                : defaultIntake?.reference_url;
-            const intake = onboardingIntakeSchema.parse({
-              kind: social?.kind ?? data.mode,
-              brand_name: data.brandName || defaultBrandName || 'My Brand',
-              url:
-                social?.url ?? (data.mode === 'website' ? resolveWebsiteDraftUrl(data.url) : null),
-              description: data.mode === 'description' ? data.description : null,
-              ...(referenceUrl ? { reference_url: referenceUrl } : {}),
-            });
-            await onSubmit(intake);
-          })}
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
         >
-          <Controller
-            control={form.control}
-            name="mode"
-            render={({ field }) => (
-              <RadioGroup
-                aria-label="Starting source"
-                value={field.value}
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  form.clearErrors();
-                }}
-                className="grid-cols-1 gap-3 sm:grid-cols-2"
-              >
-                {OPTIONS.map(([value, label]) => (
-                  <div key={value} className="flex items-center gap-3">
-                    <RadioGroupItem id={`source-${value}`} value={value} disabled={busy} />
-                    <Label htmlFor={`source-${value}`} className="cursor-pointer py-2">
-                      {label}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+          <Label htmlFor={`${ids}-source`} className="sr-only">
+            Website, social profile, or a description of your business
+          </Label>
+          <InputGroup
+            data-testid="intake-composer"
+            className={cn(
+              'rounded-xl bg-card motion-safe:transition-[box-shadow,border-color]',
+              dragActive && 'border-ring ring-[3px] ring-ring/45',
             )}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes('Files')) return;
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                setDragActive(false);
+            }}
+            onDrop={(event) => {
+              if (!event.dataTransfer.files.length) return;
+              event.preventDefault();
+              setDragActive(false);
+              addFiles(event.dataTransfer.files);
+            }}
+          >
+            {files.length > 0 ? (
+              <InputGroupAddon align="block-start" className="flex-wrap gap-1.5">
+                {files.map((file, index) => (
+                  <span
+                    key={`${file.name}:${file.size}:${file.lastModified}`}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/60 py-0.5 pr-1 pl-2.5 text-xs text-foreground"
+                  >
+                    <Files className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${file.name}`}
+                      disabled={busy}
+                      onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                      className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+              </InputGroupAddon>
+            ) : null}
+            <InputGroupTextarea
+              ref={textareaRef}
+              id={`${ids}-source`}
+              value={text}
+              rows={1}
+              maxLength={8000}
+              disabled={busy}
+              placeholder={
+                override === 'description'
+                  ? 'What does your business do, and who is it for?'
+                  : 'Paste your website or social handle, drop brand files, or describe your business'
+              }
+              className="max-h-60 min-h-14 px-4 text-base md:text-base"
+              aria-invalid={Boolean(fieldError)}
+              aria-describedby={message ? errorId : helpId}
+              onChange={(event) => {
+                setText(event.target.value);
+                setOverride((current) => (current === 'documents' ? current : null));
+                setFieldError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing)
+                  return;
+                event.preventDefault();
+                void submit();
+              }}
+            />
+            <InputGroupAddon align="block-end" className="justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1">
+                <InputGroupButton
+                  size="icon-sm"
+                  aria-label="Attach brand files"
+                  disabled={busy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="size-4" aria-hidden />
+                </InputGroupButton>
+                <SourceChip
+                  mode={mode}
+                  detected={detected}
+                  fileCount={files.length}
+                  disabled={busy}
+                  onChoose={(next) => {
+                    setOverride(next);
+                    if (next !== 'documents') setFiles([]);
+                    setFieldError(null);
+                  }}
+                />
+              </div>
+              <InputGroupButton
+                type="submit"
+                size="sm"
+                variant="default"
+                disabled={busy}
+                aria-busy={busy}
+                className="shrink-0"
+              >
+                {busy ? (
+                  <>
+                    <CircleNotch className="size-4 animate-spin motion-reduce:animate-none" />
+                    Reading your source…
+                  </>
+                ) : (
+                  <>
+                    {mode === 'documents' ? 'Continue to documents' : 'Analyze my brand'}
+                    <ArrowRight className="size-4" aria-hidden />
+                  </>
+                )}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPTED_DOCUMENT_EXTENSIONS}
+            className="hidden"
+            tabIndex={-1}
+            onChange={(event) => {
+              addFiles(event.target.files);
+              event.target.value = '';
+            }}
           />
-          {mode !== 'website' ? (
-            <div className="space-y-2">
-              <Label htmlFor="onboarding-brand-name">Brand name</Label>
+
+          {mode && mode !== 'website' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor={`${ids}-brand-name`}>Brand name</Label>
               <Input
-                id="onboarding-brand-name"
-                {...form.register('brandName')}
+                id={`${ids}-brand-name`}
+                value={brandName}
+                onChange={(event) => {
+                  setBrandName(event.target.value);
+                  setFieldError(null);
+                }}
                 autoComplete="organization"
-                aria-invalid={Boolean(form.formState.errors.brandName)}
-                aria-describedby={fieldError ? 'intake-error' : undefined}
+                disabled={busy}
+                aria-invalid={fieldError === 'Enter your brand name.'}
               />
             </div>
           ) : null}
-          {mode === 'website' || mode === 'social' ? (
-            <div className="space-y-2">
-              <Label htmlFor="onboarding-url">
-                {mode === 'website' ? 'Website URL' : 'Social profile URL'}
-              </Label>
-              <Input
-                id="onboarding-url"
-                {...form.register('url')}
-                placeholder={
-                  mode === 'website'
-                    ? 'yourdomain.com'
-                    : 'instagram.com/yourbrand or facebook.com/yourpage'
-                }
-                aria-invalid={Boolean(form.formState.errors.url)}
-                aria-describedby={fieldError ? 'intake-error' : 'source-help'}
-              />
-              <p id="source-help" className="text-sm text-muted-foreground">
-                {mode === 'website'
-                  ? 'We’ll read your website to understand your brand.'
-                  : 'Instagram profiles and public Facebook business Pages. You can also use an Instagram @handle.'}
-              </p>
+
+          {message ? (
+            <div id={errorId} role="alert" className="flex gap-2.5 text-sm">
+              <WarningCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+              <div className="min-w-0 space-y-2">
+                <p className="text-foreground">{message}</p>
+                {error && !fieldError ? (
+                  <div className="flex flex-wrap gap-2">
+                    {onRetry ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onRetry}
+                        disabled={busy}
+                      >
+                        Try again
+                      </Button>
+                    ) : null}
+                    {mode !== 'description' ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={describeInstead}
+                        disabled={busy}
+                      >
+                        Describe it instead
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          ) : null}
-          {mode === 'description' ? (
-            <div className="space-y-2">
-              <Label htmlFor="onboarding-description">What does your business do?</Label>
-              <Textarea
-                id="onboarding-description"
-                {...form.register('description')}
-                rows={5}
-                placeholder="What you offer, who you serve, and what makes your brand different."
-                aria-invalid={Boolean(form.formState.errors.description)}
-                aria-describedby={fieldError ? 'intake-error' : undefined}
-              />
-            </div>
-          ) : null}
-          {mode === 'documents' ? (
-            <p className="text-sm text-muted-foreground">
-              Upload a brand guide, deck, or product document on the next step. We’ll wait until
-              it’s readable before analyzing your brand.
+          ) : (
+            <p id={helpId} className="text-sm text-muted-foreground">
+              {helpFor(mode, detected, files.length, Boolean(override))}
             </p>
-          ) : null}
-          {fieldError || error ? (
-            <div
-              id="intake-error"
-              role="alert"
-              className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
-            >
-              <p>{fieldError || error}</p>
-              {error && onRetry ? (
-                <Button type="button" variant="ghost" size="sm" onClick={onRetry} disabled={busy}>
-                  Try again
-                </Button>
-              ) : null}
-              {error ? (
-                <p className="mt-2">
-                  You can choose Brand documents or Describe your business above.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          <Button type="submit" size="lg" className="w-full" disabled={busy}>
-            {busy
-              ? 'Reading your source…'
-              : mode === 'documents'
-                ? 'Continue to documents'
-                : 'Analyze my brand'}
-          </Button>
+          )}
         </form>
       </div>
     </div>
   );
+}
+
+function SourceChip({
+  mode,
+  detected,
+  fileCount,
+  disabled,
+  onChoose,
+}: {
+  mode: Mode | null;
+  detected: DetectedIntake | null;
+  fileCount: number;
+  disabled: boolean;
+  onChoose: (mode: Mode) => void;
+}) {
+  const { icon, label, detail } = describeSource(mode, detected, fileCount);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            disabled={disabled}
+            data-testid="intake-source-chip"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0"
+          >
+            {icon}
+            <span className="text-foreground">{label}</span>
+            {detail ? <span className="min-w-0 truncate">{detail}</span> : null}
+            <CaretDown aria-hidden />
+            <span className="sr-only">. Change source type</span>
+          </button>
+        }
+      />
+      <DropdownMenuContent align="start" className="min-w-48">
+        {MODE_OPTIONS.map((option) => (
+          <DropdownMenuItem
+            key={option.mode}
+            onClick={() => onChoose(option.mode)}
+            className="gap-2 [&_svg]:size-4"
+          >
+            {option.icon}
+            {option.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function describeSource(
+  mode: Mode | null,
+  detected: DetectedIntake | null,
+  fileCount: number,
+): { icon: ReactNode; label: string; detail: string | null } {
+  if (mode === 'documents') {
+    return {
+      icon: <Files aria-hidden />,
+      label: 'Brand documents',
+      detail: fileCount ? `${fileCount} file${fileCount === 1 ? '' : 's'}` : null,
+    };
+  }
+  if (mode === 'website') {
+    const host = detected?.kind === 'website' ? new URL(detected.url).hostname : null;
+    return { icon: <Globe aria-hidden />, label: 'Website', detail: host };
+  }
+  if (mode === 'social') {
+    if (detected?.kind === 'instagram') {
+      const handle = new URL(detected.url).pathname.replaceAll('/', '');
+      return { icon: <InstagramIcon aria-hidden />, label: 'Instagram', detail: `@${handle}` };
+    }
+    if (detected?.kind === 'facebook')
+      return { icon: <FacebookIcon aria-hidden />, label: 'Facebook Page', detail: null };
+    return { icon: <InstagramIcon aria-hidden />, label: 'Social profile', detail: null };
+  }
+  if (mode === 'description')
+    return { icon: <TextAlignLeft aria-hidden />, label: 'Description', detail: null };
+  return { icon: <Globe aria-hidden />, label: 'Detects as you type', detail: null };
 }
