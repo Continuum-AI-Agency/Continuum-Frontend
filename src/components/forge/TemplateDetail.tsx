@@ -54,6 +54,7 @@ import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateAuthoringEditor } from '@/components/forge/TemplateAuthoringEditor';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
@@ -80,9 +81,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
-import { Video } from '@/components/ui/video';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
@@ -207,6 +214,9 @@ const DESIGN_SOURCE: Partial<Record<TemplateRevisionVariant['sourceKind'], strin
   photoshop: 'a Photoshop',
   illustrator: 'an Illustrator',
 };
+
+// The font picker's "no override" item: a Select item needs a non-empty value.
+const KEEP_FONT = '__current__';
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—';
@@ -1560,23 +1570,14 @@ export function TemplateDetail({
                     return {
                       mode: 'rendered',
                       at: renderedJob.finishedAt ?? renderedJob.updatedAt,
-                      node:
-                        rendered.kind === 'video' ? (
-                          <Video
-                            src={rendered.url}
-                            ariaLabel={`${name} · ${picked.ratio ?? picked.label}`}
-                            muted
-                            className="aspect-auto! size-full rounded-none border-0"
-                            videoClassName="object-contain"
-                          />
-                        ) : (
-                          // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-                          <img
-                            src={rendered.url}
-                            alt={`${name} · ${picked.ratio ?? picked.label}`}
-                            className="size-full object-contain"
-                          />
-                        ),
+                      node: (
+                        <OutputFile
+                          key={fullSrc(rendered)}
+                          output={rendered}
+                          alt={`${name} · ${picked.ratio ?? picked.label}`}
+                          muted
+                        />
+                      ),
                       estimate,
                       caption: rendered.fileName,
                     };
@@ -1675,25 +1676,43 @@ export function TemplateDetail({
                 Select text on the preview, then click a font here or drag it onto any text box.
               </p>
               {selectedTextBox ? (
-                <label className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <span className="min-w-32 truncate">{selectedTextBox.label}</span>
-                  <select
-                    className="min-w-0 flex-1 rounded border border-input bg-background p-1"
-                    aria-label={`Font for ${selectedTextBox.label}`}
-                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font ?? ''}
-                    onChange={(event) => applyTextFont(event.currentTarget.value)}
+                  <Select
+                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font || KEEP_FONT}
+                    onValueChange={(value) => applyTextFont(value === KEEP_FONT ? '' : value)}
                   >
-                    <option value="">Keep current font</option>
-                    {editableFonts.map((font) => (
-                      <option key={font.id} value={font.postScriptName ?? ''}>
-                        {font.family} · {font.style}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <SelectTrigger
+                      size="sm"
+                      className="min-w-0 flex-1 text-xs"
+                      aria-label={`Font for ${selectedTextBox.label}`}
+                    >
+                      <SelectValue
+                        items={Object.fromEntries([
+                          [KEEP_FONT, 'Keep current font'],
+                          ...editableFonts.flatMap((font) =>
+                            font.postScriptName
+                              ? [[font.postScriptName, `${font.family} · ${font.style}`]]
+                              : [],
+                          ),
+                        ])}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={KEEP_FONT}>Keep current font</SelectItem>
+                      {editableFonts.map((font) =>
+                        font.postScriptName ? (
+                          <SelectItem key={font.id} value={font.postScriptName}>
+                            {font.family} · {font.style}
+                          </SelectItem>
+                        ) : null,
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
               ) : null}
               <fieldset
-                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border border-dashed border-input p-2"
+                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded-md border border-dashed border-input p-2"
                 aria-label="Fonts available to drag onto text; drop font files here to add them"
                 onDragOver={(event) => {
                   if (event.dataTransfer.types.includes('Files')) event.preventDefault();
@@ -1705,11 +1724,13 @@ export function TemplateDetail({
                 }}
               >
                 {editableFonts.map((font) => (
-                  <button
+                  <Button
                     key={font.id}
                     type="button"
+                    variant="outline"
+                    size="xs"
                     draggable
-                    className="cursor-grab rounded border border-input bg-background px-2 py-1 text-left hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:cursor-grabbing"
+                    className="h-auto cursor-grab px-2 py-1 text-left font-normal active:cursor-grabbing"
                     title={`Drag onto text or click to apply to ${selectedTextBox?.label ?? 'selected text'}`}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(TEXT_REPAIR_FONT_MIME, font.postScriptName ?? '');
@@ -1718,7 +1739,7 @@ export function TemplateDetail({
                     onClick={() => applyTextFont(font.postScriptName ?? '')}
                   >
                     {font.family} · {font.style}
-                  </button>
+                  </Button>
                 ))}
                 {editableFonts.length === 0 ? (
                   <span className="text-muted-foreground">

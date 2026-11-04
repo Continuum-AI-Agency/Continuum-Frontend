@@ -43,13 +43,13 @@ function renderFields(
     <QueryClientProvider client={new QueryClient()}>
       <ReactFlowProvider>
         <RenderVariableFields
-        definitions={definitions}
-        values={extra.values}
-        brandId={extra.brandId}
-        connectedKeys={extra.connectedKeys}
-        mediaStatus={extra.mediaStatus}
-        onChange={extra.onChange ?? (() => undefined)}
-        onClear={extra.onClear ?? (() => undefined)}
+          definitions={definitions}
+          values={extra.values}
+          brandId={extra.brandId}
+          connectedKeys={extra.connectedKeys}
+          mediaStatus={extra.mediaStatus}
+          onChange={extra.onChange ?? (() => undefined)}
+          onClear={extra.onClear ?? (() => undefined)}
         />
       </ReactFlowProvider>
     </QueryClientProvider>,
@@ -175,6 +175,20 @@ describe('RenderVariableFields — colour geometry', () => {
 });
 
 describe('RenderVariableFields — text geometry', () => {
+  test('decimal odds stay editable without a sample-length limit', () => {
+    const changes: Array<[string, ApiRenderInputValue]> = [];
+    const { container } = renderFields(
+      [variable({ key: 'draw_bet', label: 'Draw Bet', charBudget: 3 })],
+      { values: { draw_bet: '4.10' }, onChange: (key, value) => changes.push([key, value]) },
+    );
+    const input = screen.getByDisplayValue('4.10') as HTMLInputElement;
+    expect(input.hasAttribute('maxlength')).toBe(false);
+    expect(container.textContent).not.toContain('4 / 3');
+    expect(container.textContent).not.toContain('characters the design has room for');
+    fireEvent.change(input, { target: { value: '10.25' } });
+    expect(changes).toEqual([['draw_bet', '10.25']]);
+  });
+
   test('normalizes the reflected Spanish title to English', () => {
     renderFields([variable({ key: 'titulo', label: 'Titulo' })]);
     expect(screen.getByText('Title')).toBeTruthy();

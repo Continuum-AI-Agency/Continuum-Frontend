@@ -51,8 +51,8 @@ export function TemplateFontsRow({
       </div>
       {missing.length > 0 ? (
         <InspectorNote>
-          {missing.length} face{missing.length === 1 ? '' : 's'} nobody has uploaded. The render is
-          refused until {missing.length === 1 ? 'it is' : 'they are'} in the font repository.{' '}
+          {missing.length} face{missing.length === 1 ? '' : 's'} nobody has uploaded. Upload the
+          missing typefaces, or explicitly allow font substitution when rendering.{' '}
           {brandId ? (
             <Link className="underline underline-offset-2" href="/library?section=typography">
               Upload them

@@ -1,6 +1,10 @@
 'use client';
 
-import type { RenderApproval, RenderApprovalDecidedVia } from '@continuum/contracts';
+import type {
+  ApiRenderOutput,
+  RenderApproval,
+  RenderApprovalDecidedVia,
+} from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -14,6 +18,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -103,12 +108,12 @@ export function useRenderApprovals(brandId: string) {
 const LEDGER_PAGE = 50;
 
 /**
- * Each approval's first Library asset, by the task its renders ran as — the card links to that
- * asset's thread, where the review and its comments live.
+ * Each approval's renders, by the task they ran as, once one is in the Library — the card links
+ * to that asset's thread, where the review and its comments live, and draws the file's 480p.
  */
 // ponytail: an approval whose renders are older than the newest 50 gets no link; a taskUid filter
 // on the jobs route lifts that.
-function useApprovalAssets(brandId: string, enabled: boolean) {
+function useApprovalRenders(brandId: string, enabled: boolean) {
   const { data } = useQuery({
     queryKey: forgeQueryKeys.renderJobList(brandId, LEDGER_PAGE),
     queryFn: () => apiRendersApi.listJobs(brandId, LEDGER_PAGE),
@@ -117,10 +122,10 @@ function useApprovalAssets(brandId: string, enabled: boolean) {
     retry: false,
   });
   return useMemo(() => {
-    const byTask = new Map<string, string>();
+    const byTask = new Map<string, readonly ApiRenderOutput[]>();
     for (const job of data?.items ?? []) {
-      const assetId = job.outputs.find((output) => output.assetId)?.assetId;
-      if (job.taskUid && assetId && !byTask.has(job.taskUid)) byTask.set(job.taskUid, assetId);
+      if (!job.taskUid || byTask.has(job.taskUid)) continue;
+      if (job.outputs.some((output) => output.assetId)) byTask.set(job.taskUid, job.outputs);
     }
     return byTask;
   }, [data]);
@@ -176,20 +181,26 @@ export function groupByPackage(approvals: RenderApproval[]): Entry[] {
 }
 
 const isVideo = (url: string) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
+/** The same stored file, whatever its link's signature. */
+const sameFile = (a: string, b: string) => a.split('?')[0] === b.split('?')[0];
 
 function ApprovalCard({
   approval,
-  assetId,
+  outputs,
   busy,
   onDecide,
 }: {
   approval: RenderApproval;
-  /** The render's Library asset, once the ledger's page has it. */
-  assetId: string | undefined;
+  /** The render's files, once the ledger's page has them in the Library. */
+  outputs: readonly ApiRenderOutput[] | undefined;
   busy: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject') => void;
 }) {
   const first = approval.files[0];
+  // The ledger's copy of the file this approval shows: its poster and 480p, not the fleet's original.
+  const rendered = first ? outputs?.find((output) => sameFile(output.url, first.url)) : undefined;
+  const assetId =
+    rendered?.assetId ?? outputs?.find((output) => output.assetId)?.assetId ?? undefined;
   const pending = approval.status === 'pending';
   const destination =
     approval.action === 'replace' && approval.adId
@@ -204,14 +215,22 @@ function ApprovalCard({
         {first && isVideo(first.url) ? (
           // biome-ignore lint/a11y/useMediaCaption: a rendered ad frame has no captions to show
           <video
-            src={first.url}
+            src={rendered ? thumbnailSrc(rendered) : first.url}
+            poster={rendered?.posterUrl}
             className="h-full w-full object-cover"
             muted
             playsInline
             controls
+            preload="metadata"
           />
         ) : first ? (
-          <img src={first.url} alt="Rendered creative" className="h-full w-full object-cover" />
+          <img
+            src={rendered ? thumbnailSrc(rendered) : first.url}
+            alt="Rendered creative"
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
             No preview
@@ -285,14 +304,14 @@ type Decision = 'approve' | 'reject';
 function ApprovalPackage({
   packageId,
   approvals,
-  assets,
+  renders,
   busyId,
   onDecide,
   onDecideAll,
 }: {
   packageId: string;
   approvals: RenderApproval[];
-  assets: ReadonlyMap<string, string>;
+  renders: ReadonlyMap<string, readonly ApiRenderOutput[]>;
   busyId: string | null;
   onDecide: (id: string, decision: Decision) => void;
   onDecideAll: (packageId: string, ids: string[], decision: Decision) => void;
@@ -354,7 +373,7 @@ function ApprovalPackage({
         <ApprovalCard
           key={approval.id}
           approval={approval}
-          assetId={assets.get(approval.taskUid)}
+          outputs={renders.get(approval.taskUid)}
           busy={busyId === approval.id}
           onDecide={onDecide}
         />
@@ -370,7 +389,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   const approvalKey = forgeQueryKeys.approvals(brandId);
   const approvalQuery = useRenderApprovals(brandId);
   const approvals = approvalQuery.data ?? [];
-  const assets = useApprovalAssets(brandId, approvals.length > 0);
+  const renders = useApprovalRenders(brandId, approvals.length > 0);
   const loadAlert = approvalQuery.isError ? (
     <Alert variant="destructive" className="py-2">
       <AlertTitle>
@@ -492,7 +511,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
               key={entry.packageId}
               packageId={entry.packageId}
               approvals={entry.approvals}
-              assets={assets}
+              renders={renders}
               busyId={busyId}
               onDecide={onDecide}
               onDecideAll={onDecideAll}
@@ -501,7 +520,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
             <ApprovalCard
               key={entry.id}
               approval={entry}
-              assetId={assets.get(entry.taskUid)}
+              outputs={renders.get(entry.taskUid)}
               busy={busyId === entry.id}
               onDecide={onDecide}
             />

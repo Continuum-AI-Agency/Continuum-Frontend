@@ -371,3 +371,18 @@ describe('renderJobChecks', () => {
     });
   });
 });
+
+test('recorded quality warnings stay visible on successful renders', () => {
+  const checks = renderJobChecks(
+    {
+      ...JOB,
+      warnings: [{ code: 'BRAND_COLOR_OUTSIDE_PALETTE', message: 'Review the accent color.' }],
+    },
+    {},
+  );
+  expect(checks.find((check) => check.name === 'Warnings')).toMatchObject({
+    state: 'warn',
+    lines: ['Review the accent color.'],
+  });
+  expect(checks.find((check) => check.name === 'Brand')?.state).toBe('warn');
+});

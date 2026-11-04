@@ -61,6 +61,7 @@ export default async function ForgePage() {
       <ForgeTabs
         brandId={activeBrandId}
         brandName={brandSummaries.find((brand) => brand.id === activeBrandId)?.name}
+        metaWritesAllowed={brandRow?.meta_writes_allowed === true}
       />
     </div>
   );

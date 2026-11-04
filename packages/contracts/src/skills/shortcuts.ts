@@ -10,6 +10,7 @@
 
 import type { BrandBookPieceKind } from '../ai-studio/brand-enforcement';
 import { brandBookPieceKindSchema } from '../ai-studio/brand-enforcement';
+import { type HeadlessGrammar, headlessGrammarSchema } from '../headless-content/grammar';
 
 export const SHORTCUT_TAG = 'shortcut';
 
@@ -24,6 +25,8 @@ export const SHORTCUT_CATEGORIES = [
   'medium',
   'material',
   'edit',
+  // A reel's story shape: the slug is a headless grammar id (`/tour`), so it picks the format.
+  'format',
 ] as const;
 export type ShortcutCategory = (typeof SHORTCUT_CATEGORIES)[number];
 
@@ -38,6 +41,7 @@ export const SHORTCUT_CATEGORY_LABELS: Record<ShortcutCategory, string> = {
   medium: 'Art medium',
   material: 'Material & FX',
   edit: 'Restyle',
+  format: 'Reel format',
 };
 
 const CATEGORY_TAG_PREFIX = 'shortcut:';
@@ -60,6 +64,15 @@ export function shortcutCategoryOf(skill: Tagged): ShortcutCategory | null {
   return (SHORTCUT_CATEGORIES as readonly string[]).includes(category ?? '')
     ? (category as ShortcutCategory)
     : null;
+}
+
+/** The reel grammar a `format` shortcut picks (`/tour` → tour); null for any other shortcut. */
+export function shortcutGrammarOf(
+  skill: Tagged & { readonly slug?: string | null },
+): HeadlessGrammar | null {
+  if (shortcutCategoryOf(skill) !== 'format') return null;
+  const parsed = headlessGrammarSchema.safeParse(skill.slug);
+  return parsed.success ? parsed.data : null;
 }
 
 export const shortcutConflictsOf = (skill: Tagged): string[] =>
@@ -163,4 +176,21 @@ export function renderShortcutCatalog(skills: readonly CatalogEntry[]): string {
         `- ${SHORTCUT_CATEGORY_LABELS[category]}: ${byCategory.get(category)?.join(' ')}`,
     )
     .join('\n');
+}
+
+/** The headless create tools by their name in one agent's tool set. */
+export type ShortcutTools = { still: string; reel: string; guided: string; inspect: string };
+
+/**
+ * The shortcut catalog as a prompt block: names only, one line per category. It is what lets the
+ * agent carry a typed `/slug` into a headless generation, and offer one when the user names a look
+ * in words. Empty without a catalog.
+ */
+export function shortcutCatalogBlock(catalog: string, tools: ShortcutTools): string {
+  if (!catalog) return '';
+  return [
+    '## Style shortcuts',
+    `Named looks the headless generators expand into full visual direction. When the user typed \`/slug\` tokens or names one of these looks, pass the slugs (no slash) in \`shortcuts\` on ${tools.still} / ${tools.reel} / ${tools.guided}. Never add shortcuts the user did not ask for. A reel format shortcut also picks the reel's shape (its concept, by the same id): pass it in \`shortcuts\` on ${tools.reel} or ${tools.guided} and pin no other grammar; on ${tools.reel} author the beats and length that concept lists in ${tools.inspect} view=guidance. Headless generation carries the brand book by default; set \`brandBook: false\` only when the user asks for something deliberately off-brand, and say that you did.`,
+    catalog,
+  ].join('\n');
 }

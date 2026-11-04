@@ -5,6 +5,7 @@ import {
   renderShortcutCatalog,
   shortcutCategoryTag,
   shortcutConflictTag,
+  shortcutGrammarOf,
   stripShortcutTokens,
 } from './shortcuts';
 
@@ -65,5 +66,25 @@ describe('renderShortcutCatalog', () => {
       { slug: 'hooks', tags: ['copy'] },
     ]);
     expect(catalog).toBe('- Camera & framing: /droneview\n- Light: /goldenhour /bluehour');
+  });
+});
+
+describe('shortcutGrammarOf', () => {
+  const tags = (category: string) => ['shortcut', `shortcut:${category}`];
+  test('a format shortcut named for a grammar picks that grammar', () => {
+    expect(shortcutGrammarOf({ slug: 'tour', tags: tags('format') })).toBe('tour');
+  });
+  test('any other shortcut, or a format slug that is no grammar, picks none', () => {
+    expect(shortcutGrammarOf({ slug: 'tour', tags: tags('camera') })).toBeNull();
+    expect(shortcutGrammarOf({ slug: 'goldenhour', tags: tags('light') })).toBeNull();
+    expect(shortcutGrammarOf({ slug: 'slideshow', tags: tags('format') })).toBeNull();
+  });
+  test('the catalog lists the format line last', () => {
+    expect(
+      renderShortcutCatalog([
+        { slug: 'tour', tags: tags('format') },
+        { slug: 'drone', tags: tags('camera') },
+      ]),
+    ).toBe('- Camera & framing: /drone\n- Reel format: /tour');
   });
 });

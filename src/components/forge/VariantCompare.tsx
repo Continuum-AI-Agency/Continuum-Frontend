@@ -2,6 +2,7 @@
 
 import type { ApiRenderJob, TemplateRevisionVariant } from '@continuum/contracts';
 import { useQueries } from '@tanstack/react-query';
+import { fullSrc, thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 
@@ -39,9 +40,9 @@ export function compareRows(variants: TemplateRevisionVariant[], jobs: ApiRender
 function Still({ job }: { job: ApiRenderJob | null }) {
   const output = job?.outputs[0];
   if (!output) return <span className="text-muted-foreground">Not rendered</span>;
-  const still = output.kind === 'image' ? (output.libraryUrl ?? output.url) : output.posterUrl;
+  const still = output.kind === 'image' ? thumbnailSrc(output) : output.posterUrl;
   return (
-    <a href={output.libraryUrl ?? output.url} target="_blank" rel="noreferrer" className="block">
+    <a href={fullSrc(output)} target="_blank" rel="noreferrer" className="block">
       {still ? (
         <img
           src={still}

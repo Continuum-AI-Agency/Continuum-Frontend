@@ -2,15 +2,18 @@
 
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderDeliveryTarget,
   type ApiRenderFitReport,
   type ApiRenderFitVerdict,
   type ApiRenderInputValue,
+  type ApiRenderJob,
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
   classifyLibraryFile,
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
+  type ForgeRenderSetSettings,
   isLayerSwitch,
   leavesCheckIncomplete,
   type MediaAsset,
@@ -26,13 +29,13 @@ import {
   CornerDownRight,
   GripVertical,
   ImageIcon,
+  Info,
   Library,
   Loader2,
   type LucideIcon,
   MoreHorizontal,
   Plus,
   RotateCcw,
-  TriangleAlert,
   Upload,
   Video,
   X,
@@ -48,11 +51,19 @@ import {
 } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import type { DataGridRowProps } from '@/components/forge/DataGrid';
+import {
+  adSetName,
+  DeliveryTargetPicker,
+  isUnresolvedTarget,
+  type MetaPickerState,
+  type ReplaceFormats,
+} from '@/components/forge/DeliveryTargetPicker';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import { explainFinding, type LabelOf } from '@/components/forge/readinessCopy';
+import { jobSteps } from '@/components/forge/renderJobChecks';
 import {
   clipShortBy,
   effectiveEvidence,
@@ -64,12 +75,16 @@ import {
   isEmptyInput,
   MAX_BATCH_ROWS,
   missingInputs,
+  overrideFor,
   ownChangeCount,
+  RENDER_OVERRIDES,
+  type RenderOverride,
   type RequestRow,
   type RequestRowMedia,
   type RowDrop,
   rowBreadcrumb,
   seededValue,
+  toPreflightDelivery,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +97,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -156,6 +172,27 @@ export type RequestGridMeta = {
   generating: boolean;
   /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
   liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
+  /**
+   * Per row, the refusals a person may render through, each with what it is about. Not errors:
+   * the row still renders once someone says so at Render.
+   */
+  calls?: ReadonlyMap<
+    string,
+    ReadonlyArray<{ override: RenderOverride; message: string; key?: string }>
+  >;
+  /** Where each row's renders go, and the set's default for rows with no target of their own. */
+  destination?: DestinationMeta;
+  /** Each rendered row's newest job, while the row is still what was rendered. */
+  runs?: ReadonlyMap<string, ApiRenderJob>;
+};
+
+export type DestinationMeta = {
+  meta: MetaPickerState;
+  outputs: ReplaceFormats;
+  /** The set's default ad set (new paused ads), or null: rows with no target go to the Library. */
+  setDefault: ForgeRenderSetSettings['metaTarget'];
+  onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
+  onFormatChange: (rowId: string, outputId: string) => void;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -312,12 +349,14 @@ function MediaPicker({
           }
         }}
       />
-      <button
+      <Button
         type="button"
+        size="icon-xs"
+        variant="ghost"
         aria-label={`Upload ${variable.label}`}
         title="Upload a file here"
         disabled={uploading}
-        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        className="shrink-0 text-muted-foreground"
         onClick={() => fileInput.current?.click()}
       >
         {uploading ? (
@@ -325,7 +364,7 @@ function MediaPicker({
         ) : (
           <Upload className="size-3.5" aria-hidden />
         )}
-      </button>
+      </Button>
       {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
         // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
         <video
@@ -354,14 +393,16 @@ function MediaPicker({
         </Badge>
       ) : null}
       {pins.length ? (
-        <button
+        <Button
           type="button"
+          size="icon-xs"
+          variant="ghost"
           aria-label={`Clear ${variable.label}`}
-          className="shrink-0 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          className="shrink-0 text-muted-foreground"
           onClick={onClear}
         >
           <X className="size-3" aria-hidden />
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -392,19 +433,47 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
+/** What the row asks of the person at Render, said once each: the refusals they may render through. */
+export function rowCalls(
+  row: RequestRow,
+  calls: ReadonlyArray<{ override: RenderOverride; message: string }> = [],
+): Array<{ override: RenderOverride; message: string }> {
+  const server =
+    row.check.state === 'error' ? overrideFor(row.check.code, row.check.guardrails) : null;
+  return server && row.check.state === 'error'
+    ? [...calls, { override: server, message: row.check.message }]
+    : [...calls];
+}
+
 function StatusBadge({
   row,
   invalidReason,
+  calls,
+  fitWarning,
   labelOf,
 }: {
   row: RequestRow;
   invalidReason?: string;
+  calls: ReadonlyArray<{ override: RenderOverride; message: string }>;
+  /** Text the Live kit says will not fit as typed: it still renders, shrunk or clipped. */
+  fitWarning: string | null;
   labelOf: LabelOf;
 }) {
   if (invalidReason)
     return (
       <Explained why={invalidReason}>
         <Badge variant="destructive">Invalid</Badge>
+      </Explained>
+    );
+  // A refusal a person may render through is a question for Render, not an error in the row.
+  if (calls.length)
+    return (
+      <Explained
+        why={calls
+          .map((call) => `${RENDER_OVERRIDES[call.override].title}: ${call.message}`)
+          .join(' ')}
+      >
+        <Badge variant="warning">Needs your call</Badge>
       </Explained>
     );
   switch (row.check.state) {
@@ -415,7 +484,11 @@ function StatusBadge({
         </Badge>
       );
     case 'error':
-      return (
+      return row.check.transient ? (
+        <Explained why={`${row.check.message} It is checked again at Render.`}>
+          <Badge variant="muted">Not checked</Badge>
+        </Explained>
+      ) : (
         <Badge variant="destructive" title={row.check.message}>
           Rejected
         </Badge>
@@ -432,13 +505,19 @@ function StatusBadge({
             <Badge variant="warning">Needs review</Badge>
           </Explained>
         );
-      return row.check.fit?.escalate ? (
-        <Explained why={aiCheckWhy(row.check.fit)}>
-          <Badge variant="warning">AI check after render</Badge>
-        </Explained>
-      ) : (
-        <Badge variant="success">Ready</Badge>
-      );
+      if (row.check.fit?.escalate || fitWarning)
+        return (
+          <Explained
+            why={[fitWarning, row.check.fit?.escalate ? aiCheckWhy(row.check.fit) : null]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            <Badge variant="warning">
+              <Info className="size-3" aria-hidden /> Ready · fit warning
+            </Badge>
+          </Explained>
+        );
+      return <Badge variant="success">Ready</Badge>;
     }
     default:
       return <Badge variant="muted">Draft</Badge>;
@@ -463,38 +542,44 @@ function InheritanceAction({
     const canRestore = restore !== undefined || hasSavedDefault(variable);
     if (isMedia(variable) || !canRestore || isDefaultValue(variable, value)) return null;
     return (
-      <button
+      <Button
         type="button"
-        className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+        size="icon-xs"
+        variant="ghost"
+        className="text-muted-foreground"
         aria-label={`Reset ${variable.label} to default`}
         title="Reset to default"
         onClick={() => actions.setValue(row.id, variable.key, restore)}
       >
         <RotateCcw className="size-3" aria-hidden />
-      </button>
+      </Button>
     );
   }
   const changed = variable.key in row.values || row.clearedKeys.includes(variable.key);
   return changed ? (
-    <button
+    <Button
       type="button"
-      className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+      size="icon-xs"
+      variant="ghost"
+      className="text-muted-foreground"
       aria-label={`Reset ${variable.label} to inherited`}
       title="Reset to inherited"
       onClick={() => actions.resetValue(row.id, variable.key)}
     >
       <RotateCcw className="size-3" aria-hidden />
-    </button>
+    </Button>
   ) : (
-    <button
+    <Button
       type="button"
-      className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+      size="icon-xs"
+      variant="ghost"
+      className="text-muted-foreground"
       aria-label={`Clear inherited ${variable.label}`}
       title="Clear inherited value"
       onClick={() => actions.clearValue(row.id, variable.key)}
     >
       <X className="size-3" aria-hidden />
-    </button>
+    </Button>
   );
 }
 
@@ -581,12 +666,16 @@ export function VariableCell({
   table,
 }: CellContext<RequestRow, unknown>) {
   const { variable } = column.columnDef.meta as VariableColumnMeta;
-  const { brandId, contract, rows, clientErrors, actions, liveFit } = gridMeta(table);
-  const error = clientErrors.get(row.id)?.[variable.key];
+  const { brandId, contract, rows, clientErrors, calls, actions, liveFit } = gridMeta(table);
+  const clientError = clientErrors.get(row.id)?.[variable.key];
+  // A call is said on the cell too — never red: the row still renders once someone says so.
+  const error =
+    clientError ?? calls?.get(row.id)?.find((call) => call.key === variable.key)?.message;
   const value = effectiveValues(rows, row.id)[variable.key];
   const fit = liveFit.get(row.id)?.get(variable.key);
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
-  const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
+  const invalid =
+    clientError !== undefined && !(variable.required && isEmptyInput(variable, value));
   const inheritance = (
     <InheritanceAction row={row} variable={variable} value={value} actions={actions} />
   );
@@ -735,24 +824,16 @@ export function VariableCell({
   const text = value === undefined ? '' : String(value);
   const onText = (next: string) =>
     actions.setValue(row.id, variable.key, next === '' ? undefined : next);
-  const used =
-    typeof value === 'string'
-      ? (lineFields.length ? (value.split(/\r?\n/)[0] ?? '') : value).length
-      : 0;
-  const budget = variable.charBudget;
-  const over = budget !== null && used > budget;
   const misfit = fit?.subject === 'text' && fit.state === 'clipped' ? fit.why : null;
   return (
     <div className="flex min-w-32 items-center gap-1.5">
-      {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
-      <div className="group/count relative min-w-0 flex-1">
+      <div className="min-w-0 flex-1">
         {lineFields.length ? (
           <Textarea
             rows={lineFields.length + 1}
             className={cn(
               'min-h-0 resize-none py-1 text-xs',
               isDefault && 'text-muted-foreground',
-              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
             )}
@@ -770,7 +851,6 @@ export function VariableCell({
             className={cn(
               'h-7 text-xs',
               isDefault && 'text-muted-foreground',
-              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
               misfit && 'border-warning',
               invalid && 'border-destructive',
             )}
@@ -781,21 +861,11 @@ export function VariableCell({
             onChange={(event) => onText(event.target.value)}
           />
         )}
-        {budget !== null ? (
-          <span
-            className={cn(
-              'pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono tabular-nums text-2xs text-muted-foreground',
-              over ? 'text-warning' : 'invisible group-focus-within/count:visible',
-            )}
-            title={`${used} of ${budget} characters the design has room for${over ? ' — the type shrinks to fit, or overflows' : ''}`}
-          >
-            {used}/{budget}
-          </span>
-        ) : null}
       </div>
       {misfit ? (
-        <Explained why={`Doesn’t fit the design: ${misfit}`}>
-          <TriangleAlert className="size-3.5 text-warning" aria-label="Doesn’t fit the design" />
+        // A warning, never a block: the render still runs, and the AI check reads the frame.
+        <Explained why={`Will render · may shrink or clip — ${misfit}`}>
+          <Info className="size-3.5 text-warning" aria-label="Will render · may shrink or clip" />
         </Explained>
       ) : null}
       {defaultTag}
@@ -829,14 +899,6 @@ function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function deliveryNote(row: RequestRow): string | null {
-  const delivery = row.delivery;
-  if (!delivery) return null;
-  if (delivery.action === 'replace')
-    return `Replaces ad ${'adName' in delivery && delivery.adName ? delivery.adName : delivery.adId}`;
-  return `New ad in ${delivery.adsetName ?? delivery.adsetId}`;
 }
 
 /**
@@ -890,7 +952,6 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
   const { rows, actions } = meta;
   const row = tableRow.original;
   const breadcrumb = rowBreadcrumb(rows, row.id).slice(0, -1).join(' / ');
-  const note = deliveryNote(row);
   const full =
     rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
   return (
@@ -905,9 +966,11 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
         />
       ))}
       {tableRow.getCanExpand() ? (
-        <button
+        <Button
           type="button"
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          size="icon-xs"
+          variant="ghost"
+          className="text-muted-foreground"
           aria-label={`${tableRow.getIsExpanded() ? 'Collapse' : 'Expand'} ${row.label}`}
           onClick={tableRow.getToggleExpandedHandler()}
         >
@@ -916,7 +979,7 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           ) : (
             <ChevronRight className="size-3" aria-hidden />
           )}
-        </button>
+        </Button>
       ) : (
         <span className="size-4" />
       )}
@@ -952,11 +1015,6 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
             )
           }
         />
-        {note ? (
-          <p className="truncate text-3xs text-muted-foreground" title={note}>
-            {note}
-          </p>
-        ) : null}
       </div>
       {/* Over the end of the name while the row is hovered, so they cost the name no width. */}
       <div className="invisible absolute inset-y-0 right-7 flex items-center gap-0.5 rounded-md bg-card/95 px-0.5 group-hover/row:visible">
@@ -1118,14 +1176,16 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
         </DropdownMenuContent>
       </DropdownMenu>
       {row.parentId && row.outputIds.length ? (
-        <button
+        <Button
           type="button"
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
+          size="icon-xs"
+          variant="ghost"
+          className="text-muted-foreground"
           aria-label="Reset formats to inherited"
           onClick={() => actions.updateRow(row.id, (current) => ({ ...current, outputIds: [] }))}
         >
           <RotateCcw className="size-3" aria-hidden />
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -1143,11 +1203,126 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
   );
 }
 
+/** What a row's chip says: its own target, else the set's default, else the Library only. */
+export function destinationLabel(
+  delivery: ApiRenderDeliveryTarget | undefined,
+  setDefault: ForgeRenderSetSettings['metaTarget'],
+): { text: string; own: boolean } {
+  if (!delivery)
+    return setDefault
+      ? { text: `Set default · ${adSetName(setDefault)}`, own: false }
+      : { text: 'Library only', own: false };
+  if (delivery.action === 'create')
+    return { text: `New ad · ${delivery.adsetName ?? delivery.adsetId}`, own: true };
+  return {
+    text: isUnresolvedTarget(delivery)
+      ? `Replace · ad ${delivery.adId}`
+      : `Replace · ${delivery.adName ?? delivery.adId}`,
+    own: true,
+  };
+}
+
+/**
+ * Where this row's renders go, editable in place: replace an ad, a new ad in another ad set, or
+ * back to the set's default. The row is the source of truth — the choice is saved with the set.
+ */
+export function DestinationCell({
+  row: { original: row },
+  table,
+}: CellContext<RequestRow, unknown>) {
+  const { brandId, rows, destination } = gridMeta(table);
+  if (!destination) return null;
+  const label = destinationLabel(toPreflightDelivery(row.delivery), destination.setDefault);
+  const name = row.label.trim() || 'Untitled';
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            aria-label={`Destination for ${name}: ${label.text}`}
+            title={label.text}
+            className={cn(
+              'h-6 max-w-full justify-start truncate px-1.5 text-xs font-normal',
+              label.own ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            <span className="truncate">{label.text}</span>
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-96 p-2">
+        <DeliveryTargetPicker
+          brandId={brandId}
+          meta={destination.meta}
+          rows={[
+            {
+              rowId: row.id,
+              label: name,
+              labelPath: rowBreadcrumb(rows, row.id),
+              outputIds: effectiveOutputIds(rows, row.id),
+              ...(row.delivery ? { delivery: toPreflightDelivery(row.delivery) } : {}),
+            },
+          ]}
+          outputs={destination.outputs}
+          fallback={destinationLabel(undefined, destination.setDefault).text}
+          onDeliveryChange={destination.onDeliveryChange}
+          onFormatChange={destination.onFormatChange}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A fired row's render, where it is now: the grid's Status cell follows it until it settles. */
+function RunBadge({ job }: { job: ApiRenderJob }) {
+  const steps = jobSteps(job);
+  const now =
+    steps.find((item) => item.state === 'error') ??
+    steps.find((item) => item.state === 'active') ??
+    steps.findLast((item) => item.state === 'done');
+  const where = now ? [now.label, now.detail].filter(Boolean).join(' · ') : 'Queued';
+  if (job.status === 'finished')
+    return (
+      <Explained why={where}>
+        {job.approval?.status === 'awaiting_approval' ? (
+          <Badge variant="warning">Awaiting approval</Badge>
+        ) : (
+          <Badge variant="success">Rendered</Badge>
+        )}
+      </Explained>
+    );
+  if (job.status === 'failed')
+    return (
+      <Explained
+        why={
+          job.taskUid
+            ? where
+            : 'The render service refused it. Select the row and Render again to resend it.'
+        }
+      >
+        <Badge variant="destructive">{job.taskUid ? 'Render failed' : 'Not sent'}</Badge>
+      </Explained>
+    );
+  return (
+    <Explained why={where}>
+      <Badge variant="muted">
+        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden /> Rendering
+      </Badge>
+    </Explained>
+  );
+}
+
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { contract, rows, clientErrors } = gridMeta(table);
+  const { contract, rows, clientErrors, calls, liveFit, runs } = gridMeta(table);
+  const run = runs?.get(row.id);
+  if (run) return <RunBadge job={run} />;
   const errors = clientErrors.get(row.id) ?? {};
   const errorKeys = Object.keys(errors);
-  const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
+  const values = effectiveValues(rows, row.id);
+  const missing = missingInputs(contract.variables, values);
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
     const names = missing.map((key) =>
@@ -1163,10 +1338,21 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
     const label = contract.variables.find((variable) => variable.key === key)?.label;
     return label ? readableLayerName(label) : undefined;
   };
+  const misfits = [...(liveFit.get(row.id) ?? new Map()).entries()].filter(
+    ([, verdict]) => verdict.subject === 'text' && verdict.state === 'clipped',
+  );
+  // The warning the text cell shows: the design's measure. A character budget is only a reference
+  // length, so going past it is never a warning on its own.
+  const warned = misfits.map(([key]) => key);
+  const fitWarning = warned.length
+    ? `Will render · ${warned.map((key) => labelOf(key) ?? key).join(', ')} may shrink or clip.`
+    : null;
   return (
     <StatusBadge
       row={row}
       labelOf={labelOf}
+      calls={rowCalls(row, calls?.get(row.id))}
+      fitWarning={fitWarning}
       invalidReason={Object.entries(errors)
         .map(([key, message]) => {
           const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;

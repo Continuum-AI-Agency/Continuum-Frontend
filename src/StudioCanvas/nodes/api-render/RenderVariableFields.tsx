@@ -139,28 +139,6 @@ function FitLine({ verdict }: { verdict: ApiRenderFitVerdict | undefined }) {
   );
 }
 
-/**
- * How much of the designer's own room a string is using.
- *
- * `charBudget` is the composed length in the TIGHTEST comp the slot appears in — not a limit
- * After Effects enforces. Past it the text does not fail, it shrinks or overflows, so this
- * warns and never blocks.
- */
-function BudgetLine({ variable, value }: { variable: ApiRenderVariable; value: unknown }) {
-  if (variable.charBudget == null) return null;
-  const used = typeof value === 'string' ? value.length : 0;
-  const over = used > variable.charBudget;
-  return (
-    <FieldDescription>
-      <span className={cn('tabular-nums', over && 'text-warning')}>
-        {used} / {variable.charBudget}
-      </span>{' '}
-      characters the design has room for
-      {over ? ' — the type shrinks to fit, or overflows' : ''}
-    </FieldDescription>
-  );
-}
-
 function MediaVariableField({
   variable,
   brandId,
@@ -413,7 +391,6 @@ function VariableField({
               )
             }
           />
-          <BudgetLine variable={variable} value={value} />
           {connectedKeys?.has(variable.key) ? (
             <FieldDescription>
               Connected — the wired text is used instead of this field.

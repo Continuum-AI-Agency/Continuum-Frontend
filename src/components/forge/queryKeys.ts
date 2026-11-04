@@ -52,6 +52,8 @@ export const forgeQueryKeys = {
   inputSets: (brandId: string, templateKey: string) =>
     ['forge', brandId, 'input-sets', templateKey] as const,
   renderSets: (brandId: string) => ['forge', brandId, 'render-sets'] as const,
+  /** Slack rooms and Meta ad accounts a render can deliver to. */
+  deliveryDestinations: (brandId: string) => ['forge', brandId, 'delivery-destinations'] as const,
   renderSetList: (brandId: string, templateKey?: string) =>
     ['forge', brandId, 'render-sets', templateKey ?? 'all'] as const,
   runs: (brandId: string) => ['forge', brandId, 'runs'] as const,

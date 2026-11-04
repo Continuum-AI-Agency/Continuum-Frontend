@@ -17,8 +17,9 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // through the Frontend's own contract. The poster is the real signed Supabase link.
 //
 // It proves the ledger draws the poster (really loaded), mounts no <video> in any row, and the
-// opened render shows its poster and plays (and downloads) the Library copy — nothing on the page
-// is ever fetched from the fleet's bucket. NOT exercised: the HTTP hop to Fastify, whose route parses this same return through the
+// opened render shows its poster, plays the 720p, moves to the Library copy on a pause at the same
+// moment, and downloads the Library copy — nothing on the page is ever fetched from the fleet's
+// bucket. NOT exercised: the HTTP hop to Fastify, whose route parses this same return through the
 // same schema.
 
 const PAYLOAD = process.env.FORGE_LEDGER_POSTERS_PAYLOAD;
@@ -79,8 +80,9 @@ test('the ledger draws each video render as its poster, never as a video', async
   const job = page.items[0];
   const posterUrl = job?.outputs[0]?.posterUrl;
   const libraryUrl = job?.outputs[0]?.libraryUrl;
-  if (!job || !posterUrl || !libraryUrl) {
-    throw new Error('[ledger-posters] the payload carries no posterUrl or libraryUrl');
+  const previewUrl = job?.outputs[0]?.previewUrl;
+  if (!job || !posterUrl || !libraryUrl || !previewUrl) {
+    throw new Error('[ledger-posters] the payload carries no posterUrl, libraryUrl or previewUrl');
   }
 
   const context = await browser.newContext({
@@ -133,17 +135,36 @@ test('the ledger draws each video render as its poster, never as a video', async
   expect(fleetHits, 'the ledger fetched a render from the fleet bucket').toEqual([]);
   await tab.screenshot({ path: resolve(SHOTS_DIR, 'ledger-posters-batch.png') });
 
-  // Opened, the player shows the poster at once and plays the Library copy (storage behind a
-  // CDN, download-disposed — a <video> ignores that), never the fleet's far bucket.
+  // Opened, the player shows the poster at once and starts on the 720p, never the fleet's far
+  // bucket; a pause after a play moves it to the Library copy (storage behind a CDN,
+  // download-disposed — a <video> ignores that) at the same moment.
   await ledger.getByText(label, { exact: true }).click();
-  const player = tab.getByRole('group', { name: 'Render preview' }).locator('video');
+  const well = tab.getByRole('group', { name: 'Render preview' });
+  const player = well.locator('video');
+  const readyState = () => player.evaluate((video) => (video as HTMLVideoElement).readyState);
   await expect(player).toHaveAttribute('poster', posterUrl);
-  await expect(player).toHaveAttribute('src', libraryUrl);
+  await expect(player).toHaveAttribute('src', previewUrl);
+  await expect(well.getByText('720p', { exact: true })).toBeVisible();
+  await expect.poll(readyState, { timeout: 60_000 }).toBeGreaterThanOrEqual(2);
+  await player.evaluate((video) => {
+    const element = video as HTMLVideoElement;
+    element.muted = true;
+    return element.play();
+  });
   await expect
-    .poll(() => player.evaluate((video) => (video as HTMLVideoElement).readyState), {
-      timeout: 60_000,
-    })
-    .toBeGreaterThanOrEqual(2);
+    .poll(() => player.evaluate((video) => (video as HTMLVideoElement).currentTime))
+    .toBeGreaterThan(0.5);
+  const pausedAt = await player.evaluate((video) => {
+    const element = video as HTMLVideoElement;
+    element.pause();
+    return element.currentTime;
+  });
+  await expect(player).toHaveAttribute('src', libraryUrl);
+  await expect(well.getByText('720p', { exact: true })).toHaveCount(0);
+  await expect.poll(readyState, { timeout: 60_000 }).toBeGreaterThanOrEqual(1);
+  await expect
+    .poll(() => player.evaluate((video) => (video as HTMLVideoElement).currentTime))
+    .toBeCloseTo(pausedAt, 1);
   await expect(tab.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', libraryUrl);
   expect(fleetHits, 'opening the render fetched it from the fleet bucket').toEqual([]);
   await tab.screenshot({ path: resolve(SHOTS_DIR, 'ledger-posters-detail.png') });

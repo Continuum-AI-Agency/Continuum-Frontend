@@ -137,7 +137,11 @@ describe('VariableEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith([
-        { slotKey: 'Outline', binding: { source: 'slot', path: 'Headline', line: 2 }, exposed: false },
+        {
+          slotKey: 'Outline',
+          binding: { source: 'slot', path: 'Headline', line: 2 },
+          exposed: false,
+        },
       ]),
     );
   });
@@ -294,7 +298,7 @@ describe('VariableEditor', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
 
     // Typed while the save is still in flight: a new field on the same slot, and another slot.
-    fireEvent.change(screen.getByLabelText('Max chars'), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Reference length'), { target: { value: '30' } });
     fireEvent.click(screen.getByRole('button', { name: /Brand colour/ }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Accent' } });
 

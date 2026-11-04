@@ -5,6 +5,7 @@ import {
 } from '../media/template-revision-pin';
 import {
   type ApiRenderDeliveryTarget,
+  apiRenderDeliveryCreateTargetSchema,
   apiRenderDeliveryTargetSchema,
   apiRenderEncodeOverrideSchema,
   apiRenderVariableKeySchema,
@@ -100,6 +101,33 @@ export const forgeRenderSetRowsSchema = z
   .min(1)
   .max(FORGE_RENDER_SET_MAX_ROWS);
 
+/** Mirrors the approval-room cap a render request accepts. */
+export const FORGE_RENDER_SET_MAX_APPROVAL_ROOMS = 10;
+
+/**
+ * Where a set's renders go when nobody says otherwise — chosen once, before render, and kept.
+ *
+ * `metaTarget` is CREATE-ONLY by type: a new PAUSED ad in one ad set, for every row without a
+ * target of its own. It is never written into rows (a row's `delivery` is never inherited); it
+ * is sent as the batch-level `delivery`, where the row's own target wins and the two are never
+ * merged. Replacing an existing ad stays a per-row choice, because it needs exactly one output.
+ */
+export const forgeRenderSetSettingsSchema = z
+  .object({
+    metaTarget: apiRenderDeliveryCreateTargetSchema.nullable().default(null),
+    slackDestinationId: z.string().uuid().nullable().default(null),
+    approvalDestinationIds: z
+      .array(z.string().uuid())
+      .max(FORGE_RENDER_SET_MAX_APPROVAL_ROOMS)
+      .default([]),
+    /** Render as Final rather than Proof. Final still needs an owner or admin at render time. */
+    final: z.boolean().default(false),
+  })
+  .strict();
+export type ForgeRenderSetSettings = z.infer<typeof forgeRenderSetSettingsSchema>;
+export const FORGE_RENDER_SET_DEFAULT_SETTINGS: ForgeRenderSetSettings =
+  forgeRenderSetSettingsSchema.parse({});
+
 export const forgeRenderSetSchema = z
   .object({
     id: z.string().uuid(),
@@ -108,6 +136,8 @@ export const forgeRenderSetSchema = z
     name: z.string().trim().min(1).max(200),
     /** What this set is for, in the author's words. Null on a set that never had one. */
     description: descriptionSchema.default(null),
+    /** Delivery defaults; `{}` on a set that never saved any. */
+    settings: forgeRenderSetSettingsSchema.default(FORGE_RENDER_SET_DEFAULT_SETTINGS),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     templateRevision: templateRevisionPinSchema.nullable().optional(),
@@ -129,6 +159,7 @@ export const createForgeRenderSetRequestSchema = z
     bindingId: z.string().uuid(),
     name: z.string().trim().min(1).max(200),
     description: descriptionSchema.optional(),
+    settings: forgeRenderSetSettingsSchema.optional(),
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     templateRevision: templateRevisionRefSchema.optional(),
@@ -143,6 +174,7 @@ export const updateForgeRenderSetRequestSchema = z
     expectedRevision: z.number().int().nonnegative(),
     name: z.string().trim().min(1).max(200).optional(),
     description: descriptionSchema.optional(),
+    settings: forgeRenderSetSettingsSchema.optional(),
     rows: forgeRenderSetRowsSchema.optional(),
     /**
      * The contract these rows were checked against. Only with `rows`: a set moves to a republished
@@ -153,8 +185,11 @@ export const updateForgeRenderSetRequestSchema = z
   .strict()
   .refine(
     (value) =>
-      value.name !== undefined || value.rows !== undefined || value.description !== undefined,
-    { message: 'Update at least one of name, description or rows' },
+      value.name !== undefined ||
+      value.rows !== undefined ||
+      value.description !== undefined ||
+      value.settings !== undefined,
+    { message: 'Update at least one of name, description, rows or settings' },
   )
   .refine((value) => value.contractHash === undefined || value.rows !== undefined, {
     message: 'contractHash is only saved with rows',
@@ -237,6 +272,110 @@ export function resolveForgeRenderSetRows(rows: ForgeRenderSetRow[]): ResolvedFo
   // Array order is row order: a parent listed after its fork still resolves, and the output keeps
   // the order the rows were saved in.
   return parsed.map(visit);
+}
+
+/** One field that renders differently: absent `from` / `to` means the field is unset on that side. */
+export interface ForgeRenderSetValueChange {
+  key: string;
+  from?: unknown;
+  to?: unknown;
+}
+
+/** How one row renders against another — inherited values included, not just what each row wrote. */
+export interface ForgeRenderSetRowDiff {
+  id: string;
+  label: string;
+  labelFrom?: string;
+  parentId?: { from: string | null; to: string | null };
+  variables: ForgeRenderSetValueChange[];
+  /** `outputIds`, `encode` and `delivery`. */
+  settings: ForgeRenderSetValueChange[];
+}
+
+export interface ForgeRenderSetDiff {
+  added: Array<{ id: string; label: string }>;
+  removed: Array<{ id: string; label: string }>;
+  /** Only rows that render differently; an untouched row is left out. */
+  changed: ForgeRenderSetRowDiff[];
+}
+
+export type LabelledForgeRenderSetRow = ResolvedForgeRenderSetRow & { label: string };
+
+// Keys sorted, undefined dropped: an encode block merged in a different order is the same block.
+const canonical = (value: unknown): string =>
+  value === null || typeof value !== 'object'
+    ? (JSON.stringify(value) ?? 'undefined')
+    : Array.isArray(value)
+      ? `[${value.map(canonical).join(',')}]`
+      : `{${Object.entries(value)
+          .filter(([, item]) => item !== undefined)
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+          .join(',')}}`;
+
+function valueChanges(
+  from: Record<string, unknown>,
+  to: Record<string, unknown>,
+): ForgeRenderSetValueChange[] {
+  return [...new Set([...Object.keys(from), ...Object.keys(to)])]
+    .sort()
+    .filter((key) => canonical(from[key]) !== canonical(to[key]))
+    .map((key) => ({
+      key,
+      ...(from[key] !== undefined ? { from: from[key] } : {}),
+      ...(to[key] !== undefined ? { to: to[key] } : {}),
+    }));
+}
+
+/** Each row as it renders, with its label: what a diff compares. */
+export function labelForgeRenderSetRows(rows: ForgeRenderSetRow[]): LabelledForgeRenderSetRow[] {
+  const labels = new Map(rows.map((row) => [row.id, row.label]));
+  return resolveForgeRenderSetRows(rows).map((row) => ({ ...row, label: labels.get(row.id)! }));
+}
+
+/** Two rows compared as they render: the same row across revisions, or two rows of one set. */
+export function diffResolvedForgeRenderSetRows(
+  from: LabelledForgeRenderSetRow,
+  to: LabelledForgeRenderSetRow,
+): ForgeRenderSetRowDiff {
+  const settings = (row: LabelledForgeRenderSetRow) => ({
+    outputIds: row.outputIds,
+    encode: row.encode,
+    delivery: row.delivery,
+  });
+  return {
+    id: to.id,
+    label: to.label,
+    ...(from.label !== to.label ? { labelFrom: from.label } : {}),
+    ...(from.parentRowId !== to.parentRowId
+      ? { parentId: { from: from.parentRowId, to: to.parentRowId } }
+      : {}),
+    variables: valueChanges(from.variables, to.variables),
+    settings: valueChanges(settings(from), settings(to)),
+  };
+}
+
+/** Two states of one set, matched by row id. */
+export function diffForgeRenderSetRows(
+  before: ForgeRenderSetRow[],
+  after: ForgeRenderSetRow[],
+): ForgeRenderSetDiff {
+  const from = new Map(labelForgeRenderSetRows(before).map((row) => [row.id, row]));
+  const to = labelForgeRenderSetRows(after);
+  const kept = new Set(to.map((row) => row.id));
+  const brief = ({ id, label }: LabelledForgeRenderSetRow) => ({ id, label });
+  return {
+    added: to.filter((row) => !from.has(row.id)).map(brief),
+    removed: [...from.values()].filter((row) => !kept.has(row.id)).map(brief),
+    changed: to.flatMap((row) => {
+      const previous = from.get(row.id);
+      if (!previous) return [];
+      const diff = diffResolvedForgeRenderSetRows(previous, row);
+      return diff.variables.length || diff.settings.length || diff.labelFrom || diff.parentId
+        ? [diff]
+        : [];
+    }),
+  };
 }
 
 /** One axis of a cross-product: a variable, and the values to walk across it. */

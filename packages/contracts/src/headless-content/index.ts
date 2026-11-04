@@ -493,6 +493,50 @@ export const captionTreatmentSchema = z
   .strict();
 export type CaptionTreatment = z.infer<typeof captionTreatmentSchema>;
 
+/** Glass cards that float around her while one shot plays (a tour's rooms beside her, its figures
+ * counting up over the drone): drawn in front of the footage by the motion overlay, which they turn
+ * on. A photo is a pinned Library image; a still is another shot's opening frame; a stat counts up
+ * to its figure. */
+const floatingCardLabel = z.string().trim().min(1).max(24).nullable().default(null);
+export const headlessFloatingCardsSchema = z
+  .array(
+    z
+      .object({
+        shotId: z.string().min(1).max(60),
+        cards: z
+          .array(
+            z.discriminatedUnion('kind', [
+              z
+                .object({
+                  kind: z.literal('photo'),
+                  asset: headlessAssetRefSchema,
+                  label: floatingCardLabel,
+                })
+                .strict(),
+              z
+                .object({
+                  kind: z.literal('still'),
+                  shotId: z.string().min(1).max(60),
+                  label: floatingCardLabel,
+                })
+                .strict(),
+              z
+                .object({
+                  kind: z.literal('stat'),
+                  value: z.string().trim().min(1).max(12),
+                  label: z.string().trim().min(1).max(20),
+                })
+                .strict(),
+            ]),
+          )
+          .min(1)
+          .max(4),
+      })
+      .strict(),
+  )
+  .max(6);
+export type HeadlessFloatingCards = z.infer<typeof headlessFloatingCardsSchema>;
+
 export const headlessCompositionSchema = z
   .object({
     id: z.string().min(1),
@@ -525,6 +569,8 @@ export const headlessCompositionSchema = z
      * motion overlay (a transparent film Render lays under the captions) instead of burning them.
      * Optional so existing specs and their signatures stay unchanged; absent = burned. */
     motionOverlay: z.boolean().optional(),
+    /** Optional, as motionOverlay: absent on every spec made before it. */
+    floatingCards: headlessFloatingCardsSchema.optional(),
     /** A stylised packshot cutaway over the start of one shot's picture; its voice keeps playing. */
     productHero: z
       .object({

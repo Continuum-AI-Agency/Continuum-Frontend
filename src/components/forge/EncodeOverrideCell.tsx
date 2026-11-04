@@ -32,7 +32,7 @@ import {
 
 // One render's output settings, over the template's. "Template default" means this row asks for
 // nothing beyond what the template already says; anything else is pinned into the render when it
-// fires. The closed cell reads the same one-line summary the review tray shows.
+// fires. The closed cell reads the same one-line summary the render confirmation shows.
 
 export function EncodeOverrideCell({
   row,

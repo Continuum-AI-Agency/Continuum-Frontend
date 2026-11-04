@@ -543,6 +543,60 @@ export type FixtureState = {
   sets: ForgeRenderSet[];
   jobs: ApiRenderJob[];
   lastBatchPreflight: ApiRenderBatchPreflightRequest | null;
+  /**
+   * Refusals a person may render through, in the order the backend checks them: every preflight
+   * (single and batch) answers the first one whose `accept*` flag it does not carry, exactly as the
+   * backend's 422/400 body reads. Empty by default.
+   */
+  refuse: FixtureOverride[];
+};
+
+export type FixtureOverride =
+  | 'acceptMissingFonts'
+  | 'acceptLinkedLineMismatch'
+  | 'acceptOffPaletteColor';
+
+/** The backend's refusal for each override, body and all (`routes.ts` error serialisation). */
+const OVERRIDE_REFUSALS: Record<FixtureOverride, Reply> = {
+  acceptMissingFonts: {
+    status: 422,
+    body: {
+      error: 'render_fonts_missing',
+      detail: 'HeadingNow-36CompBold is not held by the render fleet.',
+    },
+  },
+  acceptLinkedLineMismatch: {
+    status: 400,
+    body: {
+      error: 'render_linked_line_count',
+      detail:
+        'Headline needs 2 lines — one for itself and one each for Headline line 2 — and has 3. Render anyway (acceptLinkedLineMismatch) to put the extra lines on the last layer and leave missing ones empty.',
+    },
+  },
+  acceptOffPaletteColor: {
+    status: 422,
+    body: {
+      error: 'render_brand_guardrail_blocked',
+      detail: 'accent: #ff00ff is outside the brand palette.',
+      guardrails: [
+        {
+          code: 'BRAND_COLOR_OUTSIDE_PALETTE',
+          severity: 'block',
+          message: '#ff00ff is outside the brand palette.',
+          variableKey: 'accent',
+        },
+      ],
+    },
+  },
+};
+
+/** The first refusal this request does not override, or null. */
+const refusalFor = (
+  state: FixtureState,
+  request: Partial<Record<FixtureOverride, boolean>>,
+): Reply | null => {
+  const flag = state.refuse.find((item) => request[item] !== true);
+  return flag ? OVERRIDE_REFUSALS[flag] : null;
 };
 
 export type RecordedRequest = {
@@ -775,6 +829,8 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
         brandId: request.brandId,
         bindingId: request.bindingId,
         name: request.name,
+        ...(request.description !== undefined ? { description: request.description } : {}),
+        ...(request.settings ? { settings: request.settings } : {}),
         templateKey: request.templateKey,
         contractHash: request.contractHash,
         revision: 1,
@@ -807,6 +863,8 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
         ...current,
         ...(request.name ? { name: request.name } : {}),
         ...(request.rows ? { rows: request.rows } : {}),
+        ...(request.description !== undefined ? { description: request.description } : {}),
+        ...(request.settings ? { settings: request.settings } : {}),
         revision: current.revision + 1,
         updatedAt: new Date().toISOString(),
       });
@@ -859,6 +917,8 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
       if (!request) return refused('preflight');
       if (fixtures.state.preflightDelayMs > 0) await wait(fixtures.state.preflightDelayMs);
       fixtures.preflightAnsweredAt.push(Date.now());
+      const refusal = refusalFor(fixtures.state, request);
+      if (refusal) return refusal;
       return ok(
         apiRenderPreflightResponseSchema.parse({
           confirmationToken: `confirm_${randomUUID()}`,
@@ -883,6 +943,8 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
         body,
       );
       if (!request) return refused('batch_preflight');
+      const refusal = refusalFor(fixtures.state, request);
+      if (refusal) return refusal;
       fixtures.state.lastBatchPreflight = request;
       const rows = request.records.length;
       return ok(
@@ -1114,7 +1176,7 @@ function brandIdsOf(query: Record<string, string>, body: unknown): string[] {
  */
 export async function installForgeFixtures(
   context: BrowserContext,
-  options: { meta?: FixtureMeta; preflightDelayMs?: number } = {},
+  options: { meta?: FixtureMeta; preflightDelayMs?: number; refuse?: FixtureOverride[] } = {},
 ): Promise<ForgeFixtures> {
   const fixtures: ForgeFixtures = {
     state: {
@@ -1137,6 +1199,7 @@ export async function installForgeFixtures(
       ],
       jobs: seededJobs(),
       lastBatchPreflight: null,
+      refuse: options.refuse ?? [],
     },
     requests: [],
     preflightAnsweredAt: [],

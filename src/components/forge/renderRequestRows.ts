@@ -66,19 +66,64 @@ export type RequestRowCheck =
       message: string;
       code?: string;
       guardrails?: ApiRenderPreflightResponse['guardrails'];
+      /** The check never got an answer (network, 5xx, rate limit): a wait, not a refusal. */
+      transient?: boolean;
     };
 
-export function isFontPreflightRefusal(
+/**
+ * The refusals a person may render through on purpose, each by the flag that does it. Everything
+ * else a preflight refuses — a stale revision, an asset that is not the brand's, a Meta target that
+ * moved — is a thing to fix, never a thing to override.
+ */
+export type RenderOverride =
+  | 'acceptMissingFonts'
+  | 'acceptLinkedLineMismatch'
+  | 'acceptOffPaletteColor';
+
+export const RENDER_OVERRIDES: Record<RenderOverride, { title: string; consequence: string }> = {
+  acceptMissingFonts: {
+    title: 'A typeface isn’t held',
+    consequence:
+      'The worker may substitute missing fonts. To choose the fonts, use the template’s Fonts check.',
+  },
+  acceptLinkedLineMismatch: {
+    title: 'A split headline has the wrong number of lines',
+    consequence:
+      'Extra lines join onto the last layer; layers with no line of their own render empty.',
+  },
+  acceptOffPaletteColor: {
+    title: 'A colour is outside the brand palette',
+    consequence: 'The colour renders as typed, outside the palette.',
+  },
+};
+
+/** Which override, if any, would let this refusal through. */
+export function overrideFor(
   code?: string,
-  findings: readonly { code: string }[] = [],
-): boolean {
-  return (
-    code === 'render_fonts_missing' ||
-    (code === 'render_brand_guardrail_blocked' &&
-      findings.length > 0 &&
-      findings.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+  findings: readonly { code: string; severity?: string }[] = [],
+): RenderOverride | null {
+  if (code === 'render_fonts_missing') return 'acceptMissingFonts';
+  if (code === 'render_linked_line_count') return 'acceptLinkedLineMismatch';
+  if (code !== 'render_brand_guardrail_blocked') return null;
+  // Only a block refuses: an `unknown` or `warn` finding beside it never vetoes the override.
+  const blocking = findings.filter(
+    (finding) => finding.severity === undefined || finding.severity === 'block',
   );
+  if (!blocking.length) return null;
+  if (blocking.every((finding) => finding.code === 'TEMPLATE_FONT_MISSING'))
+    return 'acceptMissingFonts';
+  if (blocking.every((finding) => finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'))
+    return 'acceptOffPaletteColor';
+  return null;
 }
+
+/** A guardrail finding a person may render through: what keeps it from being a hard block. */
+export const overridableFinding = (finding: { code: string }): RenderOverride | null =>
+  finding.code === 'TEMPLATE_FONT_MISSING'
+    ? 'acceptMissingFonts'
+    : finding.code === 'BRAND_COLOR_OUTSIDE_PALETTE'
+      ? 'acceptOffPaletteColor'
+      : null;
 
 export type RequestRowMedia = {
   w?: number;
@@ -498,8 +543,8 @@ export function isDefaultValue(
 /**
  * What the server would refuse, said per cell before it is asked.
  *
- * The char budget is deliberately NOT here: past it the type shrinks or overflows, it does not
- * fail, and the counter in the cell already says so. Only things that cannot render are errors.
+ * The char budget is a reference text length, not an input limit or proof of overflow.
+ * Preview checks layout. Only things that cannot render are errors.
  */
 export function validateRow(
   variables: ApiRenderVariable[],
@@ -662,9 +707,13 @@ export function autoMapHeaders(
 ): Record<string, string> {
   const importable = importableVariables(variables);
   const byName = new Map<string, string>();
+  const byFoldedName = new Map<string, string>();
+  // "Région" is the same column as "Region": accents fold away as a fallback, never over an exact name.
+  const unaccent = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '');
   const register = (name: string, target: string) => {
     const lower = name.trim().toLowerCase();
     if (!byName.has(lower)) byName.set(lower, target);
+    if (!byFoldedName.has(unaccent(lower))) byFoldedName.set(unaccent(lower), target);
   };
   for (const field of IMPORT_FIELDS) register(field.header, field.target);
   for (const variable of importable)
@@ -677,14 +726,15 @@ export function autoMapHeaders(
   const used = new Set<string>();
   const mapped = Object.fromEntries(
     headers.map((header) => {
-      const target = byName.get(header.trim().toLowerCase());
+      const lower = header.trim().toLowerCase();
+      const target = byName.get(lower) ?? byFoldedName.get(unaccent(lower));
       if (!target || used.has(target)) return [header, IMPORT_SKIP];
       used.add(target);
       return [header, target];
     }),
   );
   const tokens = (value: string) =>
-    value
+    unaccent(value)
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .toLowerCase()
       .split(/[^a-z0-9]+/)

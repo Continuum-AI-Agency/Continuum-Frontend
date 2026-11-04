@@ -108,6 +108,7 @@ import {
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import type { RenderPreflightRow } from './DeliveryTargetPicker';
 import {
   DeliveryTargetPicker,
   type MetaPickerState,
@@ -116,7 +117,6 @@ import {
   type ReplaceFormats,
   replaceTargetFor,
 } from './DeliveryTargetPicker';
-import type { RenderPreflightRow } from './RenderReviewTray';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const OUTPUTS = [

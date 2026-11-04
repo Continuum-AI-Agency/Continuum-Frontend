@@ -121,6 +121,31 @@ describe('AiDraftDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  test('names the set the rows join, and keeps the brief for the next draft', async () => {
+    const SET = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const onDrafted = mock((_response: unknown) => undefined);
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        renderSetId={SET}
+        parent={null}
+        onDrafted={onDrafted}
+      />,
+    );
+    brief('Two late-night offers');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+
+    await waitFor(() => expect(onDrafted).toHaveBeenCalledWith(ANSWER));
+    expect(suggestRows.mock.calls[0]?.[0]).toMatchObject({ renderSetId: SET });
+    expect((screen.getByLabelText(/Brief/) as HTMLTextAreaElement).value).toBe(
+      'Two late-night offers',
+    );
+  });
+
   test('a cell-specific variation keeps its selected key', async () => {
     render(
       <AiDraftDialog
@@ -609,7 +634,10 @@ describe('AiDraftDialog as the grid assistant', () => {
     expect(sent.prompt).toBe('Arma las filas');
     expect(sent.grid.selection).toEqual([PARENT]);
     expect(sent.grid.setDescription).toBe('La cuota más alta lleva caja roja.');
-    expect(sent.grid.tables[0]).toMatchObject({ headers: ['Partido', 'Mercado'], notes: ['Title'] });
+    expect(sent.grid.tables[0]).toMatchObject({
+      headers: ['Partido', 'Mercado'],
+      notes: ['Title'],
+    });
     expect(sent.grid.tables[0]?.rows).toHaveLength(2);
     expect(screen.getByText('Añadí 2 filas.')).toBeTruthy();
     expect(screen.getByText('Ganarías = 100 × la cuota en rojo')).toBeTruthy();

@@ -702,7 +702,7 @@ export function VariableEditor({
                     {textLike ? (
                       <Field className="w-28 gap-1.5">
                         <FieldLabel htmlFor={`variable-budget-${variable.key}`} className="text-xs">
-                          Max chars
+                          Reference length
                         </FieldLabel>
                         <InputGroup className="h-7 rounded-md shadow-none">
                           <InputGroupInput
@@ -717,9 +717,7 @@ export function VariableEditor({
                                   event.target.value === '' ? null : Number(event.target.value),
                               })
                             }
-                            // Not a limit After Effects enforces — it is the designer's own composed
-                            // length in the tightest comp, and the only honest budget without a render.
-                            title="The designer's own composed length in the tightest frame"
+                            title="The template's reference text length. Longer values are allowed; check their layout in the preview."
                           />
                           <InputGroupAddon align="inline-end" className="text-xs">
                             ch

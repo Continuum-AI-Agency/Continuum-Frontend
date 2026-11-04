@@ -27,7 +27,6 @@ import { ReviewStatusPill, reviewSummary, useLibraryState } from '@/components/f
 import {
   filesSummary,
   formatsNamedByJob,
-  imageFailed,
   jobTransitionName,
   RenderEnginePill,
   RenderJobDetail,
@@ -42,6 +41,7 @@ import {
 } from '@/components/forge/renderBatches';
 import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
 import { describeRenderJobFailure } from '@/components/forge/renderJobFailureCopy';
+import { imageFailed, thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,7 +125,7 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
  */
 function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  const still = output?.kind === 'image' ? (output.libraryUrl ?? output.url) : output?.posterUrl;
+  const still = output?.kind === 'image' ? thumbnailSrc(output) : output?.posterUrl;
   if (still && !broken) {
     return (
       <img
@@ -321,7 +321,7 @@ export function RenderJobsGrid({
             <ViewTransition name={jobTransitionName(job.id)}>
               {/* Keyed by the link it draws: a re-signed or newly made still gets a fresh try. */}
               <Thumbnail
-                key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+                key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
                 output={first}
               />
             </ViewTransition>
@@ -522,7 +522,7 @@ export function RenderJobsGrid({
           const first = firstFileOf(batch.preview);
           return (
             <Thumbnail
-              key={first?.posterUrl ?? first?.libraryUrl ?? first?.url ?? 'none'}
+              key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
               output={first}
             />
           );

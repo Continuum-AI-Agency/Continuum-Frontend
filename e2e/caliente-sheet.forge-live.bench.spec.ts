@@ -14,7 +14,7 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //
 // Per card: pick the template → Import → choose the .xlsx → (week 1) the AI mapping lands, or
 // (week 2) last week's mapping applies → Import 9 rows (they land selected) → the AI button makes
-// one edit → ⌘Z takes it back, ⇧⌘Z puts it back → Render opens the review tray. Every click is
+// one edit → ⌘Z takes it back, ⇧⌘Z puts it back → Render opens the confirmation. Every click is
 // counted and every step timed; the run fails on a wrong value, never on a slow one, and writes
 // what it measured to FORGE_CALIENTE_OUT. Run week 1 then week 2:
 //   FORGE_CALIENTE_WEEK=1 FORGE_CALIENTE_API_URL=http://127.0.0.1:4811 bun run forge:caliente:ui:bench
@@ -412,7 +412,9 @@ for (const spec of CARDS) {
 
     // Render opens the review with the nine imported rows — once each has passed its dry-run.
     mark = Date.now();
-    const renderButton = page.getByRole('button', { name: /^Render 9 rows/ }).first();
+    const renderButton = page
+      .getByRole('toolbar', { name: 'Render' })
+      .getByRole('button', { name: /^Render 9 rows/ });
     await expect(renderButton)
       .toBeEnabled({ timeout: 180_000 })
       .catch(async (error: unknown) => {
@@ -426,15 +428,11 @@ for (const spec of CARDS) {
       });
     steps.rowsReadyMs = Date.now() - mark;
     await click(renderButton);
-    await expect(
-      page
-        .getByRole('region', { name: 'Review and render' })
-        .or(page.getByLabel('Review and render')),
-    ).toBeVisible({
-      timeout: 30_000,
-    });
+    // The render's one confirmation (the old review tray); the metric keeps its historical name.
+    const confirm = page.getByRole('dialog', { name: /^Render 9 rows · / });
+    await expect(confirm).toBeVisible({ timeout: 30_000 });
     steps.renderClickToTrayMs = Date.now() - mark;
-    await page.getByRole('button', { name: 'Close review' }).click();
+    await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
 
     const cards = measured.cards as Record<string, unknown>;
     cards[spec.card] = {

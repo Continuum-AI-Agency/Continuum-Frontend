@@ -10,8 +10,8 @@ import {
   waitingCount,
 } from '@/components/forge/PendingApprovals';
 import { templateListQuery } from '@/components/forge/queryKeys';
-import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import type { ForgeRenderIntent, ForgeTemplateIntent } from '@/components/forge/RenderRequestsGrid';
+import { confirmForgeExit } from '@/components/forge/useForgeExitGuard';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -36,7 +36,16 @@ type ForgeTab = 'templates' | 'render' | 'renders';
 // row (a long file name, a wide grid) widens the whole page instead of scrolling inside its panel.
 const PANEL = 'min-h-0 min-w-0 overflow-y-auto overscroll-contain pt-2';
 
-export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
+export function ForgeTabs({
+  brandId,
+  brandName,
+  metaWritesAllowed,
+}: {
+  brandId: string;
+  brandName?: string;
+  /** The brand's arming switch for real Meta writes, read by the page beside its control. */
+  metaWritesAllowed?: boolean;
+}) {
   const [tab, setTab] = useState<ForgeTab>('templates');
   const [visited, setVisited] = useState<ReadonlySet<ForgeTab>>(() => new Set(['templates']));
   // The Render picker's list is the slowest read on the page; start it now, not on first visit.
@@ -78,9 +87,9 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
       ? approvalQuery.isError
         ? 'unavailable'
         : 'checking'
-        : approvalQuery.isError
-          ? 'stale'
-          : null;
+      : approvalQuery.isError
+        ? 'stale'
+        : null;
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -143,6 +152,7 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
           <RenderRequestsGrid
             key={brandId}
             brandId={brandId}
+            metaWritesAllowed={metaWritesAllowed}
             active={tab === 'render'}
             intent={renderIntent}
             onIntentConsumed={() => setRenderIntent(undefined)}

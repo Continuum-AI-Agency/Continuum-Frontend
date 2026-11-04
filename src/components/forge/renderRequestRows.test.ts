@@ -28,6 +28,7 @@ import {
   mergeSetRows,
   missingInputs,
   moveRow,
+  overrideFor,
   ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
@@ -436,6 +437,24 @@ describe('CSV', () => {
     expect(errors).toEqual([]);
     expect(rows[0]?.values).toEqual({ cta: 'Buy' });
     expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
+  });
+
+  test('auto-maps accented spreadsheet headers to unaccented template variables', () => {
+    const title = variable({ key: 'title', label: 'Titre' });
+    const region = variable({ key: 'region', label: 'Region' });
+    expect(autoMapHeaders(['Titré', 'Région'], [title, region])).toEqual({
+      Titré: 'title',
+      Région: 'region',
+    });
+  });
+
+  test('an accent-folded label cannot take another variable exact header', () => {
+    const accented = variable({ key: 'accented', label: 'Région' });
+    const plain = variable({ key: 'plain', label: 'Region' });
+    expect(autoMapHeaders(['Region', 'Région'], [accented, plain])).toEqual({
+      Region: 'plain',
+      Région: 'accented',
+    });
   });
 
   test('a media link column maps by detected type when it has one matching slot', () => {
@@ -1228,5 +1247,31 @@ describe('applyAssistOps', () => {
     );
     expect(after.map((row) => row.id)).toEqual([A]);
     expect(selected).toEqual([A]);
+  });
+});
+
+describe('font override reachability', () => {
+  test('nonblocking findings do not conceal font consent', () => {
+    expect(overrideFor('render_fonts_missing')).toBe('acceptMissingFonts');
+    expect(
+      overrideFor('render_brand_guardrail_blocked', [
+        { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
+        { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+        { code: 'BRAND_COLOR_OUTSIDE_PALETTE', severity: 'warn' },
+      ]),
+    ).toBe('acceptMissingFonts');
+  });
+  test('another blocking finding must be corrected', () => {
+    expect(
+      overrideFor('render_brand_guardrail_blocked', [
+        { code: 'TEMPLATE_FONT_MISSING', severity: 'block' },
+        { code: 'ASSET_UNREADABLE', severity: 'block' },
+      ]),
+    ).toBeNull();
+    expect(
+      overrideFor('render_brand_guardrail_blocked', [
+        { code: 'BRAND_PALETTE_UNKNOWN', severity: 'unknown' },
+      ]),
+    ).toBeNull();
   });
 });

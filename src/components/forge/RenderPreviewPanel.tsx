@@ -26,10 +26,10 @@ import {
   previewFormats,
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { fullSrc, OutputFile } from '@/components/forge/renderOutputMedia';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
 import { WebComponentPreview } from '@/components/forge/WebComponentPreview';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Video } from '@/components/ui/video';
 import { useDebounce } from '@/hooks/useDebounce';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -131,13 +131,11 @@ function fitText(
   const floor = variable.sample
     ? fitSize(variable.sample, width, height) * SAMPLE_FLOOR_RATIO
     : FLOOR_PX;
-  const overBudget = variable.charBudget !== null && text.length > variable.charBudget;
   const tooSmall = size < floor;
-  const overflow = overBudget
-    ? `${nameOf(variable)} overflows its box (${text.length}/${variable.charBudget} characters)`
-    : tooSmall
-      ? `${nameOf(variable)} overflows its box (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
-      : null;
+  // A warning, never a block: the render still runs, the type shrinks or the text clips.
+  const overflow = tooSmall
+    ? `Will render · ${nameOf(variable)} may shrink or clip (fits only at ${Math.floor(size)} px type, below ${Math.round(floor)} px)`
+    : null;
   // Drawn at the floor when it cannot shrink that far, so the spill is visible, not hidden.
   const drawSize = tooSmall ? floor : size;
   return {
@@ -805,18 +803,7 @@ function TemplatePreviewPanel({
     at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
     basedOn: backdrop.job.label ?? backdrop.job.templateName,
     notes: ['same values'],
-    node:
-      backdrop.file.kind === 'video' ? (
-        <Video
-          src={backdrop.file.url}
-          ariaLabel="Render"
-          className="aspect-auto! size-full rounded-none border-0"
-          videoClassName="object-contain"
-        />
-      ) : (
-        // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-        <img alt="Render" src={backdrop.file.url} className="size-full object-contain" />
-      ),
+    node: <OutputFile key={fullSrc(backdrop.file)} output={backdrop.file} alt="Render" />,
   });
 
   /** What the picked format shows, and what it cannot show, in words. */
@@ -899,7 +886,9 @@ function TemplatePreviewPanel({
         return {
           frame,
           warning:
-            livePaint.overflows.map((label) => `${label} overflows its box`).join(' · ') || null,
+            livePaint.overflows
+              .map((label) => `Will render · ${label} may shrink or clip`)
+              .join(' · ') || null,
         };
       }
       frame = drawing
@@ -920,18 +909,7 @@ function TemplatePreviewPanel({
         badge: `${lastJob.test === false ? 'Final render' : 'Previous render'}${stale ? ' · before latest edits' : ''}`,
         at: lastJob.finishedAt ?? lastJob.updatedAt,
         stale,
-        node:
-          own.kind === 'video' ? (
-            <Video
-              src={own.url}
-              ariaLabel="Last render"
-              className="aspect-auto! size-full rounded-none border-0"
-              videoClassName="object-contain"
-            />
-          ) : (
-            // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-            <img alt="Last render" src={own.url} className="size-full object-contain" />
-          ),
+        node: <OutputFile key={fullSrc(own)} output={own} alt="Last render" />,
         caption: own.fileName,
         ...(stale && ownBackdrop && preview ? { preview } : {}),
       };
@@ -969,7 +947,7 @@ function TemplatePreviewPanel({
         : []),
       ...(data
         ? [
-            ...data.overflows.map((label) => `${label} overflows its box`),
+            ...data.overflows.map((label) => `Will render · ${label} may shrink or clip`),
             ...(data.notPreviewed.length ? [`Not previewed: ${data.notPreviewed.join(', ')}`] : []),
           ]
         : (drawing?.overflows ?? [])),

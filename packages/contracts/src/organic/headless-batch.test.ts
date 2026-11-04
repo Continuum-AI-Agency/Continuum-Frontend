@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-
-import { organicStreamFrameSchema } from '../streaming/organic';
 import { bulkPlacementSpecSchema } from '../streaming/bulk';
+import { organicStreamFrameSchema } from '../streaming/organic';
 import {
   HEADLESS_BATCH_MAX_ITEMS,
   headlessBatchCreateInputSchema,
@@ -73,6 +72,21 @@ describe('quoteHeadlessBatch', () => {
     expect(quote.refusal).toContain('$16.00 of character packs ($2.00 each, up to 8)');
   });
 
+  it('a tour reel holds the long cap; a short concept and a still set keep theirs', () => {
+    const quote = quoteHeadlessBatch(
+      [
+        { format: 'reel', blocks: { concept: 'tour' } },
+        { format: 'reel', blocks: { concept: 'offer-direct' } },
+        { format: 'still_set', blocks: { concept: 'tour' } },
+      ],
+      { maxUsd: 20, castApprovalNeeded: false, windowRemainingUsd: 150 },
+    );
+    expect(quote).toMatchObject({ reels: 2, capUsd: 32, expectedUsd: 11.53 });
+    expect(quote.refusal).toContain(
+      '1 reel at up to $9.00, 1 long reel at up to $18.00 and 1 still set',
+    );
+  });
+
   it('an unread window (null) refuses only on maxUsd', () => {
     expect(
       quoteHeadlessBatch(pieces(20, 30), { castApprovalNeeded: false, windowRemainingUsd: null })
@@ -91,7 +105,8 @@ describe('the create input', () => {
       }).success,
     ).toBe(false);
     expect(
-      headlessBatchCreateInputSchema.safeParse({ items: [{ ...item, request_json: '{}' }] }).success,
+      headlessBatchCreateInputSchema.safeParse({ items: [{ ...item, request_json: '{}' }] })
+        .success,
     ).toBe(false);
     // A named draft keeps its own copy: a caption is for a new placeholder only.
     expect(
@@ -144,9 +159,9 @@ describe('the ui.headless_batch frame', () => {
   };
 
   it('is a member of the organic stream union and is persisted keyed by batch', () => {
-    expect(organicStreamFrameSchema.safeParse({ type: 'ui.headless_batch', data: status }).success).toBe(
-      true,
-    );
+    expect(
+      organicStreamFrameSchema.safeParse({ type: 'ui.headless_batch', data: status }).success,
+    ).toBe(true);
     expect(persistedCardKey('ui.headless_batch', status)).toBe(`headless_batch:${BATCH}`);
   });
 

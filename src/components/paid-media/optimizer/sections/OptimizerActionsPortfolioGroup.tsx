@@ -63,6 +63,7 @@ import { attributeTransfers, type TransferAttribution } from '../charts/chartDat
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
+import { platformName } from '../entityNoun';
 import { figureProps, formatCurrency } from '../format';
 import { itemWritable, proposalsOnlyNote } from '../platformWrites';
 import {
@@ -164,6 +165,9 @@ export type RecQueueRow = {
   rec: RecommendationRow;
   /** rec.status === 'approved' — a pause awaiting "Pause N ad sets". */
   approved: boolean;
+  /** Why this proposal cannot be approved here. Shown in place of Approve; absent while it
+   *  still stands. */
+  blocked?: string | null;
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
@@ -257,6 +261,7 @@ export function isSelectableRow(row: QueueRow): boolean {
   // ad set, so it never joins a batch approval.
   if (row.route === 'settings') return false;
   if (row.route === 'budget') return !row.approved;
+  if (row.blocked) return false;
   // An audience recommendation is decided on its card (create the new ad set), never in a
   // batch approval that would only open a renewal task.
   if (isAudienceRecommendation(row.rec)) return false;
@@ -274,6 +279,8 @@ export function buildActionQueue(
   /** Whether a budget move's platform may be written here (platformWrites.ts): a move nobody
    *  may write stays a proposal on the chart and never becomes an Approve row. */
   writable: (item: CycleItemRow) => boolean = () => true,
+  /** Why a recommendation cannot be approved here, or null while it stands. */
+  blockedNote: (rec: RecommendationRow) => string | null = () => null,
 ): QueueRow[] {
   if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
@@ -315,6 +322,7 @@ export function buildActionQueue(
       name: resolveAdsetName(rec, nameById),
       rec,
       approved: rec.status === 'approved',
+      blocked: rec.status === 'pending' ? blockedNote(rec) : null,
     });
   }
 
@@ -345,6 +353,22 @@ export function buildActionQueue(
   return rows.sort(
     (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
   );
+}
+
+/**
+ * Why a pause proposal cannot be approved here. Approve on a pause drains into the Meta ad-set
+ * writer, and the engine's pause rules also fire on Google and TikTok entities: a portfolio
+ * with no Meta side cannot pause from here. Stopgap until the engine skips the P-family off
+ * Meta (G8 deep test, F2).
+ */
+export function pauseBlockedNote(
+  rec: Pick<RecommendationRow, 'kind'>,
+  portfolio: Pick<PortfolioListItem, 'platforms'>,
+): string | null {
+  if (actionRoute(rec.kind) !== 'pause') return null;
+  const platforms = portfolio.platforms ?? [];
+  if (platforms.length === 0 || platforms.includes('meta')) return null;
+  return `Not available here: the Optimizer pauses only Meta ad sets. Pause this campaign in ${platformName({ platform: platforms[0], level: null })} if you agree.`;
 }
 
 /** A cross-platform move waiting on a person (pending) or on its write (approved). */
@@ -686,6 +710,7 @@ export function OptimizerActionsPortfolioGroup({
         nameById,
         carriedRecs,
         (item) => itemWritable(portfolio, item),
+        (rec) => pauseBlockedNote(rec, portfolio),
       ),
     [report, moves.current, nameById, carriedRecs, queueRecs, portfolio],
   );
@@ -2058,6 +2083,14 @@ function QueueRowView({
               >
                 Dismiss
               </Button>
+            ) : null}
+            {row.route !== 'budget' && row.blocked ? (
+              <span
+                className="max-w-56 text-muted-foreground text-xs"
+                data-testid="queue-row-blocked"
+              >
+                {row.blocked}
+              </span>
             ) : null}
             {selectable ? (
               <Button

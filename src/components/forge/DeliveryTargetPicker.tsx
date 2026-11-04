@@ -1,14 +1,22 @@
 'use client';
 
-import type {
-  ApiRenderDeliveryDestinationsResponse,
-  ApiRenderDeliveryTarget,
-  PaidCanvasTarget,
+import {
+  type ApiRenderDeliveryDestinationsResponse,
+  type ApiRenderDeliveryTarget,
+  type ApiRenderTemplateContract,
+  outputFormatsOfParse,
+  type PaidCanvasTarget,
 } from '@continuum/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ClipboardPaste, Loader2, Plus, X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import type { RenderPreflightRow } from '@/components/forge/RenderReviewTray';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  describeSlackFailure,
+  isSlackDeliveryUnavailable,
+  type SlackPickerState,
+} from '@/components/forge/SlackDestinationPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +28,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { fetchTemplateSources } from '@/lib/library/templateSources';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
 
 // Which Meta ad each row's render replaces, or which ad set gets it as a new paused ad, if any.
@@ -34,6 +44,23 @@ import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
 // but it is bound to the canvas store.
 
 export type MetaPickerState = 'loading' | 'unknown' | ApiRenderDeliveryDestinationsResponse['meta'];
+
+/** One row as delivery sees it: its name, the formats it renders, and its own Meta target. */
+export type RenderPreflightRow = {
+  rowId: string;
+  label: string;
+  labelPath: string[];
+  outputIds: string[];
+  delivery?: ApiRenderDeliveryTarget;
+};
+
+/** `Campaign › Ad set`, from the names a target carries. */
+export const adSetName = (target: {
+  campaignId: string;
+  campaignName?: string;
+  adsetId: string;
+  adsetName?: string;
+}) => `${target.campaignName ?? target.campaignId} › ${target.adsetName ?? target.adsetId}`;
 
 /**
  * The formats a replace can swap in, by the id preflight takes as the one `outputId`: the
@@ -182,53 +209,85 @@ export async function findAds(
   return { adAccountId: answeredAccount, ads };
 }
 
-const describePaidFailure = (error: unknown) => {
-  const message = error instanceof Error ? error.message : '';
-  if (message.includes('meta_ad_account_not_found'))
-    return 'No ad account is connected to this brand.';
-  if (message.includes('ad_account_not_assigned_to_brand'))
-    return 'That ad account is not linked to this brand.';
-  return message || 'Meta did not answer. Try again.';
-};
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'ACTIVE') return <Badge variant="success">Active</Badge>;
-  if (status === 'PAUSED') return <Badge variant="muted">Paused</Badge>;
-  return <Badge variant="outline">{status.toLowerCase()}</Badge>;
+/**
+ * Where this brand's renders can go — Slack rooms and Meta ad accounts — read once and shared by
+ * the grid's Destination cells, the set's settings and the render confirmation.
+ */
+export function useDeliveryDestinations(brandId: string): {
+  slack: SlackPickerState;
+  meta: MetaPickerState;
+} {
+  const query = useQuery({
+    queryKey: forgeQueryKeys.deliveryDestinations(brandId),
+    queryFn: () => apiRendersApi.listDeliveryDestinations(brandId),
+    staleTime: FORGE_STALE_MS.active,
+    retry: false,
+  });
+  if (query.isPending) return { slack: 'loading', meta: 'loading' };
+  if (query.isError)
+    return {
+      slack: isSlackDeliveryUnavailable(query.error)
+        ? 'unavailable'
+        : { error: describeSlackFailure(query.error) },
+      meta: 'unknown',
+    };
+  return { slack: query.data.slack, meta: query.data.meta };
 }
 
-export function DeliveryTargetPicker({
+/**
+ * The formats a replacing row picks its one file from: the contract's outputs, or — for a template
+ * that authors none (133) — the named comps its parse delivers, which preflight takes as the one
+ * `outputId`.
+ */
+export function useReplaceFormats(
+  brandId: string,
+  templateKey: string,
+  contract: Pick<ApiRenderTemplateContract, 'outputs'> | null,
+): Array<{ id: string; label: string; ratio: string | null }> {
+  const outputs = contract?.outputs;
+  const parse = useQuery({
+    queryKey: forgeQueryKeys.templateSources(brandId),
+    queryFn: () => fetchTemplateSources(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+    enabled: contract !== null && !outputs?.length,
+  }).data?.find((source) => source.templateKey === templateKey)?.parse;
+  // One array per answer, not per render: the confirmation re-checks when what it signs changes.
+  return useMemo(
+    () =>
+      outputs?.length
+        ? outputs
+        : outputFormatsOfParse(parse).map((format) => ({
+            id: format.id,
+            label: format.ratio ? `${format.ratio} · ${format.id}` : format.id,
+            ratio: format.ratio,
+          })),
+    [outputs, parse],
+  );
+}
+
+/**
+ * Spreadsheet targets carry an ad id and nothing else. Looks them up once per id and writes the
+ * full target onto the row; a miss stays as an error, keyed `rowId:adId`, until the person picks
+ * another ad or removes the target.
+ */
+export function useResolveAdTargets({
   brandId,
-  meta,
   rows,
-  outputs,
-  formatByRow,
+  enabled,
+  adAccountId,
   onDeliveryChange,
-  onFormatChange,
 }: {
   brandId: string;
-  meta: MetaPickerState;
   rows: RenderPreflightRow[];
-  outputs: ReplaceFormats;
-  formatByRow: Record<string, string>;
+  enabled: boolean;
+  adAccountId: string | undefined;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
-  onFormatChange: (rowId: string, outputId: string) => void;
-}) {
-  const connected = meta !== 'loading' && (meta === 'unknown' || meta.connected);
-  const known = meta !== 'loading' && meta !== 'unknown' ? meta : null;
-  // Where ads are looked for. Rows keep the account their own target names; this is only the
-  // account the next pick searches.
-  const [pickedAccount, setPickedAccount] = useState<string | null>(null);
-  const adAccountId = pickedAccount ?? known?.adAccountId ?? undefined;
-  const accounts = known?.adAccounts ?? [];
+}): { resolving: boolean; resolveErrors: Record<string, string> } {
   const [resolveErrors, setResolveErrors] = useState<Record<string, string>>({});
   const [resolving, setResolving] = useState(false);
   // The caller hands a fresh arrow every render; the lookup must not restart on each one.
   const deliveryChange = useRef(onDeliveryChange);
   deliveryChange.current = onDeliveryChange;
-
-  // Spreadsheet targets carry an ad id and nothing else. Look them up once per id; a miss stays
-  // on the row as an inline error until the person picks another ad or removes the target.
   const pendingKey = JSON.stringify(
     rows.flatMap((row) =>
       row.delivery?.action === 'replace' &&
@@ -240,7 +299,7 @@ export function DeliveryTargetPicker({
   );
   useEffect(() => {
     const pending = JSON.parse(pendingKey) as [string, string][];
-    if (!connected || !pending.length) return;
+    if (!enabled || !pending.length) return;
     let cancelled = false;
     setResolving(true);
     findAds(
@@ -274,7 +333,94 @@ export function DeliveryTargetPicker({
     return () => {
       cancelled = true;
     };
-  }, [brandId, connected, pendingKey, adAccountId]);
+  }, [brandId, enabled, pendingKey, adAccountId]);
+  return { resolving, resolveErrors };
+}
+
+/** Which of the brand's linked ad accounts a pick searches, when it has more than one. */
+export function AdAccountSelect({
+  meta,
+  value,
+  onChange,
+}: {
+  meta: MetaPickerState;
+  value: string | undefined;
+  onChange: (adAccountId: string) => void;
+}) {
+  const accounts = (meta !== 'loading' && meta !== 'unknown' ? meta.adAccounts : null) ?? [];
+  if (accounts.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-muted-foreground">Ad account</span>
+      <Select value={value} onValueChange={(next) => next && onChange(next)}>
+        <SelectTrigger aria-label="Ad account" size="sm" className="w-auto text-xs">
+          <SelectValue
+            items={Object.fromEntries(
+              accounts.map((account) => [account.id, account.name ?? account.id]),
+            )}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {accounts.map((account) => (
+            <SelectItem key={account.id} value={account.id}>
+              {account.name ?? account.id}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+const describePaidFailure = (error: unknown) => {
+  const message = error instanceof Error ? error.message : '';
+  if (message.includes('meta_ad_account_not_found'))
+    return 'No ad account is connected to this brand.';
+  if (message.includes('ad_account_not_assigned_to_brand'))
+    return 'That ad account is not linked to this brand.';
+  return message || 'Meta did not answer. Try again.';
+};
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'ACTIVE') return <Badge variant="success">Active</Badge>;
+  if (status === 'PAUSED') return <Badge variant="muted">Paused</Badge>;
+  return <Badge variant="outline">{status.toLowerCase()}</Badge>;
+}
+
+export function DeliveryTargetPicker({
+  brandId,
+  meta,
+  rows,
+  outputs,
+  formatByRow = {},
+  fallback = 'Library only',
+  onDeliveryChange,
+  onFormatChange,
+}: {
+  brandId: string;
+  meta: MetaPickerState;
+  rows: RenderPreflightRow[];
+  outputs: ReplaceFormats;
+  formatByRow?: Record<string, string>;
+  /** What a row with no target of its own does: Library only, or the set's default ad set. */
+  fallback?: string;
+  onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
+  onFormatChange: (rowId: string, outputId: string) => void;
+}) {
+  const connected = meta !== 'loading' && (meta === 'unknown' || meta.connected);
+  const known = meta !== 'loading' && meta !== 'unknown' ? meta : null;
+  // Where ads are looked for. Rows keep the account their own target names; this is only the
+  // account the next pick searches.
+  const [pickedAccount, setPickedAccount] = useState<string | null>(null);
+  const adAccountId = pickedAccount ?? known?.adAccountId ?? undefined;
+  const accounts = known?.adAccounts ?? [];
+  const { resolving, resolveErrors } = useResolveAdTargets({
+    brandId,
+    rows,
+    enabled: connected,
+    adAccountId,
+    onDeliveryChange,
+  });
 
   if (meta === 'loading') {
     return <p className="text-xs text-muted-foreground">Checking for an ad account…</p>;
@@ -319,27 +465,7 @@ export function DeliveryTargetPicker({
   const formatLabel = (id: string) => outputs.find((output) => output.id === id)?.label ?? id;
   return (
     <div className="space-y-2">
-      {accounts.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Ad account</span>
-          <Select value={adAccountId} onValueChange={(next) => setPickedAccount(next)}>
-            <SelectTrigger aria-label="Ad account" size="sm" className="w-auto text-xs">
-              <SelectValue
-                items={Object.fromEntries(
-                  accounts.map((account) => [account.id, account.name ?? account.id]),
-                )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
-                  {account.name ?? account.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
+      <AdAccountSelect meta={meta} value={adAccountId} onChange={setPickedAccount} />
       <p className="text-xs text-muted-foreground">
         {accounts.length <= 1 && known && (known.adAccountName || known.adAccountId)
           ? `Ad account: ${known.adAccountName ?? known.adAccountId}. `
@@ -357,6 +483,7 @@ export function DeliveryTargetPicker({
             format={replaceOutputId(row, outputs, formatByRow)}
             formatLabel={formatLabel}
             resolving={resolving}
+            fallback={fallback}
             resolveError={
               row.delivery?.action === 'replace'
                 ? resolveErrors[`${row.rowId}:${row.delivery.adId}`]
@@ -385,6 +512,7 @@ function MetaRow({
   format,
   formatLabel,
   resolving,
+  fallback,
   resolveError,
   onDeliveryChange,
   onFormatChange,
@@ -396,6 +524,7 @@ function MetaRow({
   format: string | null;
   formatLabel: (id: string) => string;
   resolving: boolean;
+  fallback: string;
   resolveError: string | undefined;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onFormatChange: (rowId: string, outputId: string) => void;
@@ -439,7 +568,7 @@ function MetaRow({
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1">
           {!delivery ? (
-            <span className="text-muted-foreground">Library only</span>
+            <span className="text-muted-foreground">{fallback}</span>
           ) : delivery.action === 'create' ? (
             <span>
               New paused ad in {delivery.campaignName ?? delivery.campaignId} ›{' '}
@@ -480,6 +609,7 @@ function MetaRow({
             size="xs"
             variant="ghost"
             aria-label={`Remove the ad target for ${name}`}
+            title={`Back to: ${fallback}`}
             onClick={() => onDeliveryChange(row.rowId, null)}
           >
             <X aria-hidden />
@@ -505,14 +635,17 @@ function MetaRow({
 
 type Crumb = { id: string; name: string };
 
-function AdDrillDown({
+export function AdDrillDown({
   brandId,
   adAccountId,
+  createOnly = false,
   onPick,
   onCancel,
 }: {
   brandId: string;
   adAccountId: string | undefined;
+  /** Campaign → ad set, and picking the ad set means "new paused ads here": no ad to replace. */
+  createOnly?: boolean;
   onPick: (target: ApiRenderDeliveryTarget) => void;
   onCancel: () => void;
 }) {
@@ -581,7 +714,19 @@ function AdDrillDown({
   const pick = (item: PaidCanvasTarget) => {
     setQuery('');
     if (item.level === 'campaign') return setCampaign({ id: item.id, name: item.name || item.id });
-    if (item.level === 'adset') return setAdset({ id: item.id, name: item.name || item.id });
+    if (item.level === 'adset') {
+      if (createOnly && page && campaign)
+        return onPick({
+          action: 'create',
+          adAccountId: page.adAccountId,
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          adsetId: item.id,
+          adsetName: item.name || item.id,
+          adStatus: 'PAUSED',
+        });
+      return setAdset({ id: item.id, name: item.name || item.id });
+    }
     if (!page || !campaign || !adset) return;
     const target = replaceTargetFor(page.adAccountId, {
       ...item,
@@ -689,7 +834,7 @@ function AdDrillDown({
   );
 }
 
-function PasteAdIds({
+export function PasteAdIds({
   brandId,
   adAccountId,
   rows,

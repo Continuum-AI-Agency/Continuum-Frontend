@@ -20,6 +20,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { chromium, type Locator, type Page } from 'playwright';
 import { mintSessionBundleForEmail } from './support/auth';
@@ -279,6 +280,7 @@ async function run() {
       .getByRole('button', { name: /^Open / })
       .first()
       .waitFor({ timeout: 120_000 });
+    await page.waitForLoadState('networkidle', { timeout: 120_000 });
 
     // 1. Header sort.
     const header = (name: string) =>
@@ -371,11 +373,10 @@ async function run() {
       .filter({
         has: page.getByRole('button', { name: /^Show \d+ variants? of / }),
       });
-    // "Bench · AEP ready render" is a registered After Effects template with three outputs, each an
-    // AE comp. StarCraft Promo and the older bench uploads carry no file checksum, so the registry
-    // never took them in and Edit layers has no revision to open — the editor says so.
+    // Choose a registered source whose checksum still matches its pinned file.
+    const editTemplate = process.env.FORGE_GALLERY_EDIT_TEMPLATE ?? 'Bench · AEP ready render';
     const promo = expandable.filter({
-      has: page.getByRole('button', { name: 'Open Bench · AEP ready render', exact: true }),
+      has: page.getByRole('button', { name: `Open ${editTemplate}`, exact: true }),
     });
     const aeRow = (
       (await promo.count()) ? promo : expandable.filter({ hasText: 'After Effects' })
@@ -429,14 +430,11 @@ async function run() {
       );
       // An output's Edit lands on that composition; a build or named variant has its own source.
       const composition = page.getByRole('combobox', { name: 'Composition' });
+      const compositionName = composition.locator('span.truncate').first();
+      if (isOutput) await expect(compositionName).toHaveText(subName, { timeout: 120_000 });
       const landed = await composition
         .waitFor({ timeout: 120_000 })
-        .then(() =>
-          composition.evaluate((node) => {
-            const select = node as HTMLSelectElement;
-            return select.selectedOptions[0]?.textContent?.trim() ?? '';
-          }),
-        )
+        .then(async () => (await compositionName.textContent())?.trim() ?? '')
         .catch(() => null);
       if (isOutput)
         check(
@@ -482,7 +480,14 @@ async function run() {
       headings.join(' · '),
     );
     const search = page.getByRole('combobox', { name: 'Search templates' });
-    const word = found?.title.split(/\s+/)[0] ?? 'bench';
+    const available = await options.evaluateAll((nodes) =>
+      nodes.map((node) => node.querySelector('span.truncate')?.textContent ?? ''),
+    );
+    const word = available.flatMap((text) => text.trim().split(/\s+/)).find((candidate) => {
+      const matches = available.filter((text) => text.toLowerCase().includes(candidate.toLowerCase()));
+      return matches.length > 0 && matches.length < total;
+    });
+    if (!word) throw new Error('The render picker has no distinct template name to search');
     await search.fill(word);
     const narrowed = await options.allTextContents();
     check(

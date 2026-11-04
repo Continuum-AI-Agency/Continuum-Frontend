@@ -91,6 +91,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
 import { useJainaChat } from '@/hooks/useJainaChat';
+import { useBrandSkills } from '@/lib/organic/skills';
 import {
   isTerminalRunStatus,
   type JainaRunStatusRow,
@@ -765,6 +766,8 @@ export function JainaChatSurface({
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
   const { integrations } = useBrandIntegrations(brandProfileId);
+  // The `/` menu the organic agent shows: Jaina passes typed shortcuts to its headless tools.
+  const { all: slashSkills } = useBrandSkills(brandProfileId);
   const { processAIAction } = useCampaignAI();
   const loadCampaignPerformance = usePaidMediaPerformanceStore(
     (store) => store.loadCampaignPerformance,
@@ -3177,6 +3180,7 @@ export function JainaChatSurface({
                       ariaLabel="Message Jaina"
                       mentionProvider={jainaMentionProvider}
                       mentionSource="jaina"
+                      slashSkills={slashSkills}
                       queuedText={initialPrompt}
                       queuedTextMode="replace"
                       onQueuedTextConsumed={onInitialPromptConsumed}
