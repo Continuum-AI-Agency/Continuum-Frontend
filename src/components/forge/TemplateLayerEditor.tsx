@@ -72,7 +72,8 @@ import {
   updateLayerHistory,
 } from '@/components/forge/layerHistory';
 import type { PreviewEdits } from '@/components/forge/layerPreviewSvg';
-import { forgeQueryKeys } from '@/components/forge/queryKeys';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { TemplateDownloadButtons, type TemplateOriginalFile } from '@/components/forge/TemplateDownloadButtons';
 import {
   TemplateAuthoringPreparationPanel,
   templatePreparationSummary,
@@ -141,6 +142,7 @@ import {
   fetchTemplateRevisionVariants,
   fetchExactTemplateRevision,
   fetchTemplateVariables,
+  fetchTemplateVariants,
   previewTemplateRevision,
   putTemplateAuthoringDraft,
 } from '@/lib/library/templateSources';
@@ -362,6 +364,28 @@ export function TemplateLayerEditor({
   const originalRevision = originalVariant?.revisions.find(
     (revision) => revision.id === originalVariant.draftHeadRevisionId,
   );
+  // The upload itself, as the Library stores it (a design import's PSD/AI, not its generated AEP);
+  // the golden revision's source is the fallback until the brand's variant catalog loads.
+  const variantCatalog = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    enabled: active,
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const catalogEntry = variantCatalog.data?.find((variant) => variant.assetId === assetId);
+  const originalFile: TemplateOriginalFile | null = catalogEntry
+    ? {
+        assetId: catalogEntry.originalAssetId,
+        versionId: catalogEntry.originalVersionId,
+        fileName: catalogEntry.originalFileName,
+      }
+    : originalRevision
+      ? {
+          assetId: originalRevision.sourceAssetId,
+          versionId: originalRevision.sourceVersionId,
+          fileName: originalRevision.source.parse?.filename ?? originalVariant?.name ?? name,
+        }
+      : null;
   const variantChoices = (revisionCatalog.data ?? [])
     .filter((item) => !item.original)
     .flatMap((item) => {
@@ -2448,6 +2472,13 @@ export function TemplateLayerEditor({
                 Retry draft save
               </Button>
             ) : null}
+            <TemplateDownloadButtons
+              brandId={brandId}
+              templateName={name}
+              original={originalFile}
+              edited={authoringLifecycle.artifact}
+              hasEdits={authoringCommands.length > 0}
+            />
             <Button
               size="sm"
               variant={agentOpen ? 'secondary' : 'ghost'}
