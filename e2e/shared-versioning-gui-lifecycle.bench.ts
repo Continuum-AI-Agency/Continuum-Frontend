@@ -160,7 +160,7 @@ async function inspect(family: Family, target: Page, actor: Actor, revisionId: s
 }
 async function aeLayers(target: Page, revisionId: string, readOnly = false) {
   const tab = target.getByRole('tab', { name: 'Edit layers', exact: true });
-  const notice = target.locator('p:visible').filter({ hasText: /^This revision is read-only\. Branch it in Variants before editing\.$/ }).first();
+  const notice = target.getByRole('button', { name: 'Edit as new variant', exact: true }).first();
   const copy = target.locator(`[data-working-copy-id][data-base-revision-id="${revisionId}"]:visible`);
   const workspace = target.locator('section[aria-label="Template layer editor"]:visible aside[aria-label="Layer workspace"]:visible');
   // Opening a revision schedules a keyed React transition. A click on the outgoing panel

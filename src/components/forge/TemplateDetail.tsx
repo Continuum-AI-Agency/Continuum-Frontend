@@ -103,7 +103,9 @@ import {
   fetchTemplateMappingReview,
   fetchTemplateRevisionVariants,
   fetchTemplateVariables,
+  fetchTemplateAuthoringUserId,
   fetchTemplateVariants,
+  branchTemplateVersion,
   healTemplateFonts,
   previewTemplateRebind,
   pushTemplateFonts,
@@ -359,6 +361,55 @@ export function TemplateDetail({
   const workingCopy = workingCopyState.copy;
   const workingCopyRevision = workingCopy && revisionCatalog?.flatMap((variant) => variant.revisions).find((revision) => revision.id === workingCopy.baseRevisionId);
   const revisionReadOnly = workingCopyState.readOnly || inspectedReadOnly && !workingCopy;
+  // A read-only revision (the original, a published or archived one) is never edited in place: it
+  // branches into a new variant from exactly this revision, and that variant opens on the same tab.
+  const [branching, setBranching] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
+  const editAsNewVariant = async (nextTab: 'layers' | 'author') => {
+    const selection = revisionSelection;
+    if (!selection || branching) return;
+    setBranching(true);
+    setBranchError(null);
+    try {
+      const userId = await fetchTemplateAuthoringUserId();
+      const { revision } = await branchTemplateVersion(
+        assetId,
+        {
+          brandId,
+          parentRevisionId: selection.revision.id,
+          name: `${selection.variant.original ? 'Original' : selection.variant.name} copy`,
+          idempotencyKey: crypto.randomUUID(),
+          origin: { tool: 'Forge web editor', button: 'Edit as new variant' },
+        },
+        userId,
+      );
+      await invalidateForgeBrand(queryClient, brandId);
+      await onOpenRevision?.(revision, nextTab);
+    } catch (cause) {
+      setBranchError(cause instanceof Error ? cause.message : 'Could not start a new variant.');
+    } finally {
+      setBranching(false);
+    }
+  };
+  const readOnlyNotice = (nextTab: 'layers' | 'author') => (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-muted-foreground">
+        This revision is read-only, so it stays as it is. Edit a new variant made from it.
+      </span>
+      <Button
+        size="xs"
+        disabled={branching || !revisionSelection || !onOpenRevision}
+        onClick={() => void editAsNewVariant(nextTab)}
+      >
+        {branching ? 'Starting new variant…' : 'Edit as new variant'}
+      </Button>
+      {branchError ? (
+        <span role="alert" className="text-destructive">
+          {branchError}
+        </span>
+      ) : null}
+    </div>
+  );
   const copyNotice = workingCopyState.error ?? (!revisionSelection && revisionCatalog
     ? 'Choose an exact variant revision in Variants before opening a private working copy.'
     : 'Opening the private working copy…');
@@ -1901,9 +1952,7 @@ export function TemplateDetail({
           <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
             {workingCopy && <TemplateWorkingCopyContext copy={workingCopy} variant={revisionCatalog?.find((variant) => variant.variantId === workingCopy.variantId)} />}
             {revisionReadOnly ? (
-              <p className="text-xs text-muted-foreground">
-                This revision is read-only. Branch it in Variants before editing.
-              </p>
+              readOnlyNotice('layers')
             ) : !workingCopy ? (
               <div className="flex items-center gap-2 text-xs" role={workingCopyState.error ? 'alert' : 'status'}>
                 <span>{copyNotice}</span>
@@ -1936,7 +1985,7 @@ export function TemplateDetail({
           </TabsContent>
           <TabsContent value="author" keepMounted className="p-[var(--card-pad)]">
             {workingCopy && <TemplateWorkingCopyContext copy={workingCopy} variant={revisionCatalog?.find((variant) => variant.variantId === workingCopy.variantId)} />}
-            {revisionReadOnly && <p className="text-xs text-muted-foreground">This revision is read-only. Branch it in Variants before editing.</p>}
+            {revisionReadOnly && readOnlyNotice('author')}
             {!revisionReadOnly && !workingCopy && <p role={workingCopyState.error ? 'alert' : 'status'} className="text-xs">{copyNotice}</p>}
             {!revisionReadOnly && workingCopy && mountedAuthorIdentity === authorIdentity ? (
               <TemplateAuthoringEditor
