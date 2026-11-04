@@ -14,6 +14,7 @@ import {
   setTemplateVariantDefault,
   unarchiveTemplateRevisionVariant,
 } from '@/lib/library/templateSources';
+import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from './queryKeys';
 import type { ForgeRenderIntent } from './RenderRequestsGrid';
@@ -34,6 +35,14 @@ const headOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.draftHeadRevisionId);
 const publishedOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.publishedHeadRevisionId);
+/** "<source name> – <variant> r<N>.<ext>": which template, which variant, which revision. */
+export const revisionFileName = (label: string, revision: TemplateRevision) => {
+  const source = revision.source.parse?.filename ?? '';
+  const dot = source.lastIndexOf('.');
+  const stem = (dot > 0 ? source.slice(0, dot) : source).trim();
+  const extension = dot > 0 ? source.slice(dot) : '';
+  return `${stem ? `${stem} – ` : ''}${label} r${revision.number}${extension}`.replace(/[\\/:*?"<>|]+/g, ' ');
+};
 const day = (at: string) =>
   new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -120,6 +129,17 @@ export function VariantsPanel({
       setBusy(false);
     }
   };
+
+  // A read of the exact stored revision; nothing about the family changes.
+  const download = (label: string, revision: TemplateRevision) =>
+    void act('download this revision', () =>
+      downloadLibraryAsset({
+        brandId,
+        assetId: revision.sourceAssetId,
+        versionId: revision.sourceVersionId,
+        fileName: revisionFileName(label, revision),
+      }),
+    );
 
   const upload = (file: File | undefined) => {
     if (!file || busy || !selectedRevision || !selectedVariant) return;
@@ -261,6 +281,16 @@ export function VariantsPanel({
                 </Button>
               ) : null,
             )}
+            {published ?? head ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => download(label, (published ?? head)!)}
+              >
+                Download Revision {(published ?? head)!.number}
+              </Button>
+            ) : null}
             {!isDefault && !archived && (variant.original || published) ? (
               <Button
                 size="xs"
@@ -343,6 +373,15 @@ export function VariantsPanel({
                         {viewing(revision) ? 'Viewing' : 'Open'}
                       </Button>
                     ) : null}
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={busy}
+                      aria-label={`Download ${label} revision ${revision.number}`}
+                      onClick={() => download(label, revision)}
+                    >
+                      Download
+                    </Button>
                   </li>
                 );
               })}
