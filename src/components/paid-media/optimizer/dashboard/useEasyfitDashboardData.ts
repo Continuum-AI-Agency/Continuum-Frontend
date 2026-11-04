@@ -22,7 +22,7 @@ export const easyfitQueryKeys = {
 export function useEasyfitDashboard(brandId: string) {
   return useQuery({
     queryKey: easyfitQueryKeys.dashboard(brandId),
-    queryFn: ({ signal }) => getEasyfitDashboard(signal),
+    queryFn: ({ signal }) => getEasyfitDashboard(brandId, signal),
     staleTime: FIFTEEN_MINUTES,
   });
 }
@@ -30,7 +30,7 @@ export function useEasyfitDashboard(brandId: string) {
 export function useEasyfitConfig(brandId: string) {
   return useQuery({
     queryKey: easyfitQueryKeys.config(brandId),
-    queryFn: ({ signal }) => getEasyfitConfig(signal),
+    queryFn: ({ signal }) => getEasyfitConfig(brandId, signal),
     staleTime: FIFTEEN_MINUTES,
   });
 }
@@ -38,7 +38,7 @@ export function useEasyfitConfig(brandId: string) {
 export function useSaveEasyfitConfig(brandId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (config: EasyfitPilotConfig) => putEasyfitConfig(config),
+    mutationFn: (config: EasyfitPilotConfig) => putEasyfitConfig(brandId, config),
     onSuccess: (saved) => {
       queryClient.setQueryData(easyfitQueryKeys.config(brandId), saved);
     },

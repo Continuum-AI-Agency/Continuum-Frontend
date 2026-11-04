@@ -14,30 +14,32 @@ const { easyfitConfigResponseSchema, easyfitDashboardResponseSchema } = await im
 const { getEasyfitConfig, getEasyfitDashboard, isEasyfitForbidden, putEasyfitConfig } =
   await import('./easyfit.client');
 
+const BRAND = '148583e0-5538-462b-8d3a-acd25b80344e';
+
 describe('easyfit.client', () => {
   beforeEach(() => requestMock.mockClear());
 
-  it('reads the dashboard through the contract envelope', async () => {
-    await getEasyfitDashboard();
+  it('reads the dashboard of the brand the user is in, through the contract envelope', async () => {
+    await getEasyfitDashboard(BRAND);
 
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: '/easyfit/dashboard',
+        path: `/easyfit/dashboard?brandId=${BRAND}`,
         schema: easyfitDashboardResponseSchema,
       }),
     );
   });
 
   it('reads and writes the config with the contract schema on both sides', async () => {
-    await getEasyfitConfig();
-    await putEasyfitConfig(configFixture);
+    await getEasyfitConfig(BRAND);
+    await putEasyfitConfig(BRAND, configFixture);
 
     expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
-      path: '/easyfit/config',
+      path: `/easyfit/config?brandId=${BRAND}`,
       schema: easyfitConfigResponseSchema,
     });
     expect(requestMock.mock.calls[1]?.[0]).toMatchObject({
-      path: '/easyfit/config',
+      path: `/easyfit/config?brandId=${BRAND}`,
       method: 'PUT',
       body: configFixture,
     });
@@ -49,7 +51,7 @@ describe('easyfit.client', () => {
       piloto: { ...configFixture.piloto, moneda: 'USD' },
     } as unknown as typeof configFixture;
 
-    expect(() => putEasyfitConfig(broken)).toThrow();
+    expect(() => putEasyfitConfig(BRAND, broken)).toThrow();
     expect(requestMock).not.toHaveBeenCalled();
   });
 
