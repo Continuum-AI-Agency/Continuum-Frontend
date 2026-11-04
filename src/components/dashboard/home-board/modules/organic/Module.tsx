@@ -4,10 +4,10 @@
 // inline approval for a waiting draft (the calendar's own Approve & schedule — the gated
 // group-approve route, then each row to scheduled), and the 7-day reach / interactions rollup.
 //
-// Two figures are deliberately absent. Best time to post comes from organic_best_times, which
-// the browser can only reach through the organic insights edge — and that edge generates the
-// insights (a model call) on a cold cache, so the Home never asks it. Reach per post this week
-// and the week's top post need a read that does not exist yet (Phase B R4).
+// Reach per post and the week's top post are the Backend's organic week (R4); until it deploys the
+// module says they are not readable yet. Best time to post stays absent: it comes from
+// organic_best_times, which the browser can only reach through the organic insights edge — and
+// that edge generates the insights (a model call) on a cold cache, so the Home never asks it.
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -24,7 +24,9 @@ import { type SnapshotAccountRef, summableRollups } from '@/lib/organic/brandOrg
 import { organicPlatformLabel } from '@/lib/organic/platforms';
 import { cn } from '@/lib/utils';
 import type { OrganicWeekDay, WaitingDraft } from './organicWeekModel';
+import { reachRowsOf, topPostLine } from './organicWeekRead';
 import { homeOrganicDraftsKey, useOrganicWeek } from './useOrganicWeek';
+import { type OrganicWeekRead, useOrganicWeekRead } from './useOrganicWeekRead';
 
 export const BEST_TIME_COLD = 'Best time not read yet — open Organic to read it.';
 export const PER_POST_NOT_READABLE =
@@ -180,6 +182,62 @@ function ReachRollup({
   );
 }
 
+function ReachPerPost({ read }: { read: OrganicWeekRead }) {
+  if (!read.data) {
+    return read.unavailable ? (
+      <p className="text-2xs text-muted-foreground" data-testid="home-organic-reach-note">
+        {PER_POST_NOT_READABLE}
+      </p>
+    ) : null;
+  }
+  const rows = reachRowsOf(read.data);
+  const topPost = topPostLine(read.data);
+  return (
+    <section className="flex min-w-0 flex-col gap-1.5" data-testid="home-organic-reach">
+      <h4 className="font-medium text-xs">Reach per post this week</h4>
+      {topPost ? <p className="text-xs tabular-nums">{topPost}</p> : null}
+      {rows.length === 0 ? (
+        <p className="text-2xs text-muted-foreground">Nothing was published this week yet.</p>
+      ) : (
+        <ul className="flex min-w-0 flex-col gap-1.5">
+          {rows.map((row) => (
+            <li
+              className="flex min-w-0 flex-col text-xs"
+              data-post={row.post.postId}
+              data-reach={row.post.reach ?? undefined}
+              data-testid="home-organic-reach-row"
+              key={`${row.post.platform}:${row.post.postId}`}
+            >
+              <span className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2">
+                <span className="min-w-0 text-muted-foreground">
+                  {organicPlatformLabel(row.post.platform)}
+                  {row.post.mediaType ? ` · ${row.post.mediaType.toLowerCase()}` : ''} ·{' '}
+                  {row.post.day}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {row.reach}
+                  {row.lift ? ` · ${row.lift}` : ''}
+                </span>
+              </span>
+              {row.note ? <span className="text-2xs text-muted-foreground">{row.note}</span> : null}
+              {row.post.permalink ? (
+                <a
+                  className="w-fit text-2xs text-primary hover:underline"
+                  href={row.post.permalink}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  View post
+                </a>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export default function OrganicWeekModule({
   brandId,
   organicAccounts,
@@ -188,6 +246,7 @@ export default function OrganicWeekModule({
   organicAccounts: SnapshotAccountRef[];
 }) {
   const load = useOrganicWeek(brandId, organicAccounts);
+  const read = useOrganicWeekRead(brandId, organicAccounts.length > 0);
   const { approveAndSchedule } = useApproveScheduleDraft();
   const queryClient = useQueryClient();
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -229,7 +288,7 @@ export default function OrganicWeekModule({
         <div aria-hidden="true" className="h-40 w-full animate-pulse rounded-md bg-muted/60" />
       )}
       <ReachRollup brandId={brandId} organicAccounts={organicAccounts} />
-      <p className="text-2xs text-muted-foreground">{PER_POST_NOT_READABLE}</p>
+      <ReachPerPost read={read} />
       <Link className="text-xs underline underline-offset-2" href="/organic?tab=planner">
         Open the Organic calendar
       </Link>

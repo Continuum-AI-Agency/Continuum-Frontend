@@ -7,11 +7,13 @@
 // Headline: `data-value` = passing checks, `data-total` = readable checks (passing + failing);
 // the reads behind each check are in doctorModel.ts's header (the bench anchor).
 
+import { type HomeAccountHygieneData, homeAccountHygieneReadSchema } from '@continuum/contracts';
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import type { HomeTileProps } from '../../types';
+import { useHomeRead } from '../../useHomeRead';
 import { CheckIcon, FixLink } from './DoctorParts';
 import { doctorView, failingChecks } from './doctorModel';
 import { useDoctorReads } from './useDoctorReads';
@@ -22,6 +24,11 @@ const FAILING_SHOWN: Record<HomeTileProps['tile']['size'], number> = { s: 1, m: 
 
 export default function HealthTile({ ctx, tile }: HomeTileProps) {
   const reads = useDoctorReads(ctx.brandId, ctx.adAccounts);
+  const hygiene = useHomeRead<HomeAccountHygieneData>({
+    name: 'accountHygiene',
+    brandId: ctx.brandId,
+    schema: homeAccountHygieneReadSchema,
+  });
   const view = doctorView({
     issues: ctx.reading.issues,
     portfolios: reads.portfolios,
@@ -29,6 +36,7 @@ export default function HealthTile({ ctx, tile }: HomeTileProps) {
     accountReads: reads.accountReads,
     googleCards: reads.googleCards,
     setup: ctx.setup,
+    hygiene,
   });
 
   if (view.state === 'loading') {

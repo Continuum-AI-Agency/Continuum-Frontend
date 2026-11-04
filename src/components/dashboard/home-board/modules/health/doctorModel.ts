@@ -1,7 +1,7 @@
 // H13 Account doctor: a list of checks, each with where it is fixed. No score: a 0–100 number would
 // need weights nobody has decided, so the headline is "N of M checks pass", counted only over the
-// checks that could be read. A check whose source does not exist yet (naming violations, ads older
-// than 30 days — Phase B read R5) or whose read failed is listed as not readable, never as passing.
+// checks that could be read. A check whose source is not here or whose read failed is listed as
+// not readable, never as passing.
 //
 // The checks, in order, and where each comes from:
 //   - Optimizer portfolios: the reading's issues (ctx.reading.issues — stale, lost its campaigns,
@@ -15,6 +15,10 @@
 //     (optimizer_get_account_read → read.guards[]), one failing check per guard; a read with no
 //     guard passes; no read stored is not readable.
 //   - Setup: the first-run setup's tracked steps (deriveDashboardSetup).
+//   - Hygiene: the Backend's Account hygiene read (R5), naming violations and ads running longer
+//     than 30 days. `ok` passes, `warn` and `fail` need fixing, `unknown` stays not readable: a
+//     brand that never chose a naming convention is not in violation of one. Until the Backend
+//     deploys, both are listed as not readable yet.
 //
 // Disconnected accounts are not a check: an account whose grant is revoked drops out of the
 // brand's integration summary (it is not in ctx.adAccounts at all), and no stored per-account
@@ -27,7 +31,14 @@
 import {
   ACCOUNT_DETECTOR_META,
   type AccountCandidate,
+  HOME_STALE_AD_DAYS,
+  type HomeAccountHygieneData,
+  type HomeHygieneCheck,
+  type HomeHygieneCheckId,
+  type HomeHygieneExample,
+  type HomeHygieneStatus,
   type HomeIssue,
+  type HomeReadMissingReason,
   type PortfolioListItem,
   titleText,
 } from '@continuum/contracts';
@@ -39,6 +50,7 @@ import type {
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 import { bareAccountId } from '@/lib/paid-media/accountId';
+import type { HomeReadLoad } from '../../homeRead';
 import { optimizerHref } from '../pacing/pacingModel';
 
 export type DoctorPortfolio = Pick<
@@ -65,6 +77,7 @@ export type DoctorInputs = {
   /** Null when the brand has no Google Ads account (nothing is read). */
   googleCards: PlatformCardsState | null;
   setup: DashboardSetupState | null;
+  hygiene: HomeReadLoad<HomeAccountHygieneData>;
 };
 
 export type DoctorCheckStatus = 'pass' | 'fail' | 'loading' | 'unreadable';
@@ -76,6 +89,10 @@ export type DoctorCheck = {
   detail: string;
   status: DoctorCheckStatus;
   fix: DoctorFix | null;
+  /** The hygiene read's own verdict, which `status` folds `warn` and `fail` into. */
+  hygiene?: HomeHygieneStatus;
+  /** The worst of what failed, in the read's words. */
+  examples?: readonly HomeHygieneExample[];
 };
 
 export type DoctorView =
@@ -286,22 +303,68 @@ function setupChecks(setup: DashboardSetupState | null): DoctorCheck[] {
     }));
 }
 
-const PHASE_B_CHECKS: DoctorCheck[] = [
-  {
-    id: 'phase_b:naming',
-    label: 'Campaign and ad names follow the naming convention',
-    detail: `Naming violations are ${PHASE_B_DETAIL}`,
-    status: 'unreadable',
+const HYGIENE_LABEL: Record<HomeHygieneCheckId, string> = {
+  naming: 'Campaign and ad names follow the naming convention',
+  stale_ads: `No ad has run longer than ${HOME_STALE_AD_DAYS} days`,
+};
+
+const PENDING_DETAIL: Record<HomeHygieneCheckId, string> = {
+  naming: `Naming violations are ${PHASE_B_DETAIL}`,
+  stale_ads: `Ad age is ${PHASE_B_DETAIL}`,
+};
+
+const MISSING_DETAIL: Record<HomeReadMissingReason, string> = {
+  no_ad_account: 'The brand has no Meta ad account to check.',
+  no_organic_account: 'The brand has no Meta ad account to check.',
+  no_portfolio: 'The brand has no Meta ad account to check.',
+  no_data: 'The brand’s Meta ads have not synced recently enough to check.',
+  not_deployed: PHASE_B_DETAIL,
+  no_goal_target: PHASE_B_DETAIL,
+};
+
+const HYGIENE_IDS: readonly HomeHygieneCheckId[] = ['naming', 'stale_ads'];
+
+const HYGIENE_STATUS: Record<HomeHygieneStatus, DoctorCheckStatus> = {
+  ok: 'pass',
+  warn: 'fail',
+  fail: 'fail',
+  unknown: 'unreadable',
+};
+
+function hygieneCheck(check: HomeHygieneCheck): DoctorCheck {
+  const status = HYGIENE_STATUS[check.status];
+  return {
+    id: `hygiene:${check.id}`,
+    label: HYGIENE_LABEL[check.id],
+    detail: check.detail,
+    status,
+    hygiene: check.status,
+    examples: check.examples,
+    fix: status === 'fail' && check.id === 'stale_ads' ? optimizerFix(null) : null,
+  };
+}
+
+function hygieneChecks(hygiene: HomeReadLoad<HomeAccountHygieneData>): DoctorCheck[] {
+  if (hygiene.status === 'ready') return hygiene.data.checks.map(hygieneCheck);
+  const unread = (
+    id: HomeHygieneCheckId,
+    detail: string,
+    status: DoctorCheckStatus,
+  ): DoctorCheck => ({
+    id: `hygiene:${id}`,
+    label: HYGIENE_LABEL[id],
+    detail,
+    status,
     fix: null,
-  },
-  {
-    id: 'phase_b:ad_age',
-    label: 'No ad has run longer than 30 days',
-    detail: `Ad age is ${PHASE_B_DETAIL}`,
-    status: 'unreadable',
-    fix: null,
-  },
-];
+  });
+  return HYGIENE_IDS.map((id) => {
+    if (hygiene.status === 'loading') return unread(id, '', 'loading');
+    if (hygiene.status === 'missing') {
+      return unread(id, MISSING_DETAIL[hygiene.missing.reason], 'unreadable');
+    }
+    return unread(id, PENDING_DETAIL[id], 'unreadable');
+  });
+}
 
 function everyRemoteReadFailed(inputs: DoctorInputs): boolean {
   const cardsFailed =
@@ -324,7 +387,7 @@ export function doctorView(inputs: DoctorInputs): DoctorView {
     ),
     ...inputs.accountReads.flatMap(measurementChecks),
     ...setupChecks(inputs.setup),
-    ...PHASE_B_CHECKS,
+    ...hygieneChecks(inputs.hygiene),
   ];
   if (checks.some((check) => check.status === 'loading')) return { state: 'loading' };
   if (everyRemoteReadFailed(inputs)) return { state: 'error' };

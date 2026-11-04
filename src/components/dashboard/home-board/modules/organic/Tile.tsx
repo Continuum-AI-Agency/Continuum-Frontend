@@ -1,7 +1,8 @@
 'use client';
 
 // H11 Organic week, the tile: posts this week (published + scheduled), how they spread over the
-// seven days, and how many drafts wait for approval. Approving happens in the expanded module.
+// seven days, and how many drafts wait for approval. Approving happens in the expanded module. The
+// Backend's organic week adds the week's top post by reach; without it the tile is as above.
 import { lazy } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatCount } from '@/lib/home/format';
@@ -9,7 +10,9 @@ import { cn } from '@/lib/utils';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
 import type { HomeTileProps } from '../../types';
 import { type OrganicWeek, organicTileView } from './organicWeekModel';
+import { topPostLine } from './organicWeekRead';
 import { useOrganicWeek } from './useOrganicWeek';
+import { useOrganicWeekRead } from './useOrganicWeekRead';
 
 const Module = lazy(() => import('./Module'));
 
@@ -60,6 +63,8 @@ function WeekBars({ week }: { week: OrganicWeek }) {
 
 export default function OrganicTile({ ctx, tile }: HomeTileProps) {
   const load = useOrganicWeek(ctx.brandId, ctx.organicAccounts);
+  const read = useOrganicWeekRead(ctx.brandId, ctx.organicAccounts.length > 0);
+  const topPost = read.data ? topPostLine(read.data) : null;
   const view = organicTileView({
     hasAccounts: ctx.organicAccounts.length > 0,
     loading: load.loading,
@@ -104,6 +109,15 @@ export default function OrganicTile({ ctx, tile }: HomeTileProps) {
           <p className="text-muted-foreground text-xs" data-testid="home-tile-organic-waiting">
             {waitingLine(week.waiting)}
           </p>
+          {topPost ? (
+            <p
+              className="font-medium text-xs tabular-nums"
+              data-reach={read.data?.topPost?.reach}
+              data-testid="home-tile-organic-top-post"
+            >
+              {topPost}
+            </p>
+          ) : null}
           {tile.size === 'l' ? (
             <p className="text-2xs text-muted-foreground tabular-nums">
               {formatCount(week.published)} published · {formatCount(week.scheduled)} scheduled

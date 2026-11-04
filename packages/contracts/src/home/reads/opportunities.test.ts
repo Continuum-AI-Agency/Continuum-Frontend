@@ -8,7 +8,9 @@ import {
 
 const BRAND = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 
-function opportunity(overrides: Partial<HomeOpportunityCard> & { id: string }): HomeOpportunityCard {
+function opportunity(
+  overrides: Partial<HomeOpportunityCard> & { id: string },
+): HomeOpportunityCard {
   return homeOpportunityCardSchema.parse({
     origin: 'account_read',
     detector: 'dead_tail',
@@ -119,7 +121,7 @@ describe('homeOpportunitiesReadSchema', () => {
       brandId: BRAND,
       generatedAt: '2026-11-03T12:00:00.000Z',
       data: {
-        goal: { metric: 'leads', label: 'Leads', from: 'portfolio' },
+        goal: { metric: 'leads', label: 'Leads', from: 'results' },
         opportunities: [opportunity({ id: 'a' })],
         total: 1,
         accounts: [

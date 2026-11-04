@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { HomeBoardTile } from '@continuum/contracts';
+import type { HomeAccountHygieneData, HomeBoardTile } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
+import type { HomeReadLoad } from '../../homeRead';
 import { EASY_FIT_GOOGLE, EASY_FIT_META, homeCtx } from '../pacing/__fixtures__/ctx';
 import {
   GOOGLE_PORTFOLIO,
@@ -29,6 +30,11 @@ mock.module('./useDoctorReads', () => ({
     },
   }),
 }));
+
+// The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
+let hygiene: HomeReadLoad<HomeAccountHygieneData> = { status: 'unavailable' };
+const realHomeRead = await import('../../useHomeRead');
+mock.module('../../useHomeRead', () => ({ ...realHomeRead, useHomeRead: () => hygiene }));
 
 const { default: HealthTile } = await import('./Tile');
 
@@ -131,5 +137,70 @@ describe('HealthTile', () => {
     expect(screen.getByTestId('home-tile-health').getAttribute('data-module-state')).toBe(
       'loading',
     );
+  });
+});
+
+describe('Account doctor with the hygiene read', () => {
+  afterEach(() => {
+    hygiene = { status: 'unavailable' };
+  });
+
+  it('counts the read’s findings and opens its examples; unknown stays apart', async () => {
+    reads = SUSPENDED;
+    hygiene = {
+      status: 'ready',
+      generatedAt: '2026-11-04T12:00:00Z',
+      data: {
+        asOf: '2026-11-04T05:05:36Z',
+        namingSchema: { delimiter: '|', fields: ['a', 'b'], version: 1, adopted: false },
+        checks: [
+          {
+            id: 'naming',
+            status: 'unknown',
+            count: 154,
+            total: 154,
+            detail: 'The convention is still the platform default, never set for this brand.',
+            examples: [],
+            source: { kind: 'x', ref: null, since: null, until: null },
+          },
+          {
+            id: 'stale_ads',
+            status: 'warn',
+            count: 18,
+            total: 88,
+            detail: '18 of 88 active ads have run longer than 30 days.',
+            examples: [
+              {
+                level: 'ad',
+                id: 'a1',
+                name: 'ultrenagos',
+                code: 'running_too_long',
+                detail: 'Active for 61 days.',
+                ageDays: 61,
+                spendShare: null,
+              },
+            ],
+            source: { kind: 'x', ref: null, since: null, until: null },
+          },
+        ],
+      },
+    };
+    render(<HealthTile ctx={ctx} tile={tile} />);
+    fireEvent.click(screen.getByTestId('home-tile-health-open'));
+    const failing = await screen.findByTestId('home-health-group-fail');
+    expect(failing.textContent).toContain('18 of 88 active ads');
+    expect(within(failing).getByTestId('home-health-examples').textContent).toContain('ultrenagos');
+    const unknown = screen.getByTestId('home-health-group-unreadable');
+    expect(unknown.textContent).toContain('never set for this brand');
+  });
+
+  it('without the read the two checks say they are not readable yet, never an error', async () => {
+    reads = SUSPENDED;
+    hygiene = { status: 'unavailable' };
+    render(<HealthTile ctx={ctx} tile={tile} />);
+    expect(screen.getByTestId('home-tile-health').getAttribute('data-module-state')).toBe('ready');
+    fireEvent.click(screen.getByTestId('home-tile-health-open'));
+    const unknown = await screen.findByTestId('home-health-group-unreadable');
+    expect(unknown.textContent).toContain('not readable yet');
   });
 });

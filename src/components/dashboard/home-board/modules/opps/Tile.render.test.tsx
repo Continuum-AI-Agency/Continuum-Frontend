@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { PortfolioListItem } from '@continuum/contracts';
+import type {
+  HomeOpportunitiesData,
+  HomeOpportunityCard,
+  PortfolioListItem,
+} from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from './__fixtures__/homeContext';
 import {
   EASY_FIT_META_BRAND_ID,
@@ -56,12 +61,18 @@ mock.module('@/components/paid-media/optimizer/sections/OptimizerActionsPortfoli
   ),
 }));
 
+// The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
+let stack: HomeReadLoad<HomeOpportunitiesData> = { status: 'unavailable' };
+const realGoalRead = await import('../../useHomeGoalRead');
+mock.module('../../useHomeGoalRead', () => ({ ...realGoalRead, useHomeGoalRead: () => stack }));
+
 const { default: OppsTile } = await import('./Tile');
 const { OPPS_MISSING, OPPS_GOAL_UNITS_NOTE } = await import('./oppsModel');
 
 afterEach(() => {
   cleanup();
   portfoliosRead = { hasAnswer: true, isError: false, brandPortfolios: EASY_FIT_PORTFOLIOS };
+  stack = { status: 'unavailable' };
   refetch.mockClear();
   platformCardReads.length = 0;
 });
@@ -181,5 +192,85 @@ describe('Opportunities expanded', () => {
     expect(queues[0]?.getAttribute('data-portfolio')).toBe('e4db2796-0cc9-4582-9c1d-b9a60ec2f3ed');
     expect(platformCardReads).toContain('google_ads');
     expect(platformCardReads).not.toContain('tiktok_ads');
+  });
+});
+
+describe('Opportunities tile with the Backend read', () => {
+  const opportunity = (impact: Partial<HomeOpportunityCard['impact']>): HomeOpportunityCard => ({
+    id: 'platform_signal:1',
+    origin: 'account_read',
+    detector: 'dead_tail',
+    adAccountId: '5251780631',
+    portfolioIds: [],
+    label: 'Spending on nothing',
+    basis: '"gimnasios" spent $275 MXN with no conversions.',
+    headline: null,
+    confidence: 0.5,
+    state: null,
+    cta: { kind: 'none', targetId: null },
+    cardAction: null,
+    source: { kind: 'optimizer_get_account_read', ref: 'r1', since: null, until: '2026-11-04' },
+    impact: {
+      moneyPerDay: 9.16,
+      currency: 'MXN',
+      impactClass: 'recoverable',
+      unit: 'goal',
+      goalMetric: 'leads',
+      goalUnits: 0.43,
+      costPerResult: 21.19,
+      goalUnitsBasis: 'portfolio_price',
+      goalUnitsBecause: "At the portfolio's own 21.19 MXN per result over the last 14 days.",
+      ...impact,
+    },
+  });
+  const ready = (cards: HomeOpportunityCard[]): HomeReadLoad<HomeOpportunitiesData> => ({
+    status: 'ready',
+    generatedAt: '2026-11-04T12:00:00Z',
+    data: {
+      goal: { metric: 'leads', label: 'Leads', from: 'results' },
+      opportunities: cards,
+      total: cards.length,
+      accounts: [],
+    },
+  });
+
+  it('prints the top opportunity in goal units, on the tile', () => {
+    stack = ready([opportunity({})]);
+    render(<OppsTile ctx={ctx} tile={tileOf('opps', 'l')} />);
+    const impact = screen.getByTestId('home-tile-opps-impact');
+    expect(impact.getAttribute('data-unit')).toBe('goal');
+    expect(impact.getAttribute('data-goal-units')).toBe('0.43');
+    expect(impact.textContent).toContain('+0.43 leads a day');
+    expect(impact.textContent).toContain('Spending on nothing');
+  });
+
+  it('keeps the figure in money where the read did not convert it, and does not pretend', () => {
+    stack = ready([
+      opportunity({ unit: 'money', goalUnits: null, costPerResult: null, goalUnitsBasis: null }),
+    ]);
+    render(<OppsTile ctx={ctx} tile={tileOf('opps', 'm')} />);
+    const impact = screen.getByTestId('home-tile-opps-impact');
+    expect(impact.getAttribute('data-unit')).toBe('money');
+    expect(impact.textContent).toContain('$9.16 MXN a day');
+  });
+
+  it('opens a stack saying why each figure is what it is, and drops the pending line', () => {
+    stack = ready([opportunity({})]);
+    render(<OppsTile ctx={ctx} tile={tileOf('opps', 'l')} />);
+    fireEvent.click(screen.getByTestId('home-tile-opps-open'));
+    const rows = screen.getAllByTestId('home-opps-stack-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain('21.19 MXN per result');
+    expect(rows[0]?.textContent).toContain('Confidence 50%');
+    expect(screen.queryByTestId('home-opps-goal-units')).toBeNull();
+  });
+
+  it('without the read the tile draws what it drew, and the sheet keeps its honest line', () => {
+    stack = { status: 'unavailable' };
+    render(<OppsTile ctx={ctx} tile={tileOf('opps', 'l')} />);
+    expect(screen.queryByTestId('home-tile-opps-impact')).toBeNull();
+    expect(frame().getAttribute('data-module-state')).toBe('ready');
+    fireEvent.click(screen.getByTestId('home-tile-opps-open'));
+    expect(screen.getByTestId('home-opps-goal-units').textContent).toBe(OPPS_GOAL_UNITS_NOTE);
   });
 });

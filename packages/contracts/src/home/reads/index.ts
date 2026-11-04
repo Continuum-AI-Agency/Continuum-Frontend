@@ -6,3 +6,4 @@ export * from './goalTargets';
 export * from './opportunities';
 export * from './organicWeek';
 export * from './overnightLog';
+export * from './readGoal';

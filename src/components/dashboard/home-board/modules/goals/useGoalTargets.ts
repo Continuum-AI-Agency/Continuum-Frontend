@@ -20,9 +20,9 @@ import {
 } from '@continuum/contracts';
 import { useCallback, useEffect, useState } from 'react';
 import { ZodError } from 'zod';
-import { ApiError, isFetchFailure } from '@/lib/api/errors';
+import { ApiError } from '@/lib/api/errors';
 import { request } from '@/lib/api/http';
-import { isRequestTimeout } from '@/lib/api/timeout';
+import { homeReadNotHereYet } from '../../homeRead';
 import type { GoalTargetsLoad } from './goalTargetModel';
 
 export type GoalTargetWriteResult = { ok: true } | { ok: false; message: string };
@@ -42,11 +42,7 @@ function loadOfRead(read: HomeGoalTargetsRead): GoalTargetsLoad {
 }
 
 function loadOfFailure(error: unknown): GoalTargetsLoad {
-  const notHereYet =
-    (error instanceof ApiError && error.status === 404) ||
-    isFetchFailure(error) ||
-    isRequestTimeout(error);
-  return { status: notHereYet ? 'unavailable' : 'unreadable' };
+  return { status: homeReadNotHereYet(error) ? 'unavailable' : 'unreadable' };
 }
 
 /** The Backend's own words for a refused write: a refused field's message when it names one. */

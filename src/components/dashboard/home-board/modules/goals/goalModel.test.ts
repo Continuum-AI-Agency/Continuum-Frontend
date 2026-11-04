@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { HomeObjective, HomeProfileRow } from '@continuum/contracts';
-import { googleOverviewForHome } from '@/lib/home/homeOverviewModel';
+import type { HomeAdAccount } from '@/lib/home/homeAccounts';
+import { googleOverviewForHome, type HomeAccountOverview } from '@/lib/home/homeOverviewModel';
 import {
   GOOGLE_ACCOUNT,
   GOOGLE_READS,
@@ -14,6 +15,7 @@ import {
   USD_OVERVIEW,
 } from './__fixtures__/monthToDate';
 import {
+  boardGoalMetric,
   type GoalAccountRead,
   type GoalLoad,
   goalActiveTarget,
@@ -402,5 +404,88 @@ describe('goalTileView', () => {
     it('still finds it on the 1st, when the month has nothing to read', () => {
       expect(goalActiveTarget({ ...input, load: { status: 'idle' } })?.target).toBe(weekly);
     });
+  });
+});
+
+describe('boardGoalMetric — the goal the board tells the Backend reads', () => {
+  const account: HomeAdAccount = {
+    id: 'act_1',
+    name: 'One',
+    platform: 'meta',
+    currency: 'MXN',
+  } as HomeAdAccount;
+  const window = { since: '2026-11-01', until: '2026-11-03' };
+  const overview = (over: Record<string, number>) =>
+    ({ metrics: over, currency: 'MXN', trends: [] }) as unknown as HomeAccountOverview;
+
+  it('a saved goal needs no result read: the Backend holds it too', () => {
+    const answer = boardGoalMetric({
+      rows: [
+        {
+          brand_id: 'b',
+          scope: 'brand',
+          source: 'user',
+          objectives: [{ id: 'tours', label: 'Tours', metric: 'purchases', role: 'primary' }],
+        },
+      ],
+      accounts: [account],
+      window,
+      load: { status: 'loading' },
+      suggested: [],
+    });
+    expect(answer).toEqual({ settled: true, metric: undefined });
+  });
+
+  it('waits for the month’s read rather than ask with no goal', () => {
+    expect(
+      boardGoalMetric({
+        rows: [],
+        accounts: [account],
+        window,
+        load: { status: 'loading' },
+        suggested: [],
+      }),
+    ).toEqual({ settled: false, metric: undefined });
+  });
+
+  it('names what the Goal tile names', () => {
+    const load: GoalLoad = {
+      status: 'ready',
+      reads: [{ account, overview: overview({ spend: 100, leads: 40 }) }],
+      failures: [],
+    };
+    const answer = boardGoalMetric({ rows: [], accounts: [account], window, load, suggested: [] });
+    const { primary } = goalObjectives({
+      scope: 'brand',
+      rows: [],
+      reads: load.status === 'ready' ? load.reads : [],
+      suggested: [],
+    });
+    expect(answer).toEqual({ settled: true, metric: primary.metric });
+    expect(answer.metric).toBe('leads');
+  });
+
+  it('a month that could not be read, or has no complete day, names no goal', () => {
+    const base = { rows: [], accounts: [account], suggested: [] };
+    expect(boardGoalMetric({ ...base, window, load: { status: 'error', failures: [] } })).toEqual({
+      settled: true,
+      metric: undefined,
+    });
+    expect(boardGoalMetric({ ...base, window: null, load: { status: 'idle' } })).toEqual({
+      settled: true,
+      metric: undefined,
+    });
+  });
+
+  it('no ad account has nothing to read', () => {
+    expect(
+      boardGoalMetric({
+        rows: [],
+        accounts: [],
+        window,
+        load: { status: 'idle' },
+        suggested: [],
+      }),
+    ).toEqual({ settled: true, metric: undefined });
   });
 });

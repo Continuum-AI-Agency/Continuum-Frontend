@@ -132,6 +132,7 @@ function ReadyBody({
           <span
             className="min-w-0 truncate font-semibold text-3xl tabular-nums tracking-tight"
             data-currency={headline.currency ?? ''}
+            data-goal-metric={primary.objective.metric}
             data-target={compared ? String(compared.target.target) : undefined}
             data-testid="home-tile-goals-headline"
             data-value={String(headline.value)}

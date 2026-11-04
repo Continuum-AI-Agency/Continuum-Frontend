@@ -6,7 +6,7 @@
 //   opportunity  — the Optimizer's top stored candidate, with the money it is worth per day.
 //   change       — what moved: a portfolio's stored growth read against the window before it.
 //
-// Served by the Backend at HOME_READ_PATHS.brief: GET ?brandId=&locale=es|en. The brief speaks
+// Served by the Backend at HOME_READ_PATHS.brief: GET ?brandId=&goalMetric=&locale=es|en. The brief speaks
 // the account's language, Spanish by default, while the UI around it stays English.
 //
 // CITATION MARKER: every figure appears in its sentence's `text` as `${display}[${n}]` — the

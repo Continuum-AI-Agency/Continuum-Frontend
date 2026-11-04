@@ -8,7 +8,11 @@
 // The main button links to the Optimizer's Actions page rather than carrying the mode's verb: no
 // verb the board names ("Create paused", "Send for approval", "Add to checklist") is a write the
 // Optimizer makes on a waiting decision, and the queue's Approve lives inside each decision.
+//
+// A second read, the Backend's Opportunity stack (R1), adds the biggest opportunity's impact in the
+// brand's goal. It only adds: without it (the route is not deployed yet) the tile is as above.
 
+import { type HomeOpportunitiesData, homeOpportunitiesReadSchema } from '@continuum/contracts';
 import Link from 'next/link';
 import { lazy, useMemo } from 'react';
 import { useOptimizerPortfolios } from '@/components/paid-media/optimizer/useOptimizerData';
@@ -16,7 +20,9 @@ import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { HomeTileFrame, TileMissing } from '../../HomeTileFrame';
+import { readyDataOf } from '../../homeRead';
 import type { HomeTileProps } from '../../types';
+import { useHomeGoalRead } from '../../useHomeGoalRead';
 import {
   OPPS_MISSING,
   OPTIMIZER_LINKS,
@@ -24,6 +30,7 @@ import {
   portfolioDecisionsHref,
   waitingLine,
 } from './oppsModel';
+import { oppImpactLine, oppLeadOf } from './oppsStack';
 import { ROW_LINK, ROW_LINK_LIST, TileReadError } from './tileParts';
 
 const Module = lazy(() => import('./Module'));
@@ -33,6 +40,13 @@ const ROWS_AT_SIZE = { l: 4, m: 2, s: 0 } as const;
 export default function OppsTile({ ctx, tile }: HomeTileProps) {
   const portfolios = useOptimizerPortfolios(ctx.brandId, null);
   const { hasAnswer, isError, refetch, brandPortfolios } = portfolios;
+  const stack = readyDataOf(
+    useHomeGoalRead<HomeOpportunitiesData>(ctx, {
+      name: 'opportunities',
+      schema: homeOpportunitiesReadSchema,
+    }),
+  );
+  const lead = oppLeadOf(stack);
   const view = useMemo(
     () => (hasAnswer ? oppsViewOf(brandPortfolios) : null),
     [hasAnswer, brandPortfolios],
@@ -69,7 +83,7 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
   return (
     <HomeTileFrame
       badge={`${view.waiting} waiting`}
-      expanded={<Module brandId={ctx.brandId} portfolios={view.portfolios} />}
+      expanded={<Module brandId={ctx.brandId} portfolios={view.portfolios} stack={stack} />}
       expandedDescription="The decisions waiting in each portfolio, with the Optimizer's own approve and dismiss."
       state="ready"
       tile={tile}
@@ -87,6 +101,20 @@ export default function OppsTile({ ctx, tile }: HomeTileProps) {
             {view.waiting === 1 ? 'decision waiting' : 'decisions waiting'}
           </span>
         </p>
+        {lead ? (
+          <p
+            className="min-w-0 text-xs leading-snug"
+            data-goal-units={lead.impact.goalUnits ?? undefined}
+            data-money={lead.impact.moneyPerDay}
+            data-testid="home-tile-opps-impact"
+            data-unit={lead.impact.unit}
+          >
+            <span className="font-semibold tabular-nums">
+              {oppImpactLine(lead, stack?.goal ?? null)}
+            </span>
+            <span className="text-muted-foreground"> · {lead.label}</span>
+          </p>
+        ) : null}
         {view.waiting === 0 ? (
           <p className="text-muted-foreground text-xs">Nothing waits for a decision right now.</p>
         ) : rows.length > 0 ? (

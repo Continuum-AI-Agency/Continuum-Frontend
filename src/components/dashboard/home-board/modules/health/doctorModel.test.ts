@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { HomeHygieneCheck } from '@continuum/contracts';
 import { deriveDashboardSetup } from '@/components/dashboard/first-run/setupState';
 import { EASY_FIT_GOOGLE, EASY_FIT_META } from '../pacing/__fixtures__/ctx';
 import {
@@ -28,6 +29,7 @@ function inputs(overrides: Partial<DoctorInputs> = {}): DoctorInputs {
     ],
     googleCards: { status: 'ready', cards: [] },
     setup: SETUP_NO_BOOK,
+    hygiene: { status: 'unavailable' },
     ...overrides,
   };
 }
@@ -56,7 +58,7 @@ describe('doctorView', () => {
   it('lists naming and ad age as not readable yet, never as passing', () => {
     const view = ready(doctorView(inputs()));
     const unreadable = view.checks.filter((check) => check.status === 'unreadable');
-    expect(unreadable.map((check) => check.id)).toEqual(['phase_b:naming', 'phase_b:ad_age']);
+    expect(unreadable.map((check) => check.id)).toEqual(['hygiene:naming', 'hygiene:stale_ads']);
     for (const check of unreadable) expect(check.detail).toContain('not readable yet');
   });
 
@@ -189,7 +191,106 @@ describe('doctorView', () => {
       accountReads: [],
       googleCards: null,
       setup: null,
+      hygiene: { status: 'unavailable' },
     });
     expect(view).toEqual({ state: 'missing', reason: DOCTOR_MISSING });
+  });
+});
+
+describe('doctorView with the Account hygiene read', () => {
+  const check = (over: Partial<HomeHygieneCheck>): HomeHygieneCheck => ({
+    id: 'stale_ads',
+    status: 'ok',
+    count: 0,
+    total: 88,
+    detail: 'No active ad has run longer than 30 days (88 active).',
+    examples: [],
+    source: { kind: 'paid_media.ads', ref: null, since: null, until: '2026-11-04' },
+    ...over,
+  });
+  const ready = (checks: HomeHygieneCheck[]): DoctorInputs['hygiene'] => ({
+    status: 'ready',
+    generatedAt: '2026-11-04T12:00:00Z',
+    data: { asOf: '2026-11-04T05:05:36Z', namingSchema: null, checks },
+  });
+  const readyView = (hygiene: DoctorInputs['hygiene']) => {
+    const view = doctorView(inputs({ hygiene }));
+    if (view.state !== 'ready') throw new Error(`expected ready, got ${view.state}`);
+    return view;
+  };
+  const checksOf = (hygiene: DoctorInputs['hygiene']) =>
+    readyView(hygiene).checks.filter((c) => c.id.startsWith('hygiene:'));
+
+  it('replaces the two pending checks with what the read found', () => {
+    const view = readyView(ready([check({ id: 'naming' }), check({ id: 'stale_ads' })]));
+    expect(view.checks.every((c) => !c.detail.includes('not readable yet'))).toBe(true);
+    expect(view.checks.filter((c) => c.id.startsWith('hygiene:')).map((c) => c.status)).toEqual([
+      'pass',
+      'pass',
+    ]);
+  });
+
+  it('a warning and a failure both need fixing, and keep what the read said', () => {
+    const [naming, stale] = checksOf(
+      ready([
+        check({ id: 'naming', status: 'fail', count: 9, total: 10, detail: '9 of 10 do not.' }),
+        check({
+          status: 'warn',
+          count: 18,
+          detail: '18 of 88 active ads have run longer than 30 days.',
+          examples: [
+            {
+              level: 'ad',
+              id: 'a1',
+              name: 'ultrenagos',
+              code: 'running_too_long',
+              detail: 'Active for 61 days.',
+              ageDays: 61,
+              spendShare: null,
+            },
+          ],
+        }),
+      ]),
+    );
+    expect(naming?.status).toBe('fail');
+    expect(naming?.hygiene).toBe('fail');
+    expect(stale?.status).toBe('fail');
+    expect(stale?.hygiene).toBe('warn');
+    expect(stale?.detail).toContain('18 of 88');
+    expect(stale?.examples?.[0]?.name).toBe('ultrenagos');
+  });
+
+  it('unknown stays unknown: not passing, not failing, not counted', () => {
+    const before = readyView({ status: 'unavailable' });
+    const view = readyView(
+      ready([
+        check({
+          id: 'naming',
+          status: 'unknown',
+          count: 154,
+          total: 154,
+          detail: 'The convention is still the platform default, never set for this brand.',
+        }),
+        check({ status: 'ok' }),
+      ]),
+    );
+    const naming = view.checks.find((c) => c.id === 'hygiene:naming');
+    expect(naming?.status).toBe('unreadable');
+    expect(naming?.detail).toContain('never set');
+    expect(view.total).toBe(before.total + 1);
+  });
+
+  it('a read that holds nothing names why, and counts as nothing', () => {
+    const [naming, stale] = checksOf({
+      status: 'missing',
+      missing: { reason: 'no_data', detail: 'Ads were last synced 20 days ago.' },
+    });
+    expect(naming?.status).toBe('unreadable');
+    expect(stale?.status).toBe('unreadable');
+    expect(naming?.detail).toBe('The brand’s Meta ads have not synced recently enough to check.');
+  });
+
+  it('waits for the read', () => {
+    expect(doctorView(inputs({ hygiene: { status: 'loading' } })).state).toBe('loading');
   });
 });

@@ -11,7 +11,9 @@ import {
   readHomeBoard,
 } from '@continuum/contracts';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderInDom, waitFor } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { ApiError, markFetchFailure } from '@/lib/api/errors';
 import type { RequestOptions } from '@/lib/api/http.types';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
@@ -35,6 +37,16 @@ import {
 // other boundary: never a real PUT, and the route is not deployed yet, so a 404 is the default
 // here as it is in production. Everything between them and the tile is the real code.
 // `mock.module` replaces a module for the whole process, so this file runs on its own.
+
+/** The month's read is held by React Query, so each render gets a client of its own. */
+const render = (ui: ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderInDom(ui, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+};
 
 type EdgeBody = {
   platform: string;

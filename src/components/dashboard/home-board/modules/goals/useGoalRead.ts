@@ -7,8 +7,12 @@
 // per result the Home has a goal for (leads, purchases) and put in the Home's words by
 // googleOverviewForHome. An account whose read fails is left out; the read fails only when no
 // account answers, and keeps every failure so the tile can say why.
+//
+// React Query holds the answer: the Backend reads that speak in the brand's goal wait for this same
+// read (useHomeGoalRead), so a board never reads the month twice.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import type { HomeAdAccount } from '@/lib/home/homeAccounts';
 import {
   GOOGLE_HOME_RESULTS,
@@ -45,6 +49,27 @@ async function readGoalAccount(
   return googleOverviewForHome({ leads: leads ?? null, purchases: purchases ?? null });
 }
 
+async function readGoalAccounts(
+  brandId: string,
+  accounts: HomeAdAccount[],
+  readWindow: GoalWindow,
+): Promise<GoalLoad> {
+  const results = await Promise.allSettled(
+    accounts.map((account) => readGoalAccount(brandId, account, readWindow)),
+  );
+  const reads: GoalAccountRead[] = [];
+  const failures: { account: HomeAdAccount; error: unknown }[] = [];
+  results.forEach((result, index) => {
+    const account = accounts[index];
+    if (!account) return;
+    if (result.status === 'fulfilled') reads.push({ account, overview: result.value });
+    else failures.push({ account, error: result.reason as unknown });
+  });
+  return reads.length === 0 ? { status: 'error', failures } : { status: 'ready', reads, failures };
+}
+
+const FIVE_MINUTES = 5 * 60 * 1000;
+
 /** `attempt` is Retry's counter: bumping it reads again with the same inputs. A null window reads
  *  nothing. An answer is kept with the read it answered, so a new window is never shown the last
  *  one's figures while it loads. */
@@ -59,35 +84,18 @@ export function useGoalRead(
   const stable = useMemo(() => JSON.parse(accountsKey) as HomeAdAccount[], [accountsKey]);
   const since = readWindow?.since ?? null;
   const until = readWindow?.until ?? null;
-  const readKey = `${brandId}|${accountsKey}|${since}|${until}|${attempt}`;
-  const [settled, setSettled] = useState<{ key: string; load: GoalLoad } | null>(null);
+  const reads = stable.length > 0 && since !== null && until !== null;
 
-  useEffect(() => {
-    if (stable.length === 0 || since === null || until === null) return;
-    let cancelled = false;
-    Promise.allSettled(
-      stable.map((account) => readGoalAccount(brandId, account, { since, until })),
-    ).then((results) => {
-      if (cancelled) return;
-      const reads: GoalAccountRead[] = [];
-      const failures: { account: HomeAdAccount; error: unknown }[] = [];
-      results.forEach((result, index) => {
-        const account = stable[index];
-        if (!account) return;
-        if (result.status === 'fulfilled') reads.push({ account, overview: result.value });
-        else failures.push({ account, error: result.reason as unknown });
-      });
-      setSettled({
-        key: readKey,
-        load:
-          reads.length === 0 ? { status: 'error', failures } : { status: 'ready', reads, failures },
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, stable, since, until, readKey]);
+  const read = useQuery({
+    queryKey: ['home-goal-read', brandId, accountsKey, since, until, attempt],
+    queryFn: () =>
+      readGoalAccounts(brandId, stable, { since: since as string, until: until as string }),
+    enabled: reads,
+    retry: false,
+    staleTime: FIVE_MINUTES,
+    refetchOnWindowFocus: false,
+  });
 
-  if (stable.length === 0 || since === null || until === null) return IDLE;
-  return settled?.key === readKey ? settled.load : LOADING;
+  if (!reads) return IDLE;
+  return read.data ?? LOADING;
 }

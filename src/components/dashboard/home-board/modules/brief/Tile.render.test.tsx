@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { HomeBoardTile } from '@continuum/contracts';
+import type { HomeBoardTile, HomeBriefData } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { HomeReadLoad } from '../../homeRead';
 import { ctxFor } from '../ask/__fixtures__/readings';
 import {
   GOOGLE_ACCOUNT,
@@ -27,6 +28,10 @@ mock.module('./useBriefReads', () => ({
   }),
 }));
 
+let briefLoad: HomeReadLoad<HomeBriefData> = { status: 'unavailable' };
+const realGoalRead = await import('../../useHomeGoalRead');
+mock.module('../../useHomeGoalRead', () => ({ ...realGoalRead, useHomeGoalRead: () => briefLoad }));
+
 const { default: BriefTile } = await import('./Tile');
 
 const tile: HomeBoardTile = { id: 'brief', size: 'm', urgency: 1, score: 12, why: null };
@@ -36,6 +41,7 @@ afterEach(() => {
   cleanup();
   reads = [];
   retries = 0;
+  briefLoad = { status: 'unavailable' };
 });
 
 describe('BriefTile', () => {
@@ -101,5 +107,85 @@ describe('BriefTile', () => {
     reads = [{ account: META_ACCOUNT, status: 'pending', data: undefined }];
     render(<BriefTile ctx={ctx} tile={tile} />);
     expect(screen.getByTestId('home-tile-brief').getAttribute('data-module-state')).toBe('loading');
+  });
+});
+
+describe('BriefTile with the numbered brief', () => {
+  const data: HomeBriefData = {
+    basis: 'deterministic_v1',
+    locale: 'es',
+    objective: null,
+    sentences: [
+      {
+        id: 'opportunity',
+        text: 'La mayor oportunidad: «gym», 9.16 MXN[1] al día recuperables.',
+        figures: [
+          {
+            n: 1,
+            label: 'Spending on nothing',
+            value: 9.16,
+            unit: 'currency',
+            currency: 'MXN',
+            display: '9.16 MXN',
+            field: 'impact_per_day',
+            source: {
+              kind: 'optimizer.account_daily_reads',
+              ref: '5251780631|platform_signal:8c5a',
+              since: '2026-11-04',
+              until: '2026-11-04',
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const ready: HomeReadLoad<HomeBriefData> = {
+    status: 'ready',
+    generatedAt: '2026-11-04T12:00:00Z',
+    data,
+  };
+
+  it('prints the sentences with their numbers, in the words they were written', () => {
+    reads = [{ account: META_ACCOUNT, status: 'success', data: META_READ_TODAY }];
+    briefLoad = ready;
+    render(<BriefTile ctx={ctx} tile={tile} />);
+    const sentences = screen.getByTestId('home-tile-brief-sentences');
+    expect(sentences.textContent).toContain('La mayor oportunidad');
+    expect(sentences.querySelector('[data-citation="1"]')?.textContent).toBe('1');
+    expect(screen.getByTestId('home-tile-brief-headline').getAttribute('data-figures')).toBe('1');
+  });
+
+  it('a brand with no stored daily read still has a brief', () => {
+    reads = [];
+    briefLoad = ready;
+    render(<BriefTile ctx={ctx} tile={tile} />);
+    expect(screen.getByTestId('home-tile-brief').getAttribute('data-module-state')).toBe('ready');
+    expect(screen.getByTestId('home-tile-brief-headline').getAttribute('data-value')).toBe(
+      '2026-11-04',
+    );
+  });
+
+  it('opens each figure with its source and window, and drops the pending line', () => {
+    reads = [{ account: META_ACCOUNT, status: 'success', data: META_READ_TODAY }];
+    briefLoad = ready;
+    render(<BriefTile ctx={ctx} tile={tile} />);
+    fireEvent.click(screen.getByTestId('home-tile-brief-open'));
+    const row = screen.getByTestId('home-brief-figure');
+    expect(row.getAttribute('data-n')).toBe('1');
+    expect(row.getAttribute('data-value')).toBe('9.16');
+    expect(row.textContent).toContain('9.16 MXN');
+    expect(row.textContent).toContain('The Optimizer’s daily read');
+    expect(row.textContent).toContain('Nov 4');
+    expect(screen.queryByTestId('home-brief-evidence-note')).toBeNull();
+  });
+
+  it('without the read it draws the stored narrative and its honest line, never an error', () => {
+    reads = [{ account: META_ACCOUNT, status: 'success', data: META_READ_TODAY }];
+    briefLoad = { status: 'unavailable' };
+    render(<BriefTile ctx={ctx} tile={tile} />);
+    expect(screen.getByTestId('home-tile-brief').getAttribute('data-module-state')).toBe('ready');
+    expect(screen.queryByTestId('home-tile-brief-sentences')).toBeNull();
+    fireEvent.click(screen.getByTestId('home-tile-brief-open'));
+    expect(screen.getByTestId('home-brief-evidence-note')).toBeTruthy();
   });
 });

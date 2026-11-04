@@ -8,9 +8,10 @@ import {
   mock,
   setSystemTime,
 } from 'bun:test';
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { HomeOvernightLogData, PortfolioListItem } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { OptimizerActionFeedRow } from '@/components/paid-media/optimizer/useOptimizerData';
+import type { HomeReadLoad } from '../../homeRead';
 import { homeContext, tileOf } from '../opps/__fixtures__/homeContext';
 import {
   EASY_FIT_META_BRAND_ID,
@@ -69,6 +70,11 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
     return { ...actionsRead, fetchNextPage, refetch: refetchActions };
   },
 }));
+
+// The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
+let logLoad: HomeReadLoad<HomeOvernightLogData> = { status: 'unavailable' };
+const realRead = await import('../../useHomeRead');
+mock.module('../../useHomeRead', () => ({ ...realRead, useHomeRead: () => logLoad }));
 
 const { default: AutopilotTile } = await import('./Tile');
 const { OUTCOME_NOTE, OVERNIGHT_MISSING } = await import('./overnightModel');
@@ -166,5 +172,138 @@ describe('Overnight expanded', () => {
     // Read-only: no autonomy control on the Home.
     expect(within(sheet).queryByRole('switch')).toBeNull();
     expect(within(sheet).queryByRole('tab')).toBeNull();
+  });
+});
+
+describe('Overnight tile with the Backend read', () => {
+  const LOG: HomeOvernightLogData = {
+    window: {
+      since: '2026-11-03T12:00:00.000Z',
+      until: '2026-11-04T12:00:00.000Z',
+      hours: 24,
+    },
+    entries: [
+      {
+        id: 'e1',
+        at: '2026-11-04T07:00:05.002Z',
+        source: 'apply_audit',
+        kind: 'budget',
+        title: 'Search',
+        entityId: 'a1',
+        entityName: 'Search',
+        outcome: 'failed',
+        outcomeReason: 'Meta refused the budget.',
+        portfolioId: null,
+        portfolioName: 'Leads',
+        platform: 'meta',
+        actor: 'autopilot',
+        change: null,
+        justification: null,
+      },
+    ],
+    counts: {
+      applied: 3,
+      failed: 1,
+      paused: 0,
+      createdPaused: 0,
+      pendingApproval: 0,
+      queued: 0,
+      undone: 0,
+      skipped: 0,
+      skippedByCap: 2,
+    },
+    bySource: {
+      applyAudit: 4,
+      cycleItem: 0,
+      actionLedger: 0,
+      recommendation: 0,
+      audienceProposal: 0,
+    },
+    total: 4,
+    truncated: false,
+    capSkipped: {
+      count: 2,
+      items: [
+        {
+          id: 'c1',
+          at: '2026-11-04T07:00:05.002Z',
+          portfolioId: 'b9cebbcf-2832-440a-b326-3af20c19be37',
+          platform: 'meta',
+          entityId: 'as1',
+          entityName: 'Retargeting',
+          changePct: 0.6,
+          capBreached: true,
+          reason: 'Over the 20% cap.',
+        },
+      ],
+    },
+    source: { kind: 'optimizer_list_action_outcomes', ref: null, since: null, until: null },
+  };
+  const ready: HomeReadLoad<HomeOvernightLogData> = {
+    status: 'ready',
+    generatedAt: '2026-11-04T12:00:00Z',
+    data: LOG,
+  };
+
+  afterEach(() => {
+    logLoad = { status: 'unavailable' };
+  });
+
+  it('counts what the read counted, with each outcome and the cap, and a failure reads failed', () => {
+    logLoad = ready;
+    render(
+      <AutopilotTile ctx={homeContext(EASY_FIT_META_BRAND_ID)} tile={tileOf('autopilot', 'l')} />,
+    );
+    const headline = screen.getByTestId('home-tile-autopilot-headline');
+    expect(headline.getAttribute('data-value')).toBe('4');
+    expect(headline.getAttribute('data-source')).toBe('overnight-log');
+    expect(headline.getAttribute('data-skipped-by-cap')).toBe('2');
+    expect(screen.getByTestId('home-tile-autopilot-summary').textContent).toBe(
+      '3 applied · 1 failed · 2 skipped by cap',
+    );
+    expect(screen.getAllByTestId('home-overnight-row')[0]?.getAttribute('data-outcome')).toBe(
+      'failed',
+    );
+  });
+
+  it('opens the cap’s moves and drops the pending note', () => {
+    logLoad = ready;
+    render(
+      <AutopilotTile ctx={homeContext(EASY_FIT_META_BRAND_ID)} tile={tileOf('autopilot', 'l')} />,
+    );
+    fireEvent.click(screen.getByTestId('home-tile-autopilot-open'));
+    expect(screen.getByTestId('home-overnight-cap-item').textContent).toContain(
+      'Retargeting: +60%',
+    );
+    expect(screen.queryByTestId('home-overnight-note')).toBeNull();
+  });
+
+  it('a window the ledgers hold nothing for is zero, without reading the feed', () => {
+    logLoad = {
+      status: 'missing',
+      missing: { reason: 'no_data', detail: 'The Optimizer recorded no action.' },
+    };
+    render(
+      <AutopilotTile ctx={homeContext(EASY_FIT_META_BRAND_ID)} tile={tileOf('autopilot', 'l')} />,
+    );
+    expect(screen.getByTestId('home-tile-autopilot-headline').getAttribute('data-value')).toBe('0');
+    expect(screen.getByTestId('home-tile-autopilot-summary').textContent).toBe(
+      'Nothing ran in the last 24 h.',
+    );
+  });
+
+  it('without the read it counts the feed and keeps saying outcomes are pending, never an error', () => {
+    logLoad = { status: 'unavailable' };
+    render(
+      <AutopilotTile ctx={homeContext(EASY_FIT_META_BRAND_ID)} tile={tileOf('autopilot', 'l')} />,
+    );
+    expect(screen.getByTestId('home-tile-autopilot').getAttribute('data-module-state')).toBe(
+      'ready',
+    );
+    expect(screen.getByTestId('home-tile-autopilot-headline').getAttribute('data-source')).toBe(
+      'feed',
+    );
+    fireEvent.click(screen.getByTestId('home-tile-autopilot-open'));
+    expect(screen.getByTestId('home-overnight-note').textContent).toBe(OUTCOME_NOTE);
   });
 });

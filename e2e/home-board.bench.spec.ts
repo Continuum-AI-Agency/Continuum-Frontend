@@ -4,14 +4,23 @@ import {
   arrangeHomeTiles,
   flightOf,
   HOME_OBJECTIVE_METRICS,
+  HOME_READ_GOAL_PARAM,
+  type HomeAccountHygieneData,
   type HomeBoard,
   type HomeBoardSort,
   type HomeBrandReading,
   type HomeBrandSignals,
+  type HomeBriefData,
+  type HomeCreativeSpotlightData,
   type HomeMode,
   type HomeObjective,
   type HomeObjectiveMetric,
+  type HomeOpportunitiesData,
+  type HomeOrganicWeekData,
+  type HomeOvernightLogData,
   type HomeProfileRow,
+  type HomeReadEnvelope,
+  type HomeReadName,
   type HomeTileId,
   homeProfileRowSchema,
   homeTileIdSchema,
@@ -89,6 +98,20 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //        market    the newest awareness report's lifecycle feed, last 7 days
 //        brief     optimizer_get_account_read per ad account: the newest narrative's day
 //      A `missing` tile whose direct read holds a figure FAILS too.
+//      The Phase B reads (/api/home/reads/*, on NEXT_PUBLIC_API_URL) are held the same way. For each
+//      read a tile asked for, the bench asks the Backend the same URL as the member and compares:
+//        answered  the wired figure on the tile and in its sheet equals the read (top opportunity,
+//                  numbered figures, outcome counts and the cap, hook rate and format per ad, reach
+//                  per post, the hygiene verdicts), and `unknown` stays unknown
+//        404       the deployed Backend has no route yet: the tile is not in error and its sheet
+//                  shows today's honest line
+//      The goal is one: the Goal tile's metric, what the board asked the reads with, and what R1
+//      and R6 answered in must agree.
+//      Two wired figures need data no benched board holds on an ordinary day: a night with writes
+//      and a cap (the 24 h window is often empty) and a card priced in goal units (a brand whose
+//      goal is money prices nothing in units). `benchWidened` opens the real tile on a real brand
+//      with only that read's query widened (7 days; the goal asked for), so a real answer reaches
+//      the real tile. The label on screen says 24 h in that one step, and the run says so.
 //   3. Each tile's expanded sheet opens and draws without an error boundary; the Weekly story
 //      opens; an Ask-bar suggestion navigates to Jaina with the question in the link (and, on the
 //      first brand, in the composer) — nothing is sent: every non-GET to the API is aborted then.
@@ -103,7 +126,8 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // pin (deleted with the session), the member's active-brand preference (restored, read back) and
 // the session itself (revoked, proven by a refused refresh).
 //
-// Un-exercised, by name: the goal save path, every approve/dismiss/send/promote write, Jaina's
+// Un-exercised, by name: reach on a measured post when no benched brand has one this week, the goal
+// save path, every approve/dismiss/send/promote write, Jaina's
 // answer to the question (never sent), the `approve` mode when no member brand reads as it, and a
 // production build (this is a dev server: a chunk 404 the server HTML asks for, also seen on
 // /settings, is a WARN here, and only a production build can clear it).
@@ -117,23 +141,28 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
 const MEMBER_EMAIL = 'ramibuisel@gmail.com';
 const EASYFIT_META_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
+const EASYFIT_BRAND_ID = '6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64';
 const PINK_BRAND_ID = '8e5b7185-e43f-4150-b763-b86c4f5297a0';
 const MODES: HomeMode[] = ['operate', 'fix', 'recommend', 'approve', 'setup'];
 /** The viewer's zone, pinned so the browser and the bench agree on "this month" and "this week". */
 const VIEWER_TIME_ZONE = 'America/Mexico_City';
 const SHOTS_DIR = resolve(__dirname, '../test-results/home-board');
 const SETTLE_MS = 150_000;
-const API_HOST = 'api.trycontinuum.ai';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'https://api.trycontinuum.ai').replace(
+  /\/$/,
+  '',
+);
+const API_HOST = new URL(API_BASE).host;
 
 // Console lines that are not errors of the board, each with its reason. They are never dropped
 // silently: each class is counted and graded on its own line (WARN), and anything else is a FAIL.
 const CONSOLE_KNOWN: { id: string; pattern: RegExp; reason: string }[] = [
   {
-    id: 'goal-targets-not-deployed',
+    id: 'home-reads-not-deployed',
     // The browser logs the 404 itself; the app's own code logs nothing and draws today's state.
-    pattern: /status of 404 .*@ https:\/\/api\.trycontinuum\.ai\/api\/home\/goal-targets/,
+    pattern: /status of 404 .*@ https?:\/\/[^ ]+\/api\/home\/(goal-targets|reads\/)/,
     reason:
-      'Phase B has not deployed /api/home/goal-targets yet: the goal tile keeps its real figure and offers no target form; goes away once the Backend deploys',
+      'Phase B has not deployed /api/home/* yet: each tile keeps its real figure and says what is pending; goes away once the Backend deploys',
   },
   {
     id: 'expired-meta-thumbnail',
@@ -152,6 +181,8 @@ const notes: string[] = [];
 const recorder = createBenchRecorder('home:board:e2e:bench', notes);
 type Grade = 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
 const tally = new Map<string, Record<Grade, number>>();
+const phaseBWired = new Map<HomeReadName, string[]>();
+const phaseBPending = new Map<HomeReadName, string[]>();
 const failures: string[] = [];
 
 function grade(scope: string, step: string, result: Grade, detail?: string): void {
@@ -601,7 +632,11 @@ async function countActionsSince(brandId: string, since: Date): Promise<number> 
 }
 
 /** The tile counts the 24 h before its mount; the bench brackets that instant. */
-async function expectAutopilot(facts: BrandFacts, mountedAt: number): Promise<Expected> {
+async function expectAutopilot(
+  facts: BrandFacts,
+  mountedAt: number,
+  reads: HomeReadsSeen,
+): Promise<Expected> {
   const acting = facts.portfolios.filter(
     (row) =>
       proposes(row) &&
@@ -610,6 +645,13 @@ async function expectAutopilot(facts: BrandFacts, mountedAt: number): Promise<Ex
       ),
   );
   if (acting.length === 0) return { kind: 'missing', detail: 'no portfolio Continuum may write' };
+  const log = await envelopeSeen<HomeOvernightLogData>(reads, 'overnightLog');
+  if (log?.state === 'ready') {
+    return { kind: 'value', value: log.data.total, detail: 'the Overnight read’s total' };
+  }
+  if (log?.state === 'missing' && log.missing.reason === 'no_data') {
+    return { kind: 'value', value: 0, detail: `the Overnight read: ${log.missing.detail}` };
+  }
   const day = 24 * 60 * 60 * 1000;
   const wide = await countActionsSince(facts.brandId, new Date(mountedAt - day - 5_000));
   const narrow = await countActionsSince(facts.brandId, new Date(Date.now() - day));
@@ -702,7 +744,7 @@ async function readAccountReads(
   );
 }
 
-async function expectBrief(facts: BrandFacts): Promise<Expected> {
+async function expectBrief(facts: BrandFacts, seen: HomeReadsSeen): Promise<Expected> {
   const reads = await readAccountReads(facts);
   const latest = new Map<string, { day: string; readyAt: string }>();
   for (const { account, envelope } of reads) {
@@ -719,6 +761,14 @@ async function expectBrief(facts: BrandFacts): Promise<Expected> {
   )[0];
   const failed = reads.filter((read) => read.error).length;
   if (!newest) {
+    const brief = await envelopeSeen<HomeBriefData>(seen, 'brief');
+    if (brief?.state === 'ready') {
+      return {
+        kind: 'value',
+        value: brief.generatedAt.slice(0, 10),
+        detail: 'no stored narrative: the numbered brief’s own day',
+      };
+    }
     return { kind: 'missing', detail: `no stored narrative (${failed} read(s) failed)` };
   }
   return {
@@ -785,7 +835,7 @@ async function expectSetup(facts: BrandFacts): Promise<Expected> {
   };
 }
 
-async function expectCreative(facts: BrandFacts): Promise<Expected> {
+async function expectCreative(facts: BrandFacts, seen: HomeReadsSeen): Promise<Expected> {
   if (!facts.adAccounts.some((account) => account.platform === 'meta')) {
     return { kind: 'missing', detail: 'no Meta ad account' };
   }
@@ -799,6 +849,14 @@ async function expectCreative(facts: BrandFacts): Promise<Expected> {
   const verdicts = (data as { verdicts?: unknown } | null)?.verdicts;
   const count = Array.isArray(verdicts) ? verdicts.length : 0;
   if (count === 0) {
+    const spotlight = await envelopeSeen<HomeCreativeSpotlightData>(seen, 'creativeSpotlight');
+    if (spotlight?.state === 'ready') {
+      return {
+        kind: 'value',
+        value: spotlight.data.adsWithSpend,
+        detail: 'no report verdict: the Spotlight read’s ads with spend',
+      };
+    }
     return {
       kind: 'missing',
       detail: `report ${(data as { status?: string } | null)?.status ?? 'absent'}, no verdict`,
@@ -1346,7 +1404,7 @@ async function guardWrites(context: BrowserContext, guard: Guard): Promise<void>
     guard.seen.push(`${method} ${name}`);
     return route.continue();
   });
-  await context.route(`https://${API_HOST}/**`, async (route) => {
+  await context.route(`${API_BASE}/**`, async (route) => {
     const request = route.request();
     const method = request.method();
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return route.continue();
@@ -1366,12 +1424,449 @@ async function guardWrites(context: BrowserContext, guard: Guard): Promise<void>
 // One brand, end to end
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The Phase B reads
+// ---------------------------------------------------------------------------
+
+type SeenRead = { url: string; status: number; body: Promise<unknown> };
+type HomeReadsSeen = Map<HomeReadName, SeenRead>;
+type SheetCheck = (sheet: Locator) => Promise<void>;
+
+const READ_PATHS: Partial<Record<HomeReadName, string>> = {
+  opportunities: '/api/home/reads/opportunities',
+  overnightLog: '/api/home/reads/overnight-log',
+  creativeSpotlight: '/api/home/reads/creative-spotlight',
+  organicWeek: '/api/home/reads/organic-week',
+  accountHygiene: '/api/home/reads/account-hygiene',
+  brief: '/api/home/reads/brief',
+};
+
+const READ_OF_TILE: Partial<Record<HomeTileId, HomeReadName>> = {
+  opps: 'opportunities',
+  brief: 'brief',
+  autopilot: 'overnightLog',
+  creative: 'creativeSpotlight',
+  organic: 'organicWeek',
+  health: 'accountHygiene',
+};
+
+function watchHomeReads(page: Page): HomeReadsSeen {
+  const seen: HomeReadsSeen = new Map();
+  page.on('response', (response) => {
+    if (response.request().method() !== 'GET') return;
+    const url = response.url();
+    for (const [name, path] of Object.entries(READ_PATHS) as [HomeReadName, string][]) {
+      if (!url.includes(`${path}?`)) continue;
+      seen.set(name, {
+        url,
+        status: response.status(),
+        body: response.json().catch(() => null),
+      });
+    }
+  });
+  return seen;
+}
+
+/** The read the page asked for, once it has answered; null when it never asked in time. */
+async function awaitRead(seen: HomeReadsSeen, name: HomeReadName): Promise<SeenRead | null> {
+  const until = Date.now() + 45_000;
+  while (Date.now() < until) {
+    const read = seen.get(name);
+    if (read) return read;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  }
+  return null;
+}
+
+async function envelopeSeen<T>(
+  seen: HomeReadsSeen,
+  name: HomeReadName,
+): Promise<HomeReadEnvelope<T> | null> {
+  const read = await awaitRead(seen, name);
+  if (read?.status !== 200) return null;
+  return (await read.body) as HomeReadEnvelope<T> | null;
+}
+
+/** Stable JSON with the moment of the answer left out: two reads differ only there. */
+function comparable(body: unknown): string {
+  return JSON.stringify(body, (key, value) =>
+    key === 'generatedAt' || key === 'since' || key === 'until' ? undefined : value,
+  );
+}
+
+async function readDirectly(url: string): Promise<{ status: number; body: unknown }> {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${await memberToken()}` },
+  });
+  return { status: response.status, body: await response.json().catch(() => null) };
+}
+
+const rowsFor = (sheet: Locator, testId: string) => sheet.getByTestId(testId);
+
+function checkOpportunitiesOnTile(page: Page, data: HomeOpportunitiesData): Promise<string> {
+  const top = data.opportunities[0];
+  if (!top) return Promise.resolve('the stack is empty');
+  const impact = page.getByTestId('home-tile-opps-impact');
+  return (async () => {
+    await expect(impact).toHaveAttribute('data-unit', top.impact.unit);
+    await expect(impact).toHaveAttribute('data-money', String(top.impact.moneyPerDay));
+    if (top.impact.goalUnits !== null) {
+      await expect(impact).toHaveAttribute('data-goal-units', String(top.impact.goalUnits));
+    }
+    return `top ${top.detector}: ${(await impact.innerText()).replace(/\s+/g, ' ')}`;
+  })();
+}
+
+async function checkBriefOnTile(page: Page, data: HomeBriefData): Promise<string> {
+  const figures = data.sentences.flatMap((sentence) => sentence.figures);
+  await expect(page.getByTestId('home-tile-brief-headline')).toHaveAttribute(
+    'data-figures',
+    String(figures.length),
+  );
+  const shown = page.getByTestId('home-tile-brief-sentences');
+  await expect(shown.locator('[data-citation]')).toHaveCount(figures.length);
+  const text = (await shown.innerText()).replace(/\s+/g, ' ');
+  for (const figure of figures) expect(text).toContain(figure.display);
+  return `${figures.length} numbered figure(s): ${data.sentences.map((sentence) => sentence.id).join(', ')}`;
+}
+
+async function checkOvernightOnTile(page: Page, data: HomeOvernightLogData): Promise<string> {
+  const headline = page.getByTestId('home-tile-autopilot-headline');
+  await expect(headline).toHaveAttribute('data-source', 'overnight-log');
+  await expect(headline).toHaveAttribute('data-value', String(data.total));
+  await expect(headline).toHaveAttribute('data-skipped-by-cap', String(data.capSkipped.count));
+  return `${data.total} action(s), ${data.counts.failed} failed, ${data.capSkipped.count} skipped by cap: ${await page.getByTestId('home-tile-autopilot-summary').innerText()}`;
+}
+
+async function checkSpotlightOnTile(page: Page, data: HomeCreativeSpotlightData): Promise<string> {
+  const line = page.getByTestId('home-tile-creative-spotlight');
+  await expect(line).toHaveAttribute('data-ads', String(data.ads.length));
+  return await line.innerText();
+}
+
+async function checkOrganicOnTile(page: Page, data: HomeOrganicWeekData): Promise<string> {
+  if (!data.topPost) return `no measured post this week (${data.totals.published} published)`;
+  const top = page.getByTestId('home-tile-organic-top-post');
+  await expect(top).toHaveAttribute('data-reach', String(data.topPost.reach));
+  return await top.innerText();
+}
+
+const SHEET_WHEN_READY: Partial<Record<HomeReadName, (body: never) => SheetCheck>> = {
+  opportunities: (data: HomeOpportunitiesData) => async (sheet) => {
+    await expect(rowsFor(sheet, 'home-opps-stack-row')).toHaveCount(data.opportunities.length);
+    await expect(sheet.getByTestId('home-opps-goal-units')).toHaveCount(0);
+  },
+  brief: (data: HomeBriefData) => async (sheet) => {
+    const figures = data.sentences.flatMap((sentence) => sentence.figures);
+    const rows = rowsFor(sheet, 'home-brief-figure');
+    await expect(rows).toHaveCount(figures.length);
+    for (const [index, figure] of figures.entries()) {
+      const row = rows.nth(index);
+      await expect(row).toHaveAttribute('data-n', String(figure.n));
+      await expect(row).toHaveAttribute('data-value', String(figure.value));
+      await expect(row).toHaveAttribute('data-source-kind', figure.source.kind);
+    }
+    await expect(sheet.getByTestId('home-brief-evidence-note')).toHaveCount(0);
+  },
+  overnightLog: (data: HomeOvernightLogData) => async (sheet) => {
+    await expect(rowsFor(sheet, 'home-overnight-row')).toHaveCount(data.entries.length);
+    await expect(rowsFor(sheet, 'home-overnight-cap-item')).toHaveCount(
+      data.capSkipped.items.length,
+    );
+    await expect(sheet.getByTestId('home-overnight-note')).toHaveCount(0);
+  },
+  creativeSpotlight: (data: HomeCreativeSpotlightData) => async (sheet) => {
+    const rows = rowsFor(sheet, 'creative-spotlight-ad');
+    await expect(rows).toHaveCount(data.ads.length);
+    for (const [index, ad] of data.ads.entries()) {
+      const row = rows.nth(index);
+      await expect(row).toHaveAttribute('data-ad', ad.adId);
+      await expect(row).toHaveAttribute('data-format', ad.format);
+      await expect(row).toHaveAttribute('data-verdict', ad.verdict);
+      if (ad.hookRate === null) {
+        expect(await row.getAttribute('data-hook-rate')).toBeNull();
+      } else {
+        await expect(row).toHaveAttribute('data-hook-rate', String(ad.hookRate));
+      }
+    }
+    await expect(sheet.getByTestId('creative-not-readable')).toHaveCount(0);
+  },
+  organicWeek: (data: HomeOrganicWeekData) => async (sheet) => {
+    const posts = data.days.flatMap((day) => day.published);
+    await expect(rowsFor(sheet, 'home-organic-reach-row')).toHaveCount(posts.length);
+    const reach = await rowsFor(sheet, 'home-organic-reach-row').evaluateAll((rows) =>
+      rows.map((row) => row.getAttribute('data-reach')),
+    );
+    const wanted = [...posts]
+      .sort((a, b) => (b.reach ?? -1) - (a.reach ?? -1))
+      .map((post) => (post.reach === null ? null : String(post.reach)));
+    expect(reach).toEqual(wanted);
+    await expect(sheet.getByTestId('home-organic-reach-note')).toHaveCount(0);
+  },
+  accountHygiene: (data: HomeAccountHygieneData) => async (sheet) => {
+    for (const check of data.checks) {
+      const row = sheet.locator(`[data-check="hygiene:${check.id}"]`);
+      await expect(row).toHaveAttribute('data-hygiene', check.status);
+      await expect(row).toHaveAttribute(
+        'data-status',
+        check.status === 'ok' ? 'pass' : check.status === 'unknown' ? 'unreadable' : 'fail',
+      );
+    }
+  },
+};
+
+/** Today's honest line in each sheet, while the route is not here. */
+const SHEET_WHEN_PENDING: Partial<Record<HomeReadName, SheetCheck>> = {
+  opportunities: async (sheet) => {
+    await expect(sheet.getByTestId('home-opps-goal-units')).toBeVisible();
+  },
+  brief: async (sheet) => {
+    await expect(sheet.getByTestId('home-brief-evidence-note')).toBeVisible();
+  },
+  overnightLog: async (sheet) => {
+    await expect(sheet.getByTestId('home-overnight-note')).toBeVisible();
+  },
+  creativeSpotlight: async (sheet) => {
+    await expect(sheet.getByTestId('creative-not-readable')).toBeVisible();
+  },
+  organicWeek: async (sheet) => {
+    await expect(sheet.getByTestId('home-organic-reach-note')).toBeVisible();
+  },
+  accountHygiene: async (sheet) => {
+    for (const id of ['naming', 'stale_ads']) {
+      await expect(sheet.locator(`[data-check="hygiene:${id}"]`)).toContainText('not readable yet');
+    }
+  },
+};
+
+/** Holds each Phase B read a tile drew to the Backend's own answer. Returns what each sheet owes. */
+async function checkHomeReads(
+  page: Page,
+  scope: string,
+  states: TileState[],
+  seen: HomeReadsSeen,
+): Promise<Map<HomeTileId, SheetCheck>> {
+  const sheetChecks = new Map<HomeTileId, SheetCheck>();
+  for (const tile of states) {
+    const name = READ_OF_TILE[tile.id];
+    if (!name) continue;
+    const read = await awaitRead(seen, name);
+    if (!read) {
+      grade(
+        scope,
+        `${name} read`,
+        'SKIP',
+        `the ${tile.id} tile (${tile.state}) did not ask for it`,
+      );
+      continue;
+    }
+    const direct = await readDirectly(read.url);
+    const body = await read.body;
+    const agrees = direct.status === read.status && comparable(direct.body) === comparable(body);
+    grade(
+      scope,
+      `${name}: the browser and a direct read get the same answer`,
+      agrees ? 'PASS' : 'WARN',
+      `${read.status} / direct ${direct.status}`,
+    );
+    if (read.status === 404 || read.status >= 500) {
+      phaseBPending.set(name, [...(phaseBPending.get(name) ?? []), scope]);
+      grade(
+        scope,
+        `${name}: ${read.status} degrades to today’s line`,
+        tile.state === 'ready' || tile.state === 'missing' ? 'PASS' : 'FAIL',
+        `tile ${tile.state}`,
+      );
+      const pending = SHEET_WHEN_PENDING[name];
+      if (pending && tile.state === 'ready') sheetChecks.set(tile.id, pending);
+      continue;
+    }
+    const envelope = body as HomeReadEnvelope<unknown> | null;
+    if (envelope?.state !== 'ready') {
+      grade(
+        scope,
+        `${name} holds nothing`,
+        tile.state === 'error' ? 'FAIL' : 'PASS',
+        `tile ${tile.state}; ${envelope?.state === 'missing' ? `${envelope.missing.reason}: ${envelope.missing.detail}` : `no envelope`}`,
+      );
+      continue;
+    }
+    if (tile.state !== 'ready') {
+      grade(
+        scope,
+        `${name} answered and the ${tile.id} tile drew it`,
+        'FAIL',
+        `tile ${tile.state}`,
+      );
+      continue;
+    }
+    phaseBWired.set(name, [...(phaseBWired.get(name) ?? []), scope]);
+    await check(scope, `${name}: the tile draws what the read returned`, async () => {
+      switch (name) {
+        case 'opportunities':
+          return checkOpportunitiesOnTile(page, envelope.data as HomeOpportunitiesData);
+        case 'brief':
+          return checkBriefOnTile(page, envelope.data as HomeBriefData);
+        case 'overnightLog':
+          return checkOvernightOnTile(page, envelope.data as HomeOvernightLogData);
+        case 'creativeSpotlight':
+          return checkSpotlightOnTile(page, envelope.data as HomeCreativeSpotlightData);
+        case 'organicWeek':
+          return checkOrganicOnTile(page, envelope.data as HomeOrganicWeekData);
+        default:
+          return 'checked in its sheet';
+      }
+    });
+    const owed = SHEET_WHEN_READY[name] as ((body: unknown) => SheetCheck) | undefined;
+    if (owed) sheetChecks.set(tile.id, owed(envelope.data));
+  }
+  return sheetChecks;
+}
+
+/** One goal: the Goal tile's metric, what the board asked with, and what R1 and R6 spoke in. */
+async function checkOneGoal(page: Page, scope: string, seen: HomeReadsSeen): Promise<void> {
+  const goalNode = page.locator(
+    '[data-board-slot="goals"] [data-testid="home-tile-goals-headline"]',
+  );
+  const metric =
+    (await goalNode.count()) > 0 ? await goalNode.getAttribute('data-goal-metric') : null;
+  const opportunities = seen.has('opportunities')
+    ? await envelopeSeen<HomeOpportunitiesData>(seen, 'opportunities')
+    : null;
+  const brief = seen.has('brief') ? await envelopeSeen<HomeBriefData>(seen, 'brief') : null;
+  const r1 = opportunities?.state === 'ready' ? (opportunities.data.goal?.metric ?? null) : null;
+  const r6 = brief?.state === 'ready' ? (brief.data.objective?.metric ?? null) : null;
+  const asked = ['opportunities', 'brief'].flatMap((name) => {
+    const url = seen.get(name as HomeReadName)?.url;
+    const value = url ? new URL(url).searchParams.get(HOME_READ_GOAL_PARAM) : null;
+    return value ? [value] : [];
+  });
+  const spoken = [...asked, r1, r6].filter((value): value is string => value !== null);
+  if (!opportunities && !brief) {
+    grade(scope, 'one goal across the board', 'SKIP', 'no read answered (route not here)');
+    return;
+  }
+  const disagree = spoken.filter((value) => metric !== null && value !== metric);
+  grade(
+    scope,
+    'one goal across the board',
+    disagree.length === 0 ? 'PASS' : 'FAIL',
+    `Goal tile ${metric ?? '(none shown)'}; asked ${asked.join(',') || '(saved or none)'}; R1 ${r1 ?? 'none'}; R6 ${r6 ?? 'no goal sentence'}`,
+  );
+}
+
+type WidenedCase = {
+  key: string;
+  brandId: string;
+  tile: HomeTileId;
+  read: HomeReadName;
+  widen: (url: URL) => void;
+  check: (page: Page, sheet: Locator, data: never) => Promise<string>;
+};
+
+const WIDENED_CASES: WidenedCase[] = [
+  {
+    key: 'overnight-7-days',
+    brandId: EASYFIT_META_BRAND_ID,
+    tile: 'autopilot',
+    read: 'overnightLog',
+    widen: (url) => url.searchParams.set('hours', '168'),
+    check: async (page, sheet, data: HomeOvernightLogData) => {
+      const summary = await checkOvernightOnTile(page, data);
+      await SHEET_WHEN_READY.overnightLog?.(data as never)(sheet);
+      return summary;
+    },
+  },
+  {
+    key: 'opportunities-in-leads',
+    brandId: EASYFIT_BRAND_ID,
+    tile: 'opps',
+    read: 'opportunities',
+    widen: (url) => url.searchParams.set(HOME_READ_GOAL_PARAM, 'leads'),
+    check: async (page, sheet, data: HomeOpportunitiesData) => {
+      const summary = await checkOpportunitiesOnTile(page, data);
+      expect(summary).toContain('leads a day');
+      await SHEET_WHEN_READY.opportunities?.(data as never)(sheet);
+      return summary;
+    },
+  },
+];
+
+/** A real read of real data reaches the real tile, with only its query widened. Reads only. */
+async function benchWidened(browser: Browser, widened: WidenedCase): Promise<void> {
+  const scope = `widened ${widened.key}`;
+  const path = READ_PATHS[widened.read] as string;
+  const asked = new URL(`${API_BASE}${path}`);
+  asked.searchParams.set('brandId', widened.brandId);
+  widened.widen(asked);
+  const direct = await readDirectly(asked.toString());
+  const envelope = direct.body as HomeReadEnvelope<unknown> | null;
+  if (direct.status !== 200 || envelope?.state !== 'ready') {
+    grade(
+      scope,
+      `${widened.read} holds the figure`,
+      'WARN',
+      `un-exercised: answered ${direct.status} ${envelope?.state ?? ''}`,
+    );
+    return;
+  }
+
+  await pinSessionBrand(session.accessToken, widened.brandId);
+  const context = await browser.newContext({
+    storageState: latestState ?? session.state,
+    viewport: { width: 1440, height: 1000 },
+    timezoneId: VIEWER_TIME_ZONE,
+  });
+  const guard: Guard = { seen: [], blocked: [], outsideBoard: false };
+  await guardWrites(context, guard);
+  await context.route(`${API_BASE}${path}?*`, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'GET') widened.widen(url);
+    await route.continue({ url: url.toString() });
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 240_000 });
+    await expect(page.getByTestId('home-board')).toBeVisible({ timeout: 240_000 });
+    const slot = page.locator(`[data-board-slot="${widened.tile}"]`);
+    if ((await slot.count()) === 0) {
+      grade(
+        scope,
+        `the ${widened.tile} tile is on the board`,
+        'WARN',
+        'un-exercised: not on this board',
+      );
+      return;
+    }
+    await settleTiles(page, [widened.tile]);
+    await check(scope, `${widened.read}: the real answer draws on the real tile`, async () => {
+      const open = page.getByTestId(`home-tile-${widened.tile}-open`);
+      await open.click();
+      const sheet = page.getByTestId(`home-tile-${widened.tile}-sheet`);
+      await expect(sheet).toHaveCSS('opacity', '1', { timeout: 30_000 });
+      try {
+        const line = await widened.check(page, sheet, envelope.data as never);
+        await sheet.screenshot({ path: resolve(SHOTS_DIR, `${widened.key}-sheet.png`) });
+        return line;
+      } finally {
+        await closeSheet(page, sheet);
+      }
+    });
+    phaseBWired.set(widened.read, [...(phaseBWired.get(widened.read) ?? []), scope]);
+    await shoot(page, `${widened.key}-1440`);
+    latestState = await closeKeepingState(context);
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
 async function expectedFor(
   id: HomeTileId,
   facts: BrandFacts,
   context: BrowserContext | null,
   baseURL: string,
   mountedAt: number,
+  reads: HomeReadsSeen,
 ): Promise<Expected> {
   switch (id) {
     case 'goals':
@@ -1381,7 +1876,7 @@ async function expectedFor(
     case 'checklist':
       return expectChecklist(facts);
     case 'autopilot':
-      return expectAutopilot(facts, mountedAt);
+      return expectAutopilot(facts, mountedAt, reads);
     case 'pacing':
       return expectPacing(facts);
     case 'health':
@@ -1389,13 +1884,13 @@ async function expectedFor(
     case 'setup':
       return expectSetup(facts);
     case 'creative':
-      return expectCreative(facts);
+      return expectCreative(facts, reads);
     case 'organic':
       return expectOrganic(facts, context, baseURL);
     case 'market':
       return expectMarket(facts);
     case 'brief':
-      return expectBrief(facts);
+      return expectBrief(facts, reads);
   }
 }
 
@@ -1439,6 +1934,7 @@ async function benchBrand(
   });
   let phase = 'load';
   const chunk404s = await watchChunk404s(page, () => phase);
+  const reads = watchHomeReads(page);
   let goalTargetsStatus: number | null = null;
   page.on('response', (response) => {
     if (response.url().includes('/api/home/goal-targets')) goalTargetsStatus = response.status();
@@ -1507,7 +2003,7 @@ async function benchBrand(
 
       let expected: Expected;
       try {
-        expected = await expectedFor(tile.id, facts, context, baseURL, mountedAt);
+        expected = await expectedFor(tile.id, facts, context, baseURL, mountedAt, reads);
       } catch (error) {
         grade(
           scope,
@@ -1590,6 +2086,9 @@ async function benchBrand(
       }
     }
 
+    const sheetChecks = await checkHomeReads(page, scope, states, reads);
+    await checkOneGoal(page, scope, reads);
+
     // 5. Light / dark / 390 px: screenshots, sideways scroll.
     phase = 'themes';
     await shoot(page, `${facts.key}-1440-light`);
@@ -1637,8 +2136,11 @@ async function benchBrand(
           await expect(sheet.locator(SKELETONS)).toHaveCount(0, { timeout: 60_000 });
           await sheet.screenshot({ path: resolve(SHOTS_DIR, `${facts.key}-sheet-${id}.png`) });
           sheetText = (await sheet.innerText()).replace(/\s+/g, ' ');
-          moduleText = (await sheet.locator('[data-testid="home-tile-sheet-body"]').innerText()).trim();
+          moduleText = (
+            await sheet.locator('[data-testid="home-tile-sheet-body"]').innerText()
+          ).trim();
           checklistItems = await sheet.getByTestId('home-checklist-item').count();
+          await sheetChecks.get(id)?.(sheet);
           tileState = await page
             .locator(`[data-board-slot="${id}"] > [data-module-state]`)
             .getAttribute('data-module-state');
@@ -1649,10 +2151,16 @@ async function benchBrand(
         expect(tileState, 'the tile fell into its error boundary').not.toBe('error');
         expect(sheetText).not.toMatch(/could not be drawn|Something went wrong|Application error/i);
         // More than the sheet's own title and description: the module itself drew.
-        expect(moduleText.length, `${id}'s module drew nothing below its title`).toBeGreaterThan(20);
+        expect(moduleText.length, `${id}'s module drew nothing below its title`).toBeGreaterThan(
+          20,
+        );
         if (id === 'checklist') {
-          const headline = await page.getByTestId('home-tile-checklist-headline').getAttribute('data-value');
-          expect(String(checklistItems), 'checklist items against the tile headline').toBe(headline);
+          const headline = await page
+            .getByTestId('home-tile-checklist-headline')
+            .getAttribute('data-value');
+          expect(String(checklistItems), 'checklist items against the tile headline').toBe(
+            headline,
+          );
         }
         const sheetErrors = consoleErrors.slice(errorsBefore);
         expect(
@@ -1961,6 +2469,20 @@ test.afterAll(async () => {
       `${proof.sessionId}: ${proof.detail}; pins left ${proof.pinsLeft}`,
     );
   }
+  for (const name of Object.keys(READ_PATHS) as HomeReadName[]) {
+    const wired = phaseBWired.get(name) ?? [];
+    const pending = phaseBPending.get(name) ?? [];
+    grade(
+      'coverage',
+      `${name} on ${API_HOST}`,
+      wired.length > 0 || pending.length > 0 ? 'PASS' : 'WARN',
+      wired.length > 0
+        ? `figures held to the read on ${wired.join(', ')}`
+        : pending.length > 0
+          ? `route not here on ${pending.join(', ')}: degradation proven, figures un-exercised`
+          : 'un-exercised: no benched brand held data for it',
+    );
+  }
   for (const id of homeTileIdSchema.options) {
     const proven = headlineProven.get(id) ?? [];
     const shown = tileShownOn.get(id) ?? [];
@@ -1997,6 +2519,9 @@ test('the adaptive Home on one brand per mode: order, figures, sheets, pins, the
         composerCheck: first,
       }));
     first = false;
+  }
+  for (const widened of WIDENED_CASES) {
+    await test.step(`widened: ${widened.key}`, () => benchWidened(browser, widened));
   }
   expect(failures, failures.join('\n')).toEqual([]);
 });

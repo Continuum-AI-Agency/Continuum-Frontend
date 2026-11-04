@@ -1,15 +1,18 @@
 'use client';
 
-// The expanded Overnight: every action of the last 24 h with its reason, the one note about write
-// outcomes, and how each portfolio is set to run — read-only. The autonomy controls stay in the
-// Optimizer's automations page, linked from here; the Home writes none of them.
+// The expanded Overnight: every action of the last 24 h with its reason, what the cap held back
+// (or, without the Backend's read, the one note that outcomes are pending), and how each portfolio
+// is set to run — read-only. The autonomy controls stay in the Optimizer's automations page, linked
+// from here; the Home writes none of them.
 
+import type { HomeOvernightCapItem } from '@continuum/contracts';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { OPTIMIZER_LINKS } from '../opps/oppsModel';
 import { ROW_LINK } from '../opps/tileParts';
 import { OvernightRowItem } from './OvernightRowItem';
 import { OUTCOME_NOTE, type OvernightRow, type PortfolioRun } from './overnightModel';
+import { capItemLine } from './overnightRead';
 
 function runLine(run: PortfolioRun): string {
   if (run.writesOff) return `${run.mode} · writes off, the client applies the changes`;
@@ -20,18 +23,54 @@ function runLine(run: PortfolioRun): string {
   return parts.join(' · ');
 }
 
+function CapSkipped({ items }: { items: readonly HomeOvernightCapItem[] }) {
+  return (
+    <section className="space-y-2" data-testid="home-overnight-cap">
+      <h4 className="font-medium text-sm">Held back by the cap · {items.length}</h4>
+      <p className="text-muted-foreground text-xs leading-snug">
+        The autopilot did not write these because they were over the per-cycle change cap.
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {items.map((item) => (
+          <li className="space-y-0.5 text-xs" data-testid="home-overnight-cap-item" key={item.id}>
+            <p className="font-medium tabular-nums">{capItemLine(item)}</p>
+            {item.reason ? (
+              <p className="text-muted-foreground leading-snug">{item.reason}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function AutopilotModule({
   rows,
   runs,
+  outcomesPending = true,
+  capSkipped = [],
+  truncated = false,
 }: {
   rows: OvernightRow[];
   runs: PortfolioRun[];
+  /** The rows come from the action feed, which cannot say what each write's outcome was. */
+  outcomesPending?: boolean;
+  capSkipped?: readonly HomeOvernightCapItem[];
+  /** The window held more actions than the read listed. */
+  truncated?: boolean;
 }) {
   return (
     <div className="space-y-5" data-testid="home-overnight-module">
       <section className="space-y-2">
         <h4 className="font-medium text-sm">Last 24 hours</h4>
-        <p className="text-muted-foreground text-xs leading-snug">{OUTCOME_NOTE}</p>
+        {outcomesPending ? (
+          <p
+            className="text-muted-foreground text-xs leading-snug"
+            data-testid="home-overnight-note"
+          >
+            {OUTCOME_NOTE}
+          </p>
+        ) : null}
         {rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">Nothing ran in the last 24 h.</p>
         ) : (
@@ -41,7 +80,11 @@ export default function AutopilotModule({
             ))}
           </ul>
         )}
+        {truncated ? (
+          <p className="text-2xs text-muted-foreground">The newest actions of a longer list.</p>
+        ) : null}
       </section>
+      {capSkipped.length > 0 ? <CapSkipped items={capSkipped} /> : null}
       <section className="space-y-2">
         <h4 className="font-medium text-sm">How each portfolio runs</h4>
         <ul className="flex flex-col gap-1.5">

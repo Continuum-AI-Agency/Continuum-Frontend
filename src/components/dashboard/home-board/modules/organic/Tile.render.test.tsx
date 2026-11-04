@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { HomeBoardTile } from '@continuum/contracts';
+import type { HomeBoardTile, HomeOrganicWeekData } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -8,6 +8,7 @@ import type { HomeBoardContext } from '../../types';
 import { DRAFT_ROWS, NOW, POSTS } from './__fixtures__/organicWeek';
 import { buildOrganicWeek } from './organicWeekModel';
 import type { OrganicWeekLoad } from './useOrganicWeek';
+import type { OrganicWeekRead } from './useOrganicWeekRead';
 
 // The tile's reads and the calendar's approve hook are mocked: the week model has its own test,
 // and the approve hook is the calendar's. `mock.module` replaces a module for the whole process,
@@ -22,6 +23,14 @@ const reset = () => {
 reset();
 const realWeek = await import('./useOrganicWeek');
 mock.module('./useOrganicWeek', () => ({ ...realWeek, useOrganicWeek: () => load }));
+
+// The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
+let weekRead: OrganicWeekRead = { data: null, unavailable: true };
+const realWeekRead = await import('./useOrganicWeekRead');
+mock.module('./useOrganicWeekRead', () => ({
+  ...realWeekRead,
+  useOrganicWeekRead: () => weekRead,
+}));
 
 const approved: OrganicCalendarDraft[] = [];
 const realApprove = await import('@/components/organic/hooks/useApproveScheduleDraft');
@@ -186,5 +195,84 @@ describe('Organic week module (expanded)', () => {
       withQueries(<OrganicWeekModule brandId="b1" organicAccounts={ACCOUNTS} />),
     );
     expect(getByText('Approved, not scheduled yet')).toBeTruthy();
+  });
+});
+
+describe('Organic week with the Backend read', () => {
+  const POST = {
+    postId: 'p1',
+    platform: 'instagram' as const,
+    accountId: '1784',
+    publishedAt: '2026-11-03T15:00:00Z',
+    day: '2026-11-03',
+    permalink: 'https://instagram.com/p/1',
+    mediaType: 'REEL',
+    reach: 12_300,
+    interactions: 240,
+    engagementRate: 0.0195,
+    reachCapturedOn: '2026-11-04',
+    reachLift: 2.14,
+    isTrial: false,
+    publishedThrough: 'external' as const,
+  };
+  const WEEK: HomeOrganicWeekData = {
+    week: { since: '2026-11-02', until: '2026-11-08', timeZone: 'America/Mexico_City' },
+    baseline: { since: '2026-10-05', until: '2026-11-01', days: 28, statistic: 'median' },
+    days: (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((weekday, index) => ({
+      date: `2026-11-0${index + 2}`,
+      weekday,
+      published: index === 1 ? [POST] : [],
+      scheduled: [],
+      drafts: [],
+    })),
+    accounts: [],
+    totals: { published: 1, scheduled: 0, drafts: 0, withReach: 1 },
+    topPost: {
+      postId: 'p1',
+      platform: 'instagram',
+      accountId: '1784',
+      reach: 12_300,
+      reachLift: 2.14,
+    },
+    sources: [],
+  };
+
+  afterEach(() => {
+    weekRead = { data: null, unavailable: true };
+  });
+
+  it('adds the top post to the tile', () => {
+    weekRead = { data: WEEK, unavailable: false };
+    const { getByTestId } = render(<OrganicTile ctx={ctxWith()} tile={tileOf()} />);
+    const top = getByTestId('home-tile-organic-top-post');
+    expect(top.textContent).toBe('Top post: 12.3K reach · 2.1× its account’s usual');
+    expect(top.getAttribute('data-reach')).toBe('12300');
+  });
+
+  it('opens reach per post and drops the pending line', () => {
+    weekRead = { data: WEEK, unavailable: false };
+    const { getByTestId, queryByText } = render(
+      withQueries(<OrganicWeekModule brandId="b1" organicAccounts={ACCOUNTS} />),
+    );
+    const row = getByTestId('home-organic-reach-row');
+    expect(row.getAttribute('data-reach')).toBe('12300');
+    expect(row.textContent).toContain('12.3K reach · 2.1× usual');
+    expect(queryByText(PER_POST_NOT_READABLE)).toBeNull();
+  });
+
+  it('a read holding nothing for the week says nothing, and does not claim it is pending', () => {
+    weekRead = { data: null, unavailable: false };
+    const { queryByTestId } = render(
+      withQueries(<OrganicWeekModule brandId="b1" organicAccounts={ACCOUNTS} />),
+    );
+    expect(queryByTestId('home-organic-reach')).toBeNull();
+    expect(queryByTestId('home-organic-reach-note')).toBeNull();
+  });
+
+  it('without the read the tile is as it was, never an error', () => {
+    weekRead = { data: null, unavailable: true };
+    const { container, queryByTestId } = render(<OrganicTile ctx={ctxWith()} tile={tileOf()} />);
+    expect(stateOf(container)).toBe('ready');
+    expect(queryByTestId('home-tile-organic-top-post')).toBeNull();
   });
 });

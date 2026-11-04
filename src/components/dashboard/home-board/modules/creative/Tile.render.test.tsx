@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { OrganicWinners } from '@continuum/contracts';
+import type { HomeCreativeSpotlightData, OrganicWinners } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { PaidCreativeReadState } from '@/hooks/usePaidCreativeReport';
+import type { HomeReadLoad } from '../../homeRead';
 import { TWO_WINNERS } from '../flywheel/__fixtures__/organicWinners';
 import {
   EASY_FIT_ACCOUNT,
@@ -47,6 +48,11 @@ mock.module('@/lib/api/jainaCreativePreview.client', () => ({
   fetchJainaCreativePreview: livePreview,
 }));
 
+// The tile's Backend read; `unavailable` is what production answers until the Backend deploys.
+let spotlightLoad: HomeReadLoad<HomeCreativeSpotlightData> = { status: 'unavailable' };
+const realHomeRead = await import('../../useHomeRead');
+mock.module('../../useHomeRead', () => ({ ...realHomeRead, useHomeRead: () => spotlightLoad }));
+
 const { default: CreativeTile } = await import('./Tile');
 const { default: CreativeModule } = await import('./Module');
 const { creativeTileState, CREATIVE_MISSING } = await import('./creativeModel');
@@ -61,6 +67,7 @@ afterEach(() => {
     isError: false,
   };
   winners = TWO_WINNERS;
+  spotlightLoad = { status: 'unavailable' };
   refetchReport.mockClear();
 });
 
@@ -243,5 +250,130 @@ describe('the Home never reaches for a live creative preview', () => {
   )('%s imports no live preview, no extremes read, no thumbnail recovery', (path) => {
     const source = readFileSync(path, 'utf8');
     expect(source).not.toMatch(/jainaCreativePreview|useCreativeExtremes|usePaidCreativeRecovery/);
+  });
+});
+
+describe('Creative tile with the Spotlight read', () => {
+  const SPOTLIGHT: HomeCreativeSpotlightData = {
+    window: '7d',
+    currency: 'USD',
+    asOf: '2026-11-04T05:05:36.334Z',
+    ageDays: 0,
+    totalSpend: 1000,
+    adsWithSpend: 12,
+    ads: [
+      {
+        adId: 'a1',
+        adAccountId: 'act_1',
+        adName: 'Ad one',
+        title: 'Hook them',
+        format: 'video',
+        thumbnailUrl: 'https://cdn.example/a1.jpg',
+        permalinkUrl: null,
+        firstSeenAt: '2026-10-17T17:10:14Z',
+        spend: 400,
+        spendShare: 0.4,
+        impressions: 1000,
+        costPerResult: { value: 20, results: 20, kpi: 'leads', label: 'cost per lead' },
+        hookRate: 0.25,
+        hookRateUnavailable: null,
+        frequency: 1.5,
+        verdict: 'fading',
+        verdictWhy: 'CTR fell 30% and the cost rose 25%.',
+        intelVerdict: null,
+        intelReason: null,
+      },
+      {
+        adId: 'a2',
+        adAccountId: 'act_1',
+        adName: 'Ad two',
+        title: null,
+        format: 'image',
+        thumbnailUrl: null,
+        permalinkUrl: null,
+        firstSeenAt: '2026-11-01T17:10:14Z',
+        spend: 100,
+        spendShare: 0.1,
+        impressions: 500,
+        costPerResult: { value: null, results: 0, kpi: 'leads', label: 'cost per lead' },
+        hookRate: null,
+        hookRateUnavailable: 'not_video',
+        frequency: null,
+        verdict: 'new',
+        verdictWhy: 'Delivered this week and not the week before.',
+        intelVerdict: null,
+        intelReason: null,
+      },
+    ],
+    otherCurrencies: [],
+    source: { kind: 'paid_media.ads', ref: null, since: null, until: null },
+  };
+  const ready: HomeReadLoad<HomeCreativeSpotlightData> = {
+    status: 'ready',
+    generatedAt: '2026-11-04T12:00:00Z',
+    data: SPOTLIGHT,
+  };
+  const ctx = homeContext({ adAccounts: [EASY_FIT_ACCOUNT] });
+
+  it('adds what is fading to the tile, and the report keeps its headline', () => {
+    spotlightLoad = ready;
+    render(<CreativeTile ctx={ctx} tile={creativeTile('l')} />);
+    expect(screen.getByTestId('home-tile-creative-spotlight').textContent).toBe(
+      'Top 2 by spend: 1 fading · 1 new',
+    );
+    expect(
+      screen.getByTestId('home-tile-creative-headline').getAttribute('data-source'),
+    ).toBeNull();
+  });
+
+  it('opens hook rate, format and verdict per ad, with the read’s own unknowns', async () => {
+    spotlightLoad = ready;
+    render(<CreativeTile ctx={ctx} tile={creativeTile('l')} />);
+    fireEvent.click(screen.getByTestId('home-tile-creative-open'));
+    const ads = await screen.findAllByTestId('creative-spotlight-ad');
+    expect(ads[0]?.getAttribute('data-verdict')).toBe('fading');
+    expect(ads[0]?.textContent).toContain('Hook rate 25.0%');
+    expect(ads[1]?.textContent).toContain('No hook rate: not a video');
+    expect(ads[1]?.textContent).toContain('Frequency not reported');
+    expect(ads[1]?.textContent).toContain('No result yet');
+    expect(screen.queryByTestId('creative-not-readable')).toBeNull();
+  });
+
+  it('an expired thumbnail falls back to the placeholder, and never reaches for the Graph', async () => {
+    spotlightLoad = ready;
+    render(<CreativeTile ctx={ctx} tile={creativeTile('l')} />);
+    fireEvent.click(screen.getByTestId('home-tile-creative-open'));
+    const [first] = await screen.findAllByTestId('creative-spotlight-ad');
+    const image = within(first as HTMLElement).getByTestId('creative-thumb');
+    fireEvent.error(image);
+    const placeholder = within(first as HTMLElement).getByTestId('creative-thumb-placeholder');
+    expect(placeholder.getAttribute('data-expired')).toBe('true');
+    expect(placeholder.textContent).toContain('Preview expired');
+    expect(livePreview).not.toHaveBeenCalled();
+  });
+
+  it('a brand with no report still shows the ads that spent', () => {
+    reportRead = {
+      status: 'assembling',
+      report: null,
+      refreshedAt: null,
+      isLoading: false,
+      isError: false,
+    };
+    spotlightLoad = ready;
+    render(<CreativeTile ctx={ctx} tile={creativeTile('m')} />);
+    expect(frame().getAttribute('data-module-state')).toBe('ready');
+    const headline = screen.getByTestId('home-tile-creative-headline');
+    expect(headline.getAttribute('data-value')).toBe('12');
+    expect(headline.getAttribute('data-source')).toBe('spotlight');
+  });
+
+  it('without the read the tile and its honest line are as they were, never an error', async () => {
+    spotlightLoad = { status: 'unavailable' };
+    render(<CreativeTile ctx={ctx} tile={creativeTile('l')} />);
+    expect(frame().getAttribute('data-module-state')).toBe('ready');
+    expect(screen.queryByTestId('home-tile-creative-spotlight')).toBeNull();
+    fireEvent.click(screen.getByTestId('home-tile-creative-open'));
+    expect(await screen.findByTestId('creative-not-readable')).toBeTruthy();
   });
 });

@@ -6,7 +6,7 @@
 // Optimizer already wires. Only the open portfolio reads its queue, so the module costs one
 // portfolio's reads at a time. Platform cards (Google, TikTok) ride in as on the Actions page.
 
-import type { AccountCandidate, PlatformId } from '@continuum/contracts';
+import type { AccountCandidate, HomeOpportunitiesData, PlatformId } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
@@ -18,6 +18,7 @@ import {
 } from '@/components/paid-media/optimizer/useOptimizerData';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { cn } from '@/lib/utils';
+import { OppStack } from './OppStack';
 import {
   OPPS_GOAL_UNITS_NOTE,
   OPTIMIZER_LINKS,
@@ -58,15 +59,21 @@ function OpenQueue({ brandId, waiting }: { brandId: string; waiting: WaitingPort
 export default function OppsModule({
   brandId,
   portfolios,
+  stack,
 }: {
   brandId: string;
   portfolios: WaitingPortfolio[];
+  /** The Backend's Opportunity stack; null until it is deployed or when it holds nothing. */
+  stack: HomeOpportunitiesData | null;
 }) {
   const [openId, setOpenId] = useState<string | null>(portfolios[0]?.id ?? null);
 
+  const priced = stack && stack.opportunities.length > 0 ? stack : null;
+
   if (portfolios.length === 0) {
     return (
-      <div className="space-y-2 text-sm" data-testid="home-opps-module">
+      <div className="space-y-4 text-sm" data-testid="home-opps-module">
+        {priced ? <OppStack stack={priced} /> : null}
         <p>Nothing waits for a decision right now.</p>
         <Link className={cn(ROW_LINK, 'text-xs')} href={OPTIMIZER_LINKS.actions}>
           Open the Optimizer's Actions
@@ -77,9 +84,13 @@ export default function OppsModule({
 
   return (
     <div className={cn('space-y-4', boardPaletteClass)} data-testid="home-opps-module">
-      <p className="text-muted-foreground text-xs" data-testid="home-opps-goal-units">
-        {OPPS_GOAL_UNITS_NOTE}
-      </p>
+      {priced ? (
+        <OppStack stack={priced} />
+      ) : (
+        <p className="text-muted-foreground text-xs" data-testid="home-opps-goal-units">
+          {OPPS_GOAL_UNITS_NOTE}
+        </p>
+      )}
       <ul className="space-y-3">
         {portfolios.map((waiting) => {
           const open = waiting.id === openId;

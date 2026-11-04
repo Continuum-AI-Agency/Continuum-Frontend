@@ -11,6 +11,7 @@ const OUTCOME_TONE: Record<ActionOutcome['kind'], string> = {
   sent: 'bg-muted text-muted-foreground',
   unconfirmed: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
   failed: 'bg-destructive/10 text-destructive-ink',
+  waiting: 'bg-primary/10 text-primary-ink',
   recorded: 'bg-muted text-muted-foreground',
 };
 

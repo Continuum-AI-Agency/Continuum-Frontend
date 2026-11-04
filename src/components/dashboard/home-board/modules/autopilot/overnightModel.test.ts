@@ -94,15 +94,6 @@ describe('a write is applied only when its own row proves it', () => {
     expect(outcomeOf({ ...VERIFIED_META, receipt: { success: false } }).kind).toBe('failed');
   });
 
-  it('reads an outcome column, the day the RPC sends one', () => {
-    expect(outcomeOf({ ...EMPTY_RECEIPT, outcome: 'failed' } as OptimizerActionFeedRow).kind).toBe(
-      'failed',
-    );
-    expect(outcomeOf({ ...EMPTY_RECEIPT, outcome: 'applied' } as OptimizerActionFeedRow).kind).toBe(
-      'applied',
-    );
-  });
-
   it('labels settings and decisions by what they recorded, never as a write', () => {
     expect(outcomeOf(SETTING)).toEqual({ kind: 'recorded', label: 'Setting changed' });
     expect(outcomeOf(DECISION)).toEqual({ kind: 'recorded', label: 'Recommendation dismissed' });

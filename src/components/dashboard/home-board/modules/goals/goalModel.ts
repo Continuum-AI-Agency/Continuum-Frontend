@@ -12,6 +12,7 @@ import {
   HOME_OBJECTIVE_METRICS,
   HOME_PROFILE_BRAND_SCOPE,
   type HomeObjective,
+  type HomeObjectiveMetric,
   type HomeProfileRow,
   resolveHomeObjectives,
 } from '@continuum/contracts';
@@ -190,6 +191,39 @@ export function goalObjectives(input: {
     secondaries: secondaries.slice(0, MAX_SECONDARY_GOALS),
     source: resolved.fromSuggestion ? 'business' : resolved.source === 'user' ? 'team' : 'results',
   };
+}
+
+/** A goal the team saved is the Backend's to read too; only an unsaved one needs the results. */
+export function boardGoalNeedsResults(rows: readonly HomeProfileRow[]): boolean {
+  const brand = rows.find((row) => row.scope === HOME_PROFILE_BRAND_SCOPE);
+  return !brand || brand.objectives.length === 0;
+}
+
+/**
+ * The goal the board tells the Backend reads (contracts home/reads/readGoal.ts): the one the tile
+ * leads with. Undefined once settled means there is nothing to tell: the goal is saved, or the
+ * month could not be read, and the read then speaks without a guess.
+ */
+export function boardGoalMetric(input: {
+  rows: HomeProfileRow[];
+  accounts: readonly HomeAdAccount[];
+  window: GoalWindow | null;
+  load: GoalLoad;
+  suggested: HomeObjective[];
+}): { settled: boolean; metric: HomeObjectiveMetric | undefined } {
+  const { load } = input;
+  if (!boardGoalNeedsResults(input.rows) || input.accounts.length === 0 || !input.window) {
+    return { settled: true, metric: undefined };
+  }
+  if (load.status === 'loading') return { settled: false, metric: undefined };
+  if (load.status !== 'ready') return { settled: true, metric: undefined };
+  const { primary } = goalObjectives({
+    scope: HOME_PROFILE_BRAND_SCOPE,
+    rows: input.rows,
+    reads: load.reads,
+    suggested: input.suggested,
+  });
+  return { settled: true, metric: primary.metric };
 }
 
 export type GoalMissingReason = 'no-account' | 'month-start' | 'not-counted';

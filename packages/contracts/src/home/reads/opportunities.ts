@@ -7,7 +7,7 @@
 // Anything else stays money and says why (`goalUnitsBecause`), so a figure on the stack never
 // borrows a denominator nobody measured.
 //
-// Served by the Backend at HOME_READ_PATHS.opportunities (GET ?brandId=).
+// Served by the Backend at HOME_READ_PATHS.opportunities (GET ?brandId=&goalMetric=).
 
 import { z } from 'zod';
 import { homeObjectiveMetricSchema } from '../objectives';
@@ -125,8 +125,8 @@ export type HomeOpportunityCard = z.infer<typeof homeOpportunityCardSchema>;
 export const homeOpportunityGoalSchema = z.object({
   metric: homeObjectiveMetricSchema,
   label: z.string().min(1),
-  /** 'saved': the team's own primary objective. 'portfolio': what the Optimizer optimises for. */
-  from: z.enum(['saved', 'portfolio']),
+  /** 'team': the team's own primary objective. 'results': what the board resolved (homeReadGoalOf). */
+  from: z.enum(['team', 'results']),
 });
 export type HomeOpportunityGoal = z.infer<typeof homeOpportunityGoalSchema>;
 

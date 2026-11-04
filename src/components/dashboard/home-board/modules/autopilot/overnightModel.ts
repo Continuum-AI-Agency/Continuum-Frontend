@@ -1,12 +1,13 @@
-// H07 Overnight: what the Optimizer did for the brand in the last 24 h (optimizer_list_actions,
-// read through the Optimizer's own useOptimizerActions), and how each portfolio is set to run.
+// H07 Overnight: what the Optimizer did for the brand in the last 24 h, and how each portfolio is
+// set to run. The Backend's Overnight read says what each action's outcome really was
+// (overnightRead.ts). This file is what the tile draws without it, from the Optimizer's own action
+// feed (optimizer_list_actions, useOptimizerActions), until the Backend deploys.
 //
-// The honesty rule: optimizer_list_actions sends no outcome column today, and a write that failed
-// lives in apply_audits beside the ones that landed. So a write is "applied" only when its own row
-// proves it: a receipt whose read-back came back clean (Meta's verification.state 'verified',
-// written by the Optimizer after it read the entity back), or the outcome column the day the RPC
-// sends it. Every other write reads "Sent", and the module says once that outcomes arrive with an
-// update. "Skipped by cap" needs cycle_items.cap_breached and is not drawn.
+// The honesty rule of the feed: it sends no outcome column, and a write that failed lives in
+// apply_audits beside the ones that landed. So a write is "applied" only when its own row proves
+// it: a receipt whose read-back came back clean (Meta's verification.state 'verified', written by
+// the Optimizer after it read the entity back). Every other write reads "Sent", and the module says
+// once that outcomes arrive with an update. "Skipped by cap" needs the read and is not drawn.
 
 import type { AdAccount, PortfolioListItem } from '@continuum/contracts';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
@@ -67,8 +68,9 @@ export function needsOlderPage(
 
 export type ActionOutcome = {
   /** applied: the row proves it · sent: the row cannot say · unconfirmed: the read-back
-   *  disagreed · failed: the row says it did not land · recorded: a setting or a decision. */
-  kind: 'applied' | 'sent' | 'unconfirmed' | 'failed' | 'recorded';
+   *  disagreed · failed: the row says it did not land · waiting: for a person or the executor ·
+   *  recorded: a setting, a decision, or something done that wrote no new value. */
+  kind: 'applied' | 'sent' | 'unconfirmed' | 'failed' | 'waiting' | 'recorded';
   label: string;
 };
 
@@ -85,11 +87,6 @@ const DECISION_LABELS: Record<string, string> = {
   rejected: 'Recommendation dismissed',
 };
 
-function readOutcomeColumn(row: OptimizerActionFeedRow): string | null {
-  const raw = (row as Record<string, unknown>).outcome;
-  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim().toLowerCase() : null;
-}
-
 export function outcomeOf(row: OptimizerActionFeedRow): ActionOutcome {
   if (row.family === 'settings') return { kind: 'recorded', label: 'Setting changed' };
   if (row.family === 'decision') {
@@ -99,10 +96,6 @@ export function outcomeOf(row: OptimizerActionFeedRow): ActionOutcome {
       label: (status && DECISION_LABELS[status]) ?? `Recommendation set to ${status ?? 'unknown'}`,
     };
   }
-  const column = readOutcomeColumn(row);
-  if (column === 'failed') return { kind: 'failed', label: 'Failed' };
-  if (column === 'applied') return { kind: 'applied', label: 'Applied' };
-
   const receipt = row.receipt ?? null;
   if (receipt?.success === false) return { kind: 'failed', label: 'Failed' };
   const verification = receipt?.verification as { state?: unknown } | undefined;

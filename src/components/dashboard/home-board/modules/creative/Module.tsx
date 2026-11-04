@@ -1,13 +1,15 @@
 'use client';
 
-// H09 expanded: every ad the stored creative report judged — stored thumbnail, stored reason,
-// standing, cost — filterable by standing, the report's synopsis themes, and the flywheel (H10)
-// below. Reads nothing of its own: the tile hands it the spotlight it already read.
+// H09 expanded: the Backend's Creative Spotlight when it answers (top ads by spend with hook rate,
+// format and fatigue; until it deploys the module says so), every ad the stored creative report
+// judged — stored thumbnail, stored reason, standing, cost — filterable by standing, the report's
+// synopsis themes, and the flywheel (H10) below. Reads nothing of its own: the tile hands it both.
 //
 // "Make variants" links to the Optimizer only where the report cross-references a pending
 // recommendation for the ad's ad set: generation starts from that recommendation there
 // (optimizer_request_creative_generation is a write and stays on that page). No AI Studio route
 // takes an ad, so AI Studio is linked as itself.
+import type { HomeCreativeSpotlightData } from '@continuum/contracts';
 import Link from 'next/link';
 import { lazy, Suspense, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -25,8 +27,12 @@ import {
   STANDING_LABEL,
   STANDING_ORDER,
 } from './creativeModel';
+import { SpotlightSection } from './SpotlightSection';
 
 const Flywheel = lazy(() => import('../flywheel/Flywheel'));
+
+export const SPOTLIGHT_NOT_READABLE =
+  'Hook rate, format and a fatigue score are not readable yet on the Home.';
 
 const STANDING_BADGE: Record<CreativeStanding, 'success' | 'destructive' | 'warning' | 'muted'> = {
   winning: 'success',
@@ -85,13 +91,7 @@ function Card({ card }: { card: CreativeCard }) {
   );
 }
 
-export default function CreativeModule({
-  ctx,
-  spotlight,
-}: {
-  ctx: HomeBoardContext;
-  spotlight: CreativeSpotlight;
-}) {
+function ReportSection({ spotlight }: { spotlight: CreativeSpotlight }) {
   const [filter, setFilter] = useState<Filter>('all');
   const filters: Filter[] = [
     'all',
@@ -101,7 +101,7 @@ export default function CreativeModule({
     filter === 'all' ? spotlight.cards : spotlight.cards.filter((card) => card.standing === filter);
 
   return (
-    <div className="flex min-w-0 flex-col gap-4" data-testid="creative-module">
+    <>
       <p className="text-muted-foreground text-xs leading-snug">
         {spotlight.adAccountName ? `${spotlight.adAccountName} · ` : ''}
         {spotlight.currency
@@ -146,10 +146,6 @@ export default function CreativeModule({
         ))}
       </ul>
 
-      <p className="text-muted-foreground text-xs" data-testid="creative-not-readable">
-        Hook rate, format and a fatigue score are not readable yet on the Home.
-      </p>
-
       {spotlight.themes.length > 0 ? (
         <section className="space-y-1.5">
           <h4 className="font-semibold text-xs">What the report sees</h4>
@@ -160,6 +156,33 @@ export default function CreativeModule({
           </ul>
         </section>
       ) : null}
+    </>
+  );
+}
+
+export default function CreativeModule({
+  ctx,
+  spotlight,
+  read = null,
+}: {
+  ctx: HomeBoardContext;
+  /** The stored creative report, read for the Home; null when the brand has none. */
+  spotlight: CreativeSpotlight | null;
+  /** The Backend's Creative Spotlight; null until it is deployed or when it holds nothing. */
+  read?: HomeCreativeSpotlightData | null;
+}) {
+  const reportThumbs = new Map(
+    (spotlight?.cards ?? []).map((card) => [card.adId, card.thumbnailUrl]),
+  );
+  return (
+    <div className="flex min-w-0 flex-col gap-4" data-testid="creative-module">
+      {read ? <SpotlightSection data={read} reportThumbs={reportThumbs} /> : null}
+      {spotlight ? <ReportSection spotlight={spotlight} /> : null}
+      {read ? null : (
+        <p className="text-muted-foreground text-xs" data-testid="creative-not-readable">
+          {SPOTLIGHT_NOT_READABLE}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Link
@@ -174,7 +197,7 @@ export default function CreativeModule({
         <Flywheel
           brandId={ctx.brandId}
           mode={ctx.board.mode}
-          refreshCandidates={needsNewCreative(spotlight)}
+          refreshCandidates={spotlight ? needsNewCreative(spotlight) : []}
           verbLabel={ctx.board.verb.label}
         />
       </Suspense>
