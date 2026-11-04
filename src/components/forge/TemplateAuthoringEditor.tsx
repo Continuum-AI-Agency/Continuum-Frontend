@@ -2780,7 +2780,7 @@ export function TemplateAuthoringEditor({
                 <p className="text-xs font-medium text-foreground">{preparationSummary.label}
                   {authoringLifecycle.artifact ? <span className="font-normal text-muted-foreground"> · revision {authoringLifecycle.artifact.draftRevision}</span> : null}
                 </p>
-                <p className="truncate text-xs text-muted-foreground" title={preparationSummary.detail}>{preparationSummary.detail}</p>
+                <p className="text-pretty text-xs text-muted-foreground">{preparationSummary.detail}</p>
               </div>
               {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
                 <Button size="xs" variant="outline" onClick={onOpenFontRepair}>Resolve fonts</Button>

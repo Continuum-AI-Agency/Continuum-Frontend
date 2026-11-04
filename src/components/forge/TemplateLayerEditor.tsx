@@ -2442,18 +2442,18 @@ export function TemplateLayerEditor({
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {shownScene ? (
               <span
                 role="status"
-                className="flex items-center gap-1 text-2xs text-muted-foreground"
+                className="flex items-center gap-1 whitespace-nowrap text-2xs text-muted-foreground"
               >
                 {previewing ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
                 {previewLabel}
               </span>
             ) : null}
             {authoringDraft.status !== 'saved' || authoringDraft.revision > 0 ? (
-              <span role="status" aria-live="polite" className="text-2xs text-muted-foreground">
+              <span role="status" aria-live="polite" className="whitespace-nowrap text-2xs text-muted-foreground">
                 {authoringDraft.status === 'loading' ? 'Loading private draft…' : null}
                 {authoringDraft.status === 'saved'
                   ? `Draft saved${authoringDraft.revision ? ` · revision ${authoringDraft.revision}` : ''}`
@@ -4079,12 +4079,7 @@ export function TemplateLayerEditor({
                     </span>
                   ) : null}
                 </p>
-                <p
-                  className="truncate text-xs text-muted-foreground"
-                  title={preparationSummary.detail}
-                >
-                  {preparationSummary.detail}
-                </p>
+                <p className="text-pretty text-xs text-muted-foreground">{preparationSummary.detail}</p>
               </div>
               {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
                 <Button size="xs" variant="outline" onClick={onOpenFontRepair}>

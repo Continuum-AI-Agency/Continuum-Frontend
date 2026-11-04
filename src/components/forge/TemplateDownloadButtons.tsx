@@ -112,7 +112,7 @@ export function TemplateDownloadButtons({
         Download edited
       </Button>
       {hint ? (
-        <span id={hintId} className="text-2xs text-muted-foreground">
+        <span id={hintId} className="whitespace-nowrap text-2xs text-muted-foreground">
           {hint}
         </span>
       ) : null}
