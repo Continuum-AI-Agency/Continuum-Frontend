@@ -32,10 +32,23 @@ describe('sharePreviewRoleFor', () => {
     expect(sharePreviewRoleFor({ fileName: 'gemini-file-9x', mimeType: 'video/mp4' })).toBe(
       'preview_video',
     );
-    // Still nothing for an extensionless GIF, a name with no type at all, or HEIC.
+    // Still nothing for an extensionless GIF or a name with no type at all.
     expect(sharePreviewRoleFor({ fileName: 'gemini-file-9x', mimeType: 'image/gif' })).toBeNull();
     expect(sharePreviewRoleFor({ fileName: 'gemini-file-9x' })).toBeNull();
-    expect(sharePreviewRoleFor({ fileName: 'IMG_0001.HEIC', mimeType: 'image/heic' })).toBeNull();
+  });
+
+  it('stores a WebP still for an iPhone HEIC (the Backend converts it), not for other sources', () => {
+    expect(sharePreviewRoleFor({ fileName: 'IMG_0001.HEIC', mimeType: 'image/heic' })).toBe(
+      'preview_image',
+    );
+    expect(sharePreviewRoleFor({ fileName: 'photo.heif' })).toBe('preview_image');
+    expect(sharePreviewRoleFor({ fileName: 'gemini-file-9x', mimeType: 'image/heic' })).toBe(
+      'preview_image',
+    );
+    for (const fileName of ['scan.tiff', 'comp.psd', 'logo.svg', 'deck.ai']) {
+      expect(sharePreviewRoleFor({ fileName })).toBeNull();
+    }
+    expect(sharePreviewRoleFor({ fileName: 'gemini-file-9x', mimeType: 'image/tiff' })).toBeNull();
   });
 
   it('lets a known extension decide over the MIME type', () => {

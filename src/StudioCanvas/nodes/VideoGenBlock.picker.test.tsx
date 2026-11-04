@@ -123,20 +123,22 @@ describe('#293 VideoGenBlock model picker', () => {
   it('leaves every reachable model selectable and unannotated', async () => {
     await openModelPicker(nodeData());
 
-    const item = modelItem('Omni 1.1 Flash');
-    expect(item.getAttribute('aria-disabled')).not.toBe('true');
-    expect(item.textContent).not.toContain('Returning soon');
+    for (const label of ['Omni 1.1 Flash', 'Veo 3.1', 'Veo 3.1 Fast']) {
+      const item = modelItem(label);
+      expect(item.getAttribute('aria-disabled')).not.toBe('true');
+      expect(item.textContent).not.toContain('Returning soon');
+      expect(item.textContent).not.toContain('Retired by Google');
+    }
   });
 
-  // Google retired Veo on the Gemini API (2026-10-23); the Backend renders a saved Veo node on Omni.
-  it('greys out the retired Veo models and says they run on Omni', async () => {
+  // Google retired Veo on the Gemini API (2026-10-23). Veo 3.1 and Fast run on Vertex again;
+  // Lite stays retired, and the Backend renders a saved Lite node on Omni.
+  it('greys out the retired Veo 3.1 Lite and says it runs on Omni', async () => {
     await openModelPicker(nodeData());
 
-    for (const label of ['Veo 3.1', 'Veo 3.1 Fast', 'Veo 3.1 Lite']) {
-      const item = modelItem(label);
-      expect(item.getAttribute('aria-disabled')).toBe('true');
-      expect(item.textContent).toContain('Retired by Google');
-    }
+    const item = modelItem('Veo 3.1 Lite');
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    expect(item.textContent).toContain('Retired by Google');
   });
 
   it('checks the selected model, including one selected only by default', async () => {

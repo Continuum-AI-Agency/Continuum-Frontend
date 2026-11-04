@@ -649,7 +649,15 @@ export function classifyZipEntries(entryNames: readonly string[]): ZipContentKin
   return names.some((name) => /\.html?$/i.test(name)) ? 'ambiguous' : 'archive';
 }
 
-const STORED_IMAGE_PREVIEW_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif']);
+const STORED_IMAGE_PREVIEW_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'avif',
+  'heic',
+  'heif',
+]);
 const STORED_IMAGE_PREVIEW_MIME_TYPES = new Set([
   'image/jpeg',
   'image/jpg',
@@ -657,15 +665,17 @@ const STORED_IMAGE_PREVIEW_MIME_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/avif',
+  'image/heic',
+  'image/heif',
 ]);
 
 /**
- * The share-safe preview a file gets: a WebP still for a JPEG/PNG/WebP/AVIF photo, a 720p
+ * The share-safe preview a file gets: a WebP still for a JPEG/PNG/WebP/AVIF/HEIC photo, a 720p
  * proxy for any video (small browser MP4s included — a share never signs the original), none
  * for anything else (GIF keeps its animation, documents and audio have their own viewers).
  * A known extension decides; a name with none, or an unknown one ('gemini-file-…' — 325 of
- * prod's 8,634 photos), falls back to the MIME type. HEIC is not a Library image format, and
- * the Backend's image decoder (prebuilt sharp/libvips) has no HEVC to read it.
+ * prod's 8,634 photos), falls back to the MIME type. An iPhone HEIC is a design source Chrome
+ * cannot decode; the Backend converts it with libheif, so its still is made there.
  */
 export function sharePreviewRoleFor(file: {
   fileName: string;
@@ -677,7 +687,7 @@ export function sharePreviewRoleFor(file: {
   });
   if (!format.accepted) return null;
   if (format.originalKind === 'video') return 'preview_video';
-  if (format.family !== 'raster_image') return null;
+  if (format.family !== 'raster_image' && format.family !== 'design_source') return null;
   if (classifyLibraryFile({ fileName: file.fileName }).accepted) {
     const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
     return STORED_IMAGE_PREVIEW_EXTENSIONS.has(extension) ? 'preview_image' : null;
