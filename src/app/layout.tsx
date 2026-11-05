@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { preconnect } from 'react-dom';
 import { ClientOnly } from '@/components/ui/ClientOnly';
 import { VersionBanner } from '@/components/version-banner';
 import { PointerOrigin } from '../components/shared/PointerOrigin';
@@ -63,6 +64,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Every image and still the app draws comes from Storage. An <img> carries cookies, so it cannot
+  // reuse the anonymous socket supabase-js opens: without this the first picture on every page
+  // pays its own DNS, TCP and TLS round trips before a byte arrives.
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) preconnect(process.env.NEXT_PUBLIC_SUPABASE_URL);
   return (
     <html
       lang="en"

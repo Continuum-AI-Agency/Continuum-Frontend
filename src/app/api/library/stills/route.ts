@@ -41,17 +41,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
   const { brandId, assetIds, edge } = parsed.data;
-  if (!(await callerHasBrandAccess(supabase, brandId))) {
+
+  // The access check and the read are independent, so they run together: every Forge thumbnail
+  // waits on this route. The read is user-scoped (media.assets RLS) and is only used once the
+  // check has passed.
+  const [allowed, { data, error }] = await Promise.all([
+    callerHasBrandAccess(supabase, brandId),
+    mediaSchema(supabase)
+      .from('assets')
+      .select('id, bucket, storage_path, mime_type, thumbnail_path, updated_at, head_version_id')
+      .in('id', [...new Set(assetIds)])
+      .eq('brand_id', brandId)
+      .is('deleted_at', null),
+  ]);
+  if (!allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-
-  // User-scoped read: media.assets RLS restricts the rows to the caller's brands.
-  const { data, error } = await mediaSchema(supabase)
-    .from('assets')
-    .select('id, bucket, storage_path, mime_type, thumbnail_path, updated_at, head_version_id')
-    .in('id', [...new Set(assetIds)])
-    .eq('brand_id', brandId)
-    .is('deleted_at', null);
   if (error) {
     console.error('[library/stills] asset read failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
