@@ -52,8 +52,10 @@ const inFlight = new Map<string, Promise<string | null>>();
 
 // A reload starts the page over but not the tab. Kept in sessionStorage, the URLs a canvas
 // already drew survive it, so a reopened canvas paints from the browser cache instead of
-// downloading every clip again under a new token.
-const STORED = 'signed-url\n';
+// downloading every clip again under a new token. The `continuum:` prefix is what logout's
+// purge clears, so the next person in this tab never inherits these URLs.
+export const SIGNED_URL_STORAGE_PREFIX = 'continuum:signed-url\n';
+const STORED = SIGNED_URL_STORAGE_PREFIX;
 
 function stored(key: string): CacheEntry | undefined {
   try {
@@ -173,7 +175,17 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
 
 /** Drop everything. Used when the canvas switches rooms or brands, and by tests. */
 export function clearSignedUrlCache(): void {
-  for (const key of resolved.keys()) unstore(key);
+  try {
+    const store = globalThis.sessionStorage;
+    const stale: string[] = [];
+    for (let i = 0; store && i < store.length; i += 1) {
+      const key = store.key(i);
+      if (key?.startsWith(STORED)) stale.push(key);
+    }
+    for (const key of stale) store?.removeItem(key);
+  } catch {
+    // Nothing stored to drop.
+  }
   resolved.clear();
   inFlight.clear();
 }

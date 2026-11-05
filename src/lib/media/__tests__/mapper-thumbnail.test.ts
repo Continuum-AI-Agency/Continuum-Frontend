@@ -52,15 +52,15 @@ describe('poster columns', () => {
 
   it('signs the poster from the asset own bucket, alongside the asset', () => {
     expect(assetSignablePaths([videoRow])).toEqual([
-      { path: 'brand-1/asset-1/clip.mp4', bucket: 'media-library' },
-      { path: 'brand-1/asset-1/thumb.webp', bucket: 'media-library' },
+      { path: 'brand-1/asset-1/clip.mp4', bucket: 'media-library', version: videoRow.updated_at },
+      { path: 'brand-1/asset-1/thumb.webp', bucket: 'media-library', version: videoRow.updated_at },
     ]);
   });
 
   it('omits the poster from signing when the row has none', () => {
     const { thumbnail_path: _omitted, ...withoutPoster } = videoRow;
     expect(assetSignablePaths([withoutPoster as MediaAssetRow])).toEqual([
-      { path: 'brand-1/asset-1/clip.mp4', bucket: 'media-library' },
+      { path: 'brand-1/asset-1/clip.mp4', bucket: 'media-library', version: videoRow.updated_at },
     ]);
   });
 

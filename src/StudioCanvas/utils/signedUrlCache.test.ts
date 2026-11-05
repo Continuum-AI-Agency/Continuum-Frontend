@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import { purgeStorageForLogout } from '@/lib/storage/brandScopedStorage';
 import {
   clearSignedUrlCache,
   resolveSignedUrls,
+  SIGNED_URL_STORAGE_PREFIX,
   type SignedUrlCoordinate,
   signedUrlKey,
 } from './signedUrlCache';
@@ -122,5 +124,34 @@ describe('resolveSignedUrls', () => {
       throw new Error('network down');
     });
     expect(out.size).toBe(0);
+  });
+});
+
+describe('signed URLs kept across a reload', () => {
+  const storedKeys = () =>
+    Object.keys(sessionStorage).filter((key) => key.startsWith(SIGNED_URL_STORAGE_PREFIX));
+
+  it('are read back from sessionStorage, and logout clears them for the next person', async () => {
+    const key = signedUrlKey('b', 'kept.mp4');
+    const url = (await resolveSignedUrls([coord('kept.mp4')], recordingSigner().sign)).get(key);
+    expect(url).toBeString();
+    expect(storedKeys()).toHaveLength(1);
+
+    // A reload empties memory but keeps the tab's sessionStorage: no new sign, same URL.
+    const stored = { ...sessionStorage };
+    clearSignedUrlCache();
+    for (const [key, value] of Object.entries(stored)) sessionStorage.setItem(key, value);
+    const second = recordingSigner();
+    expect((await resolveSignedUrls([coord('kept.mp4')], second.sign)).get(key)).toBe(url);
+    expect(second.calls).toBe(0);
+
+    purgeStorageForLogout();
+    expect(storedKeys()).toHaveLength(0);
+  });
+
+  it('are dropped by clearSignedUrlCache', async () => {
+    await resolveSignedUrls([coord('dropped.mp4')], recordingSigner().sign);
+    clearSignedUrlCache();
+    expect(storedKeys()).toHaveLength(0);
   });
 });

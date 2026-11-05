@@ -110,15 +110,19 @@ async function mintGcsSignedUrl(
   return ((await response.json()) as { signedUrl?: string }).signedUrl ?? null;
 }
 
-/** `download` names the saved file; a GCS URL has to be signed with it. */
+/**
+ * `download` names the saved file; a GCS URL has to be signed with it. `version` is the row's
+ * `updated_at`, so a poster replaced at the same path gets a new URL rather than the reused one.
+ */
 export async function mintSignedUrl(
   storagePath: string,
   bucket: string,
   download?: string,
+  version?: string | null,
 ): Promise<string | null> {
   const client = await createSupabaseServerClient();
   if (isGcsPointer(bucket)) return mintGcsSignedUrl(client, storagePath, bucket, download);
-  const key = reuseKey((await claimsIdentityOf(client))?.id, { path: storagePath, bucket });
+  const key = reuseKey((await claimsIdentityOf(client))?.id, { path: storagePath, bucket, version });
   const reused = key ? reusableSignedUrl(key) : undefined;
   if (reused) return reused;
   const { data, error } = await client.storage
