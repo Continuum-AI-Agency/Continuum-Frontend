@@ -1785,7 +1785,19 @@ const WIDENED_CASES: WidenedCase[] = [
     widen: (url) => url.searchParams.set(HOME_READ_GOAL_PARAM, 'leads'),
     check: async (page, sheet, data: HomeOpportunitiesData) => {
       const summary = await checkOpportunitiesOnTile(page, data);
-      expect(summary).toContain('leads a day');
+      expect(data.goal?.metric).toBe('leads');
+      // Whether a card prices in leads depends on that day's data, so the sentence is only owed
+      // when the read priced one; a day without one says so instead of reading as covered.
+      if (data.opportunities[0]?.impact.unit === 'goal') {
+        expect(summary).toContain('leads a day');
+      } else {
+        grade(
+          'widened opportunities-in-leads',
+          'a card priced in leads',
+          'WARN',
+          'un-exercised: the read asked for leads priced no card in goal units today',
+        );
+      }
       await SHEET_WHEN_READY.opportunities?.(data as never)(sheet);
       return summary;
     },
