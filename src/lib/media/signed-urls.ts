@@ -19,13 +19,19 @@ export interface SignablePath {
   displayDerivative?: boolean;
   /** The row's `updated_at`: an object replaced at the same path gets a new URL, not a cached one. */
   version?: string | null;
+  /** The derivative's longest edge in px (CANVAS_MEDIA_PREVIEW_MAX_EDGE when unset). */
+  edge?: number;
 }
 
 const reuseKey = (userId: string | undefined, item: SignablePath): string | null =>
   userId
-    ? [userId, item.bucket, item.path, item.displayDerivative ? 'display' : '', item.version ?? ''].join(
-        '\n',
-      )
+    ? [
+        userId,
+        item.bucket,
+        item.path,
+        item.displayDerivative ? `display${item.edge ?? ''}` : '',
+        item.version ?? '',
+      ].join('\n')
     : null;
 
 // Every mint is a new token, so a page rendered again for the same person names each image by a
@@ -74,6 +80,27 @@ export function assetSignablePaths(
         : [];
     return [{ path: row.storage_path, bucket: row.bucket, version }, ...poster];
   });
+}
+
+/**
+ * The still a small box draws for an asset row: its poster, else a resized copy of the image at
+ * `edge` px. Never the original — a video with no poster, or a file Supabase cannot resize, has
+ * no still, and the box draws its placeholder instead of downloading the source.
+ */
+export function stillSignable(
+  row: {
+    bucket: string;
+    storage_path: string;
+    mime_type?: string | null;
+    thumbnail_path?: string | null;
+    updated_at?: string | null;
+  },
+  edge: number,
+): SignablePath | null {
+  const version = row.updated_at;
+  if (row.thumbnail_path) return { path: row.thumbnail_path, bucket: row.bucket, version };
+  if (isGcsPointer(row.bucket) || !RESIZABLE_IMAGE_TYPES.has(row.mime_type ?? '')) return null;
+  return { path: row.storage_path, bucket: row.bucket, displayDerivative: true, version, edge };
 }
 
 type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -210,8 +237,8 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
         .from(bucket)
         .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, {
           transform: {
-            width: CANVAS_MEDIA_PREVIEW_MAX_EDGE,
-            height: CANVAS_MEDIA_PREVIEW_MAX_EDGE,
+            width: item.edge ?? CANVAS_MEDIA_PREVIEW_MAX_EDGE,
+            height: item.edge ?? CANVAS_MEDIA_PREVIEW_MAX_EDGE,
             resize: 'contain',
           },
         });

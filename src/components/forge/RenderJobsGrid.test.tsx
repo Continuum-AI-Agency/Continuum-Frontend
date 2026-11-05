@@ -294,7 +294,18 @@ afterAll(() => {
   }
 });
 
+// The Library answers each row's still: a 96 px copy of the asset, never the full render.
+const realFetch = globalThis.fetch;
+const stillOf = (assetId: string) => `https://cdn.test/still-96/${assetId}.webp`;
+
 beforeEach(() => {
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    if (String(input) === '/api/library/stills') {
+      const { assetIds } = JSON.parse(String(init?.body)) as { assetIds: string[] };
+      return Response.json({ stills: Object.fromEntries(assetIds.map((id) => [id, stillOf(id)])) });
+    }
+    return realFetch(input as RequestInfo, init);
+  }) as unknown as typeof fetch;
   realtime = undefined;
   libraryState.mockClear();
   listJobs.mockClear();
@@ -309,6 +320,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  globalThis.fetch = realFetch;
   clientTemplatesFixture = [];
   libraryStateFixture = [];
   environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
@@ -850,12 +862,14 @@ describe('RenderJobsGrid', () => {
         />
       </QueryClientProvider>,
     );
-    expect((await findBatchRow()).querySelector('img')?.getAttribute('src')).toBe(
-      `https://cdn.test/${fileName}`,
+    // The rows draw the Library copy's 96 px still; the preview and the download keep the file.
+    const still = stillOf(MADRID.outputs[0]!.assetId!);
+    await waitFor(async () =>
+      expect((await findBatchRow()).querySelector('img')?.getAttribute('src')).toBe(still),
     );
     fireEvent.click(await findBatchRow());
     const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
-    expect(row.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
+    await waitFor(() => expect(row.querySelector('img')?.getAttribute('src')).toBe(still));
     fireEvent.click(row);
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(preview.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
@@ -905,7 +919,11 @@ describe('RenderJobsGrid', () => {
     );
     fireEvent.click(await findBatchRow());
     const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
-    expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
+    await waitFor(() =>
+      expect(row.querySelector('img')?.getAttribute('src')).toBe(
+        stillOf(MADRID.outputs[0]!.assetId!),
+      ),
+    );
     fireEvent.click(row);
     const preview = screen.getByRole('group', { name: 'Render preview' });
     expect(preview.querySelector('[aria-pressed="true"]')?.textContent).toContain('4:5');
@@ -961,8 +979,9 @@ describe('RenderJobsGrid', () => {
     expect(within(rowOf('Timed out')).getByText('Proof')).toBeTruthy();
 
     // An expired signed link: the image is replaced by the empty tile, never a broken image.
+    await waitFor(() => expect(rowOf('Expired link').querySelector('img')).not.toBeNull());
     const thumbnail = rowOf('Expired link').querySelector('img') as HTMLImageElement;
-    expect(thumbnail.getAttribute('src')).toBe('https://cdn.example.com/madrid.png');
+    expect(thumbnail.getAttribute('src')).toBe(stillOf(MADRID.outputs[0]!.assetId!));
     fireEvent.error(thumbnail);
     expect(rowOf('Expired link').querySelector('img')).toBeNull();
   }, 30_000);

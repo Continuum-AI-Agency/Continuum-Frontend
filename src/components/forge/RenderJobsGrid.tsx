@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { pluralize } from '@/lib/format/pluralize';
+import { useLibraryStill } from '@/lib/media/libraryStills';
 import { subscribeToRowBroadcasts } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
@@ -123,9 +124,17 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
  * and froze the ledger. A still that fails to load — an expired signed link, a deleted file — or
  * a video whose poster is not made yet falls back to the tile.
  */
-function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
+function Thumbnail({ brandId, output }: { brandId: string; output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  const still = output?.kind === 'image' ? thumbnailSrc(output) : output?.posterUrl;
+  // A still at the row's size, never the full render: an image's 480p or a video's poster, else
+  // the Library copy resized to 96 px when the render's own rendition was never made.
+  const own = output?.kind === 'image' ? output.thumbnailUrl : output?.posterUrl;
+  const libraryStill = useLibraryStill(brandId, own ? null : output?.assetId, 96);
+  const still =
+    own ??
+    libraryStill ??
+    // A render outside the Library has no other still to fall back on.
+    (output?.kind === 'image' && !output.assetId ? thumbnailSrc(output) : null);
   if (still && !broken) {
     return (
       <img
@@ -319,6 +328,7 @@ export function RenderJobsGrid({
               {/* Keyed by the link it draws: a re-signed or newly made still gets a fresh try. */}
               <Thumbnail
                 key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
+                brandId={brandId}
                 output={first}
               />
             </ViewTransition>
@@ -520,6 +530,7 @@ export function RenderJobsGrid({
           return (
             <Thumbnail
               key={first ? (first.posterUrl ?? thumbnailSrc(first)) : 'none'}
+              brandId={brandId}
               output={first}
             />
           );

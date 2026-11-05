@@ -11,7 +11,7 @@ mock.module('@/lib/supabase/server', () => ({
 }));
 
 import { displayDerivativeKey } from './mapper';
-import { assetSignablePaths, mintSignedUrls } from './signed-urls';
+import { assetSignablePaths, mintSignedUrls, stillSignable } from './signed-urls';
 
 const ORIGIN = 'https://proj.supabase.co/storage/v1';
 
@@ -89,6 +89,31 @@ describe('assetSignablePaths', () => {
       'postered.png',
       'p.png',
     ]);
+  });
+});
+
+describe('stillSignable', () => {
+  const row = { bucket: 'b', storage_path: 'render.png', mime_type: 'image/png', updated_at: 'v1' };
+
+  it('is the poster when the row has one, else the image resized to the edge', () => {
+    expect(stillSignable({ ...row, thumbnail_path: 'poster.webp' }, 96)).toEqual({
+      path: 'poster.webp',
+      bucket: 'b',
+      version: 'v1',
+    });
+    expect(stillSignable(row, 96)).toEqual({
+      path: 'render.png',
+      bucket: 'b',
+      displayDerivative: true,
+      version: 'v1',
+      edge: 96,
+    });
+  });
+
+  it('is never the original: no still for a video with no poster or a file Supabase cannot resize', () => {
+    expect(stillSignable({ ...row, storage_path: 'clip.mp4', mime_type: 'video/mp4' }, 96)).toBeNull();
+    expect(stillSignable({ ...row, storage_path: 'anim.gif', mime_type: 'image/gif' }, 96)).toBeNull();
+    expect(stillSignable({ ...row, bucket: 'gs://films' }, 96)).toBeNull();
   });
 });
 

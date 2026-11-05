@@ -34,10 +34,12 @@ import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { VideoStill } from '@/components/media/VideoStill';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import type { TemplateVariablesResponse } from '@/lib/library/templateSources';
+import { useLibraryStill } from '@/lib/media/libraryStills';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { TemplateMorph, TemplateWireframe } from './TemplateWireframe';
@@ -250,11 +252,13 @@ export function latestCardRender(
 
 /** The card's picture: the rendered file, else the drawing of the boxes with a word on why. */
 export function CardPicture({
+  brandId,
   name,
   render,
   emptyLabel,
   children,
 }: {
+  brandId: string;
   name: string;
   render: CardRender | null;
   /** Null while the renders are still being read: no claim either way. */
@@ -263,33 +267,37 @@ export function CardPicture({
   children: ReactNode;
 }) {
   const [broken, setBroken] = useState(false);
-  if (render && !broken) {
-    const { file } = render;
-    // A still, never the original: a video draws its poster (its 480p only until the poster is
-    // made), an image its 480p — a gallery of cards no longer pulls every full render.
-    const still = file.kind === 'video' ? file.posterUrl : thumbnailSrc(file);
-    return still ? (
-      // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-      <img
-        src={still}
-        alt={`${name} · last render`}
-        loading="lazy"
-        decoding="async"
-        className="size-full object-contain"
-        onError={() => setBroken(true)}
-      />
-    ) : (
-      // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
-      <video
-        src={`${thumbnailSrc(file)}#t=0.1`}
-        aria-label={`${name} · last render`}
-        className="size-full object-contain"
-        muted
-        playsInline
-        preload="metadata"
-        onError={() => setBroken(true)}
-      />
-    );
+  const file = render?.file ?? null;
+  // A still, never the full render: a video's poster or an image's 480p, else the Library copy's
+  // poster or resize when the render's own rendition was never made.
+  const own = file ? (file.kind === 'video' ? file.posterUrl : file.thumbnailUrl) : null;
+  const libraryStill = useLibraryStill(brandId, own ? null : file?.assetId, 480);
+  if (render && file && !broken) {
+    // A render outside the Library has no other still to fall back on.
+    const still = own ?? libraryStill ?? (file.assetId ? null : thumbnailSrc(file));
+    if (still) {
+      return (
+        // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+        <img
+          src={still}
+          alt={`${name} · last render`}
+          loading="lazy"
+          decoding="async"
+          className="size-full object-contain"
+          onError={() => setBroken(true)}
+        />
+      );
+    }
+    if (file.kind === 'video') {
+      return (
+        <VideoStill
+          src={`${thumbnailSrc(file)}#t=0.1`}
+          alt={`${name} · last render`}
+          className="size-full object-contain"
+          onError={() => setBroken(true)}
+        />
+      );
+    }
   }
   const label = render ? "The last render's file didn't load" : emptyLabel;
   return (
@@ -361,6 +369,7 @@ export function TemplateHoverPreview({
       <div className="aspect-[4/3] overflow-hidden rounded-md border bg-muted/40">
         <CardPicture
           key={render?.file.url ?? 'none'}
+          brandId={brandId}
           name={name}
           render={render}
           emptyLabel={emptyLabel}
@@ -532,6 +541,7 @@ export function TemplateCard({
         <div className="pointer-events-none aspect-[4/3] border-b bg-muted/40">
           <CardPicture
             key={render?.file.url ?? 'none'}
+            brandId={brandId}
             name={name}
             render={render}
             emptyLabel={emptyLabel}
@@ -625,6 +635,7 @@ export function SharedTemplateCard({
       <div className="pointer-events-none aspect-[4/3] border-b bg-muted/40">
         <CardPicture
           key={render?.file.url ?? 'none'}
+          brandId={brandId}
           name={name}
           render={render}
           emptyLabel={emptyLabel}

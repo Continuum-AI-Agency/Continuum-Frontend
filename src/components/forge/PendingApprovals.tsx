@@ -12,11 +12,13 @@ import {
   Clock,
   Loader2,
   Package,
+  Play,
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
+import { VideoStill } from '@/components/media/VideoStill';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -26,6 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { toast } from '@/components/ui/toast-imperative';
 import { decideApprovals } from '@/lib/library/approvalDecisions';
 import { decideRenderApproval, fetchRenderApprovals } from '@/lib/library/renderApprovals';
+import { useLibraryStill } from '@/lib/media/libraryStills';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
@@ -201,6 +204,13 @@ function ApprovalCard({
   const rendered = first ? outputs?.find((output) => sameFile(output.url, first.url)) : undefined;
   const assetId =
     rendered?.assetId ?? outputs?.find((output) => output.assetId)?.assetId ?? undefined;
+  const video = first ? isVideo(first.url) : false;
+  // A still for the 160 px card, never the full render: the render's poster or 480p, else the
+  // Library copy's poster or resize when the render's own rendition was never made.
+  const own = video ? rendered?.posterUrl : rendered?.thumbnailUrl;
+  const libraryStill = useLibraryStill(approval.brandId, own ? null : assetId, 320);
+  const still = own ?? libraryStill;
+  const [playing, setPlaying] = useState(false);
   const pending = approval.status === 'pending';
   const destination =
     approval.action === 'replace' && approval.adId
@@ -212,25 +222,38 @@ function ApprovalCard({
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-start">
       <div className="w-full shrink-0 overflow-hidden rounded-md border bg-muted sm:w-40">
-        {first && isVideo(first.url) ? (
-          // biome-ignore lint/a11y/useMediaCaption: a rendered ad frame has no captions to show
-          <video
-            src={rendered ? thumbnailSrc(rendered) : first.url}
-            poster={rendered?.posterUrl}
-            className="h-full w-full object-cover"
-            muted
-            playsInline
-            controls
-            preload="metadata"
-          />
-        ) : first ? (
+        {first && video ? (
+          <div className="relative">
+            <VideoStill
+              src={rendered ? thumbnailSrc(rendered) : first.url}
+              poster={still}
+              playing={playing}
+              alt="Rendered creative"
+              className="h-full w-full object-cover"
+              controls
+            />
+            {!playing && still ? (
+              <button
+                type="button"
+                aria-label="Play the rendered creative"
+                onClick={() => setPlaying(true)}
+                className="absolute inset-0 flex items-center justify-center bg-black/10 text-white hover:bg-black/20"
+              >
+                <Play className="size-6 fill-current drop-shadow" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        ) : first && (still || !assetId) ? (
           <img
-            src={rendered ? thumbnailSrc(rendered) : first.url}
+            // A render outside the Library has no other still to fall back on.
+            src={still ?? (rendered ? thumbnailSrc(rendered) : first.url)}
             alt="Rendered creative"
             loading="lazy"
             decoding="async"
             className="h-full w-full object-cover"
           />
+        ) : first ? (
+          <div className="h-24 animate-pulse bg-muted" />
         ) : (
           <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
             No preview
