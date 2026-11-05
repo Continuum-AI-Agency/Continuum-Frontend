@@ -13,8 +13,8 @@ import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 
 describe('document upload limits', () => {
   it('rejects oversized files', () => {
-    expect(MAX_DOCUMENT_BYTES).toBe(25 * 1024 * 1024);
-    expect(MAX_DOCUMENT_MB).toBe(25);
+    expect(MAX_DOCUMENT_BYTES).toBe(50 * 1024 * 1024);
+    expect(MAX_DOCUMENT_MB).toBe(50);
   });
 
   it('accepts PDF mime type', () => {

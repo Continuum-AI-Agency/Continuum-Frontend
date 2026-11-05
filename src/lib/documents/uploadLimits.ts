@@ -7,8 +7,20 @@
 // with MAX_DOCUMENT_BYTES below); these helpers provide fast client feedback and a
 // server-side metadata check.
 
-export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024; // 25 MiB; mirror in brand-docs bucket file_size_limit
+// 50 MiB is Gemini's PDF cap; mirror in brand-docs bucket file_size_limit.
+export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_DOCUMENT_MB = Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024);
+export const DOCUMENT_TOO_LARGE_ERROR = `File exceeds the ${MAX_DOCUMENT_MB} MB limit. Split it into smaller PDFs and upload each part.`;
+
+// Decks the extractor cannot read. Rejected up front with the fix, instead of
+// uploading and failing later as an unsupported format (browsers often report '').
+const EXPORT_FIRST_EXTENSION = /\.(key|ppt|odp)$/i;
+
+export function presentationExportError(fileName: string | undefined): string | null {
+  return fileName && EXPORT_FIRST_EXTENSION.test(fileName)
+    ? 'Keynote, PPT and ODP files cannot be read. Export the deck as PDF or PPTX and upload that.'
+    : null;
+}
 
 const ACCEPTED_MIME_PREFIXES = ['text/', 'image/'] as const;
 const ACCEPTED_MIME_EXACT = new Set<string>([
@@ -97,8 +109,10 @@ export function validateDocumentUploadMetadata(
     return { ok: false, status: 400, error: 'Invalid file size' };
   }
   if (input.size > MAX_DOCUMENT_BYTES) {
-    return { ok: false, status: 413, error: `File exceeds ${MAX_DOCUMENT_MB} MB limit` };
+    return { ok: false, status: 413, error: DOCUMENT_TOO_LARGE_ERROR };
   }
+  const exportError = presentationExportError(input.fileName);
+  if (exportError) return { ok: false, status: 415, error: exportError };
   if (typeof input.mimeType !== 'string' || !isAcceptedDocumentMime(input.mimeType)) {
     return {
       ok: false,

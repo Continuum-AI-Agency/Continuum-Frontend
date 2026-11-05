@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  DOCUMENT_TOO_LARGE_ERROR,
   isAcceptedDocumentMime,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_MB,
+  presentationExportError,
   validateDocumentUploadMetadata,
 } from './uploadLimits';
 
@@ -22,9 +24,9 @@ function validMetadata(overrides: Record<string, unknown> = {}) {
 }
 
 describe('upload limit constants', () => {
-  it('caps documents at 25 MiB', () => {
-    expect(MAX_DOCUMENT_BYTES).toBe(25 * 1024 * 1024);
-    expect(MAX_DOCUMENT_MB).toBe(25);
+  it('caps documents at 50 MiB, the brand-docs bucket limit', () => {
+    expect(MAX_DOCUMENT_BYTES).toBe(50 * 1024 * 1024);
+    expect(MAX_DOCUMENT_MB).toBe(50);
   });
 });
 
@@ -57,13 +59,25 @@ describe('isAcceptedDocumentMime', () => {
 
 describe('validateDocumentUploadMetadata', () => {
   it('accepts well-formed metadata for a large (but in-limit) pdf', () => {
-    const result = validateDocumentUploadMetadata(validMetadata({ size: 24 * 1024 * 1024 }));
+    const result = validateDocumentUploadMetadata(validMetadata({ size: 40 * 1024 * 1024 }));
     expect(result.ok).toBe(true);
   });
 
-  it('rejects a file over the 25 MiB limit with 413', () => {
+  it('rejects a file over the 50 MiB limit with 413 and suggests splitting', () => {
     const result = validateDocumentUploadMetadata(validMetadata({ size: MAX_DOCUMENT_BYTES + 1 }));
-    expect(result).toEqual({ ok: false, status: 413, error: 'File exceeds 25 MB limit' });
+    expect(result).toEqual({ ok: false, status: 413, error: DOCUMENT_TOO_LARGE_ERROR });
+    expect(DOCUMENT_TOO_LARGE_ERROR).toContain('50 MB');
+    expect(DOCUMENT_TOO_LARGE_ERROR).toContain('Split');
+  });
+
+  it('rejects Keynote, PPT and ODP decks with an export hint, even with an empty MIME', () => {
+    for (const fileName of ['deck.key', 'Deck.PPT', 'deck.odp']) {
+      const result = validateDocumentUploadMetadata(validMetadata({ fileName, mimeType: '' }));
+      expect(result).toEqual({ ok: false, status: 415, error: presentationExportError(fileName) });
+    }
+    expect(presentationExportError('deck.key')).toContain('PDF or PPTX');
+    expect(presentationExportError('deck.pptx')).toBeNull();
+    expect(presentationExportError('keynote.pdf')).toBeNull();
   });
 
   it('rejects a storagePath outside the brand/document scope', () => {

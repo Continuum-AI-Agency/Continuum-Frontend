@@ -150,3 +150,37 @@ describe('attachAssetPreview — a video this browser cannot decode', () => {
     });
   }
 });
+
+describe('attachAssetPreview — an iPhone HEIC this browser cannot decode', () => {
+  it('hands it to the server, which converts it, instead of asking for a companion', async () => {
+    (globalThis as Record<string, unknown>).createImageBitmap = async () => {
+      throw new DOMException('The source image could not be decoded.', 'InvalidStateError');
+    };
+    const { client, actions } = fakeClient();
+    const file = new File([new Uint8Array(10)], 'IMG_0001.HEIC', { type: 'image/heic' });
+
+    expect(await attachAssetPreview({ ...ids, client, file })).toBe('awaiting_companion');
+    expect(actions).toEqual([
+      {
+        action: 'mark_asset_preview_state',
+        ...ids,
+        state: 'awaiting_companion',
+        errorCode: 'server_preview_pending',
+        errorMessage: 'Building the preview on our servers. It will appear here shortly.',
+      },
+    ]);
+    expect(proxyRequests).toEqual([ids]);
+  });
+
+  it('still asks for a companion when a design source is not a HEIC', async () => {
+    (globalThis as Record<string, unknown>).createImageBitmap = async () => {
+      throw new DOMException('The source image could not be decoded.', 'InvalidStateError');
+    };
+    const { client, actions } = fakeClient();
+    const file = new File([new Uint8Array(10)], 'scan.tiff', { type: 'image/tiff' });
+
+    expect(await attachAssetPreview({ ...ids, client, file })).toBe('awaiting_companion');
+    expect(actions[0]).toMatchObject({ errorCode: 'companion_preview_required' });
+    expect(proxyRequests).toEqual([]);
+  });
+});

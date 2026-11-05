@@ -1557,17 +1557,19 @@ describe('#293 videoModelOptions', () => {
   });
 
   it('leaves the reachable models selectable and unannotated', () => {
-    const option = videoModelOptions().find((entry) => entry.model === 'gemini-omni-flash');
-    expect(option?.selectable).toBe(true);
-    expect(option?.note).toBeUndefined();
+    for (const model of ['gemini-omni-flash', 'veo-3.1', 'veo-3.1-fast'] as const) {
+      const option = videoModelOptions().find((entry) => entry.model === model);
+      expect(option?.selectable).toBe(true);
+      expect(option?.note).toBeUndefined();
+    }
   });
 
-  it('marks every Veo model retired: unselectable, saying it now runs on Omni', () => {
-    for (const model of ['veo-3.1', 'veo-3.1-fast', 'veo-3.1-lite'] as const) {
-      const option = videoModelOptions().find((entry) => entry.model === model);
-      expect(option?.selectable).toBe(false);
-      expect(option?.note).toBe('Retired by Google · runs on Omni');
-    }
+  // Google retired Veo on the Gemini API (2026-10-23). Veo 3.1 and Fast run on Vertex again;
+  // Lite stays retired, and a saved Lite node renders on Omni.
+  it('keeps Veo 3.1 Lite retired: unselectable, saying it now runs on Omni', () => {
+    const option = videoModelOptions().find((entry) => entry.model === 'veo-3.1-lite');
+    expect(option?.selectable).toBe(false);
+    expect(option?.note).toBe('Retired by Google · runs on Omni');
   });
 
   it('covers the whole vocabulary, grouped exactly as the picker draws it', () => {
