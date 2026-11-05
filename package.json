@@ -40,6 +40,7 @@
     "studio:config-controls:bench": "bun run e2e/studio-config-controls.bench.ts",
     "styles:ui:bench": "bun run e2e/styles-ui.bench.ts",
     "forge:layers:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-layers-ui.bench.ts",
+    "media:delivery:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/media-delivery.bench.ts",
     "forge:gallery:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-gallery-ui.bench.ts",
     "forge:batch-preflight:e2e:bench": "bun e2e/forge-batch-preflight.bench.ts",
     "forge:scene:ui:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-scene-editor.bench.ts",
