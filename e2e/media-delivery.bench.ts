@@ -19,9 +19,14 @@
  *   C6 sharp        no shown derived still (thumbnail, poster, resize) over 64 px is drawn from
  *                   fewer pixels than its CSS box (DPR 1)
  *
+ * Speed: every visit also records how long the screen takes to fill — from navigation (or the
+ * tab click) to the last on-screen image or video still finishing — and LCP. `--throttle fast4g`
+ * (9 Mbps, 60 ms) or `slow4g` (1.6 Mbps, 150 ms) makes that a real network; run it against a
+ * production build (`--build`, then `--serve` with MEDIA_BENCH_PROD=1), not the dev server.
+ *
  * Run: `bun run media:delivery:bench -- --label baseline-a` (Frontend). `--serve` starts the
  * Backend and app and keeps them up; `MEDIA_BENCH_APP=http://127.0.0.1:3147` reuses them.
- * Flags: --repeats N (default 2) · --cases a,b · --no-warm · --headed.
+ * Flags: --repeats N (default 2) · --cases a,b · --no-warm · --headed · --throttle fast4g|slow4g.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -47,6 +52,10 @@ const LAZY_MARGIN = 1250;
 const QUIET_MS = 2_500;
 const SETTLE_TIMEOUT_MS = 45_000;
 const SPLIT_SEED = 20261105;
+const THROTTLE = {
+  fast4g: { latency: 60, downloadThroughput: (9_000_000 / 8) * 0.9, uploadThroughput: (1_500_000 / 8) * 0.9 },
+  slow4g: { latency: 150, downloadThroughput: (1_600_000 / 8) * 0.9, uploadThroughput: (750_000 / 8) * 0.9 },
+} as const;
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -372,6 +381,50 @@ function scaleOf(box: { w: number; h: number; fit: string }, nw: number, nh: num
   return Math.sqrt((box.w * box.h) / (nw * nh));
 }
 
+// ── speed ────────────────────────────────────────────────────────────────────────────────────
+
+// Installed before any page script: keep every resource timing (dev pages load hundreds of
+// chunks; the default buffer of 250 would drop the images) and the latest LCP candidate.
+const SPEED_INIT = () => {
+  performance.setResourceTimingBufferSize(10_000);
+  const w = window as unknown as { __lcp?: number };
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) w.__lcp = entry.startTime;
+  }).observe({ type: 'largest-contentful-paint', buffered: true });
+};
+
+// The screen is ready when the last image or still drawn on it has arrived: the latest
+// responseEnd among resources whose URL an on-screen <img>, poster or background shows.
+async function readSpeed(page: Page, from: number) {
+  return page.evaluate((since) => {
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const onScreen = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
+    };
+    const abs = (src: string) => (src ? new URL(src, location.href).href : '');
+    const shown = new Set<string>();
+    for (const img of document.images)
+      if (img.complete && img.naturalWidth > 0 && onScreen(img)) shown.add(abs(img.currentSrc || img.src));
+    for (const video of document.querySelectorAll('video'))
+      if (video.poster && onScreen(video)) shown.add(abs(video.poster));
+    for (const el of document.querySelectorAll('body *')) {
+      const bg = getComputedStyle(el).backgroundImage;
+      if (bg.includes('url(') && onScreen(el))
+        for (const m of bg.matchAll(/url\("?(.*?)"?\)/g)) shown.add(abs(m[1] ?? ''));
+    }
+    let ready = 0;
+    for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+      if (shown.has(entry.name)) ready = Math.max(ready, entry.responseEnd);
+    const lcp = (window as unknown as { __lcp?: number }).__lcp;
+    return {
+      screenReadyMs: ready > 0 ? Math.round(Math.max(0, ready - since)) : null,
+      lcpMs: typeof lcp === 'number' ? Math.round(Math.max(0, lcp - since)) : null,
+    };
+  }, from);
+}
+
 // ── one visit ────────────────────────────────────────────────────────────────────────────────
 
 type Shown = {
@@ -384,6 +437,10 @@ type Shown = {
 };
 type Visit = {
   settleMs: number;
+  /** Navigation (or the tab click) to the last on-screen image or still finishing, in ms. */
+  screenReadyMs: number | null;
+  /** Largest Contentful Paint, from navigation (or the tab click), in ms. */
+  lcpMs: number | null;
   imageBytes: number;
   videoBytes: number;
   imageRequests: number;
@@ -397,15 +454,22 @@ type Visit = {
 
 async function measure(page: Page, cdp: CDPSession, kase: Case, withDom: boolean): Promise<Visit> {
   await cdp.send('Network.enable');
+  const throttle = option('throttle') as keyof typeof THROTTLE | undefined;
+  if (throttle) {
+    await cdp.send('Network.emulateNetworkConditions', { offline: false, ...THROTTLE[throttle] });
+  }
   const reqs = recordNetwork(cdp);
   await page.goto(`${APP}${kase.path}`, { waitUntil: 'domcontentloaded', timeout: 240_000 });
   await settle(reqs);
+  let from = 0;
   if (kase.act) {
+    from = await page.evaluate(() => performance.now());
     await kase.act(page);
   }
   await kase.ready?.(page);
   const settleMs = await settle(reqs);
   await page.waitForTimeout(500);
+  const speed = await readSpeed(page, from);
   // Freeze the record before probing natural sizes: the probes are the bench's, not the page's.
   const frozen = [...reqs.values()].map((r) => ({ ...r }));
   await cdp.send('Network.disable');
@@ -414,6 +478,7 @@ async function measure(page: Page, cdp: CDPSession, kase: Case, withDom: boolean
   const videos = frozen.filter((r) => isVideo(r) && !isImage(r));
   const visit: Visit = {
     settleMs,
+    ...speed,
     imageBytes: images.reduce((sum, r) => sum + bytesOf(r), 0),
     videoBytes: videos.reduce((sum, r) => sum + bytesOf(r), 0),
     imageRequests: images.filter((r) => bytesOf(r) > 0).length,
@@ -612,13 +677,14 @@ function killGroup(child: ChildProcess) {
 
 async function startApp(backendUrl: string): Promise<() => void> {
   if (await answers(APP)) throw new Error(`${APP} already answers; set MEDIA_BENCH_APP to reuse it`);
-  const child = spawn('bun', ['run', 'dev'], {
+  const prod = Boolean(process.env.MEDIA_BENCH_PROD);
+  const child = spawn('bun', prod ? ['x', 'next', 'start', '-p', String(APP_PORT)] : ['run', 'dev'], {
     cwd: FRONTEND_DIR,
     detached: true,
     env: {
       ...process.env,
       PORT: String(APP_PORT),
-      NEXT_DIST_DIR: '.next/media-delivery-bench',
+      NEXT_DIST_DIR: prod ? '.next/media-delivery-prod' : '.next/media-delivery-bench',
       NEXT_PUBLIC_API_URL: backendUrl,
       API_URL: backendUrl,
     },
@@ -666,6 +732,22 @@ async function pinSession(accessToken: string, brand: string) {
 // ── main ─────────────────────────────────────────────────────────────────────────────────────
 
 async function main() {
+  if (flag('build')) {
+    // A production build for speed runs, with the bench Backend's address baked in.
+    const backendUrl = `http://127.0.0.1:${BACKEND_PORT}`;
+    const build = spawn('bun', ['x', 'next', 'build'], {
+      cwd: FRONTEND_DIR,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        NEXT_DIST_DIR: '.next/media-delivery-prod',
+        NEXT_PUBLIC_API_URL: backendUrl,
+        API_URL: backendUrl,
+      },
+    });
+    const code = await new Promise<number | null>((resolve) => build.on('exit', resolve));
+    process.exit(code ?? 1);
+  }
   let backend: LocalBackend | null = null;
   let stopApp: (() => void) | null = null;
   const stop = async () => {
@@ -702,12 +784,15 @@ async function main() {
 
   const session = await mintSessionBundleForEmail(OWNER_EMAIL);
   const browser = await chromium.launch({ headless: !flag('headed'), ...benchBrowserChannel() });
-  const newContext = () =>
-    browser.newContext({
+  const newContext = async () => {
+    const context = await browser.newContext({
       storageState: session.state,
       viewport: VIEWPORT,
       deviceScaleFactor: DPR,
     });
+    await context.addInitScript(SPEED_INIT);
+    return context;
+  };
 
   try {
     if (!flag('no-warm')) {
@@ -726,6 +811,7 @@ async function main() {
 
     const scores: Record<'train' | 'test', Record<string, number[]>> = { train: {}, test: {} };
     const firstBytes: Record<'train' | 'test', Record<string, number[]>> = { train: {}, test: {} };
+    const screenReady: Record<'train' | 'test', Record<string, number[]>> = { train: {}, test: {} };
     const report: Record<string, unknown[]> = {};
     for (const kase of cases) {
       for (let repeat = 0; repeat < repeats; repeat++) {
@@ -757,10 +843,12 @@ async function main() {
         const side = split[kase.id] ?? 'train';
         (scores[side][kase.id] ??= []).push(Number(score.toFixed(4)));
         (firstBytes[side][kase.id] ??= []).push(first.imageBytes + first.videoBytes);
+        if (first.screenReadyMs !== null)
+          (screenReady[side][kase.id] ??= []).push(first.screenReadyMs);
         (report[kase.id] ??= []).push({ repeat, score, claims, first, revisit });
         const failedClaims = claims.filter((c) => c.applies && !c.pass);
         console.log(
-          `${kase.id} #${repeat + 1} score ${score.toFixed(2)} · first ${kb(first.imageBytes)} img + ${kb(first.videoBytes)} video · revisit ${kb(revisit.imageBytes + revisit.videoBytes)} · settle ${first.settleMs} ms`,
+          `${kase.id} #${repeat + 1} score ${score.toFixed(2)} · first ${kb(first.imageBytes)} img + ${kb(first.videoBytes)} video · revisit ${kb(revisit.imageBytes + revisit.videoBytes)} · screen ready ${first.screenReadyMs ?? '–'} ms · LCP ${first.lcpMs ?? '–'} ms`,
         );
         for (const c of failedClaims) console.log(`   ✗ ${c.id} ${c.evidence.slice(0, 400)}`);
       }
@@ -773,6 +861,10 @@ async function main() {
     writeFileSync(
       path.join(outDir, 'bytes.json'),
       `${JSON.stringify({ rubric: 'bytes-v1', ...firstBytes }, null, 2)}\n`,
+    );
+    writeFileSync(
+      path.join(outDir, 'screen-ready.json'),
+      `${JSON.stringify({ rubric: `screen-ready-${option('throttle') ?? 'unthrottled'}`, ...screenReady }, null, 2)}\n`,
     );
     writeFileSync(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
     console.log(`· wrote ${outDir}`);
