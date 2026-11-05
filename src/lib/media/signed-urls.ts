@@ -2,6 +2,7 @@ import 'server-only';
 
 import { CANVAS_MEDIA_PREVIEW_MAX_EDGE, isGcsPointer } from '@continuum/contracts';
 import { getApiBaseUrl } from '@/lib/api/config';
+import { claimsIdentityOf } from '@/lib/auth/claims';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { displayDerivativeKey } from './mapper';
 import { toBrowserReachableStorageUrl } from './storage-url';
@@ -16,7 +17,16 @@ export interface SignablePath {
   bucket: string;
   /** Sign a display-sized derivative instead of the original, keyed by displayDerivativeKey(path). */
   displayDerivative?: boolean;
+  /** The row's `updated_at`: an object replaced at the same path gets a new URL, not a cached one. */
+  version?: string | null;
 }
+
+const reuseKey = (userId: string | undefined, item: SignablePath): string | null =>
+  userId
+    ? [userId, item.bucket, item.path, item.displayDerivative ? 'display' : '', item.version ?? ''].join(
+        '\n',
+      )
+    : null;
 
 // Every mint is a new token, so a page rendered again for the same person names each image by a
 // new URL and the browser downloads it again. A URL already minted for this person is handed back
@@ -52,15 +62,17 @@ export function assetSignablePaths(
     storage_path: string;
     mime_type?: string | null;
     thumbnail_path?: string | null;
+    updated_at?: string | null;
   }[],
 ): SignablePath[] {
   return rows.flatMap((row) => {
+    const version = row.updated_at;
     const poster: SignablePath[] = row.thumbnail_path
-      ? [{ path: row.thumbnail_path, bucket: row.bucket }]
+      ? [{ path: row.thumbnail_path, bucket: row.bucket, version }]
       : RESIZABLE_IMAGE_TYPES.has(row.mime_type ?? '')
-        ? [{ path: row.storage_path, bucket: row.bucket, displayDerivative: true }]
+        ? [{ path: row.storage_path, bucket: row.bucket, displayDerivative: true, version }]
         : [];
-    return [{ path: row.storage_path, bucket: row.bucket }, ...poster];
+    return [{ path: row.storage_path, bucket: row.bucket, version }, ...poster];
   });
 }
 
@@ -106,6 +118,9 @@ export async function mintSignedUrl(
 ): Promise<string | null> {
   const client = await createSupabaseServerClient();
   if (isGcsPointer(bucket)) return mintGcsSignedUrl(client, storagePath, bucket, download);
+  const key = reuseKey((await claimsIdentityOf(client))?.id, { path: storagePath, bucket });
+  const reused = key ? reusableSignedUrl(key) : undefined;
+  if (reused) return reused;
   const { data, error } = await client.storage
     .from(bucket)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
@@ -113,7 +128,9 @@ export async function mintSignedUrl(
     console.error('[media/signed-urls] Failed to sign URL', { bucket, storagePath, error });
     return null;
   }
-  return toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const url = toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  if (key) rememberSignedUrl(key, url, SIGNED_URL_TTL_SECONDS);
+  return url;
 }
 
 // Signs a batch of paths that may span multiple buckets. Returns a Map keyed by
@@ -125,19 +142,25 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
   if (items.length === 0) return map;
 
   const client = await createSupabaseServerClient();
+  const userId = (await claimsIdentityOf(client))?.id;
 
-  const pathsByBucket = new Map<string, string[]>();
-  for (const { path, bucket, displayDerivative } of items) {
-    if (displayDerivative) continue;
-    const existing = pathsByBucket.get(bucket);
-    if (existing) {
-      existing.push(path);
-    } else {
-      pathsByBucket.set(bucket, [path]);
+  // Per bucket, the paths still to sign, each with its reuse key.
+  const pathsByBucket = new Map<string, Map<string, string | null>>();
+  for (const item of items) {
+    if (item.displayDerivative) continue;
+    const key = isGcsPointer(item.bucket) ? null : reuseKey(userId, item);
+    const reused = key ? reusableSignedUrl(key) : undefined;
+    if (reused) {
+      map.set(item.path, reused);
+      continue;
     }
+    const pending = pathsByBucket.get(item.bucket) ?? new Map<string, string | null>();
+    pending.set(item.path, key);
+    pathsByBucket.set(item.bucket, pending);
   }
 
-  const signOriginals = Array.from(pathsByBucket.entries()).map(async ([bucket, paths]) => {
+  const signOriginals = Array.from(pathsByBucket.entries()).map(async ([bucket, pending]) => {
+    const paths = [...pending.keys()];
     if (isGcsPointer(bucket)) {
       // ponytail: one Backend call per film; batch the sign route when a page holds many films.
       for (const path of paths) {
@@ -155,10 +178,13 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
     }
     for (const item of data) {
       if (item.signedUrl && item.path) {
-        map.set(
-          item.path,
-          toBrowserReachableStorageUrl(item.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
+        const url = toBrowserReachableStorageUrl(
+          item.signedUrl,
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
         );
+        map.set(item.path, url);
+        const key = pending.get(item.path);
+        if (key) rememberSignedUrl(key, url, SIGNED_URL_TTL_SECONDS);
       }
     }
   });
@@ -168,7 +194,14 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
   // back to the original.
   const signDerivatives = items
     .filter((item) => item.displayDerivative)
-    .map(async ({ path, bucket }) => {
+    .map(async (item) => {
+      const { path, bucket } = item;
+      const key = reuseKey(userId, item);
+      const reused = key ? reusableSignedUrl(key) : undefined;
+      if (reused) {
+        map.set(displayDerivativeKey(path), reused);
+        return;
+      }
       const { data, error } = await client.storage
         .from(bucket)
         .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, {
@@ -179,10 +212,9 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
           },
         });
       if (error || !data?.signedUrl) return;
-      map.set(
-        displayDerivativeKey(path),
-        toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL),
-      );
+      const url = toBrowserReachableStorageUrl(data.signedUrl, process.env.NEXT_PUBLIC_SUPABASE_URL);
+      map.set(displayDerivativeKey(path), url);
+      if (key) rememberSignedUrl(key, url, SIGNED_URL_TTL_SECONDS);
     });
 
   await Promise.all([...signOriginals, ...signDerivatives]);

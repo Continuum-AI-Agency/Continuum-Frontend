@@ -50,11 +50,42 @@ interface CacheEntry {
 const resolved = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<string | null>>();
 
+// A reload starts the page over but not the tab. Kept in sessionStorage, the URLs a canvas
+// already drew survive it, so a reopened canvas paints from the browser cache instead of
+// downloading every clip again under a new token.
+const STORED = 'signed-url\n';
+
+function stored(key: string): CacheEntry | undefined {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(STORED + key);
+    return raw ? (JSON.parse(raw) as CacheEntry) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function store(key: string, entry: CacheEntry): void {
+  try {
+    globalThis.sessionStorage?.setItem(STORED + key, JSON.stringify(entry));
+  } catch {
+    // A full or blocked sessionStorage only costs the reload its cache.
+  }
+}
+
+function unstore(key: string): void {
+  try {
+    globalThis.sessionStorage?.removeItem(STORED + key);
+  } catch {
+    // Nothing stored to drop.
+  }
+}
+
 function readFresh(key: string, now: number): string | null {
-  const entry = resolved.get(key);
+  const entry = resolved.get(key) ?? stored(key);
   if (!entry) return null;
   if (entry.expiresAtMs <= now) {
     resolved.delete(key);
+    unstore(key);
     return null;
   }
   return entry.url;
@@ -67,6 +98,7 @@ function remember(key: string, url: string, now: number): void {
   // not worth storing — caching it would just hand the next caller something stale.
   if (expiresAtMs <= now) return;
   resolved.set(key, { url, expiresAtMs });
+  store(key, { url, expiresAtMs });
 }
 
 /**
@@ -141,6 +173,7 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
 
 /** Drop everything. Used when the canvas switches rooms or brands, and by tests. */
 export function clearSignedUrlCache(): void {
+  for (const key of resolved.keys()) unstore(key);
   resolved.clear();
   inFlight.clear();
 }

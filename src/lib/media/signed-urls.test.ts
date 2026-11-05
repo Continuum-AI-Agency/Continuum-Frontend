@@ -17,10 +17,18 @@ const ORIGIN = 'https://proj.supabase.co/storage/v1';
 
 type SignCall = { bucket: string; path: string; transform?: unknown };
 
-function fakeStorage(options: { failPaths?: string[]; failBatchBucket?: string } = {}) {
+let users = 0;
+
+// Each fake is a different person unless one is passed, so the module's reuse memo never
+// carries a URL from one test into another.
+function fakeStorage(
+  options: { failPaths?: string[]; failBatchBucket?: string; userId?: string } = {},
+) {
   const single: SignCall[] = [];
   const batches: { bucket: string; paths: string[] }[] = [];
+  const sub = options.userId ?? `user-${++users}`;
   hooks.__testCreateSupabaseServerClient = () => ({
+    auth: { getClaims: async () => ({ data: { claims: { sub } }, error: null }) },
     storage: {
       from: (bucket: string) => ({
         createSignedUrls: async (paths: string[]) => {
@@ -116,5 +124,31 @@ describe('mintSignedUrls', () => {
     expect(map.has(displayDerivativeKey('bad.jpg'))).toBe(false);
     expect(map.has('lost.jpg')).toBe(false);
     expect(map.get(displayDerivativeKey('lost.jpg'))).toBeString();
+  });
+
+  it('hands the same person the URL it already minted, until the row changes', async () => {
+    const first = fakeStorage({ userId: 'reuser' });
+    const items = [
+      { bucket: 'b', path: 'r.jpg', version: 'v1' },
+      { bucket: 'b', path: 'r.jpg', displayDerivative: true, version: 'v1' },
+    ];
+    const minted = await mintSignedUrls(items);
+    expect(first.batches).toHaveLength(1);
+    expect(first.single).toHaveLength(1);
+
+    const again = fakeStorage({ userId: 'reuser' });
+    const reused = await mintSignedUrls(items);
+    expect(again.batches).toHaveLength(0);
+    expect(again.single).toHaveLength(0);
+    expect(reused).toEqual(minted);
+
+    const changed = fakeStorage({ userId: 'reuser' });
+    await mintSignedUrls(items.map((item) => ({ ...item, version: 'v2' })));
+    expect(changed.batches).toHaveLength(1);
+    expect(changed.single).toHaveLength(1);
+
+    const someoneElse = fakeStorage();
+    await mintSignedUrls(items);
+    expect(someoneElse.batches).toHaveLength(1);
   });
 });
