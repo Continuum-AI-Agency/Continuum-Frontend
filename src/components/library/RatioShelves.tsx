@@ -34,6 +34,10 @@ export function RatioShelves({ onSelectBin, ...gridProps }: Props) {
     return <MediaGrid {...gridProps} />;
   }
 
+  const firstIndexOf = grouped.map((_, index) =>
+    grouped.slice(0, index).reduce((sum, group) => sum + group.assets.length, 0),
+  );
+
   return (
     <div className="flex flex-col gap-8">
       {grouped.map((group, index) => (
@@ -56,6 +60,7 @@ export function RatioShelves({ onSelectBin, ...gridProps }: Props) {
             {...gridProps}
             previewFrame="native"
             assets={group.assets}
+            firstIndex={firstIndexOf[index]}
             emptyHint={undefined}
             onLoadMore={index === grouped.length - 1 ? gridProps.onLoadMore : undefined}
             hasMore={index === grouped.length - 1 ? gridProps.hasMore : false}

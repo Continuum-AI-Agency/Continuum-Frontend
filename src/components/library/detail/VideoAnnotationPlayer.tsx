@@ -177,8 +177,11 @@ export function VideoAnnotationPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
-  const measuredRate = useFrameRate(src);
-  const startTimecode = useStartTimecode(src) ?? null;
+  // Rate and start timecode are read off the file itself, megabytes of ranged reads, and only
+  // matter once the person plays, seeks or steps; nothing is read before that.
+  const [engaged, setEngaged] = useState(false);
+  const measuredRate = useFrameRate(engaged ? src : null);
+  const startTimecode = useStartTimecode(engaged ? src : null) ?? null;
   const timecodeMode = useTimecodeDisplay();
   const stageTime = (ms: number) => formatStageTime(ms, timecodeMode, measuredRate, startTimecode);
   const stageRange = (from: number, to: number | null) =>
@@ -625,7 +628,11 @@ export function VideoAnnotationPlayer({
             publishTime(ms);
           }}
           onSeeked={(e) => publishTime(msFromSeconds(e.currentTarget.currentTime, measuredRate))}
-          onPlay={() => setPlaying(true)}
+          onSeeking={() => setEngaged(true)}
+          onPlay={() => {
+            setEngaged(true);
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
           onEnded={stopShuttle}
           // A proxy that will not play falls back to the original before calling it lost.

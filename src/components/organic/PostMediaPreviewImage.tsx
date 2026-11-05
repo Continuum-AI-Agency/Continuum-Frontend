@@ -36,6 +36,8 @@ export function PostMediaPreviewImage({
     <img
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       className={className}
       onError={() => {
         setFailedSrc(src);

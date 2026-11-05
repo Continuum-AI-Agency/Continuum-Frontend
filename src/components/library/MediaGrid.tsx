@@ -44,6 +44,8 @@ type Props = {
   fieldValues?: FieldValuesByAsset;
   /** Cards become draggable and accept other cards, stacking them as new versions. */
   onStackDrop?: (target: MediaAsset, sourceAssetIds: string[]) => void;
+  /** This grid's first card's place on the page, when shelves split one page into grids. */
+  firstIndex?: number;
 };
 
 const cardVariants: Variants = {
@@ -83,6 +85,7 @@ export function MediaGrid({
   cardFields = [],
   fieldValues,
   onStackDrop,
+  firstIndex = 0,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -172,7 +175,7 @@ export function MediaGrid({
               key={asset.id}
               brandId={brandId}
               asset={asset}
-              index={i}
+              index={firstIndex + i}
               showBoundingBoxes={showBoundingBoxes}
               captionStyle={captionStyle}
               onOpen={onOpenDetail}
@@ -201,7 +204,7 @@ export function MediaGrid({
                 <MediaCard
                   brandId={brandId}
                   asset={asset}
-                  index={i}
+                  index={firstIndex + i}
                   showBoundingBoxes={showBoundingBoxes}
                   captionStyle={captionStyle}
                   onOpen={onOpenDetail}

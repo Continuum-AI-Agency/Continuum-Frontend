@@ -100,7 +100,9 @@ export function ReelVideo({
     }
   }, [shouldPlay, errored, src]);
 
-  if (errored) {
+  // At rest a tile is its cover, as lazy as any still: a <video poster> downloads the cover and
+  // the file's metadata for every tile on the page, on screen or not.
+  if (errored || (!shouldPlay && !controls && poster)) {
     return <PostThumb coverUrl={poster} alt={alt} className={className} />;
   }
 
