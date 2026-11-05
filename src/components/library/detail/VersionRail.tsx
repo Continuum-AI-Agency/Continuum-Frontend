@@ -91,7 +91,7 @@ type VersionDisplay = {
   createdAt: string;
   isHead: boolean;
   commentCount: number;
-  /** The head's card still (its poster or thumbnail), drawn in place of the file itself. */
+  /** The head video's poster, drawn in place of loading the film. */
   stillUrl?: string | null;
 };
 
@@ -141,7 +141,9 @@ function VersionPreview({
     return (
       <div className={base}>
         <img
-          src={version.stillUrl ?? version.signedUrl}
+          // The same URL the stage draws, already in the browser: a smaller copy here would be a
+          // second download that waits on the versions read, and the screen waits on it.
+          src={version.signedUrl}
           alt={version.fileName}
           loading="lazy"
           className="h-full w-full object-cover"
@@ -430,11 +432,7 @@ export function VersionRail({
   const loading = versions === null;
   const mutating = rollingBack || restacking;
   const stacked = versions !== null && versions.length > 1;
-  const headStill =
-    asset.thumbnailUrl ??
-    (asset.preview?.state === 'ready' && asset.preview.kind === 'image'
-      ? asset.preview.signedUrl
-      : null);
+  const headStill = asset.kind === 'video' ? (asset.thumbnailUrl ?? null) : null;
   const displayList: VersionDisplay[] = (
     versions && versions.length > 0
       ? versions.map((version) => toDisplay(version, commentCounts.get(version.id) ?? 0))

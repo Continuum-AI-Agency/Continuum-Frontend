@@ -424,7 +424,11 @@ async function readSpeed(page: Page, from: number) {
         lastStart = entry.startTime;
       }
     const lcp = (window as unknown as { __lcp?: number }).__lcp;
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
     return {
+      // Where the time went before any still: the server's first byte, and the document parsed.
+      ttfbMs: nav ? Math.round(nav.responseStart) : null,
+      domContentLoadedMs: nav ? Math.round(nav.domContentLoadedEventEnd) : null,
       screenReadyMs: ready > 0 ? Math.round(Math.max(0, ready - since)) : null,
       // Which still finished last, and when it was asked for: what to make faster.
       lastStill: last ? `${last} (asked at ${Math.round(lastStart - since)} ms)` : null,
@@ -450,6 +454,8 @@ type Visit = {
   /** Largest Contentful Paint, from navigation (or the tab click), in ms. */
   lcpMs: number | null;
   lastStill: string | null;
+  ttfbMs: number | null;
+  domContentLoadedMs: number | null;
   imageBytes: number;
   videoBytes: number;
   imageRequests: number;
@@ -458,6 +464,8 @@ type Visit = {
   broken: { url: string; why: string }[];
   videos: { url: string; bytes: number }[];
   videoElements: { preload: string; poster: boolean; autoplay: boolean }[];
+  /** With --waterfall: every request, ms from navigation, for attributing a slow screen. */
+  waterfall?: string[];
   cacheControl: string[];
 };
 
@@ -481,6 +489,7 @@ async function measure(page: Page, cdp: CDPSession, kase: Case, withDom: boolean
   const speed = await readSpeed(page, from);
   // Freeze the record before probing natural sizes: the probes are the bench's, not the page's.
   const frozen = [...reqs.values()].map((r) => ({ ...r }));
+  const navStart = Math.min(...frozen.map((r) => r.start));
   await cdp.send('Network.disable');
 
   const images = frozen.filter(isImage);
@@ -499,6 +508,17 @@ async function measure(page: Page, cdp: CDPSession, kase: Case, withDom: boolean
       .map((r) => ({ url: shortUrl(r.url), bytes: bytesOf(r) })),
     videoElements: [],
     cacheControl: [...new Set(images.map((r) => r.cacheControl ?? '∅'))],
+    ...(flag('waterfall')
+      ? {
+          waterfall: frozen
+            .filter((r) => r.type !== 'Script' && r.type !== 'Stylesheet' && r.type !== 'Font')
+            .sort((a, b) => a.start - b.start)
+            .map(
+              (r) =>
+                `${r.start - navStart}→${(r.end ?? r.start) - navStart} ${r.type} ${r.status ?? '-'} ${shortUrl(r.url).slice(-70)}`,
+            ),
+        }
+      : {}),
   };
   for (const r of [...images, ...videos]) {
     if ((r.status ?? 0) >= 400 || (r.failed && !r.canceled))
