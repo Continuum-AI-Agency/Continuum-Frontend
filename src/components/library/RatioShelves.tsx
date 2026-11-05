@@ -23,6 +23,16 @@ export function groupAssetsByRatio(
   })).filter((group) => group.assets.length > 0);
 }
 
+/** Each shelf's first card's place on the page, so "the first ten cards" means the page's. */
+export function shelfFirstIndexes(groups: readonly { assets: readonly unknown[] }[]): number[] {
+  let next = 0;
+  return groups.map((group) => {
+    const first = next;
+    next += group.assets.length;
+    return first;
+  });
+}
+
 type Props = ComponentProps<typeof MediaGrid> & {
   onSelectBin?: (bin: LibraryAspectRatioBin) => void;
 };
@@ -34,9 +44,7 @@ export function RatioShelves({ onSelectBin, ...gridProps }: Props) {
     return <MediaGrid {...gridProps} />;
   }
 
-  const firstIndexOf = grouped.map((_, index) =>
-    grouped.slice(0, index).reduce((sum, group) => sum + group.assets.length, 0),
-  );
+  const firstIndexOf = shelfFirstIndexes(grouped);
 
   return (
     <div className="flex flex-col gap-8">

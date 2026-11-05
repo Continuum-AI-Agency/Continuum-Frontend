@@ -102,6 +102,25 @@ describe('VideoAnnotationPlayer — without an asset', () => {
   });
 });
 
+describe('VideoAnnotationPlayer — reads the file only once engaged', () => {
+  it('measures frame rate and timecode on the first seek or play, not on open', async () => {
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: unknown) => {
+      requested.push(String(input));
+      return new Response(null, { status: 404 });
+    }) as unknown as typeof fetch;
+    mount({ withAsset: false });
+
+    await act(async () => {});
+    expect(requested.filter((url) => url.startsWith(ORIGINAL))).toEqual([]);
+
+    fireEvent.seeking(video());
+    await waitFor(() =>
+      expect(requested.some((url) => url.startsWith(ORIGINAL))).toBe(true),
+    );
+  });
+});
+
 describe('VideoAnnotationPlayer — quality', () => {
   it('lists Auto, every rung, and Original, and Auto swaps in while nothing has played', async () => {
     stubFetch(PLAYBACK);
@@ -116,8 +135,9 @@ describe('VideoAnnotationPlayer — quality', () => {
       'Original',
     ]);
     expect(playbackRequests[0]).toContain(`versionId=${VERSION_ID}`);
-    // A stage with no measured size needs no more than the smallest rung.
-    expect(root().dataset.playingRole).toBe('preview_video');
+    // A stage with no measured size needs no more than the smallest rung; the swap lands a tick
+    // after the menu does.
+    await waitFor(() => expect(root().dataset.playingRole).toBe('preview_video'));
     expect(root().dataset.quality).toBe('auto');
     expect(video().getAttribute('src')).toBe('https://storage.test/preview_video.mp4');
   });

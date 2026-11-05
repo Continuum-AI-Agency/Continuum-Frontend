@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { LIBRARY_ASPECT_RATIO_LABEL, type MediaAsset } from '@continuum/contracts';
-import { groupAssetsByRatio } from './RatioShelves';
+import { groupAssetsByRatio, shelfFirstIndexes } from './RatioShelves';
 
 function asset(
   id: string,
@@ -39,5 +39,13 @@ describe('Home ratio shelves', () => {
       ['other', ['odd']],
     ]);
     expect(LIBRARY_ASPECT_RATIO_LABEL['9:16']).toContain('phone');
+  });
+});
+
+describe('shelfFirstIndexes', () => {
+  test('numbers cards across shelves, so only the page’s first ten load eagerly', () => {
+    expect(
+      shelfFirstIndexes([{ assets: [1, 2, 3] }, { assets: [4] }, { assets: [5, 6] }]),
+    ).toEqual([0, 3, 4]);
   });
 });

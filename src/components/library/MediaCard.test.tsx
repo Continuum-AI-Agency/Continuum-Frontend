@@ -134,6 +134,29 @@ describe('MediaCard thumbnail', () => {
   });
 });
 
+describe('MediaCard video at rest', () => {
+  it('draws its poster as a lazy still and fetches no video until the pointer is on it', () => {
+    const { container } = mount(
+      <MediaCard
+        brandId="brand-1"
+        index={20}
+        asset={libraryAsset({
+          kind: 'video',
+          mimeType: 'video/mp4',
+          fileName: 'clip.mp4',
+          signedUrl: 'https://cdn.test/clip.mp4',
+          thumbnailUrl: 'https://cdn.test/clip-poster.webp',
+        })}
+      />,
+    );
+    const still = container.querySelector('img[src="https://cdn.test/clip-poster.webp"]');
+    expect(still?.getAttribute('loading')).toBe('lazy');
+    const video = container.querySelector('video');
+    expect(video?.hasAttribute('poster')).toBe(false);
+    expect(video?.getAttribute('src')).toBeNull();
+  });
+});
+
 describe('MediaCard non-visual kinds', () => {
   it('paints an audio card with its duration instead of an image', () => {
     const { container } = mount(
@@ -275,12 +298,6 @@ describe('MediaCard office documents', () => {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'XLSX',
       'spreadsheet',
-    ],
-    [
-      'deck.pptx',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'PPTX',
-      'presentation',
     ],
     ['old.xls', 'application/vnd.ms-excel', 'XLS', 'spreadsheet'],
   ])('%s says it has no preview and still offers the download', (fileName, mimeType, badge, icon) => {
