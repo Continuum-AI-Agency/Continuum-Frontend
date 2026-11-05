@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { CompetitorPostAnalysis, InstagramPost } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { CompetitorPostView } from './competitorPostView';
 
@@ -187,6 +187,22 @@ describe('CompetitorPostHoverTile face', () => {
       />,
     );
     expect(getByTestId('relevance-reason').textContent).toContain('rooftop, rentals');
+  });
+});
+
+describe('CompetitorPostHoverTile reel media', () => {
+  it('rests as its cover and mounts the video only while the pointer is on it', () => {
+    const { container, getByRole } = wrap(<CompetitorPostHoverTile brandId="b1" view={view()} />);
+    const face = getByRole('button', { name: /^Analyse / });
+
+    expect(container.querySelector('video')).toBeNull();
+    expect(face.querySelector('img')?.getAttribute('src')).toBe(reel.coverUrl);
+
+    fireEvent.pointerEnter(face);
+    expect(face.querySelector('video')?.getAttribute('src')).toBe('https://cdn.example.com/reel.mp4');
+
+    fireEvent.pointerLeave(face);
+    expect(container.querySelector('video')).toBeNull();
   });
 });
 
