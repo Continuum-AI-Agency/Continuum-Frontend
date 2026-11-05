@@ -415,11 +415,19 @@ async function readSpeed(page: Page, from: number) {
         for (const m of bg.matchAll(/url\("?(.*?)"?\)/g)) shown.add(abs(m[1] ?? ''));
     }
     let ready = 0;
+    let last = '';
+    let lastStart = 0;
     for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[])
-      if (shown.has(entry.name)) ready = Math.max(ready, entry.responseEnd);
+      if (shown.has(entry.name) && entry.responseEnd > ready) {
+        ready = entry.responseEnd;
+        last = new URL(entry.name).pathname.slice(-80);
+        lastStart = entry.startTime;
+      }
     const lcp = (window as unknown as { __lcp?: number }).__lcp;
     return {
       screenReadyMs: ready > 0 ? Math.round(Math.max(0, ready - since)) : null,
+      // Which still finished last, and when it was asked for: what to make faster.
+      lastStill: last ? `${last} (asked at ${Math.round(lastStart - since)} ms)` : null,
       lcpMs: typeof lcp === 'number' ? Math.round(Math.max(0, lcp - since)) : null,
     };
   }, from);
@@ -441,6 +449,7 @@ type Visit = {
   screenReadyMs: number | null;
   /** Largest Contentful Paint, from navigation (or the tab click), in ms. */
   lcpMs: number | null;
+  lastStill: string | null;
   imageBytes: number;
   videoBytes: number;
   imageRequests: number;
@@ -717,16 +726,22 @@ async function pinSession(accessToken: string, brand: string) {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { error } = await member.schema('brand_profiles').from('user_session_brands').upsert(
-    {
-      user_id: claims.sub,
-      session_id: claims.session_id,
-      active_brand_id: brand,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id,session_id' },
-  );
-  if (error) throw new Error(`brand pin failed: ${error.message}`);
+  // A gateway blip (Cloudflare 520 in front of PostgREST) is retried, not a dead run.
+  let error: { message: string } | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    ({ error } = await member.schema('brand_profiles').from('user_session_brands').upsert(
+      {
+        user_id: claims.sub,
+        session_id: claims.session_id,
+        active_brand_id: brand,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,session_id' },
+    ));
+    if (!error) return;
+    await new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1)));
+  }
+  throw new Error(`brand pin failed: ${error?.message.slice(0, 200)}`);
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────────────────────
