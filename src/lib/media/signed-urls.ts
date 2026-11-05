@@ -18,6 +18,25 @@ export interface SignablePath {
   displayDerivative?: boolean;
 }
 
+// Every mint is a new token, so a page rendered again for the same person names each image by a
+// new URL and the browser downloads it again. A URL already minted for this person is handed back
+// while at least half its life is left, which makes the revisit a cache hit. Callers key it by
+// person, object and the row's version, so an object replaced at the same path gets a fresh URL.
+// ponytail: per-instance memo; move it to a shared cache if instances stop being reused.
+const REUSE_LIMIT = 5_000;
+const minted = new Map<string, { url: string; expiresAt: number; lifeMs: number }>();
+
+export function reusableSignedUrl(key: string): string | undefined {
+  const hit = minted.get(key);
+  return hit && hit.expiresAt - Date.now() >= hit.lifeMs / 2 ? hit.url : undefined;
+}
+
+export function rememberSignedUrl(key: string, url: string, ttlSeconds: number): void {
+  minted.delete(key);
+  minted.set(key, { url, expiresAt: Date.now() + ttlSeconds * 1000, lifeMs: ttlSeconds * 1000 });
+  if (minted.size > REUSE_LIMIT) minted.delete(minted.keys().next().value as string);
+}
+
 // Formats Supabase resizes without losing anything a card shows. GIF would lose
 // its animation; everything else keeps painting from the original.
 const RESIZABLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);

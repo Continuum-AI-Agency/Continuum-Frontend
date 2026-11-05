@@ -7,6 +7,7 @@ import { type BrandAccessClient, readBrandAccess } from '@/lib/billing/brandAcce
 import type { BrandAccess } from '@/lib/billing/productAccess';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { resolveActiveBrandId } from '@/lib/brands/resolve-active-brand';
+import { reusableSignedUrl, rememberSignedUrl } from '@/lib/media/signed-urls';
 import { claimPendingInvite } from '@/lib/onboarding/claimInvite';
 import type { BrandSummary } from '@/lib/repositories/brandProfile';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
@@ -178,6 +179,13 @@ export async function redeemPendingInvites(
   return refetch();
 }
 
+// A week: the shell keeps these URLs for as long as a tab stays open.
+const LOGO_URL_TTL_SECONDS = 604800;
+// The largest logo box is 36 px; 160 px covers it at DPR 2 whatever the logo's aspect.
+const LOGO_EDGE = 160;
+// What Supabase can resize; an SVG or GIF logo keeps its original.
+const RESIZABLE_LOGO = /\.(png|jpe?g|webp)$/i;
+
 export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
   const supabase = await createSupabaseServerClient();
   const user = await requireClaimsIdentity();
@@ -198,7 +206,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   let brandMap = new Map<
     string,
-    { name: string; logoPath: string | null; completedAt: string | null }
+    { name: string; logoPath: string | null; completedAt: string | null; updatedAt: string | null }
   >();
 
   // Run brand_profiles lookup and get_active_brand_id RPC in parallel — both only need
@@ -208,7 +216,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       ? supabase
           .schema('brand_profiles')
           .from('brand_profiles')
-          .select('id, brand_name, logo_path, completed_at')
+          .select('id, brand_name, logo_path, completed_at, updated_at')
           .in('id', allBrandIds)
           // Exclude soft-deleted brands (delete_brand_profile sets active=false).
           // Without this, a deleted brand reappears because its permissions row
@@ -220,6 +228,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
             brand_name: string | null;
             logo_path: string | null;
             completed_at: string | null;
+            updated_at: string | null;
           }>,
           error: null,
         }),
@@ -242,6 +251,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
           name: brand.brand_name ?? 'Untitled brand',
           logoPath: brand.logo_path ?? null,
           completedAt: brand.completed_at ?? null,
+          updatedAt: brand.updated_at ?? null,
         },
       ]),
     );
@@ -270,26 +280,43 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     ? readBrandAccess(activeBrandId, supabase as unknown as BrandAccessClient)
     : Promise.resolve(NO_BRAND_ACCESS);
 
-  // Batch logo signing: one request for all brands instead of N individual calls.
-  const pathsToSign = allBrandIds
-    .map((id) => brandMap.get(id)?.logoPath)
-    .filter((p): p is string => Boolean(p));
-
+  // Logos draw at 16–36 px, so each is signed as a small still rather than the uploaded original
+  // (a scraped logo is often a 300 KB banner). The shell re-renders on every navigation, and a
+  // fresh token is a fresh download of the same picture, so the URL minted for this person is
+  // reused while it has half its week left; the brand row's updated_at moves it on a new logo.
   const signedUrlMap = new Map<string, string>();
-  if (pathsToSign.length > 0) {
-    try {
-      const { data: signedUrls, error: signError } = await supabase.storage
-        .from('brand-profile-assets')
-        .createSignedUrls(pathsToSign, 604800);
-      if (!signError && signedUrls) {
-        for (const item of signedUrls) {
-          if (item.signedUrl && item.path) signedUrlMap.set(item.path, item.signedUrl);
-        }
+  await Promise.all(
+    allBrandIds.map(async (id) => {
+      const brand = brandMap.get(id);
+      const path = brand?.logoPath;
+      if (!path) return;
+      const key = ['logo', user.id, path, brand.updatedAt ?? ''].join('\n');
+      const reused = reusableSignedUrl(key);
+      if (reused) {
+        signedUrlMap.set(path, reused);
+        return;
       }
-    } catch (e) {
-      console.error('[activeBrand] Failed to batch sign URLs', e);
-    }
-  }
+      try {
+        const { data, error } = await supabase.storage
+          .from('brand-profile-assets')
+          .createSignedUrl(
+            path,
+            LOGO_URL_TTL_SECONDS,
+            RESIZABLE_LOGO.test(path)
+              ? { transform: { width: LOGO_EDGE, height: LOGO_EDGE, resize: 'contain' } }
+              : undefined,
+          );
+        if (error || !data?.signedUrl) {
+          console.error('[activeBrand] logo sign failed', { path, error });
+          return;
+        }
+        signedUrlMap.set(path, data.signedUrl);
+        rememberSignedUrl(key, data.signedUrl, LOGO_URL_TTL_SECONDS);
+      } catch (e) {
+        console.error('[activeBrand] logo sign failed', { path, error: describeError(e) });
+      }
+    }),
+  );
 
   const brandSummaries: BrandSummary[] = allBrandIds.flatMap((id) => {
     const brandData = brandMap.get(id);
