@@ -82,10 +82,13 @@ export function assetSignablePaths(
   });
 }
 
+// A poster's type is not stored; its extension says whether Supabase can resize it.
+const RESIZABLE_STILL_PATH = /\.(jpe?g|png|webp)$/i;
+
 /**
- * The still a small box draws for an asset row: its poster, else a resized copy of the image at
- * `edge` px. Never the original — a video with no poster, or a file Supabase cannot resize, has
- * no still, and the box draws its placeholder instead of downloading the source.
+ * The still a small box draws for an asset row, at `edge` px: its poster (resized when Supabase
+ * can), else a resized copy of the image. Never the original — a video with no poster, or a file
+ * Supabase cannot resize, has no still, and the box draws its placeholder instead.
  */
 export function stillSignable(
   row: {
@@ -98,7 +101,11 @@ export function stillSignable(
   edge: number,
 ): SignablePath | null {
   const version = row.updated_at;
-  if (row.thumbnail_path) return { path: row.thumbnail_path, bucket: row.bucket, version };
+  if (row.thumbnail_path) {
+    return RESIZABLE_STILL_PATH.test(row.thumbnail_path)
+      ? { path: row.thumbnail_path, bucket: row.bucket, displayDerivative: true, version, edge }
+      : { path: row.thumbnail_path, bucket: row.bucket, version };
+  }
   if (isGcsPointer(row.bucket) || !RESIZABLE_IMAGE_TYPES.has(row.mime_type ?? '')) return null;
   return { path: row.storage_path, bucket: row.bucket, displayDerivative: true, version, edge };
 }

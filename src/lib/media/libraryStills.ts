@@ -55,12 +55,12 @@ export function loadLibraryStill(
   });
 }
 
-/** The still for one box, or null while it loads or when the asset has none. */
+/** The still for one box: undefined while it loads, null when the asset has none. */
 export function useLibraryStill(
   brandId: string | null | undefined,
   assetId: string | null | undefined,
   edge: StillEdge,
-): string | null {
+): string | null | undefined {
   const { data } = useQuery({
     queryKey: ['library-still', brandId, assetId, edge],
     queryFn: () => loadLibraryStill(brandId as string, assetId as string, edge),
@@ -68,5 +68,5 @@ export function useLibraryStill(
     // A signed still lives an hour; the server hands back the same URL while half of it is left.
     staleTime: 25 * 60_000,
   });
-  return data ?? null;
+  return data;
 }

@@ -557,7 +557,8 @@ function MediaCardHoverDetail({
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
           {asset.signedUrl && asset.kind === 'image' && asset.mimeType !== 'application/pdf' ? (
             <Image
-              src={asset.signedUrl}
+              // The 480 px still fills this 320 px box; the original only when there is none.
+              src={asset.thumbnailUrl ?? asset.signedUrl}
               alt={asset.title ?? asset.fileName}
               fill
               sizes="320px"

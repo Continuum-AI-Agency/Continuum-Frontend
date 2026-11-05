@@ -126,15 +126,13 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
  */
 function Thumbnail({ brandId, output }: { brandId: string; output: ApiRenderOutput | null }) {
   const [broken, setBroken] = useState(false);
-  // A still at the row's size, never the full render: an image's 480p or a video's poster, else
-  // the Library copy resized to 96 px when the render's own rendition was never made.
+  // A still at the row's 36 px, never the full render: the Library copy's poster or image resized
+  // to 96 px; an image's own 480p or a video's 640 poster only for a render outside the Library.
+  const libraryStill = useLibraryStill(brandId, output?.assetId, 96);
   const own = output?.kind === 'image' ? output.thumbnailUrl : output?.posterUrl;
-  const libraryStill = useLibraryStill(brandId, own ? null : output?.assetId, 96);
-  const still =
-    own ??
-    libraryStill ??
-    // A render outside the Library has no other still to fall back on.
-    (output?.kind === 'image' && !output.assetId ? thumbnailSrc(output) : null);
+  const fallback = own ?? (output?.kind === 'image' && output ? thumbnailSrc(output) : null);
+  // Nothing while the Library answers: drawing the fallback first would download it anyway.
+  const still = output?.assetId && libraryStill === undefined ? null : (libraryStill ?? fallback);
   if (still && !broken) {
     return (
       <img

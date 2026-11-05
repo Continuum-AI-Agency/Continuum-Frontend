@@ -95,9 +95,16 @@ describe('assetSignablePaths', () => {
 describe('stillSignable', () => {
   const row = { bucket: 'b', storage_path: 'render.png', mime_type: 'image/png', updated_at: 'v1' };
 
-  it('is the poster when the row has one, else the image resized to the edge', () => {
+  it('is the poster when the row has one (resized when it can be), else the image resized', () => {
     expect(stillSignable({ ...row, thumbnail_path: 'poster.webp' }, 96)).toEqual({
       path: 'poster.webp',
+      bucket: 'b',
+      displayDerivative: true,
+      version: 'v1',
+      edge: 96,
+    });
+    expect(stillSignable({ ...row, thumbnail_path: 'poster.avif' }, 96)).toEqual({
+      path: 'poster.avif',
       bucket: 'b',
       version: 'v1',
     });

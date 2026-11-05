@@ -209,7 +209,8 @@ function ApprovalCard({
   // Library copy's poster or resize when the render's own rendition was never made.
   const own = video ? rendered?.posterUrl : rendered?.thumbnailUrl;
   const libraryStill = useLibraryStill(approval.brandId, own ? null : assetId, 320);
-  const still = own ?? libraryStill;
+  const still = own ?? libraryStill ?? null;
+  const stillPending = !own && Boolean(assetId) && libraryStill === undefined;
   const [playing, setPlaying] = useState(false);
   const pending = approval.status === 'pending';
   const destination =
@@ -243,7 +244,7 @@ function ApprovalCard({
               </button>
             ) : null}
           </div>
-        ) : first && (still || !assetId) ? (
+        ) : first && !stillPending ? (
           <img
             // A render outside the Library has no other still to fall back on.
             src={still ?? (rendered ? thumbnailSrc(rendered) : first.url)}

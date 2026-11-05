@@ -17,6 +17,7 @@ import React from 'react';
 import { LibraryElementsGrid } from '@/components/library/LibraryElementsGrid';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
 import { QuickReformatMenu } from '@/components/library/reformat/QuickReformatMenu';
+import { VideoStill } from '@/components/media/VideoStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { setStudioAssetDragData } from '@/lib/creative-assets/studioAssetDrop';
@@ -268,18 +269,28 @@ function InspirationEmptyState({ pull }: { pull: InspirationPull }) {
   );
 }
 
-// Image/video tiles paint the original. Audio and source files (PSD, INDD, 3D, PDF…)
-// paint their Library preview still, never the original bytes an <img> cannot draw.
+// A tile paints a still, never the original: an image's 480 px resize or a video's poster
+// (`thumbnailUrl`), else the Library preview still for audio and source files (PSD, INDD, 3D,
+// PDF…). Only an image with no smaller still (a GIF) keeps its own file.
 function tileStill(asset: MediaAsset): string | null {
-  if (asset.kind === 'image' || asset.kind === 'video') return sanitizeCreativeAssetUrl(asset.signedUrl);
   const preview = asset.preview;
+  const previewStill =
+    preview?.state === 'ready' && preview.kind === 'image' ? preview.signedUrl : null;
   return sanitizeCreativeAssetUrl(
-    preview?.state === 'ready' && preview.kind === 'image' ? preview.signedUrl : asset.thumbnailUrl,
+    asset.thumbnailUrl ??
+      previewStill ??
+      (asset.kind === 'image' ? asset.signedUrl : null),
   );
+}
+
+/** A video's own file, for the tile to play once it is wanted. */
+function tileVideo(asset: MediaAsset): string | null {
+  return asset.kind === 'video' ? sanitizeCreativeAssetUrl(asset.signedUrl) : null;
 }
 
 function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: string }) {
   const url = tileStill(asset);
+  const video = tileVideo(asset);
   const isVideo = asset.kind === 'video';
   const label = asset.title ?? asset.fileName;
 
@@ -296,14 +307,19 @@ function StudioAssetTile({ asset, brandId }: { asset: MediaAsset; brandId: strin
               onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
               className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
             >
-              {url && !isVideo ? (
-                <img src={url} alt={label} className="h-full w-full object-cover" />
-              ) : url && isVideo ? (
-                <video
-                  src={`${url}#t=0.01`}
-                  preload="metadata"
-                  muted
-                  playsInline
+              {isVideo && video ? (
+                <VideoStill
+                  src={`${video}#t=0.01`}
+                  poster={url}
+                  alt={label}
+                  className="h-full w-full object-cover"
+                />
+              ) : url ? (
+                <img
+                  src={url}
+                  alt={label}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -363,6 +379,7 @@ function StudioAssetHoverDetail({
   isVideo: boolean;
   label: string;
 }) {
+  const video = tileVideo(asset);
   const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
   const tags = asset.tags?.slice(0, 6) ?? [];
 
@@ -370,16 +387,10 @@ function StudioAssetHoverDetail({
     <HoverCardContent side="left" className="w-72">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
-          {url && !isVideo ? (
-            <img src={url} alt={label} className="h-full w-full object-contain" />
-          ) : url && isVideo ? (
-            <video
-              src={`${url}#t=0.01`}
-              preload="metadata"
-              muted
-              playsInline
-              className="h-full w-full object-contain"
-            />
+          {url ? (
+            <img src={url} alt={label} decoding="async" className="h-full w-full object-contain" />
+          ) : isVideo && video ? (
+            <VideoStill src={`${video}#t=0.01`} alt={label} eager className="h-full w-full object-contain" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
               <ImageOff className="h-6 w-6" />

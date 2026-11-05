@@ -111,8 +111,9 @@ describe('POST /api/library/stills', () => {
     expect(stills[IMAGE]).toBe(`https://s.test/render/image/sign/b/${BRAND_ID}/render.png`);
     expect(state.transforms).toEqual([
       { path: `${BRAND_ID}/render.png`, transform: { width: 96, height: 96, resize: 'contain' } },
+      { path: `${BRAND_ID}/poster.webp`, transform: { width: 96, height: 96, resize: 'contain' } },
     ]);
-    expect(stills[POSTERED]).toBe(`https://s.test/object/sign/b/${BRAND_ID}/poster.webp`);
+    expect(stills[POSTERED]).toBe(`https://s.test/render/image/sign/b/${BRAND_ID}/poster.webp`);
     expect(stills[BARE_VIDEO]).toBeNull();
     expect(state.batches.flat()).not.toContain(`${BRAND_ID}/clip.mp4`);
     expect(state.batches.flat()).not.toContain(`${BRAND_ID}/bare.mp4`);

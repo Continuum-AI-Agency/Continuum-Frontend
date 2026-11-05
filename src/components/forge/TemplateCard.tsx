@@ -273,8 +273,9 @@ export function CardPicture({
   const own = file ? (file.kind === 'video' ? file.posterUrl : file.thumbnailUrl) : null;
   const libraryStill = useLibraryStill(brandId, own ? null : file?.assetId, 480);
   if (render && file && !broken) {
-    // A render outside the Library has no other still to fall back on.
-    const still = own ?? libraryStill ?? (file.assetId ? null : thumbnailSrc(file));
+    // While the Library answers, the wireframe; a render with no smaller still keeps its file.
+    const still =
+      own ?? (file.assetId && libraryStill === undefined ? null : (libraryStill ?? thumbnailSrc(file)));
     if (still) {
       return (
         // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
