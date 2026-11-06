@@ -110,6 +110,8 @@ type Props = {
   /** With `assetVersionId` and `brandId`, loads the version's proxy ladder and scrub sprite. */
   assetId?: string;
   assetVersionId?: string | null;
+  /** The asset's poster. With a known duration, the stage rests on it and reads no file until engaged. */
+  posterUrl?: string | null;
 };
 
 // Stepping still works on a file whose container cannot be read; it just says
@@ -173,6 +175,7 @@ export function VideoAnnotationPlayer({
   onTimeChange,
   assetId,
   assetVersionId,
+  posterUrl,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
@@ -181,6 +184,20 @@ export function VideoAnnotationPlayer({
   // matter once the person plays, scrubs or steps. A press or key on the player, or play, is
   // that person; a seek is not, since the stage seeks on its own when it swaps quality rungs.
   const [engaged, setEngaged] = useState(false);
+  // Resting: the poster stands in and no byte of the film is read. It needs the duration from the
+  // asset (the comment lane draws from it) and the poster's shape (the stage's geometry), so a
+  // video with neither still reads its metadata to show them.
+  const resting = Boolean(posterUrl) && Boolean(durationMsHint) && !engaged;
+  useEffect(() => {
+    if (!resting || !posterUrl) return;
+    const still = document.createElement('img');
+    still.onload = () => {
+      // The file's own size wins once it has loaded.
+      if (!videoRef.current?.videoWidth)
+        setNaturalSize({ width: still.naturalWidth, height: still.naturalHeight });
+    };
+    still.src = posterUrl;
+  }, [resting, posterUrl, setNaturalSize]);
   const measuredRate = useFrameRate(engaged ? src : null);
   const startTimecode = useStartTimecode(engaged ? src : null) ?? null;
   const timecodeMode = useTimecodeDisplay();
@@ -606,7 +623,8 @@ export function VideoAnnotationPlayer({
           // Signed Storage URLs answer CORS; without this the still's canvas is tainted.
           crossOrigin="anonymous"
           playsInline
-          preload="metadata"
+          poster={posterUrl ?? undefined}
+          preload={resting ? 'none' : 'metadata'}
           loop={loop}
           className="absolute inset-0 size-full object-contain"
           onLoadedMetadata={(e) => {

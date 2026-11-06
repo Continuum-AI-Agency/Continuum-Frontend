@@ -592,6 +592,7 @@ function AssetDetailDialog({
                     assetId={asset.id}
                     assetVersionId={stage.assetVersionId}
                     durationMsHint={stage.durationMs}
+                    posterUrl={asset.thumbnailUrl ?? null}
                     markers={videoMarkers}
                     onSelectMarker={setSelectedCommentId}
                     posting={posting}

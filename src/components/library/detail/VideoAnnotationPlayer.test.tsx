@@ -121,6 +121,48 @@ describe('VideoAnnotationPlayer — reads the file only once engaged', () => {
   });
 });
 
+describe('VideoAnnotationPlayer — rests on its poster', () => {
+  it('reads no film before the person engages when it has a poster and a duration', async () => {
+    stubFetch(null);
+    render(
+      <VideoAnnotationPlayer
+        src={ORIGINAL}
+        durationMsHint={10_000}
+        posterUrl="https://storage.test/poster.webp"
+        markers={[]}
+        onSelectMarker={() => {}}
+        posting={false}
+        brandId={BRAND_ID}
+        onPostAtTime={() => {}}
+        registerSeek={() => {}}
+      />,
+    );
+    expect(video().getAttribute('preload')).toBe('none');
+    expect(video().getAttribute('poster')).toBe('https://storage.test/poster.webp');
+
+    fireEvent.pointerDown(root());
+    await waitFor(() => expect(video().getAttribute('preload')).toBe('metadata'));
+  });
+
+  it('reads metadata at rest when it has no duration to draw the lane from', () => {
+    stubFetch(null);
+    render(
+      <VideoAnnotationPlayer
+        src={ORIGINAL}
+        durationMsHint={null}
+        posterUrl="https://storage.test/poster.webp"
+        markers={[]}
+        onSelectMarker={() => {}}
+        posting={false}
+        brandId={BRAND_ID}
+        onPostAtTime={() => {}}
+        registerSeek={() => {}}
+      />,
+    );
+    expect(video().getAttribute('preload')).toBe('metadata');
+  });
+});
+
 describe('VideoAnnotationPlayer — quality', () => {
   it('lists Auto, every rung, and Original, and Auto swaps in while nothing has played', async () => {
     stubFetch(PLAYBACK);
