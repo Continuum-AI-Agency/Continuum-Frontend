@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { VideoStill } from './VideoStill';
 
@@ -17,17 +17,38 @@ describe('VideoStill', () => {
     expect(container.querySelector('video')).toBeNull();
   });
 
-  it('without a poster, rests as a neutral tile: no video, no metadata read', () => {
-    const { container, getByLabelText } = render(<VideoStill src={SRC} alt="Clip" />);
-    expect(container.querySelector('video')).toBeNull();
-    expect(getByLabelText('Clip').getAttribute('role')).toBe('img');
+  it('without a poster, paints its first frame from metadata only once it nears the screen', () => {
+    const realObserver = globalThis.IntersectionObserver;
+    let enter: () => void = () => {};
+    globalThis.IntersectionObserver = class {
+      constructor(report: (entries: { isIntersecting: boolean }[]) => void) {
+        enter = () => report([{ isIntersecting: true }]);
+      }
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
+    try {
+      const { container } = render(<VideoStill src={SRC} alt="Clip" />);
+      const video = () => container.querySelector('video');
+      expect(video()?.getAttribute('src')).toBeNull();
+      act(() => enter());
+      expect(video()?.getAttribute('src')).toBe(SRC);
+      expect(video()?.getAttribute('preload')).toBe('metadata');
+      expect(video()?.hasAttribute('autoplay')).toBe(false);
+    } finally {
+      globalThis.IntersectionObserver = realObserver;
+    }
   });
 
-  it('draws the placeholder it is given', () => {
+  it('with neither a poster nor a file, draws the placeholder it is given, or a labelled tile', () => {
     const { getByTestId } = render(
-      <VideoStill src={SRC} placeholder={<span data-testid="wireframe" />} />,
+      <VideoStill src={null} placeholder={<span data-testid="wireframe" />} />,
     );
     expect(getByTestId('wireframe')).toBeTruthy();
+    cleanup();
+    const { container, getByLabelText } = render(<VideoStill src={null} alt="Clip" />);
+    expect(container.querySelector('video')).toBeNull();
+    expect(getByLabelText('Clip').getAttribute('role')).toBe('img');
   });
 
   it('streams the video only while playing, over its poster', () => {
@@ -39,9 +60,8 @@ describe('VideoStill', () => {
     expect(video?.getAttribute('preload')).toBe('auto');
   });
 
-  it('renders no video on the server: nothing is fetched while the HTML parses', () => {
+  it('names no file on the server: nothing is fetched while the HTML parses', () => {
     const html = renderToString(<VideoStill src={SRC} />);
     expect(html).not.toContain(SRC);
-    expect(html).not.toContain('<video');
   });
 });

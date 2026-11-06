@@ -19,10 +19,11 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { type DragEvent, useEffect, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { VideoStill } from '@/components/media/VideoStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
+import { useNearViewport } from '@/hooks/useNearViewport';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatUsesCompanionPreview, officeDocumentType } from '@/lib/library/previewPlayable';
 import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
@@ -116,8 +117,6 @@ function cardAspectClass(
   return NATIVE_ASPECT_CLASS[bin];
 }
 
-// Defers assigning src to the video element until the card is near the viewport,
-// preventing preload="metadata" range requests for every off-screen video card.
 // One class for every control in the card's hover corner, so a control added later
 // cannot drift into a different size or a different contrast against the thumbnail.
 const HOVER_CHROME_BUTTON =
@@ -145,9 +144,16 @@ function VideoThumbnail({
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  // VideoStill's rule, kept here for the hover scrub: no video byte until the pointer is on the
-  // card. At rest it is its poster, or without one the card's own muted tile.
-  const src = hovered && asset.signedUrl ? asset.signedUrl : undefined;
+  const [observe, near] = useNearViewport(priority && !posterUrl);
+  const setVideo = useCallback(
+    (video: HTMLVideoElement | null) => {
+      videoRef.current = video;
+      observe(video);
+    },
+    [observe],
+  );
+  const activeSrc = near && asset.signedUrl ? asset.signedUrl : undefined;
+  const src = !posterUrl || hovered ? activeSrc : undefined;
   const scrub = useCardScrub(asset);
 
   // The first hover plays while the sprite is still being looked up; it stops once known.
@@ -170,13 +176,16 @@ function VideoThumbnail({
       ) : null}
       {/* biome-ignore lint/a11y/useMediaCaption: silent grid preview of the user's own creative; no caption track exists */}
       <video
-        ref={videoRef}
+        ref={setVideo}
         src={src}
         className="relative size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         muted
         playsInline
-        preload="none"
+        preload={posterUrl ? 'none' : 'metadata'}
         onError={onMediaError}
+        onLoadedMetadata={() => {
+          if (!posterUrl && videoRef.current) seekVideoPreviewFrame(videoRef.current);
+        }}
         onLoadedData={() => {
           if (hoveredRef.current && !scrub.sprite) void videoRef.current?.play();
         }}
@@ -454,12 +463,13 @@ function CarouselThumbnail({
     <>
       {slide?.signedUrl && !mediaError ? (
         slide.kind === 'video' ? (
-          // A grid slide shows no video until the card is opened.
           <VideoStill
             key={slide.slideIndex}
             src={slide.signedUrl}
             alt={`${alt} — slide ${index + 1}`}
             className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+            onError={() => setMediaError(true)}
+            onLoadedMetadata={(event) => seekVideoPreviewFrame(event.currentTarget)}
           />
         ) : (
           <Image

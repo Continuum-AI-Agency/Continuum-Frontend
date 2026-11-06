@@ -30,10 +30,10 @@ const draw = (file: ApiRenderOutput) =>
   );
 
 describe('CardPicture', () => {
-  it('draws a video render with no poster as its placeholder: no file read, never an <img>', () => {
+  it('draws a video render with no poster as its first frame, never its file as an <img>', () => {
     const { container } = draw(output({}));
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('video')).not.toBeNull();
   });
 
   it('draws a video render with a poster as that poster', () => {

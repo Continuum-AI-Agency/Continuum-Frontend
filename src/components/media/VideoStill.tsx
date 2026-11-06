@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode, VideoHTMLAttributes } from 'react';
+import { useNearViewport } from '@/hooks/useNearViewport';
 import { cn } from '@/lib/utils';
 
 type Props = Omit<
@@ -11,19 +12,21 @@ type Props = Omit<
   poster?: string | null;
   /** The video plays: the pointer is on it, a panel opened it, or the person pressed play. */
   playing?: boolean;
-  /** In the first screenful: load the poster at once rather than lazily. */
+  /** In the first screenful: load at once rather than when it nears the screen. */
   eager?: boolean;
   alt?: string;
-  /** Drawn at rest when there is no poster; a neutral tile by default. */
+  /** Drawn when there is neither a poster nor a file; a neutral tile by default. */
   placeholder?: ReactNode;
   onError?: () => void;
 };
 
 /**
- * A video, loaded the way every video in the app loads: not a byte of it until it plays.
- * At rest it is its poster, as a lazy still, or without one a neutral tile. The film streams
- * only while `playing`. A thumbnail never falls back to the original file; that rule lives in
- * `stillSignable`.
+ * A video, loaded the way every video in the app loads:
+ * - with a poster, it rests as that poster, a lazy still, and no `<video>` exists;
+ * - without one, the file's metadata paints its first frame once the box nears the screen
+ *   (most production videos have none; opening one in the Library backfills it);
+ * - the film streams only while `playing`.
+ * A thumbnail never falls back to the original file; that rule lives in `stillSignable`.
  */
 export function VideoStill({
   src,
@@ -36,6 +39,7 @@ export function VideoStill({
   onError,
   ...video
 }: Props) {
+  const [observe, near] = useNearViewport(eager);
   if (!playing) {
     if (poster) {
       return (
@@ -50,23 +54,26 @@ export function VideoStill({
         />
       );
     }
-    return (
-      placeholder ?? (
-        <div
-          role={alt ? 'img' : undefined}
-          aria-label={alt || undefined}
-          className={cn('bg-muted', className)}
-        />
-      )
-    );
+    if (!src) {
+      return (
+        placeholder ?? (
+          <div
+            role={alt ? 'img' : undefined}
+            aria-label={alt || undefined}
+            className={cn('bg-muted', className)}
+          />
+        )
+      );
+    }
   }
   return (
     // biome-ignore lint/a11y/useMediaCaption: previews and review players of the brand's own media carry no caption track
     <video
-      src={src ?? undefined}
+      ref={observe}
+      src={(playing || near) && src ? src : undefined}
       poster={poster ?? undefined}
-      preload="auto"
-      autoPlay
+      preload={playing ? 'auto' : 'metadata'}
+      autoPlay={playing}
       muted
       playsInline
       aria-label={alt || undefined}
