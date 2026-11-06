@@ -41,11 +41,11 @@ export function AssetStill({
   if (video) {
     return (
       <VideoStill
-        src={`${video}#t=0.01`}
+        src={video}
         poster={still}
-        // A tile is a labelled control already; its first-frame video is decoration, its still is not.
-        alt={still ? alt : ''}
+        alt={alt}
         eager={eager}
+        placeholder={fallback ?? undefined}
         className={className}
       />
     );

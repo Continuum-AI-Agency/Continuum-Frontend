@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { OpenInLibrary } from '@/components/forge/libraryState';
-import { VideoStill } from '@/components/media/VideoStill';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { thumbnailSrc } from '@/components/forge/renderOutputMedia';
+import { VideoStill } from '@/components/media/VideoStill';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -233,7 +233,7 @@ function ApprovalCard({
               className="h-full w-full object-cover"
               controls
             />
-            {!playing && still ? (
+            {!playing ? (
               <button
                 type="button"
                 aria-label="Play the rendered creative"

@@ -6,7 +6,8 @@
 // element tolerates a load error instead of showing a broken image.
 
 import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { VideoStill } from '@/components/media/VideoStill';
 import {
   Carousel,
   type CarouselApi,
@@ -78,45 +79,20 @@ export function ReelVideo({
   autoPlay?: boolean;
   controls?: boolean;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [errored, setErrored] = useState(false);
-  const shouldPlay = playing || autoPlay;
-
-  useEffect(() => {
-    if (errored) return;
-    const video = videoRef.current;
-    if (!video) return;
-    if (shouldPlay) {
-      void video.play().catch(() => {
-        // Autoplay can be blocked by policy; the poster still shows.
-      });
-      return;
-    }
-    video.pause();
-    try {
-      video.currentTime = 0;
-    } catch {
-      // Seeking before metadata is ready can throw; leave it paused where it is.
-    }
-  }, [shouldPlay, errored, src]);
-
-  // At rest a tile is its cover, as lazy as any still: a <video poster> downloads the cover and
-  // the file's metadata for every tile on the page, on screen or not.
-  if (errored || (!shouldPlay && !controls && poster)) {
+  // At rest a tile is its cover, as lazy as any still; the video mounts only to play (the
+  // panel's controls play it too). Leaving the tile unmounts it, which is the rewind.
+  if (errored || !(playing || autoPlay || controls)) {
     return <PostThumb coverUrl={poster} alt={alt} className={className} />;
   }
-
   return (
-    <video
-      ref={videoRef}
+    <VideoStill
       src={src}
-      poster={poster ?? undefined}
-      muted
+      poster={poster}
+      playing
+      alt={alt}
       loop
-      playsInline
       controls={controls}
-      preload={shouldPlay ? 'auto' : 'metadata'}
-      aria-label={alt}
       onError={() => setErrored(true)}
       className={cn('w-full bg-black object-cover', className)}
     />

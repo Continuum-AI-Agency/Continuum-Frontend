@@ -498,6 +498,9 @@ describe('MediaCard video scrub', () => {
     const { video, calls } = videoCard();
 
     fireEvent.pointerEnter(video, { clientX: 10 });
+    // The first hover is what gives the video its file; it plays once that file has data.
+    expect(video.getAttribute('src')).toBe('https://cdn.test/cut.mp4');
+    fireEvent.loadedData(video);
     expect(calls.plays).toBe(1);
     await waitFor(() => expect(requests).toHaveLength(1));
     await act(async () => {});

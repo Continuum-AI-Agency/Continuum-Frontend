@@ -291,14 +291,14 @@ export function CardPicture({
         />
       );
     }
-    // A video with a Library copy waits for its still rather than reading its own metadata.
-    if (file.kind === 'video' && !(file.assetId && libraryStill === undefined)) {
+    // A video with no still rests as its wireframe: VideoStill's rule, no video before play.
+    if (file.kind === 'video') {
       return (
         <VideoStill
-          src={`${thumbnailSrc(file)}#t=0.1`}
+          src={thumbnailSrc(file)}
           alt={`${name} · last render`}
+          placeholder={<div className="relative size-full">{children}</div>}
           className="size-full object-contain"
-          onError={() => setBroken(true)}
         />
       );
     }

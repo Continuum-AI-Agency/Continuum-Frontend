@@ -2,6 +2,7 @@
 
 import type { InstagramPost } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Images, Play } from 'lucide-react';
+import { VideoStill } from '@/components/media/VideoStill';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { setInstagramMediaDragData } from './instagramMediaDrag';
@@ -20,12 +21,19 @@ const PostCover = ({ post }: { post: InstagramPost }) => {
     // <img> starts its own drag with the browser's default payload instead.
     // eslint-disable-next-line @next/next/no-img-element
     return (
-      <img src={post.coverUrl} alt="" draggable={false} className="h-full w-full object-cover" />
+      <img
+        src={post.coverUrl}
+        alt=""
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover"
+      />
     );
   }
   const firstVideo = post.items.find((item) => item.kind === 'video');
   if (firstVideo) {
-    return <video src={firstVideo.url} className="h-full w-full object-cover" muted />;
+    return <VideoStill src={firstVideo.url} alt="" className="h-full w-full object-cover" />;
   }
   return (
     <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">

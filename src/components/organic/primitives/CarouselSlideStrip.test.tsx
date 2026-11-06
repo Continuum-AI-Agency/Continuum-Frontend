@@ -99,17 +99,9 @@ describe('CarouselSlideStrip', () => {
     expect(screen.getByAltText('Slide 3').getAttribute('src')).toBe('https://cdn/c.jpg');
   });
 
-  it('renders video slides as video thumbnails while retaining their order', () => {
-    // On screen: a video slide with no poster loads its first frame once it is near.
-    const realObserver = globalThis.IntersectionObserver;
-    globalThis.IntersectionObserver = class {
-      constructor(private readonly report: (entries: { isIntersecting: boolean }[]) => void) {}
-      observe() {
-        this.report([{ isIntersecting: true }]);
-      }
-      disconnect() {}
-    } as unknown as typeof IntersectionObserver;
-    render(
+  it('renders video slides as still tiles while retaining their order', () => {
+    // A video slide with no poster is a labelled tile: its file is read only when it plays.
+    const { container } = render(
       <CarouselSlideStrip
         slides={[
           sparseSlides[0],
@@ -123,11 +115,9 @@ describe('CarouselSlideStrip', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Video slide 2').getAttribute('src')).toBe(
-      'https://cdn/clip.mp4#t=0.01',
-    );
+    expect(screen.getByLabelText('Video slide 2').getAttribute('role')).toBe('img');
+    expect(container.querySelector('video')).toBeNull();
     expect(screen.getByLabelText('Slide 2 (active)')).toBeTruthy();
-    globalThis.IntersectionObserver = realObserver;
   });
 
   it('routes remove, replace and enlarge through the same position', () => {

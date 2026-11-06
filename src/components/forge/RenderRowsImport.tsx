@@ -1153,6 +1153,8 @@ export function RenderRowsImport({
                                     <img
                                       src={thumbnail}
                                       alt=""
+                                      loading="lazy"
+                                      decoding="async"
                                       className="size-5 rounded object-cover"
                                     />
                                   ) : null}
