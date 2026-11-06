@@ -1,6 +1,6 @@
 'use client';
 
-import { AtSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AtSign, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import Image from 'next/image';
 import {
   type MentionAnalyticsContext,
@@ -66,15 +66,11 @@ function SuggestionThumb({ suggestion }: { suggestion: AgentMentionSuggestion })
   const preview = suggestion.preview;
   if (!preview?.url) return null;
   if (preview.kind === 'video') {
+    // A glyph, not a <video>: opening the menu reads no clip's metadata for a 32 px thumb.
     return (
-      <video
-        aria-hidden
-        className="size-8 shrink-0 rounded-md border border-border/60 object-cover bg-muted"
-        muted
-        playsInline
-        preload="metadata"
-        src={preview.url}
-      />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted">
+        <Video className="size-4 text-muted-foreground" aria-hidden="true" />
+      </span>
     );
   }
   return (
