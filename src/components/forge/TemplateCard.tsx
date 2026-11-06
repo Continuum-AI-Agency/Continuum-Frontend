@@ -273,9 +273,11 @@ export function CardPicture({
   const own = file ? (file.kind === 'video' ? file.posterUrl : file.thumbnailUrl) : null;
   const libraryStill = useLibraryStill(brandId, own ? null : file?.assetId, 480);
   if (render && file && !broken) {
-    // While the Library answers, the wireframe; a render with no smaller still keeps its file.
+    // While the Library answers, the wireframe. With no smaller still, an image keeps its file and
+    // a video its first frame (below); a video's file is never drawn as an <img>.
+    const fallback = file.kind === 'image' ? thumbnailSrc(file) : null;
     const still =
-      own ?? (file.assetId && libraryStill === undefined ? null : (libraryStill ?? thumbnailSrc(file)));
+      own ?? (file.assetId && libraryStill === undefined ? null : (libraryStill ?? fallback));
     if (still) {
       return (
         // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
@@ -289,7 +291,8 @@ export function CardPicture({
         />
       );
     }
-    if (file.kind === 'video') {
+    // A video with a Library copy waits for its still rather than reading its own metadata.
+    if (file.kind === 'video' && !(file.assetId && libraryStill === undefined)) {
       return (
         <VideoStill
           src={`${thumbnailSrc(file)}#t=0.1`}
