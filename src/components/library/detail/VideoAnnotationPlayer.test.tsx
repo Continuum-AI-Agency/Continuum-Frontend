@@ -103,7 +103,7 @@ describe('VideoAnnotationPlayer — without an asset', () => {
 });
 
 describe('VideoAnnotationPlayer — reads the file only once engaged', () => {
-  it('measures frame rate and timecode on the first seek or play, not on open', async () => {
+  it('measures frame rate and timecode once the person engages, not on open or a seek of its own', async () => {
     const requested: string[] = [];
     globalThis.fetch = (async (input: unknown) => {
       requested.push(String(input));
@@ -112,12 +112,12 @@ describe('VideoAnnotationPlayer — reads the file only once engaged', () => {
     mount({ withAsset: false });
 
     await act(async () => {});
+    fireEvent.seeking(video());
+    await act(async () => {});
     expect(requested.filter((url) => url.startsWith(ORIGINAL))).toEqual([]);
 
-    fireEvent.seeking(video());
-    await waitFor(() =>
-      expect(requested.some((url) => url.startsWith(ORIGINAL))).toBe(true),
-    );
+    fireEvent.pointerDown(root());
+    await waitFor(() => expect(requested.some((url) => url.startsWith(ORIGINAL))).toBe(true));
   });
 });
 

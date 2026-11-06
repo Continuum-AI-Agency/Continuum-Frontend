@@ -178,7 +178,8 @@ export function VideoAnnotationPlayer({
   const laneRef = useRef<HTMLDivElement>(null);
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
   // Rate and start timecode are read off the file itself, megabytes of ranged reads, and only
-  // matter once the person plays, seeks or steps; nothing is read before that.
+  // matter once the person plays, scrubs or steps. A press or key on the player, or play, is
+  // that person; a seek is not, since the stage seeks on its own when it swaps quality rungs.
   const [engaged, setEngaged] = useState(false);
   const measuredRate = useFrameRate(engaged ? src : null);
   const startTimecode = useStartTimecode(engaged ? src : null) ?? null;
@@ -583,6 +584,8 @@ export function VideoAnnotationPlayer({
   return (
     <div
       className="flex size-full flex-col"
+      onPointerDownCapture={() => setEngaged(true)}
+      onKeyDownCapture={() => setEngaged(true)}
       data-testid="video-annotation-player"
       data-current-ms={currentMs}
       data-current-frame={currentFrame}
@@ -628,7 +631,6 @@ export function VideoAnnotationPlayer({
             publishTime(ms);
           }}
           onSeeked={(e) => publishTime(msFromSeconds(e.currentTarget.currentTime, measuredRate))}
-          onSeeking={() => setEngaged(true)}
           onPlay={() => {
             setEngaged(true);
             setPlaying(true);
