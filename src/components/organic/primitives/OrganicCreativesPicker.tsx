@@ -6,9 +6,9 @@ import { creativeRefFromAsset, shapeUserSuppliedMedia } from '@continuum/contrac
 import { ImageOff, Play, Search } from 'lucide-react';
 import * as React from 'react';
 import { LibraryFilterBar } from '@/components/library/LibraryFilterBar';
+import { AssetStill } from '@/components/media/AssetStill';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sanitizeCreativeAssetUrl } from '@/lib/creative-assets/assetUrl';
 import { useStudioLibraryBrowser } from '@/lib/creative-assets/useStudioLibraryBrowser';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
@@ -43,7 +43,6 @@ function AssetTile({
   order: number;
   onToggle: () => void;
 }) {
-  const url = sanitizeCreativeAssetUrl(asset.signedUrl);
   const isVideo = asset.kind === 'video';
   const isSelected = order > 0;
 
@@ -60,26 +59,16 @@ function AssetTile({
           : 'border-border/50 hover:border-border',
       )}
     >
-      {url && !isVideo ? (
-        <img
-          src={url}
-          alt={asset.title ?? asset.fileName}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : url && isVideo ? (
-        <video
-          src={`${url}#t=0.01`}
-          preload="metadata"
-          muted
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
-          <ImageOff className="size-5" />
-        </div>
-      )}
+      <AssetStill
+        asset={asset}
+        alt={asset.title ?? asset.fileName}
+        className="h-full w-full object-cover"
+        fallback={
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+            <ImageOff className="size-5" />
+          </div>
+        }
+      />
 
       {isVideo && (
         <div className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/60 p-1">
