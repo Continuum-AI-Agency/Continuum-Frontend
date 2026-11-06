@@ -70,8 +70,9 @@ export function useLibraryStill(
     queryKey: ['library-still', brandId, assetId, edge],
     queryFn: () => loadLibraryStill(brandId as string, assetId as string, edge),
     enabled: Boolean(brandId && assetId),
-    // Asked again after a minute, the server answers with the same URL (it keys reuse on the
-    // row's updated_at), so nothing is downloaded twice, and a replaced still shows within a minute.
+    // A box mounted again after a minute asks again; the server answers with the same URL unless
+    // the row's updated_at changed, so nothing downloads twice and a replaced still shows on the
+    // next mount. A box that stays mounted keeps its still (refetch on focus is off app-wide).
     staleTime: 60_000,
   });
   return isError ? null : data;
