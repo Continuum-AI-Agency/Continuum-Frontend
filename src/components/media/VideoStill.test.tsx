@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { VideoStill } from './VideoStill';
 
 afterEach(cleanup);
@@ -31,6 +32,22 @@ describe('VideoStill', () => {
     expect(video?.getAttribute('src')).toBe(SRC);
     expect(video?.getAttribute('poster')).toBe(POSTER);
     expect(video?.getAttribute('preload')).toBe('auto');
+  });
+});
+
+describe('VideoStill on the server', () => {
+  it('renders no src for a video at rest: nothing is fetched while the HTML parses', () => {
+    // A server has no IntersectionObserver; the test setup installs one, so take it away.
+    const observer = globalThis.IntersectionObserver;
+    // @ts-expect-error: absent on the server
+    delete globalThis.IntersectionObserver;
+    try {
+      const html = renderToString(<VideoStill src={SRC} />);
+      expect(html).toContain('<video');
+      expect(html).not.toContain(SRC);
+    } finally {
+      globalThis.IntersectionObserver = observer;
+    }
   });
 });
 

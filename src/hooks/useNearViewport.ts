@@ -9,10 +9,12 @@ import { useEffect, useState } from 'react';
  */
 export function useNearViewport(immediate = false): [(node: Element | null) => void, boolean] {
   const [node, setNode] = useState<Element | null>(null);
-  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
+  // Never near on the first render: on the server there is no screen, and a server-rendered
+  // video given its src there is fetched while the HTML parses, before anything is near.
+  const [near, setNear] = useState(false);
   useEffect(() => {
     if (near) return;
-    if (immediate) {
+    if (immediate || typeof IntersectionObserver === 'undefined') {
       setNear(true);
       return;
     }
