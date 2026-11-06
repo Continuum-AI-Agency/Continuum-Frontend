@@ -169,6 +169,27 @@ describe('signed URLs kept across a reload', () => {
     expect(storedKeys()).toHaveLength(0);
   });
 
+  it('a sign still in flight when the person changes is never kept for the next person', async () => {
+    setSignedUrlCacheOwner('user-a');
+    const key = signedUrlKey('b', 'race.mp4');
+    let answer: (signed: Map<string, string>) => void = () => {};
+    const forA = resolveSignedUrls(
+      [coord('race.mp4')],
+      () => new Promise<Map<string, string>>((resolve) => (answer = resolve)),
+    );
+
+    setSignedUrlCacheOwner('user-b');
+    answer(new Map([[key, 'https://storage.test/race.mp4?token=minted-for-a']]));
+    // The caller who asked still gets its URL…
+    expect((await forA).get(key)).toBe('https://storage.test/race.mp4?token=minted-for-a');
+    // …but user-b's first read signs for user-b.
+    expect(storedKeys()).toHaveLength(0);
+    const forB = recordingSigner();
+    const url = (await resolveSignedUrls([coord('race.mp4')], forB.sign)).get(key);
+    expect(forB.calls).toBe(1);
+    expect(url).not.toContain('minted-for-a');
+  });
+
   it('are dropped by clearSignedUrlCache', async () => {
     setSignedUrlCacheOwner('user-a');
     await resolveSignedUrls([coord('dropped.mp4')], recordingSigner().sign);

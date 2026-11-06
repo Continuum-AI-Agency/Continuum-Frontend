@@ -147,6 +147,8 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
   signBatch: (pending: Coordinate[]) => Promise<Map<string, string>>,
 ): Promise<Map<string, string>> {
   const now = Date.now();
+  // Whose cache this sign fills. A person switching mid-sign must never find these URLs.
+  const signedFor = owner;
   const out = new Map<string, string>();
   const waits: Array<{ key: string; promise: Promise<string | null> }> = [];
   const pending: Coordinate[] = [];
@@ -177,27 +179,33 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
     // against that request BEFORE the first await, so a caller arriving mid-flight
     // joins this fetch instead of starting a second one.
     const batch = signBatch(pending).catch(() => new Map<string, string>());
+    const mine: typeof waits = [];
 
     for (const coordinate of pending) {
       const key = signedUrlKey(coordinate.bucket, coordinate.path);
       const promise = batch.then((signed) => signed.get(key) ?? null);
       inFlight.set(key, promise);
-      waits.push({ key, promise });
+      mine.push({ key, promise });
     }
+    waits.push(...mine);
 
     void batch.finally(() => {
-      for (const coordinate of pending) {
-        inFlight.delete(signedUrlKey(coordinate.bucket, coordinate.path));
+      // Only this batch's entries: after a change of person the key may be someone else's sign.
+      for (const { key, promise } of mine) {
+        if (inFlight.get(key) === promise) inFlight.delete(key);
       }
     });
   }
 
   const settled = await Promise.all(waits.map((wait) => wait.promise));
   const settledAt = Date.now();
+  // Signed for someone who is no longer this tab's person: the caller who asked gets them,
+  // the cache does not.
+  const keep = owner === signedFor;
   settled.forEach((url, index) => {
     const key = waits[index]?.key;
     if (!key || !url) return;
-    remember(key, url, settledAt);
+    if (keep) remember(key, url, settledAt);
     out.set(key, url);
   });
 
