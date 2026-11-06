@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
 type TestHooks = {
   __testCreateSupabaseServerClient?: () => unknown;
@@ -11,7 +11,13 @@ mock.module('@/lib/supabase/server', () => ({
 }));
 
 import { displayDerivativeKey } from './mapper';
-import { assetSignablePaths, mintSignedUrls, stillSignable } from './signed-urls';
+import {
+  assetSignablePaths,
+  mintSignedUrls,
+  rememberSignedUrl,
+  reusableSignedUrl,
+  stillSignable,
+} from './signed-urls';
 
 const ORIGIN = 'https://proj.supabase.co/storage/v1';
 
@@ -118,8 +124,12 @@ describe('stillSignable', () => {
   });
 
   it('is never the original: no still for a video with no poster or a file Supabase cannot resize', () => {
-    expect(stillSignable({ ...row, storage_path: 'clip.mp4', mime_type: 'video/mp4' }, 96)).toBeNull();
-    expect(stillSignable({ ...row, storage_path: 'anim.gif', mime_type: 'image/gif' }, 96)).toBeNull();
+    expect(
+      stillSignable({ ...row, storage_path: 'clip.mp4', mime_type: 'video/mp4' }, 96),
+    ).toBeNull();
+    expect(
+      stillSignable({ ...row, storage_path: 'anim.gif', mime_type: 'image/gif' }, 96),
+    ).toBeNull();
     expect(stillSignable({ ...row, bucket: 'gs://films' }, 96)).toBeNull();
   });
 });
@@ -179,8 +189,22 @@ describe('mintSignedUrls', () => {
     expect(changed.batches).toHaveLength(1);
     expect(changed.single).toHaveLength(1);
 
-    const someoneElse = fakeStorage();
+    const someoneElse = fakeStorage({ userId: 'someone-else' });
     await mintSignedUrls(items);
     expect(someoneElse.batches).toHaveLength(1);
+  });
+
+  it('stops handing a URL back once less than half its life is left', () => {
+    const start = Date.now();
+    const clock = spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      rememberSignedUrl('half-life', 'https://storage.test/h.jpg', 100);
+      clock.mockReturnValue(start + 49_000);
+      expect(reusableSignedUrl('half-life')).toBe('https://storage.test/h.jpg');
+      clock.mockReturnValue(start + 51_000);
+      expect(reusableSignedUrl('half-life')).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

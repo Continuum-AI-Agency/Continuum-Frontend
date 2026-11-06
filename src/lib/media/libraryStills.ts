@@ -70,8 +70,9 @@ export function useLibraryStill(
     queryKey: ['library-still', brandId, assetId, edge],
     queryFn: () => loadLibraryStill(brandId as string, assetId as string, edge),
     enabled: Boolean(brandId && assetId),
-    // A signed still lives an hour; the server hands back the same URL while half of it is left.
-    staleTime: 25 * 60_000,
+    // Asked again after a minute, the server answers with the same URL (it keys reuse on the
+    // row's updated_at), so nothing is downloaded twice, and a replaced still shows within a minute.
+    staleTime: 60_000,
   });
   return isError ? null : data;
 }
