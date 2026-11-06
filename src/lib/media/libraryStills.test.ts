@@ -22,11 +22,15 @@ describe('loadLibraryStill', () => {
     ]);
 
     expect(bodies).toEqual([{ brandId: 'brand-1', assetIds: ['a1', 'a2'], edge: 96 }]);
-    expect(stills).toEqual(['https://storage.test/a1-96.webp', null, 'https://storage.test/a1-96.webp']);
+    expect(stills).toEqual([
+      'https://storage.test/a1-96.webp',
+      null,
+      'https://storage.test/a1-96.webp',
+    ]);
   });
 
-  it('resolves null when the route fails, so the box draws its placeholder', async () => {
+  it('fails when the route fails, so a failure is never cached as "no still"', async () => {
     globalThis.fetch = (async () => new Response(null, { status: 500 })) as unknown as typeof fetch;
-    expect(await loadLibraryStill('brand-1', 'a3', 160)).toBeNull();
+    await expect(loadLibraryStill('brand-1', 'a3', 160)).rejects.toThrow('stills 500');
   });
 });

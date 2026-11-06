@@ -41,7 +41,13 @@ export function ElementCard({
       >
         <div className="flex aspect-video w-full items-center justify-center bg-muted/30">
           {previewUrl ? (
-            <img src={previewUrl} alt={element.name} className={`h-full w-full ${fit}`} />
+            <img
+              src={previewUrl}
+              alt={element.name}
+              loading="lazy"
+              decoding="async"
+              className={`h-full w-full ${fit}`}
+            />
           ) : (
             <Layers className="size-5 text-muted-foreground" />
           )}

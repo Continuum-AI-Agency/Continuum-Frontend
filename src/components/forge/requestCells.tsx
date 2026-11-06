@@ -301,6 +301,8 @@ function MediaPicker({
               <img
                 src={media.thumbnailUrl}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="size-5 shrink-0 rounded-sm object-cover"
               />
             ) : (
@@ -498,9 +500,9 @@ function StatusBadge({
             fitWarning,
             status.state === 'ai-check'
               ? aiCheckWhy(status.fit)
-              : [...new Set(status.findings.map((finding) => explainFinding(finding, labelOf)))].join(
-                  ' ',
-                ),
+              : [
+                  ...new Set(status.findings.map((finding) => explainFinding(finding, labelOf))),
+                ].join(' '),
           ]
             .filter(Boolean)
             .join(' ')}

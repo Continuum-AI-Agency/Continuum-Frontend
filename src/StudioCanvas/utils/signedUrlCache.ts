@@ -204,7 +204,7 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
   return out;
 }
 
-/** Drop everything. Used when the canvas switches rooms or brands, and by tests. */
+/** Drop everything, stored entries included. Tests use it; a change of person goes through setSignedUrlCacheOwner. */
 export function clearSignedUrlCache(): void {
   dropStored(() => true);
   resolved.clear();
