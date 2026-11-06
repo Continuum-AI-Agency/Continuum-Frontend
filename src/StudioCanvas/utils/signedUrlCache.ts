@@ -52,14 +52,43 @@ const inFlight = new Map<string, Promise<string | null>>();
 
 // A reload starts the page over but not the tab. Kept in sessionStorage, the URLs a canvas
 // already drew survive it, so a reopened canvas paints from the browser cache instead of
-// downloading every clip again under a new token. The `continuum:` prefix is what logout's
-// purge clears, so the next person in this tab never inherits these URLs.
+// downloading every clip again under a new token. Entries are stored under the person they were
+// signed for: another person signing in to this tab, or a lost session, drops every entry that is
+// not theirs before anything can read it. The `continuum:` prefix is also what logout purges.
 export const SIGNED_URL_STORAGE_PREFIX = 'continuum:signed-url\n';
 const STORED = SIGNED_URL_STORAGE_PREFIX;
 
-function stored(key: string): CacheEntry | undefined {
+let owner: string | null = null;
+
+const storedKey = (key: string) => `${STORED}${owner}\n${key}`;
+
+function dropStored(drop: (storageKey: string) => boolean): void {
   try {
-    const raw = globalThis.sessionStorage?.getItem(STORED + key);
+    const store = globalThis.sessionStorage;
+    const keys: string[] = [];
+    for (let i = 0; store && i < store.length; i += 1) {
+      const key = store.key(i);
+      if (key?.startsWith(STORED) && drop(key)) keys.push(key);
+    }
+    for (const key of keys) store?.removeItem(key);
+  } catch {
+    // Nothing stored to drop.
+  }
+}
+
+/** Whose URLs this tab keeps: set from the auth session on every change (react-query provider). */
+export function setSignedUrlCacheOwner(id: string | null): void {
+  if (id === owner) return;
+  owner = id;
+  resolved.clear();
+  inFlight.clear();
+  dropStored((key) => !id || !key.startsWith(`${STORED}${id}\n`));
+}
+
+function stored(key: string): CacheEntry | undefined {
+  if (!owner) return undefined;
+  try {
+    const raw = globalThis.sessionStorage?.getItem(storedKey(key));
     return raw ? (JSON.parse(raw) as CacheEntry) : undefined;
   } catch {
     return undefined;
@@ -67,16 +96,18 @@ function stored(key: string): CacheEntry | undefined {
 }
 
 function store(key: string, entry: CacheEntry): void {
+  if (!owner) return;
   try {
-    globalThis.sessionStorage?.setItem(STORED + key, JSON.stringify(entry));
+    globalThis.sessionStorage?.setItem(storedKey(key), JSON.stringify(entry));
   } catch {
     // A full or blocked sessionStorage only costs the reload its cache.
   }
 }
 
 function unstore(key: string): void {
+  if (!owner) return;
   try {
-    globalThis.sessionStorage?.removeItem(STORED + key);
+    globalThis.sessionStorage?.removeItem(storedKey(key));
   } catch {
     // Nothing stored to drop.
   }
@@ -175,17 +206,7 @@ export async function resolveSignedUrls<Coordinate extends SignedUrlCoordinate>(
 
 /** Drop everything. Used when the canvas switches rooms or brands, and by tests. */
 export function clearSignedUrlCache(): void {
-  try {
-    const store = globalThis.sessionStorage;
-    const stale: string[] = [];
-    for (let i = 0; store && i < store.length; i += 1) {
-      const key = store.key(i);
-      if (key?.startsWith(STORED)) stale.push(key);
-    }
-    for (const key of stale) store?.removeItem(key);
-  } catch {
-    // Nothing stored to drop.
-  }
+  dropStored(() => true);
   resolved.clear();
   inFlight.clear();
 }
