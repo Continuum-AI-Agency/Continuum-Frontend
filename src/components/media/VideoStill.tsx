@@ -34,7 +34,7 @@ export function VideoStill({
   onError,
   ...video
 }: Props) {
-  const { ref, near } = useNearViewport<HTMLVideoElement>(eager || playing);
+  const [observe, near] = useNearViewport(eager || playing);
   if (!playing && poster) {
     return (
       // biome-ignore lint/performance/noImgElement: a signed storage still, not a Next-optimisable asset
@@ -51,7 +51,7 @@ export function VideoStill({
   return (
     // biome-ignore lint/a11y/useMediaCaption: previews and review players of the brand's own media carry no caption track
     <video
-      ref={ref}
+      ref={observe}
       src={(playing || near) && src ? src : undefined}
       poster={poster ?? undefined}
       preload={playing ? 'auto' : 'metadata'}

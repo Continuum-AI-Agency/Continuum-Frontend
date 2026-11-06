@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { type DragEvent, useEffect, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { VideoStill } from '@/components/media/VideoStill';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
@@ -145,7 +145,15 @@ function VideoThumbnail({
       : (asset.thumbnailUrl ?? null);
   const [hovered, setHovered] = useState(false);
   const hoveredRef = useRef(false);
-  const { ref: videoRef, near } = useNearViewport<HTMLVideoElement>(priority && !posterUrl);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [observe, near] = useNearViewport(priority && !posterUrl);
+  const setVideo = useCallback(
+    (video: HTMLVideoElement | null) => {
+      videoRef.current = video;
+      observe(video);
+    },
+    [observe],
+  );
   const activeSrc = near && asset.signedUrl ? asset.signedUrl : undefined;
   const src = !posterUrl || hovered ? activeSrc : undefined;
   const scrub = useCardScrub(asset);
@@ -170,7 +178,7 @@ function VideoThumbnail({
       ) : null}
       {/* biome-ignore lint/a11y/useMediaCaption: silent grid preview of the user's own creative; no caption track exists */}
       <video
-        ref={videoRef}
+        ref={setVideo}
         src={src}
         className="relative size-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         muted

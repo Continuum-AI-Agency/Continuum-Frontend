@@ -1,28 +1,30 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
- * Whether an element has come within `margin` of the screen: the cue to start loading what it
- * shows. Once near it stays near, so what has loaded is not thrown away when it scrolls past.
+ * Whether an element has come within 200 px of the screen: the cue to load (or sign) what it
+ * shows. Latched, so what came near stays near. A callback ref, so a box that swaps its element
+ * (a still for a video) is observed again. `immediate` starts near (the first screenful).
  */
-export function useNearViewport<T extends Element>(immediate = false, margin = '200px') {
-  const ref = useRef<T>(null);
-  const [near, setNear] = useState(immediate);
+export function useNearViewport(immediate = false): [(node: Element | null) => void, boolean] {
+  const [node, setNode] = useState<Element | null>(null);
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
   useEffect(() => {
-    if (near || !ref.current) return;
-    if (typeof IntersectionObserver === 'undefined') {
+    if (near) return;
+    if (immediate) {
       setNear(true);
       return;
     }
+    if (!node) return;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) setNear(true);
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
       },
-      { rootMargin: margin },
+      { rootMargin: '200px 0px' },
     );
-    observer.observe(ref.current);
+    observer.observe(node);
     return () => observer.disconnect();
-  }, [near, margin]);
-  return { ref, near: near || immediate };
+  }, [near, immediate, node]);
+  return [setNode, near || immediate];
 }

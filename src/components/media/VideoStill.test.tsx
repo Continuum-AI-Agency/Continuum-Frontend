@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { VideoStill } from './VideoStill';
 
 afterEach(cleanup);
@@ -31,5 +31,38 @@ describe('VideoStill', () => {
     expect(video?.getAttribute('src')).toBe(SRC);
     expect(video?.getAttribute('poster')).toBe(POSTER);
     expect(video?.getAttribute('preload')).toBe('auto');
+  });
+});
+
+describe('VideoStill near the screen', () => {
+  const realObserver = globalThis.IntersectionObserver;
+  afterEach(() => {
+    globalThis.IntersectionObserver = realObserver;
+  });
+
+  it('observes the video that replaces its still, and loads it once it is near', () => {
+    const observed: Element[] = [];
+    let report: ((entries: { isIntersecting: boolean }[]) => void) | undefined;
+    globalThis.IntersectionObserver = class {
+      constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+        report = callback;
+      }
+      observe(node: Element) {
+        observed.push(node);
+      }
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
+
+    const { container, rerender } = render(<VideoStill src={SRC} poster={POSTER} />);
+    expect(container.querySelector('img')).not.toBeNull();
+
+    // The poster goes (a re-signed asset without one): the video that takes its place is watched.
+    rerender(<VideoStill src={SRC} poster={null} />);
+    const video = container.querySelector('video') as HTMLVideoElement;
+    expect(observed).toContain(video);
+    expect(video.getAttribute('src')).toBeNull();
+
+    act(() => report?.([{ isIntersecting: true }]));
+    expect(video.getAttribute('src')).toBe(SRC);
   });
 });
