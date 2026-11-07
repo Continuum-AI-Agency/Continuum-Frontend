@@ -89,3 +89,39 @@ export function describeDraftChanges(commands: readonly TemplateAuthoringCommand
 export function withoutLayerChanges(commands: readonly TemplateAuthoringCommand[], nodeId: string): TemplateAuthoringCommand[] {
   return commands.filter((command) => !('nodeId' in command) || command.nodeId !== nodeId);
 }
+
+const REFERENCE_FIELDS = new Set(['compId', 'layerId', 'designLayerId', 'artboardId']);
+/** Each edited field's latest value on one layer, across the commands. */
+function editFields(commands: readonly TemplateAuthoringCommand[], nodeId: string) {
+  const fields: Record<string, unknown> = {};
+  for (const command of commands)
+    if (command.type === 'layer.edit' && command.nodeId === nodeId)
+      for (const [field, value] of Object.entries(command.edit as Record<string, unknown>))
+        if (!REFERENCE_FIELDS.has(field)) fields[field] = value;
+  return fields;
+}
+
+/**
+ * What one agent turn changed on `nodeIds`: the layer fields whose value differs between the draft
+ * before the turn and after it, plus any other command the turn added there. Compares values, not
+ * commands, so the editor merging edits on one layer does not read as a change.
+ */
+export function describeTurnChanges(
+  before: readonly TemplateAuthoringCommand[],
+  after: readonly TemplateAuthoringCommand[],
+  nodeIds: readonly string[],
+  nodes: readonly Named[],
+): DraftChange[] {
+  const had = new Set(before.map((command) => JSON.stringify(command)));
+  const changed: TemplateAuthoringCommand[] = [];
+  for (const nodeId of new Set(nodeIds)) {
+    const was = editFields(before, nodeId);
+    const now = editFields(after, nodeId);
+    const edit = Object.fromEntries(Object.entries(now).filter(([field, value]) => JSON.stringify(value) !== JSON.stringify(was[field])));
+    if (Object.keys(edit).length) changed.push({ type: 'layer.edit', nodeId, edit } as TemplateAuthoringCommand);
+    for (const command of after)
+      if (command.type !== 'layer.edit' && 'nodeId' in command && command.nodeId === nodeId && !had.has(JSON.stringify(command)))
+        changed.push(command);
+  }
+  return describeDraftChanges(changed, nodes);
+}

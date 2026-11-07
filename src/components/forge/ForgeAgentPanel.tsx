@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import type { DraftChange } from '@/components/forge/draftChanges';
 import { streamForgeAgent } from '@/lib/api/forgeAgent.client';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,10 @@ export type ForgeAgentTurn = {
   error?: string;
   /** Draft revisions this turn saved: one undo step each in the editor. */
   drafts: number;
+  /** Layers the turn's drafts touched, from the draft frames. */
+  changedNodeIds: string[];
+  /** What the turn changed, read from the draft once the turn ends. */
+  changes?: DraftChange[];
 };
 
 /** How a turn folds its NDJSON frames. */
@@ -60,7 +65,11 @@ export function applyForgeAgentFrame(turn: ForgeAgentTurn, frame: ForgeAgentFram
         ),
       };
     case 'draft':
-      return { ...turn, drafts: turn.drafts + 1 };
+      return {
+        ...turn,
+        drafts: turn.drafts + 1,
+        changedNodeIds: [...new Set([...turn.changedNodeIds, ...frame.data.changedNodeIds, ...frame.data.createdNodeIds])],
+      };
     case 'question':
       return { ...turn, question: frame.data };
     case 'done':
@@ -109,8 +118,10 @@ export function ForgeAgentPanel({
   workingCopyId,
   compId,
   selectedNodeIds,
+  selectedLayerNames = [],
   prepare,
   onDraft,
+  describeTurn,
   onRunningChange,
 }: {
   assetId: string;
@@ -119,10 +130,14 @@ export function ForgeAgentPanel({
   workingCopyId?: string;
   compId?: number;
   selectedNodeIds: readonly string[];
+  /** The selected layers' names, in selection order. */
+  selectedLayerNames?: readonly string[];
   /** Saves pending editor changes; the draft revision the agent starts from, or null to refuse. */
   prepare: () => Promise<number | null>;
   /** The agent saved a new draft revision. */
   onDraft: () => Promise<void>;
+  /** What the turn changed on these layers, read from the editor's draft after the turn. */
+  describeTurn?: (nodeIds: string[]) => DraftChange[];
   onRunningChange: (running: boolean) => void;
 }): React.ReactNode {
   const [turns, setTurns] = useState<ForgeAgentTurn[]>([]);
@@ -146,6 +161,7 @@ export function ForgeAgentPanel({
       question: null,
       status: 'running',
       drafts: 0,
+      changedNodeIds: [],
     };
     const update = (change: (current: ForgeAgentTurn) => ForgeAgentTurn) =>
       setTurns((all) => all.map((entry) => (entry.id === turn.id ? change(entry) : entry)));
@@ -176,17 +192,22 @@ export function ForgeAgentPanel({
       };
       // Draft reloads run one after another, in frame order.
       let reloads = Promise.resolve();
+      const touched = new Set<string>();
       await streamForgeAgent({
         assetId,
         request,
         signal: controller.signal,
         onFrame: (frame) => {
           update((current) => applyForgeAgentFrame(current, frame));
-          if (frame.type === 'draft') reloads = reloads.then(onDraft).catch(() => undefined);
+          if (frame.type === 'draft') {
+            for (const id of [...frame.data.changedNodeIds, ...frame.data.createdNodeIds]) touched.add(id);
+            reloads = reloads.then(onDraft).catch(() => undefined);
+          }
         },
       });
       await reloads;
-      update((current) => (current.status === 'running' ? { ...current, status: 'done' } : current));
+      const changes = touched.size && describeTurn ? describeTurn([...touched]) : undefined;
+      update((current) => ({ ...(current.status === 'running' ? { ...current, status: 'done' } : current), changes }));
     } catch (error) {
       update((current) =>
         controller.signal.aborted
@@ -247,6 +268,15 @@ export function ForgeAgentPanel({
                         </div>
                       </div>
                     ) : null}
+                    {turn.changes?.length && turn.status !== 'running' ? (
+                      <ul aria-label="What this turn changed" className="flex flex-col gap-0.5 text-xs">
+                        {turn.changes.map((change) => (
+                          <li key={change.key} className="text-pretty">
+                            <span className="font-medium">{change.name}</span>: {change.changes.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {turn.drafts > 0 && turn.status !== 'running' ? (
                       <span className="text-xs text-muted-foreground">
                         Saved to your draft as {turn.drafts} undo step{turn.drafts === 1 ? '' : 's'}.
@@ -284,9 +314,11 @@ export function ForgeAgentPanel({
           <Textarea
             value={draft}
             placeholder={
-              selectedNodeIds.length
-                ? `Ask about the ${selectedNodeIds.length} selected layer${selectedNodeIds.length === 1 ? '' : 's'}…`
-                : 'Ask the template agent…'
+              selectedLayerNames.length && selectedLayerNames.length <= 3
+                ? `Ask about ${selectedLayerNames.join(', ')}…`
+                : selectedNodeIds.length
+                  ? `Ask about the ${selectedNodeIds.length} selected layer${selectedNodeIds.length === 1 ? '' : 's'}…`
+                  : 'Ask the template agent…'
             }
             aria-label="Ask the template agent"
             className="min-h-16 resize-none pr-12 text-sm"

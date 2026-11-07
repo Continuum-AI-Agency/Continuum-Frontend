@@ -11,6 +11,7 @@ const turn: ForgeAgentTurn = {
   question: null,
   status: 'running',
   drafts: 0,
+  changedNodeIds: [],
 };
 const fold = (frames: ForgeAgentFrame[]) => frames.reduce(applyForgeAgentFrame, turn);
 
@@ -33,6 +34,7 @@ describe('applyForgeAgentFrame', () => {
     ]);
     expect(folded.tools).toEqual([{ toolCallId: 'a', tool: 'apply_commands', ok: true, summary: 'CTA Pill (color)' }]);
     expect(folded.drafts).toBe(1);
+    expect(folded.changedNodeIds).toEqual(['aep:7:4']);
     expect(folded.text).toBe('Done.');
     expect(folded.status).toBe('done');
   });

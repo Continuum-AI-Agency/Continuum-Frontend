@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { TemplateAuthoringCommand } from '@continuum/contracts';
-import { describeDraftChanges, withoutLayerChanges } from './draftChanges';
+import { describeDraftChanges, describeTurnChanges, withoutLayerChanges } from './draftChanges';
 
 const nodes = [
   { nodeId: 'aep:7:1', name: 'Headline' },
@@ -42,5 +42,16 @@ describe('describeDraftChanges', () => {
   test('withoutLayerChanges keeps every other command', () => {
     const commands = [edit('aep:7:1', { text: 'Sale' }), edit('aep:7:2', { y: 240 })];
     expect(withoutLayerChanges(commands, 'aep:7:2')).toEqual([commands[0]]);
+  });
+});
+
+describe('describeTurnChanges', () => {
+  test('names only what the turn changed, even when the editor merged the edits', () => {
+    const before = [edit('aep:7:1', { text: 'Sale' }), edit('aep:7:2', { x: 10 })];
+    // The editor's snapshot merges every edit on a layer into one command.
+    const after = [edit('aep:7:1', { text: 'Sale' }), edit('aep:7:2', { x: 10, rotation: 15, opacity: 60 })];
+    expect(describeTurnChanges(before, after, ['aep:7:2'], nodes)).toEqual([
+      { key: 'aep:7:2', name: 'Badge', changes: ['rotated', 'opacity 60%'], undoable: true },
+    ]);
   });
 });

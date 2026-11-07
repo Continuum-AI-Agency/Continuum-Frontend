@@ -73,7 +73,7 @@ import {
 import type { PreviewEdits } from '@/components/forge/layerPreviewSvg';
 import { DiscardEditsButton } from '@/components/forge/DiscardEditsButton';
 import { DraftChangesButton } from '@/components/forge/DraftChangesButton';
-import { describeDraftChanges, withoutLayerChanges } from '@/components/forge/draftChanges';
+import { describeDraftChanges, describeTurnChanges, withoutLayerChanges } from '@/components/forge/draftChanges';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { TemplateDownloadButtons, type TemplateOriginalFile } from '@/components/forge/TemplateDownloadButtons';
 import {
@@ -649,8 +649,11 @@ export function TemplateLayerEditor({
       return null;
     if (!(await draftState.save())) return null;
     if (sourceKeyRef.current !== context) return null;
+    agentTurnStartRef.current = commandsFromLayerSnapshot(historyRef.current.present);
     return agentDraftRef.current.persistedDraft?.revision ?? 0;
   }, []);
+  // The draft as the agent's turn found it, so the turn's own changes can be named afterwards.
+  const agentTurnStartRef = useRef<TemplateAuthoringCommand[]>([]);
   // Each draft the agent saves becomes one undo step here.
   const adoptAgentDraft = useCallback(async () => {
     const remote = await agentDraftRef.current.adoptAgentDraft();
@@ -764,6 +767,20 @@ export function TemplateLayerEditor({
         ...(authoringDraft.sourceDocument?.nodes ?? []),
       ]),
     [authoringCommands, authoringDocument, authoringDraft.sourceDocument],
+  );
+  const changeNodesRef = useRef<{ nodeId: string; name: string | null }[]>([]);
+  changeNodesRef.current = [...(authoringDocument?.nodes ?? []), ...(authoringDraft.sourceDocument?.nodes ?? [])];
+  const agentLayerNames = useMemo(
+    () =>
+      agentSelection
+        .map((nodeId) => changeNodesRef.current.find((node) => node.nodeId === nodeId)?.name)
+        .filter((name): name is string => !!name),
+    [agentSelection, authoringDocument, authoringDraft.sourceDocument],
+  );
+  const describeAgentTurn = useCallback(
+    (nodeIds: string[]) =>
+      describeTurnChanges(agentTurnStartRef.current, commandsFromLayerSnapshot(historyRef.current.present), nodeIds, changeNodesRef.current),
+    [],
   );
   const viewStateKey =
     authoringDraft.userId && authoringScope && currentWorkspaceIdentity
@@ -4094,6 +4111,8 @@ export function TemplateLayerEditor({
                     workingCopyId={workingCopy?.id}
                     compId={compId ?? inventoryData?.compId ?? undefined}
                     selectedNodeIds={agentSelection}
+                    selectedLayerNames={agentLayerNames}
+                    describeTurn={describeAgentTurn}
                     prepare={prepareAgentTurn}
                     onDraft={async () => { if (sourceKeyRef.current === sourceKey) await adoptAgentDraft(); }}
                     onRunningChange={setAgentRunning}
