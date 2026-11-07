@@ -278,6 +278,25 @@ describe('LayerDraftAutosaver', () => {
     autosaver.dispose();
   });
 
+  test('restored commands autosave from their acknowledged revision while conflicts and errors wait for review', async () => {
+    const writes: number[] = [];
+    const restored = new LayerDraftAutosaver({ scope, revision: 3, persistedCommands: [edit(1)], commands: [edit(2)], delayMs: 20,
+      write: async (_scope, expectedRevision, commands) => { writes.push(expectedRevision); return persistedDraft(expectedRevision + 1, commands); } });
+    expect(restored.view).toMatchObject({ status: 'unsaved', revision: 3, dirty: true });
+    await until(() => restored.view.status === 'saved');
+    expect(writes).toEqual([3]);
+    expect(restored.view).toMatchObject({ revision: 4, dirty: false });
+    restored.dispose();
+    for (const options of [{ initialConflict: true }, { initialError: 'Source preview unavailable' }]) {
+      const held = new LayerDraftAutosaver({ scope, revision: 3, persistedCommands: [edit(1)], commands: [edit(2)], delayMs: 1, ...options,
+        write: async () => { writes.push(99); return persistedDraft(4, [edit(2)]); } });
+      await wait(10);
+      expect(held.view.dirty).toBe(true);
+      expect(writes).toEqual([3]);
+      held.dispose();
+    }
+  });
+
   test('coalesces idle typing and persists once after the idle delay', async () => {
     const writes: Array<{ revision: number; commands: TemplateAuthoringCommand[] }> = [];
     const autosaver = new LayerDraftAutosaver({

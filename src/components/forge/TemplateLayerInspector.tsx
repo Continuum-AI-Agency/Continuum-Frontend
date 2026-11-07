@@ -11,6 +11,7 @@ import type {
   FontInventoryRow,
   TemplateEditableLayer,
   TemplateLayerEdit,
+  TemplateOperationOrigin,
 } from '@continuum/contracts';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
@@ -99,7 +100,7 @@ export function TemplateLayerInspector({
   edit?: TemplateLayerEdit;
   fonts: FontInventoryRow[];
   disabled: boolean;
-  onEdit: (change: Partial<TemplateLayerEdit>, group?: string) => void;
+  onEdit: (change: Partial<TemplateLayerEdit>, group?: string, origin?: TemplateOperationOrigin) => void;
   onEditCommit?: (group: string) => void;
   onValidity: (invalidFields: string[]) => void;
   /** What was typed into a text field, kept so a blank or invalid entry stays on screen. */
@@ -118,6 +119,7 @@ export function TemplateLayerInspector({
   const font = edit?.font ?? layer.font;
   const weight = boldFaceFor(font, fonts);
   const fontLocked = disabled || !!fontEditReason(layer);
+  const controlOrigin = (control: string): TemplateOperationOrigin => ({ tool: 'Forge inspector', control });
   const editGroup = (field: string) => `native-layer:${layer.compId}:${layer.layerId}:${field}`;
   const commitGroup = (field: string) => onEditCommit?.(editGroup(field));
   const textLocked = disabled || !!layer.textReason;
@@ -133,6 +135,7 @@ export function TemplateLayerInspector({
       onEdit(
         field === 'size' ? { fontSize: parsed.data } : { [field]: parsed.data },
         editGroup(field),
+        controlOrigin(field === 'size' ? 'Text size (pt)' : `Text box ${field}`),
       );
   };
   return (
@@ -156,7 +159,7 @@ export function TemplateLayerInspector({
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
-            onCheckedChange={(visible) => onEdit({ visible }, editGroup('visible'))}
+            onCheckedChange={(visible) => onEdit({ visible }, editGroup('visible'), controlOrigin('Visible in template'))}
           />
         </div>
         {layer.fillColor ? (
@@ -171,7 +174,7 @@ export function TemplateLayerInspector({
               value={rgbToHex(edit?.fillColor ?? layer.fillColor)}
               disabled={disabled || layer.fillReason !== null}
               title={layer.fillReason ?? undefined}
-              onChange={(event) => onEdit({ fillColor: hexToRgb(event.target.value) }, editGroup('fill'))}
+              onChange={(event) => onEdit({ fillColor: hexToRgb(event.target.value) }, editGroup('fill'), controlOrigin(layer.kind === 'text' ? 'Text colour' : 'Fill'))}
               onBlur={() => commitGroup('fill')}
             />
           </div>
@@ -193,7 +196,7 @@ export function TemplateLayerInspector({
             max={100_000}
             value={x ?? 0}
             disabled={positionLock || x == null}
-            onChange={(next) => onEdit({ x: next }, editGroup('x'))}
+            onChange={(next) => onEdit({ x: next }, editGroup('x'), controlOrigin('Position X'))}
             onCommit={() => commitGroup('x')}
           />
           <NumberScrubField
@@ -204,7 +207,7 @@ export function TemplateLayerInspector({
             max={100_000}
             value={y ?? 0}
             disabled={positionLock || y == null}
-            onChange={(next) => onEdit({ y: next }, editGroup('y'))}
+            onChange={(next) => onEdit({ y: next }, editGroup('y'), controlOrigin('Position Y'))}
             onCommit={() => commitGroup('y')}
           />
           <NumberScrubField
@@ -214,7 +217,7 @@ export function TemplateLayerInspector({
             max={36_000}
             value={edit?.rotation ?? layer.rotation ?? 0}
             disabled={disabled || !!locks.rotation || layer.rotation == null}
-            onChange={(rotation) => onEdit({ rotation }, editGroup('rotation'))}
+            onChange={(rotation) => onEdit({ rotation }, editGroup('rotation'), controlOrigin('Rotation'))}
             onCommit={() => commitGroup('rotation')}
           />
           <NumberScrubField
@@ -224,7 +227,7 @@ export function TemplateLayerInspector({
             max={100}
             value={edit?.opacity ?? layer.opacity ?? 100}
             disabled={disabled || !!locks.opacity || layer.opacity == null}
-            onChange={(opacity) => onEdit({ opacity }, editGroup('opacity'))}
+            onChange={(opacity) => onEdit({ opacity }, editGroup('opacity'), controlOrigin('Opacity'))}
             onCommit={() => commitGroup('opacity')}
           />
           <NumberScrubField
@@ -234,7 +237,7 @@ export function TemplateLayerInspector({
             max={10_000}
             value={scale[0]}
             disabled={disabled || !!locks.scale || layer.scale == null}
-            onChange={(next) => onEdit({ scale: [next, scale[1]] }, editGroup('scale-x'))}
+            onChange={(next) => onEdit({ scale: [next, scale[1]] }, editGroup('scale-x'), controlOrigin('Scale X'))}
             onCommit={() => commitGroup('scale-x')}
           />
           <NumberScrubField
@@ -244,7 +247,7 @@ export function TemplateLayerInspector({
             max={10_000}
             value={scale[1]}
             disabled={disabled || !!locks.scale || layer.scale == null}
-            onChange={(next) => onEdit({ scale: [scale[0], next] }, editGroup('scale-y'))}
+            onChange={(next) => onEdit({ scale: [scale[0], next] }, editGroup('scale-y'), controlOrigin('Scale Y'))}
             onCommit={() => commitGroup('scale-y')}
           />
         </div>
@@ -267,7 +270,7 @@ export function TemplateLayerInspector({
               className="h-8 text-xs"
               value={edit?.text ?? layer.text ?? ''}
               disabled={textLocked}
-              onChange={(event) => onEdit({ text: event.target.value }, editGroup('text'))}
+              onChange={(event) => onEdit({ text: event.target.value }, editGroup('text'), controlOrigin('Layer text'))}
               onBlur={() => commitGroup('text')}
             />
           </label>
@@ -278,7 +281,7 @@ export function TemplateLayerInspector({
               className="h-8 w-full rounded-md border bg-background px-2"
               value={font ?? ''}
               disabled={fontLocked}
-              onChange={(event) => onEdit({ font: event.target.value }, editGroup('font'))}
+              onChange={(event) => onEdit({ font: event.target.value }, editGroup('font'), controlOrigin('Font face'))}
               onBlur={() => commitGroup('font')}
             >
               <option value={font ?? ''}>{font || 'Source font'}</option>
@@ -313,14 +316,15 @@ export function TemplateLayerInspector({
             </label>
             <label
               htmlFor={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}
-              className="flex h-8 items-center gap-2 text-xs"
+              // The checkbox's 32 px tap area reaches 8 px left of its box: keep it off the size field.
+              className="flex h-8 items-center gap-2 pl-2 text-xs"
             >
               <Checkbox
                 id={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}
                 checked={weight.bold}
                 disabled={textLocked || !weight.target}
                 onCheckedChange={() => {
-                  if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
+                  if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName }, undefined, controlOrigin('Bold'));
                 }}
               />
               Bold

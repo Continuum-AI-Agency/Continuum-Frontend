@@ -19,6 +19,7 @@ export const forgeAgentRequestSchema = z
   .object({
     brandId: z.string().uuid(),
     baseVersionId: z.string().uuid(),
+    workingCopyId: z.string().uuid().optional(),
     prompt: z.string().trim().min(1).max(8_000),
     /** Prior exchanges, most recent last. An answer to `ask_user` is the next prompt. */
     history: z

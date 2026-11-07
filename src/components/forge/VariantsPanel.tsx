@@ -14,10 +14,13 @@ import {
   setTemplateVariantDefault,
   unarchiveTemplateRevisionVariant,
 } from '@/lib/library/templateSources';
+import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { FORGE_STALE_MS, forgeQueryKeys, invalidateForgeBrand } from './queryKeys';
 import type { ForgeRenderIntent } from './RenderRequestsGrid';
+import { selectTemplateRevision } from './revisionSelection';
 import { VariantCompare } from './VariantCompare';
+import { VersionControlPanel } from './VersionControlPanel';
 import { revisionChanges, type VariantNode, variantLanes, variantTree } from './variantTree';
 
 // A design import's variants come from its layers; an uploaded After Effects project cannot stand in.
@@ -32,6 +35,14 @@ const headOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.draftHeadRevisionId);
 const publishedOf = (variant: TemplateRevisionVariant) =>
   variant.revisions.find((revision) => revision.id === variant.publishedHeadRevisionId);
+/** "<source name> – <variant> r<N>.<ext>": which template, which variant, which revision. */
+export const revisionFileName = (label: string, revision: TemplateRevision) => {
+  const source = revision.source.parse?.filename ?? '';
+  const dot = source.lastIndexOf('.');
+  const stem = (dot > 0 ? source.slice(0, dot) : source).trim();
+  const extension = dot > 0 ? source.slice(dot) : '';
+  return `${stem ? `${stem} – ` : ''}${label} r${revision.number}${extension}`.replace(/[\\/:*?"<>|]+/g, ' ');
+};
 const day = (at: string) =>
   new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -43,10 +54,14 @@ export function VariantsPanel({
   onBranch,
   onRender,
   onEditLayers,
+  revisionId,
+  onOpenRevision,
 }: {
   brandId: string;
   assetId: string;
   expectedVersionId: string;
+  revisionId?: string;
+  onOpenRevision?: (revision: TemplateRevision) => void | Promise<void>;
   /** Where a design import's variants are made: its layers, saved under a new name. */
   onEditLayers?: () => void;
   onInspect?: (assetId: string) => void | Promise<void>;
@@ -82,10 +97,21 @@ export function VariantsPanel({
   const defaultId =
     defaults?.find((item) => item.templateId === original?.templateId)?.variantId ??
     original?.variantId;
-  const viewing = (revision: TemplateRevision) =>
-    revision.sourceAssetId === assetId && revision.sourceVersionId === expectedVersionId;
-  const selectedVariant = variants?.find((item) => item.revisions.some(viewing));
-  const selectedRevision = selectedVariant?.revisions.find(viewing);
+  const selection = selectTemplateRevision(variants ?? [], assetId, expectedVersionId, revisionId);
+  const selectedVariant = selection?.variant;
+  const selectedRevision = selection?.revision;
+  const viewing = (revision: TemplateRevision) => revision.id === selectedRevision?.id;
+  const open = (revision: TemplateRevision) => {
+    if (onOpenRevision) return onOpenRevision(revision);
+    if (
+      selectTemplateRevision(variants ?? [], revision.sourceAssetId, revision.sourceVersionId)
+        ?.revision.id === revision.id
+    )
+      return onInspect?.(revision.sourceAssetId);
+    setFailure(
+      'This file is reused by several revisions. Select the exact revision in Version control.',
+    );
+  };
 
   const refresh = async () => {
     await invalidateForgeBrand(queryClient, brandId);
@@ -103,6 +129,17 @@ export function VariantsPanel({
       setBusy(false);
     }
   };
+
+  // A read of the exact stored revision; nothing about the family changes.
+  const download = (label: string, revision: TemplateRevision) =>
+    void act('download this revision', () =>
+      downloadLibraryAsset({
+        brandId,
+        assetId: revision.sourceAssetId,
+        versionId: revision.sourceVersionId,
+        fileName: revisionFileName(label, revision),
+      }),
+    );
 
   const upload = (file: File | undefined) => {
     if (!file || busy || !selectedRevision || !selectedVariant) return;
@@ -200,13 +237,24 @@ export function VariantsPanel({
               <Button
                 size="xs"
                 variant={head.sourceAssetId === assetId ? 'default' : 'outline'}
-                onClick={() => void onInspect(head.sourceAssetId)}
+                onClick={() => void open(head)}
               >
                 {published ? 'Open' : 'Open to publish'}
               </Button>
             ) : null}
             {head && onBranch && !archived ? (
-              <Button size="xs" variant="outline" onClick={() => void onBranch(head.sourceAssetId)}>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => {
+                  if (onOpenRevision) void onOpenRevision(head);
+                  else if (
+                    selectTemplateRevision(variants ?? [], head.sourceAssetId, head.sourceVersionId)
+                  )
+                    void onBranch(head.sourceAssetId);
+                  else setFailure('Choose the exact revision in Version control before branching.');
+                }}
+              >
                 Branch from here
               </Button>
             ) : null}
@@ -233,6 +281,16 @@ export function VariantsPanel({
                 </Button>
               ) : null,
             )}
+            {published ?? head ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => download(label, (published ?? head)!)}
+              >
+                Download Revision {(published ?? head)!.number}
+              </Button>
+            ) : null}
             {!isDefault && !archived && (variant.original || published) ? (
               <Button
                 size="xs"
@@ -310,11 +368,20 @@ export function VariantsPanel({
                       <Button
                         size="xs"
                         variant={viewing(revision) ? 'default' : 'ghost'}
-                        onClick={() => void onInspect(revision.sourceAssetId)}
+                        onClick={() => void open(revision)}
                       >
                         {viewing(revision) ? 'Viewing' : 'Open'}
                       </Button>
                     ) : null}
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={busy}
+                      aria-label={`Download ${label} revision ${revision.number}`}
+                      onClick={() => download(label, revision)}
+                    >
+                      Download
+                    </Button>
                   </li>
                 );
               })}
@@ -336,136 +403,161 @@ export function VariantsPanel({
   const compared = (variants ?? []).filter((item) => comparing.includes(item.variantId));
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          The Original is never edited. Branch a variant from any revision, change its layers and
-          save it under a new name; publish a variant to render it. Render sets keep the exact
-          revision they picked.
-        </p>
-        <fieldset className="flex gap-1">
-          <legend className="sr-only">Family view</legend>
-          {(['tree', 'graph'] as const).map((option) => (
-            <Button
-              key={option}
-              size="xs"
-              variant={view === option ? 'default' : 'outline'}
-              aria-pressed={view === option}
-              onClick={() => setView(option)}
-            >
-              {option === 'tree' ? 'Tree' : 'Graph'}
-            </Button>
-          ))}
-        </fieldset>
-      </div>
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not read variants.{' '}
-          <Button size="xs" variant="outline" onClick={() => void refetch()}>
-            Retry
-          </Button>
-        </p>
-      ) : !variants ? (
-        <p className="text-xs text-muted-foreground">Reading variants…</p>
-      ) : null}
-      {failure ? (
-        <p role="alert" className="text-xs text-destructive">
-          {failure}
-        </p>
-      ) : null}
-      {compared.length >= 2 ? (
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="flex items-center gap-2 text-xs">
-            <strong className="flex-1">Compare {compared.map(variantName).join(' · ')}</strong>
-            <Button size="xs" variant="ghost" onClick={() => setComparing([])}>
-              Close
-            </Button>
-          </div>
-          <VariantCompare brandId={brandId} variants={compared} />
-        </div>
-      ) : comparing.length === 1 ? (
-        <p className="text-xs text-muted-foreground">Tick one more published variant to compare.</p>
-      ) : null}
-      {view === 'tree' ? (
-        <ul aria-label="Template variants" className="space-y-2">
-          {tree.map(renderNode)}
-        </ul>
-      ) : variants ? (
-        <VariantGraph
+      {variants?.length ? (
+        <VersionControlPanel
+          key={`${brandId}:${variants[0]?.templateId}:${revisionId ?? assetId}`}
+          brandId={brandId}
+          assetId={assetId}
+          versionId={expectedVersionId}
           variants={variants}
-          isViewing={viewing}
-          onOpen={onInspect ? (revision) => void onInspect(revision.sourceAssetId) : undefined}
+          revisionId={revisionId}
+          onOpenRevision={onOpenRevision}
         />
       ) : null}
-      {selectedVariant && DESIGN_FILE[selectedVariant.sourceKind] ? (
-        <div className="space-y-2 border-t pt-3 text-xs">
-          <p>
-            This template is built from {DESIGN_FILE[selectedVariant.sourceKind]} file. Make a
-            variant by changing its layers and saving them as a new variant.
-          </p>
-          {onEditLayers ? (
-            <Button size="xs" variant="outline" onClick={onEditLayers}>
-              Edit layers
-            </Button>
+      <details className="border-t border-border pt-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          Published packages and uploads
+        </summary>
+        <div className="space-y-4 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+              The Original is never edited. Branch a variant from any revision, change its layers
+              and save it under a new name; publish a variant to render it. Render sets keep the
+              exact revision they picked.
+            </p>
+            <fieldset className="flex gap-1">
+              <legend className="sr-only">Family view</legend>
+              {(['tree', 'graph'] as const).map((option) => (
+                <Button
+                  key={option}
+                  size="xs"
+                  variant={view === option ? 'default' : 'outline'}
+                  aria-pressed={view === option}
+                  onClick={() => setView(option)}
+                >
+                  {option === 'tree' ? 'Tree' : 'Graph'}
+                </Button>
+              ))}
+            </fieldset>
+          </div>
+          {error ? (
+            <p role="alert" className="text-xs text-destructive">
+              Could not read variants.{' '}
+              <Button size="xs" variant="outline" onClick={() => void refetch()}>
+                Retry
+              </Button>
+            </p>
+          ) : !variants ? (
+            <p className="text-xs text-muted-foreground">Reading variants…</p>
+          ) : null}
+          {failure ? (
+            <p role="alert" className="text-xs text-destructive">
+              {failure}
+            </p>
+          ) : null}
+          {compared.length >= 2 ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-center gap-2 text-xs">
+                <strong className="flex-1">Compare {compared.map(variantName).join(' · ')}</strong>
+                <Button size="xs" variant="ghost" onClick={() => setComparing([])}>
+                  Close
+                </Button>
+              </div>
+              <VariantCompare brandId={brandId} variants={compared} />
+            </div>
+          ) : comparing.length === 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Tick one more published variant to compare.
+            </p>
+          ) : null}
+          {view === 'tree' ? (
+            <ul aria-label="Template variants" className="space-y-2">
+              {tree.map(renderNode)}
+            </ul>
+          ) : variants ? (
+            <VariantGraph
+              variants={variants}
+              isViewing={viewing}
+              onOpen={onInspect || onOpenRevision ? (revision) => void open(revision) : undefined}
+            />
+          ) : null}
+          {selectedVariant && DESIGN_FILE[selectedVariant.sourceKind] ? (
+            <div className="space-y-2 border-t pt-3 text-xs">
+              <p>
+                This template is built from {DESIGN_FILE[selectedVariant.sourceKind]} file. Make a
+                variant by changing its layers and saving them as a new variant.
+              </p>
+              {onEditLayers ? (
+                <Button size="xs" variant="outline" onClick={onEditLayers}>
+                  Edit layers
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <fieldset className="space-y-2 border-t pt-3">
+              <legend className="text-xs">Upload an authored After Effects variant</legend>
+              <Input
+                aria-label="Uploaded variant name"
+                placeholder="Variant name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={busy}
+              />
+              <input
+                type="file"
+                aria-label="Upload After Effects variant"
+                accept=".aep,.aet,.zip"
+                disabled={busy || !selectedRevision}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  upload(file);
+                }}
+              />
+            </fieldset>
+          )}
+          {archive ? (
+            <div
+              role="alertdialog"
+              aria-label="Archive template variant"
+              className="space-y-2 rounded-md border p-3"
+            >
+              <p className="text-xs">
+                Archive this variant? Existing sets keep their saved revision, and you can restore
+                it later. It will no longer appear for new sets.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setArchive(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="xs"
+                  disabled={busy}
+                  onClick={() =>
+                    void act('archive variant', async () => {
+                      await archiveTemplateRevisionVariant(brandId, assetId, archive);
+                      setArchive(null);
+                      const refreshed = await refresh();
+                      if (selectedVariant?.variantId === archive) {
+                        const fallback = refreshed.data?.find((item) => item.original);
+                        const head = fallback ? headOf(fallback) : undefined;
+                        if (head) await open(head);
+                      }
+                    })
+                  }
+                >
+                  Archive variant
+                </Button>
+              </div>
+            </div>
           ) : null}
         </div>
-      ) : (
-        <fieldset className="space-y-2 border-t pt-3">
-          <legend className="text-xs">Upload an authored After Effects variant</legend>
-          <Input
-            aria-label="Uploaded variant name"
-            placeholder="Variant name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={busy}
-          />
-          <input
-            type="file"
-            aria-label="Upload After Effects variant"
-            accept=".aep,.aet,.zip"
-            disabled={busy || !selectedRevision}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = '';
-              upload(file);
-            }}
-          />
-        </fieldset>
-      )}
-      {archive ? (
-        <div
-          role="alertdialog"
-          aria-label="Archive template variant"
-          className="space-y-2 rounded-md border p-3"
-        >
-          <p className="text-xs">
-            Archive this variant? Existing sets keep their saved revision, and you can restore it
-            later. It will no longer appear for new sets.
-          </p>
-          <div className="flex gap-2">
-            <Button size="xs" variant="outline" disabled={busy} onClick={() => setArchive(null)}>
-              Cancel
-            </Button>
-            <Button
-              size="xs"
-              disabled={busy}
-              onClick={() =>
-                void act('archive variant', async () => {
-                  await archiveTemplateRevisionVariant(brandId, assetId, archive);
-                  setArchive(null);
-                  const refreshed = await refresh();
-                  if (selectedVariant?.variantId === archive) {
-                    const fallback = refreshed.data?.find((item) => item.original);
-                    const head = fallback ? headOf(fallback) : undefined;
-                    if (head) await onInspect?.(head.sourceAssetId);
-                  }
-                })
-              }
-            >
-              Archive variant
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      </details>
     </div>
   );
 }

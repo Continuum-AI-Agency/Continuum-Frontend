@@ -4,6 +4,7 @@ import type {
   FontInventoryRow,
   TemplateEditableLayer as NativeEditableLayer,
   TemplateAuthoringCommand,
+  TemplateOperationOrigin,
   TemplateAuthoringNode,
   TemplateLayerEdit,
 } from '@continuum/contracts';
@@ -148,6 +149,7 @@ function pointerIsOnRenderedResizeEdge(
 }
 
 type CanvasGesture = {
+  origin: TemplateOperationOrigin;
   edits: readonly TemplateLayerEdit[];
   selectionIds: readonly number[];
   group: string;
@@ -462,15 +464,17 @@ export function AuthoredTemplateLayerPreview({
     change: Partial<TemplateLayerEdit>,
     group?: string | null,
     end?: boolean,
+    origin?: TemplateOperationOrigin,
   ) => void;
   /** One completed canvas gesture becomes one editor history/draft command. */
   onGestureCommit?: (gesture: CanvasGesture) => void;
   onSelectNode?: (nodeId: string) => void;
-  onDuplicateNode?: () => void;
-  onDeleteNode?: () => void;
+  onDuplicateNode?: (origin: TemplateOperationOrigin) => void;
+  onDeleteNode?: (origin: TemplateOperationOrigin) => void;
   onAuthoredGestureCommit?: (
     nodeId: string,
     edit: Extract<TemplateAuthoringCommand, { type: 'layer.edit' }>['edit'],
+    origin: TemplateOperationOrigin,
   ) => void;
   authoredNodes?: readonly TemplateAuthoringNode[];
   authoredNodeIds?: readonly string[];
@@ -914,7 +918,7 @@ export function AuthoredTemplateLayerPreview({
           );
           setGuides(delta.guides);
           const next: [number, number] = [startPosition[0] + delta.dx, startPosition[1] + delta.dy];
-          authoredCallbacks.current.onAuthoredGestureCommit?.(node.nodeId, { position: next });
+          authoredCallbacks.current.onAuthoredGestureCommit?.(node.nodeId, { position: next }, { tool: 'Forge canvas', gesture: 'Move layer' });
         };
         const cancel = (cancelEvent: PointerEvent) => {
           if (cancelEvent.pointerId !== event.pointerId) return;
@@ -1290,11 +1294,12 @@ export function AuthoredTemplateLayerPreview({
     batch: readonly TemplateLayerEdit[],
     ids: readonly number[],
     group: string,
+    origin: TemplateOperationOrigin,
   ) => {
     if (!batch.length) return;
     updateShadow(batch);
     if (onGestureCommit) {
-      onGestureCommit({ edits: batch, selectionIds: [...ids], group });
+      onGestureCommit({ edits: batch, selectionIds: [...ids], group, origin });
       return;
     }
     // Compatibility for callers that have not adopted the batch seam yet. The editor caller uses
@@ -1305,7 +1310,7 @@ export function AuthoredTemplateLayerPreview({
       );
       if (!target) return;
       const { compId: _compId, layerId: _layerId, ...fields } = change;
-      onEdit(target, fields, group, index === batch.length - 1);
+      onEdit(target, fields, group, index === batch.length - 1, origin);
     });
   };
 
@@ -1539,7 +1544,7 @@ export function AuthoredTemplateLayerPreview({
           ? element.removeAttribute('transform')
           : element.setAttribute('transform', transform);
       if (!cancelled && Object.keys(authored.edit).length) {
-        onAuthoredGestureCommit?.(authored.node.nodeId, authored.edit);
+        onAuthoredGestureCommit?.(authored.node.nodeId, authored.edit, { tool: 'Forge canvas', gesture: `${authored.kind} layer` });
       } else if (authored.node.kind !== 'group') {
         const [x, y] = authored.startPosition;
         const [sx, sy] = authored.startScale;
@@ -1568,7 +1573,7 @@ export function AuthoredTemplateLayerPreview({
     } else {
       const batch = updateGesture(gesture, event.clientX, event.clientY, event.shiftKey);
       if (gesture.moved && batch.length)
-        publishGesture(batch, gesture.selectionIds, `canvas:${gesture.kind}:${++sequence.current}`);
+        publishGesture(batch, gesture.selectionIds, `canvas:${gesture.kind}:${++sequence.current}`, { tool: 'Forge canvas', gesture: `${gesture.kind} layers` });
       else if (gesture.selectionIds.length === 1) setOpen(true);
     }
     active.current = null;
@@ -1585,11 +1590,11 @@ export function AuthoredTemplateLayerPreview({
     return next;
   };
 
-  const alignSelection = (alignment: CanvasAlignment) => {
+  const alignSelection = (alignment: CanvasAlignment, label: string) => {
     const ids = normalizeSelection(selectionRef.current, layers, compId);
     const frames = framesForGesture(ids);
     const batch = alignFrames(frames, alignment);
-    if (batch.length) publishGesture(batch, ids, `canvas:align:${++sequence.current}`);
+    if (batch.length) publishGesture(batch, ids, `canvas:align:${++sequence.current}`, { tool: 'Forge canvas menu', control: label });
   };
 
   const zoomAt = (nextZoom: number, clientX?: number, clientY?: number) => {
@@ -1735,6 +1740,9 @@ export function AuthoredTemplateLayerPreview({
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
+    const shortcut = [event.metaKey ? 'Meta' : null, event.ctrlKey ? 'Control' : null,
+      event.altKey ? 'Alt' : null, event.shiftKey ? 'Shift' : null,
+      event.key.length === 1 ? event.key.toUpperCase() : event.key].filter(Boolean).join('+');
     if (
       event.target instanceof Element &&
       event.target.closest('input, textarea, select, [contenteditable="true"]')
@@ -1752,7 +1760,7 @@ export function AuthoredTemplateLayerPreview({
     ) {
       event.preventDefault();
       event.stopPropagation();
-      onDuplicateNode();
+      onDuplicateNode({ tool: 'Forge canvas', shortcut });
     } else if (
       !disabled &&
       singleSelected &&
@@ -1763,7 +1771,7 @@ export function AuthoredTemplateLayerPreview({
       onDeleteNode
     ) {
       event.preventDefault();
-      onDeleteNode();
+      onDeleteNode({ tool: 'Forge canvas', shortcut });
     } else if (event.key === ' ') {
       spaceDown.current = true;
       event.preventDefault();
@@ -1819,7 +1827,7 @@ export function AuthoredTemplateLayerPreview({
           selectedAuthoredNode.position[0] + delta.x * step,
           selectedAuthoredNode.position[1] + delta.y * step,
         ],
-      });
+      }, { tool: 'Forge canvas', shortcut });
     } else if (currentSelection.length && !event.metaKey && !event.ctrlKey && !event.altKey) {
       const direction: Record<string, CanvasPoint> = {
         ArrowLeft: { x: -1, y: 0 },
@@ -1835,7 +1843,7 @@ export function AuthoredTemplateLayerPreview({
       if (frames.length !== ids.length || !canvasGestureAllowed(frames, 'move')) return;
       const step = event.shiftKey ? 10 : 1;
       const batch = moveFrames(frames, delta.x * step, delta.y * step);
-      publishGesture(batch, ids, `canvas:nudge:${++sequence.current}`);
+      publishGesture(batch, ids, `canvas:nudge:${++sequence.current}`, { tool: 'Forge canvas', shortcut });
     }
   };
 
@@ -2069,12 +2077,12 @@ export function AuthoredTemplateLayerPreview({
             <ContextMenuItem onSelect={() => setOpen(true)}>Layer controls</ContextMenuItem>
           ) : null}
           {selectedNodeId && onDuplicateNode ? (
-            <ContextMenuItem disabled={disabled} onSelect={onDuplicateNode}>
+            <ContextMenuItem disabled={disabled} onSelect={() => onDuplicateNode({ tool: 'Forge canvas menu', control: 'Duplicate selected layer' })}>
               Duplicate selected layer
             </ContextMenuItem>
           ) : null}
           {selectedNodeId && onDeleteNode ? (
-            <ContextMenuItem disabled={disabled} onSelect={onDeleteNode}>
+            <ContextMenuItem disabled={disabled} onSelect={() => onDeleteNode({ tool: 'Forge canvas menu', control: 'Delete selected layer' })}>
               Delete selected layer
             </ContextMenuItem>
           ) : null}
@@ -2120,7 +2128,7 @@ export function AuthoredTemplateLayerPreview({
             <ContextMenuItem
               key={alignment}
               disabled={disabled || !multiAlignAllowed}
-              onSelect={() => alignSelection(alignment)}
+              onSelect={() => alignSelection(alignment, label)}
             >
               {label}
             </ContextMenuItem>

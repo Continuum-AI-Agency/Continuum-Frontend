@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type {
   SaveTemplateLayerVariantRequest,
   TemplateEditableLayer,
@@ -10,7 +10,9 @@ import type {
   TemplateAuthoringDocument,
   TemplateAuthoringDraft,
   TemplateAuthoringDraftPut,
+  TemplateOperationInput,
   TemplateAuthoringArtifact,
+  TemplateAuthoringArtifactCommit,
   TemplateAuthoringPreparation,
   TemplateAuthoringCompileRequest,
   TemplateAuthoringPreparationRequest,
@@ -292,11 +294,7 @@ const nativeRenders = mock(async (_assetId: string, _artifactId: string, _scope:
 }));
 const authoringArtifactReads = mock(async () => authoringArtifact);
 const reviewAuthoring = mock(async () => ({ ...authoringArtifact, state: 'reviewed' as const, reviewedAt: '2026-10-11T00:00:00.000Z' }));
-const commitAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: unknown, request: {
-  parentRevisionId: string;
-  expectedHeadRevisionId: string;
-  variantId?: string;
-}) => ({ ...authoringArtifact, state: 'committed' as const, commit: {
+const commitAuthoring = mock(async (_assetId: string, _artifactId: string, _scope: unknown, request: TemplateAuthoringArtifactCommit) => ({ ...authoringArtifact, state: 'committed' as const, commit: {
   assetId: '10000000-0000-4000-8000-000000000304',
   versionId: '10000000-0000-4000-8000-000000000305',
   packageChecksum,
@@ -339,7 +337,7 @@ const revisionVariants = mock(async () => {
     ? '00000000-0000-4000-8000-000000000202'
     : '00000000-0000-4000-8000-000000000212';
   const sourceRevisions = [
-    [VERSION, '00000000-0000-4000-8000-000000000203', null],
+    [VERSION, inventory.lineage.role === 'golden' ? '00000000-0000-4000-8000-000000000203' : '00000000-0000-4000-8000-000000000223', null],
     [nextRevision.versionId, '00000000-0000-4000-8000-000000000204', '00000000-0000-4000-8000-000000000203'],
     ['00000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000205', '00000000-0000-4000-8000-000000000204'],
   ].map(([sourceVersionId, id, parentRevisionId], index) => ({
@@ -408,6 +406,7 @@ const revisionVariants = mock(async () => {
     revisions: [
       ...sourceRevisions.slice(0, 1).map((revision) => ({
         ...revision,
+        id: '00000000-0000-4000-8000-000000000203',
         variantId: '00000000-0000-4000-8000-000000000202',
       })),
     ],
@@ -421,6 +420,7 @@ const fieldReads = mock(async (): Promise<TemplateVariablesResponse> => ({
   edits: [],
   parseState: 'parsed',
 }));
+const authoringHistoryWrites = mock(async (_userId: string, _assetId: string, _brandId: string, _events: TemplateOperationInput[]) => {});
 const sources = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
   ...sources,
@@ -435,6 +435,7 @@ mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateAuthoringWorkspacePreview: workspacePreviews,
   fetchTemplateAuthoringFontPreview: authoringFontPreviews,
   putTemplateAuthoringDraft: authoringDraftWrites,
+  appendTemplateAuthoringHistory: authoringHistoryWrites,
   compileTemplateAuthoring: compileAuthoring,
   prepareTemplateAuthoringArtifact: prepareAuthoring,
   requestTemplateAuthoringNativeRender: nativeRenders,
@@ -510,7 +511,7 @@ mock.module('@/components/library/editor/LibraryMediaPickerDialog', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { LayerDraftState } from './layerDraft';
+import { TemplateAuthoringDraftError, type LayerDraftState } from './layerDraft';
 import { projectTemplateAuthoringCommands } from './templateAuthoringProjection';
 import { templateAuthoringWorkspaceIdentity } from './useTemplateAuthoringDraft';
 import { readTemplateAuthoringViewState } from './templateDraftRecovery';
@@ -568,6 +569,7 @@ const privateDraftTestIndexedDb = {
 } as unknown as IDBFactory;
 const originalPrivateDraftIndexedDb = globalThis.indexedDB;
 const enablePrivateDraftTestStorage = () => Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: privateDraftTestIndexedDb });
+beforeEach(enablePrivateDraftTestStorage);
 const persistedDraftForTest = (
   revision: number,
   commands: TemplateAuthoringCommand[],
@@ -671,6 +673,7 @@ afterEach(() => {
     authoringDocumentReads,
     authoringDraftReads,
     authoringDraftWrites,
+    authoringHistoryWrites,
     compileAuthoring,
     prepareAuthoring,
     nativeRenders,
@@ -770,6 +773,8 @@ const editor = (
         brandId={BRAND}
         assetId="a"
         versionId={versionId}
+        revisionId={versionId === VERSION ? (inventory.lineage.role === 'golden'
+          ? '00000000-0000-4000-8000-000000000203' : '00000000-0000-4000-8000-000000000223') : undefined}
         name="Card B"
         parse={parse ?? AUTHORING_PARSE}
         active
@@ -882,6 +887,8 @@ describe('TemplateLayerEditor', () => {
       { brandId: BRAND, assetId: 'a', baseVersionId: VERSION, expectedDraftRevision: 1 },
     ));
     expect(await screen.findByTestId('hyperframes-seed-attached')).toBeTruthy();
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_workspace_seed_import_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Create private draft and import' } });
   });
 
   test('reconciles a lost empty-draft bootstrap response only from exact empty scope', async () => {
@@ -929,6 +936,8 @@ describe('TemplateLayerEditor', () => {
     expect(scenes).toHaveBeenCalledTimes(baseSceneCallsBeforeImport);
     expect(saves).not.toHaveBeenCalled();
     expect(commitAuthoring).not.toHaveBeenCalled();
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_workspace_seed_import_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Import into this Forge workspace' } });
   });
 
   test('reconciles a seed attach when the private export completes but its response is lost', async () => {
@@ -1007,8 +1016,10 @@ describe('TemplateLayerEditor', () => {
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
       type: 'artboard.resize', compId: 63, width: 640, height: 360,
     });
+    expect(authoringHistoryWrites.mock.calls.flatMap(call => call[3]).some(event =>
+      event.command === 'forge_authoring_command' && (event.changes.command as TemplateAuthoringCommand).type === 'artboard.resize')).toBe(true);
     await waitFor(() => expect(document.querySelector('[data-effective-artboard="640x360"]')?.getAttribute('viewBox')).toBe('0 0 640 360'));
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
     await waitFor(() => expect(document.querySelector('[data-effective-artboard="400x300"]')?.getAttribute('viewBox')).toBe('0 0 400 300'));
@@ -1571,7 +1582,7 @@ describe('TemplateLayerEditor', () => {
     expect(screen.getByText('private-template.aep')).toBeTruthy();
     expect(screen.getByTestId('preparation-next-step').textContent).toMatch(/Open Fonts check to resolve the exact listed faces/i);
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Open Fonts check' }));
     expect(openFontRepair).toHaveBeenCalledTimes(1);
     const createTools = screen.getByRole('button', { name: 'Create and artboard tools' });
@@ -1661,7 +1672,7 @@ describe('TemplateLayerEditor', () => {
     expect(createTools.getAttribute('aria-expanded')).toBe('true');
     expect(screen.queryByRole('button', { name: /pin .*library image/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -1718,9 +1729,9 @@ describe('TemplateLayerEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply composition size' }));
 
     await waitFor(() => expect(compileAuthoring).toHaveBeenCalledTimes(1), { timeout: 2500 });
-    await waitForAuthoringReadyToPublish('Review and publish variant');
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
     expect(screen.queryByRole('button', { name: 'Approve for version saving' })).toBeNull();
-    const publish = screen.getByRole('button', { name: 'Review and publish variant' });
+    const publish = screen.getByRole('button', { name: 'Review and publish as new variant' });
     fireEvent.click(publish);
     fireEvent.click(publish);
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
@@ -1736,6 +1747,7 @@ describe('TemplateLayerEditor', () => {
     });
     await waitFor(() => expect(onOpenVariant).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000304'));
     expect(saves).not.toHaveBeenCalled();
+    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish as new variant' });
   });
 
   test('does not commit after the draft changes while exact-package review is in flight', async () => {
@@ -1753,8 +1765,8 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
       expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(reviewAuthoring).toHaveBeenCalledTimes(1));
 
     fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
@@ -1793,7 +1805,7 @@ describe('TemplateLayerEditor', () => {
     expect(revisionVariants).toHaveBeenCalledWith(BRAND, 'a');
     expect(screen.getByRole('button', { name: 'Review and publish revision' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Review and publish new variant' })).toBeTruthy();
-    expect(screen.queryByText('Golden source', { exact: true })).toBeNull();
+    expect(screen.queryByText('Original', { exact: true })).toBeNull();
     expect(inventories).not.toHaveBeenCalled();
   });
 
@@ -2361,7 +2373,7 @@ describe('TemplateLayerEditor', () => {
       },
       size: [320, 180],
     });
-    expect(screen.getByRole('button', { name: 'Review and publish variant' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Review and publish as new variant' }).hasAttribute('disabled')).toBe(true);
     expect(saves).not.toHaveBeenCalled();
   });
 
@@ -2438,6 +2450,49 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() =>
       expect(inventories.mock.calls.some(([, , version]) => version === latestVersion)).toBe(true),
     );
+  });
+
+  test('records exact controls, buttons and shortcuts in action order through coalescing, save and discard', async () => {
+    let draft: LayerDraftState | null = null;
+    editor(undefined, undefined, (next) => { draft = next; });
+    const x = await screen.findByLabelText('Position X');
+    fireEvent.change(x, { target: { value: '110' } });
+    fireEvent.change(x, { target: { value: '120' } });
+    fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo layer change' }));
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    fireEvent.keyDown(document, { key: 'z', ctrlKey: true, shiftKey: true });
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    let saved = false;
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(true);
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    fireEvent.change(x, { target: { value: '130' } });
+    fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    await act(async () => { draft!.discard(); });
+    const events = () => authoringHistoryWrites.mock.calls.flatMap((call) => call[3]);
+    await waitFor(() => expect(events().some((event) => event.command === 'forge_discard')).toBe(true));
+    const recorded = events();
+    expect(recorded.map((event) => event.command)).toEqual([
+      'forge_authoring_command', 'forge_authoring_command', 'forge_undo', 'forge_redo',
+      'forge_private_draft_save_requested', 'forge_authoring_command', 'forge_discard',
+    ]);
+    expect(recorded.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(new Set(recorded.map((event) => event.id)).size).toBe(7);
+    expect(new Set(recorded.map((event) => event.workingCopyId)).size).toBe(1);
+    expect(recorded[0]?.origin).toEqual({ tool: 'Forge inspector', control: 'Position X' });
+    expect(recorded[1]?.origin).toEqual(recorded[0]?.origin);
+    expect(recorded[2]?.origin).toMatchObject({ button: 'Undo' });
+    expect(recorded[3]?.origin).toMatchObject({ shortcut: 'Control+Shift+Z' });
+    expect(recorded[4]?.outcome).toBe('requested');
+    expect(recorded[4]?.origin).toEqual({ tool: 'Forge exit guard', button: 'Save private draft' });
+    expect(recorded[6]?.origin).toEqual({ tool: 'Forge exit guard', button: 'Discard' });
+    expect(recorded[2]?.causedBy).toEqual(expect.arrayContaining([recorded[0]!.id, recorded[1]!.id]));
+    expect(recorded.every((event) => event.evidence === 'recorded')).toBe(true);
+    await waitFor(() => expect((screen.getByLabelText('Position X') as HTMLInputElement).value).toBe('100'));
+    await waitFor(() => expect(draft?.dirty).toBe(false));
   });
 
   test('several numeric scrub updates commit as one undo step', async () => {
@@ -2530,6 +2585,52 @@ describe('TemplateLayerEditor', () => {
     expect(saves).not.toHaveBeenCalled();
   });
 
+  test('an inactive layer editor parks its exact draft and cannot replace a newer remote projection', async () => {
+    let draft: LayerDraftState | null = null;
+    const onDraftChange = (next: LayerDraftState | null) => { draft = next; };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const stage = (active: boolean) => <QueryClientProvider client={client}>
+      <TemplateLayerEditor brandId={BRAND} assetId="a" versionId={VERSION}
+        revisionId="00000000-0000-4000-8000-000000000203" name="Card B" parse={AUTHORING_PARSE}
+        active={active} onSaved={async () => {}} onDraftChange={onDraftChange} />
+    </QueryClientProvider>;
+    authoringDraftWrites.mockImplementation(async (_assetId, request) => {
+      if (request.expectedRevision !== (authoringDraft?.revision ?? 0))
+        throw new TemplateAuthoringDraftError(409, 'revision_conflict', 'Another editor advanced this private draft.');
+      authoringDraft = persistedDraftForTest(request.expectedRevision + 1, request.commands);
+      return authoringDraft;
+    });
+    const view = render(stage(true));
+    const x = await screen.findByLabelText('Position X');
+    fireEvent.change(x, { target: { value: '140' } }); fireEvent.blur(x);
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    let saved = false;
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(true);
+    await waitFor(() => expect(draft?.dirty).toBe(false));
+    const accepted = structuredClone(authoringDraft!);
+    authoringDraft = persistedDraftForTest(accepted.revision + 1, [{
+      type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, x: 170 },
+    }]);
+    const newer = structuredClone(authoringDraft);
+    const writes = authoringDraftWrites.mock.calls.length;
+    view.rerender(stage(false));
+    let parked = false;
+    await act(async () => { parked = await draft!.park!(); });
+    expect(parked).toBe(true);
+    expect(authoringDraftWrites.mock.calls).toHaveLength(writes);
+    expect(authoringDraft).toEqual(newer);
+    expect((screen.getByLabelText('Position X') as HTMLInputElement).value).toBe('140');
+    view.rerender(stage(true));
+    fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '180' } });
+    fireEvent.blur(screen.getByLabelText('Position X'));
+    await waitFor(() => expect(draft?.dirty).toBe(true));
+    await act(async () => { saved = await draft!.save(); });
+    expect(saved).toBe(false);
+    expect(authoringDraft).toEqual(newer);
+    expect(authoringDraftWrites.mock.calls.at(-1)?.[1].expectedRevision).toBe(accepted.revision);
+  });
+
   test('guard save writes a private draft and never creates a variant or version', async () => {
     const onOpenVariant = mock((_id: string) => {});
     const onSaved = mock(async () => {});
@@ -2552,6 +2653,8 @@ describe('TemplateLayerEditor', () => {
       brandId: BRAND,
       baseVersionId: VERSION,
     });
+    expect(authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_private_draft_save_requested')?.origin).toEqual({ tool: 'Forge exit guard', button: 'Save private draft' });
+    expect(authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).some((event) => event.command === 'forge_discard')).toBe(false);
     expect(saves).not.toHaveBeenCalled();
     expect(onOpenVariant).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
@@ -2784,7 +2887,8 @@ describe('TemplateLayerEditor', () => {
     expect(draft?.dirty).toBe(false);
     fireEvent.change(x, { target: { value: '160' } });
     await waitFor(() => expect(draft?.dirty).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard edits' }));
     await waitFor(() => expect(draft?.dirty).toBe(false));
   });
 
@@ -2812,8 +2916,8 @@ describe('TemplateLayerEditor', () => {
     await waitFor(() => expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual(
       expect.objectContaining({ type: 'layer.edit', edit: expect.objectContaining({ x: 140 }) }),
     ));
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByLabelText('Rotation'), { target: { value: '10' } });
     fireEvent.blur(screen.getByLabelText('Rotation'));
@@ -2850,6 +2954,8 @@ describe('TemplateLayerEditor', () => {
     }));
     expect(await draft!.retry?.()).toBe(true);
     await waitFor(() => expect(draft?.dirty).toBe(false));
+    const action = authoringHistoryWrites.mock.calls.flatMap((call) => call[3]).find((event) => event.command === 'forge_private_draft_retry_requested');
+    expect(action).toMatchObject({ outcome: 'requested', evidence: 'recorded', origin: { button: 'Retry draft save' } });
   });
 
   test('a golden source only forks: Save as variant sends the move and a name', async () => {
@@ -2857,13 +2963,13 @@ describe('TemplateLayerEditor', () => {
     enableVerifiedAuthoringFixture();
     const onOpenVariant = mock((_id: string) => {});
     editor(onOpenVariant);
-    await screen.findByText('Golden source');
+    await screen.findByText('Original', { exact: true });
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     const x = await screen.findByLabelText('Position X');
     fireEvent.change(x, { target: { value: '140' } });
     fireEvent.blur(x);
-    await waitForAuthoringReadyToPublish('Review and publish variant');
-    fireEvent.click(screen.getByRole('button', { name: 'Review and publish variant' }));
+    await waitForAuthoringReadyToPublish('Review and publish as new variant');
+    fireEvent.click(screen.getByRole('button', { name: 'Review and publish as new variant' }));
     await waitFor(() => expect(commitAuthoring).toHaveBeenCalledTimes(1));
     expect(commitAuthoring.mock.calls[0]?.[3]).toMatchObject({ saveTo: 'new_variant', name: 'Card B variant' });
     expect(authoringDraftWrites.mock.calls.at(-1)?.[1].commands).toContainEqual({
@@ -2893,6 +2999,7 @@ describe('TemplateLayerEditor', () => {
       type: 'layer.edit', nodeId: 'aep:63:114', edit: { compId: 63, layerId: 114, rotation: 15 },
     });
     expect(saves).not.toHaveBeenCalled();
+    expect(commitAuthoring.mock.calls[0]?.[3].origin).toEqual({ tool: 'Forge editor', button: 'Review and publish revision' });
   });
 
   test('re-stacking a comp previews and saves the whole front-first order', async () => {
@@ -2967,6 +3074,23 @@ describe('TemplateLayerEditor', () => {
     ).toBeTruthy();
   });
 
+  test('unavailable critical storage refuses edits without recording a command or changing the preview', async () => {
+    Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: undefined });
+    editor();
+    const x = await screen.findByLabelText('Position X');
+    expect((x as HTMLInputElement).value).toBe('100');
+    fireEvent.change(x, { target: { value: '140' } });
+    fireEvent.blur(x);
+    await screen.findByText('Private operation history is not ready. Retry before editing.');
+    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Private recovery storage is unavailable in this browser.');
+    expect((x as HTMLInputElement).value).toBe('100');
+    expect(screen.getByText('Source preview')).toBeTruthy();
+    expect(screen.queryByText(/Local estimate/)).toBeNull();
+    expect(authoringHistoryWrites).not.toHaveBeenCalled();
+    expect(authoringDraftWrites).not.toHaveBeenCalled();
+    expect(previews).not.toHaveBeenCalled();
+  });
+
   test('a failed composition is a local estimate with a retry, not a successful preview', async () => {
     revisionPreviews.mockImplementation(async () => {
       throw new Error('Composition unavailable');
@@ -2979,7 +3103,6 @@ describe('TemplateLayerEditor', () => {
     );
     expect(screen.queryByText('Composed preview')).toBeNull();
     expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Composition unavailable');
-    expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toContain('Private recovery storage is unavailable in this browser.');
     fireEvent.change(screen.getByLabelText('Position X'), { target: { value: '160' } });
     expect(screen.getByText('Local estimate · updating')).toBeTruthy();
     expect(screen.queryAllByRole('alert').some((alert) => alert.textContent === 'Composition unavailable')).toBe(false);
@@ -3026,7 +3149,7 @@ describe('TemplateLayerEditor', () => {
     expect(await screen.findByRole('status', { name: 'Reading template layers…' })).toBeTruthy();
     await waitFor(() => expect(container.querySelector('[data-layer-id="114"]')).toBeTruthy());
     expect(
-      (screen.getByRole('button', { name: 'Review and publish variant' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Review and publish as new variant' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     land(inventory);
     expect(await screen.findByRole('list', { name: 'Layers' })).toBeTruthy();

@@ -1,5 +1,18 @@
 'use client';
 
+import {
+  templateVersionBranchRequestSchema, templateVersionDiffRequestSchema,
+  templateVersionDiffResponseSchema, templateVersionResultSchema,
+  templateVersionMergePreviewRequestSchema, templateVersionMergePreviewSchema,
+  templateVersionMergeCommitRequestSchema, templateVersionRevertRequestSchema,
+  templateVersionCapabilitiesSchema, templateVersionCommitsResponseSchema,
+  templateVersionHistoryQuerySchema, templateVersionHistoryResponseSchema, templateReleaseListQuerySchema, templateReleaseListResponseSchema,
+  templateReleaseRequestSchema, templateReleaseRollbackRequestSchema, templateReleaseResultSchema,
+  type TemplateVersionHistoryQuery, type TemplateVersionBranchRequest, type TemplateVersionDiffRequest,
+  type TemplateVersionMergePreviewRequest, type TemplateVersionMergeCommitRequest,
+  type TemplateVersionRevertRequest, type TemplateReleaseRequest, type TemplateReleaseRollbackRequest,
+} from '@continuum/contracts';
+
 import type {
   RenderWorkspace,
   TemplateFontPushResponse,
@@ -23,6 +36,10 @@ import type {
   TemplateSourceSummary,
   WorkspaceTemplateDiscoveryResponse,
   ForgeLineageView,
+  TemplateOperationInput,
+  TemplateAuthoringWorkingCopy,
+  TemplateAuthoringWorkingCopyOpenRequest,
+  TemplateAuthoringScopeQuery,
 } from '@continuum/contracts';
 import type { MediaAssetVersion } from '@continuum/contracts';
 import {
@@ -86,8 +103,15 @@ import {
   templateSourceListResponseSchema,
   templateTextMoveResponseSchema,
   workspaceTemplateDiscoveryResponseSchema,
+  templateVersionHistoryAppendRequestSchema,
+  templateVersionHistoryAppendResponseSchema,
+  templateAuthoringWorkingCopySchema,
+  templateAuthoringWorkingCopyOpenRequestSchema,
+  templateAuthoringWorkingCopyListSchema,
 } from '@continuum/contracts';
 import { TemplateAuthoringDraftError } from '@/components/forge/layerDraft';
+import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
+import { authoringScopeQuery, withAuthoringWorkingCopy } from '@/components/forge/authoringScope';
 import { verifyTemplateAuthoringPackageResponse } from '@/components/forge/templateAuthoringPackage';
 import { verifyTemplateAuthoringFontResponse } from '@/components/forge/templateAuthoringFont';
 import { resolvePinnedArtworkVersion, type PinnedArtworkAssetRef } from '@/components/forge/templateArtworkPreview';
@@ -145,11 +169,13 @@ export async function editableTemplateFonts(brandId: string): Promise<FontInvent
 // in a Next route handler because they reach Template Forge with a server-only token, and
 // because the font readiness check reads the private brand font store.
 
-async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
+async function authorizedFetch(path: string, init?: RequestInit, expectedUserId?: string): Promise<Response> {
   const supabase = createSupabaseBrowserClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error('A signed-in session is required');
+  if (expectedUserId && data.session?.user.id !== expectedUserId)
+    throw new Error('This operation history belongs to another signed-in account. Its pending events are preserved.');
   return fetch(getApiUrl(path), {
     ...init,
     headers: {
@@ -160,6 +186,25 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
   });
 }
 
+export async function appendTemplateAuthoringHistory(
+  userId: string,
+  assetId: string,
+  brandId: string,
+  operations: TemplateOperationInput[],
+): Promise<void> {
+  const request = templateVersionHistoryAppendRequestSchema.parse({ brandId, operations });
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(assetId)}/history`,
+    { method: 'POST', body: JSON.stringify(request) }, userId);
+  const { items } = templateVersionHistoryAppendResponseSchema.parse(await unwrap(response, 'Forge operation history'));
+  const received = new Map(items.filter((event) => event.principalId === userId).map((event) => [event.id, event]));
+  if (request.operations.some((event) => {
+    const accepted = received.get(event.id);
+    return !accepted || Object.entries(event).some(([key, value]) =>
+      !templateAuthoringEqual(accepted[key as keyof typeof accepted], value));
+  }))
+    throw new Error('The server did not acknowledge every operation for this account. The original batch is preserved.');
+}
+
 async function unwrap<T>(response: Response, what: string): Promise<T> {
   if (!response.ok) {
     const detail = (await response.json().catch(() => ({}))) as { detail?: string; error?: string };
@@ -167,6 +212,122 @@ async function unwrap<T>(response: Response, what: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+const versionPath = (assetId: string, action: string) =>
+  `/api/ai-studio/templates/${encodeURIComponent(assetId)}/${action}`;
+const versionPost = (assetId: string, action: string, body: object, userId?: string) =>
+  authorizedFetch(
+    versionPath(assetId, action),
+    { method: 'POST', body: JSON.stringify(body) },
+    userId,
+  ).then((response) => unwrap(response, action));
+const versionGet = (assetId: string, action: string, brandId: string) =>
+  authorizedFetch(`${versionPath(assetId, action)}?${new URLSearchParams({ brandId })}`).then(
+    (response) => unwrap(response, action),
+  );
+
+export async function branchTemplateVersion(
+  assetId: string,
+  body: TemplateVersionBranchRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(assetId, 'branches', templateVersionBranchRequestSchema.parse(body), userId),
+  );
+}
+export async function diffTemplateVersions(assetId: string, body: TemplateVersionDiffRequest) {
+  return templateVersionDiffResponseSchema.parse(
+    await versionPost(assetId, 'diff', templateVersionDiffRequestSchema.parse(body)),
+  );
+}
+export async function previewTemplateMerge(
+  assetId: string,
+  body: TemplateVersionMergePreviewRequest,
+) {
+  return templateVersionMergePreviewSchema.parse(
+    await versionPost(
+      assetId,
+      'merges/preview',
+      templateVersionMergePreviewRequestSchema.parse(body),
+    ),
+  );
+}
+export async function commitTemplateMerge(
+  assetId: string,
+  body: TemplateVersionMergeCommitRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(
+      assetId,
+      'merges',
+      templateVersionMergeCommitRequestSchema.parse(body),
+      userId,
+    ),
+  );
+}
+export async function revertTemplateVersion(
+  assetId: string,
+  body: TemplateVersionRevertRequest,
+  userId?: string,
+) {
+  return templateVersionResultSchema.parse(
+    await versionPost(assetId, 'reverts', templateVersionRevertRequestSchema.parse(body), userId),
+  );
+}
+export async function fetchTemplateVersionCapabilities(brandId: string, assetId: string) {
+  return templateVersionCapabilitiesSchema.parse(
+    await versionGet(assetId, 'capabilities', brandId),
+  );
+}
+export async function fetchTemplateVersionCommits(brandId: string, assetId: string) {
+  return templateVersionCommitsResponseSchema.parse(await versionGet(assetId, 'commits', brandId));
+}
+export async function fetchTemplateVersionHistory(
+  brandId: string,
+  assetId: string,
+  options: Partial<Omit<TemplateVersionHistoryQuery, 'brandId'>> = {},
+  expectedUserId?: string,
+  signal?: AbortSignal,
+) {
+  const input = templateVersionHistoryQuerySchema.parse({ ...options, brandId });
+  const query = new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)]));
+  const page = templateVersionHistoryResponseSchema.parse(await unwrap(
+    await authorizedFetch(`${versionPath(assetId, 'history')}?${query}`, { signal }, expectedUserId), 'Operation history'));
+  if (expectedUserId && (await fetchTemplateAuthoringUserId()) !== expectedUserId)
+    throw new Error('This operation history belongs to another signed-in account.');
+  return page;
+}
+export async function fetchTemplateReleases(brandId: string, assetId: string) {
+  const input = templateReleaseListQuerySchema.parse({ brandId, includeTargets: true });
+  const query = new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)]));
+  return templateReleaseListResponseSchema.parse(await unwrap(
+    await authorizedFetch(`${versionPath(assetId, 'releases')}?${query}`), 'Template releases'));
+}
+export async function promoteTemplateRelease(
+  assetId: string,
+  body: TemplateReleaseRequest,
+  userId?: string,
+) {
+  return templateReleaseResultSchema.parse(
+    await versionPost(assetId, 'releases', templateReleaseRequestSchema.parse(body), userId),
+  );
+}
+export async function rollbackTemplateRelease(
+  assetId: string,
+  body: TemplateReleaseRollbackRequest,
+  userId?: string,
+) {
+  return templateReleaseResultSchema.parse(
+    await versionPost(
+      assetId,
+      'releases/rollback',
+      templateReleaseRollbackRequestSchema.parse(body),
+      userId,
+    ),
+  );
+}
+
 
 /** The brand's templates a page at a time, newest first, until the list runs out. */
 export async function* streamTemplateSources(
@@ -709,12 +870,57 @@ export async function fetchTemplateAuthoringUserId(): Promise<string> {
   return data.session.user.id;
 }
 
+export async function openTemplateAuthoringWorkingCopy(
+  templateId: string,
+  input: TemplateAuthoringWorkingCopyOpenRequest,
+  expectedUserId: string,
+): Promise<TemplateAuthoringWorkingCopy> {
+  const request = templateAuthoringWorkingCopyOpenRequestSchema.parse(input);
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(templateId)}/authoring-working-copies`,
+    { method: 'POST', body: JSON.stringify(request) }, expectedUserId);
+  const copy = templateAuthoringWorkingCopySchema.parse(await unwrap(response, 'Private working copy'));
+  if (copy.brandId !== request.brandId || copy.templateId !== templateId || copy.variantId !== request.variantId ||
+      copy.principalId !== expectedUserId || copy.closedAt ||
+      (request.workingCopyId && (copy.id !== request.workingCopyId || copy.baseRevisionId !== request.baseRevisionId)))
+    throw new Error('The server returned a different private working copy. The current draft is preserved.');
+  return copy;
+}
+
+export async function listTemplateAuthoringWorkingCopies(
+  templateId: string,
+  brandId: string,
+  variantId: string,
+  expectedUserId: string,
+): Promise<TemplateAuthoringWorkingCopy[]> {
+  const query = new URLSearchParams({ brandId, variantId });
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(templateId)}/authoring-working-copies?${query}`, undefined, expectedUserId);
+  const copies = templateAuthoringWorkingCopyListSchema.parse(await unwrap(response, 'Private working copies')).items;
+  if (copies.some((copy) => copy.principalId !== expectedUserId || copy.brandId !== brandId || copy.templateId !== templateId || copy.variantId !== variantId))
+    throw new Error('The private working-copy list did not match this account and variant.');
+  return copies;
+}
+
+export async function fetchTemplateAuthoringWorkingCopy(
+  templateId: string,
+  brandId: string,
+  workingCopyId: string,
+  expectedUserId: string,
+): Promise<TemplateAuthoringWorkingCopy> {
+  const response = await authorizedFetch(`/api/ai-studio/templates/${encodeURIComponent(templateId)}/authoring-working-copies/${encodeURIComponent(workingCopyId)}?${new URLSearchParams({ brandId })}`,
+    undefined, expectedUserId);
+  const copy = templateAuthoringWorkingCopySchema.parse(await unwrap(response, 'Private working copy'));
+  if (copy.id !== workingCopyId || copy.brandId !== brandId || copy.templateId !== templateId || copy.principalId !== expectedUserId)
+    throw new Error('This private working copy belongs to another context.');
+  return copy;
+}
+
 export async function fetchTemplateAuthoringDocument(
   assetId: string,
   brandId: string,
   baseVersionId: string,
+  workingCopyId?: string,
 ): Promise<TemplateAuthoringDocument> {
-  const query = new URLSearchParams({ brandId, baseVersionId });
+  const query = new URLSearchParams(authoringScopeQuery({ brandId, baseVersionId, workingCopyId }));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-document?${query}`,
   );
@@ -724,12 +930,12 @@ export async function fetchTemplateAuthoringDocument(
 
 export async function fetchTemplateAuthoringWorkspacePreview(
   assetId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   expectedRevision: number,
   compId?: number,
 ): Promise<TemplateAuthoringWorkspacePreviewResponse> {
   const query = new URLSearchParams({
-    ...scope,
+    ...authoringScopeQuery(scope),
     expectedRevision: String(expectedRevision),
     ...(compId ? { compId: String(compId) } : {}),
   });
@@ -743,7 +949,7 @@ export async function fetchTemplateAuthoringWorkspacePreview(
 
 export async function fetchTemplateAuthoringFontPreview(
   assetId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   font:
     | { fontId: string; postScriptName: string; sha256: string }
     | { kind: 'workspace_package'; packageChecksum: string; postScriptName: string; sha256: string },
@@ -753,7 +959,7 @@ export async function fetchTemplateAuthoringFontPreview(
   if (packageFont && (!workspaceSeed || font.packageChecksum.toLowerCase() !== workspaceSeed.seedPackageChecksum.toLowerCase()))
     throw new Error('The package font does not match the attached private workspace seed.');
   const query = new URLSearchParams({
-    ...scope,
+    ...authoringScopeQuery(scope),
     postScriptName: font.postScriptName,
     sha256: font.sha256,
     ...('fontId' in font ? { fontId: font.fontId } : { kind: font.kind }),
@@ -779,8 +985,9 @@ export async function fetchTemplateAuthoringDraft(
   assetId: string,
   brandId: string,
   baseVersionId: string,
+  workingCopyId?: string,
 ): Promise<TemplateAuthoringDraft | null> {
-  const query = new URLSearchParams({ brandId, baseVersionId });
+  const query = new URLSearchParams(authoringScopeQuery({ brandId, baseVersionId, workingCopyId }));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-draft?${query}`,
   );
@@ -793,10 +1000,11 @@ export async function fetchTemplateAuthoringDraft(
 export async function putTemplateAuthoringDraft(
   assetId: string,
   request: TemplateAuthoringDraftPut,
+  expectedUserId?: string,
 ): Promise<TemplateAuthoringDraft> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-draft`,
-    { method: 'PUT', body: JSON.stringify(request) },
+    { method: 'PUT', body: JSON.stringify(request) }, expectedUserId,
   );
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -830,9 +1038,9 @@ export async function compileTemplateAuthoring(
 export async function fetchTemplateAuthoringArtifact(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
 ): Promise<TemplateAuthoringArtifact> {
-  const query = new URLSearchParams(scope);
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}?${query}`,
   );
@@ -843,9 +1051,9 @@ export async function fetchTemplateAuthoringArtifact(
 export async function fetchTemplateAuthoringArtifactPackage(
   assetId: string,
   artifact: TemplateAuthoringArtifact,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
 ): Promise<Blob> {
-  const query = new URLSearchParams(scope);
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifact.artifactId)}/package?${query}`,
   );
@@ -855,11 +1063,11 @@ export async function fetchTemplateAuthoringArtifactPackage(
 export async function prepareTemplateAuthoringArtifact(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   request: TemplateAuthoringPreparationRequest,
 ): Promise<TemplateAuthoringPreparation> {
-  const body = templateAuthoringPreparationRequestSchema.parse(request);
-  const query = new URLSearchParams(scope);
+  const body = templateAuthoringPreparationRequestSchema.parse(withAuthoringWorkingCopy(scope, request));
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/prepare?${query}`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -871,9 +1079,9 @@ export async function prepareTemplateAuthoringArtifact(
 export async function fetchTemplateAuthoringPreparation(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
 ): Promise<TemplateAuthoringPreparation> {
-  const query = new URLSearchParams(scope);
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/preparation?${query}`,
   );
@@ -884,11 +1092,11 @@ export async function fetchTemplateAuthoringPreparation(
 export async function requestTemplateAuthoringNativeRender(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   request: TemplateAuthoringNativeRenderRequest,
 ): Promise<TemplateAuthoringNativeRender> {
-  const body = templateAuthoringNativeRenderRequestSchema.parse(request);
-  const query = new URLSearchParams(scope);
+  const body = templateAuthoringNativeRenderRequestSchema.parse(withAuthoringWorkingCopy(scope, request));
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders?${query}`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -901,9 +1109,9 @@ export async function fetchTemplateAuthoringNativeRender(
   assetId: string,
   artifactId: string,
   renderId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
 ): Promise<TemplateAuthoringNativeRender> {
-  const query = new URLSearchParams(scope);
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders/${encodeURIComponent(renderId)}?${query}`,
   );
@@ -916,9 +1124,9 @@ export async function fetchTemplateAuthoringNativeRenderFrame(
   artifactId: string,
   renderId: string,
   frameId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
 ): Promise<{ blob: Blob; sha256: string; stale: boolean }> {
-  const query = new URLSearchParams(scope);
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/native-renders/${encodeURIComponent(renderId)}/frames/${encodeURIComponent(frameId)}?${query}`,
   );
@@ -939,11 +1147,11 @@ export async function fetchTemplateAuthoringNativeRenderFrame(
 export async function reviewTemplateAuthoringArtifact(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   request: TemplateAuthoringArtifactReview,
 ): Promise<TemplateAuthoringArtifact> {
-  const body = templateAuthoringArtifactReviewSchema.parse(request);
-  const query = new URLSearchParams(scope);
+  const body = templateAuthoringArtifactReviewSchema.parse(withAuthoringWorkingCopy(scope, request));
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/review?${query}`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -955,11 +1163,11 @@ export async function reviewTemplateAuthoringArtifact(
 export async function commitTemplateAuthoringArtifact(
   assetId: string,
   artifactId: string,
-  scope: { brandId: string; baseVersionId: string },
+  scope: TemplateAuthoringScopeQuery,
   request: TemplateAuthoringArtifactCommit,
 ): Promise<TemplateAuthoringArtifact> {
-  const body = templateAuthoringArtifactCommitSchema.parse(request);
-  const query = new URLSearchParams(scope);
+  const body = templateAuthoringArtifactCommitSchema.parse(withAuthoringWorkingCopy(scope, request));
+  const query = new URLSearchParams(authoringScopeQuery(scope));
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/authoring-artifacts/${encodeURIComponent(artifactId)}/commit?${query}`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -1007,6 +1215,13 @@ export async function fetchTemplateRevisionVariants(
   ).items;
 }
 
+export async function fetchExactTemplateRevision(brandId: string, assetId: string, revisionId: string) {
+  const variants = await fetchTemplateRevisionVariants(brandId, assetId);
+  const matches = variants.flatMap((variant) => variant.revisions.filter((revision) => revision.id === revisionId));
+  if (matches.length !== 1) throw new Error('The exact saved revision is unavailable. The private working copy is retained.');
+  return matches[0]!;
+}
+
 export async function previewTemplateRevision(
   assetId: string,
   request: TemplateRevisionPreviewRequest,
@@ -1034,6 +1249,13 @@ export async function previewTemplateLayers(assetId: string, request: TemplateLa
   );
 }
 
+/** Send the frozen native intent with the exact account token checked by authorizedFetch. */
+export async function savePinnedTemplateRevision(assetId: string, body: unknown, expectedUserId: string, signal?: AbortSignal) {
+  return templateRevisionSchema.parse(await unwrap(await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/revisions`,
+    { method: 'POST', body: JSON.stringify(body), signal }, expectedUserId), 'Save template revision'));
+}
+
 export async function saveTemplateRevision(assetId: string, request: SaveTemplateRevisionRequest) {
   return templateRevisionSchema.parse(
     await unwrap(
@@ -1054,8 +1276,9 @@ export async function fetchTemplateLayerInventory(
   brandId: string,
   assetId: string,
   versionId: string,
+  workingCopyId?: string,
 ) {
-  const query = new URLSearchParams({ brandId, versionId });
+  const query = new URLSearchParams({ brandId, versionId, ...(workingCopyId ? { workingCopyId } : {}) });
   return templateLayerInventorySchema.parse(
     await unwrap(
       await authorizedFetch(
@@ -1072,10 +1295,12 @@ export async function fetchTemplateLayerScene(
   assetId: string,
   versionId: string,
   compId: number | null,
+  workingCopyId?: string,
 ) {
   const query = new URLSearchParams({
     brandId,
     versionId,
+    ...(workingCopyId ? { workingCopyId } : {}),
     ...(compId ? { compId: String(compId) } : {}),
   });
   return templateLayerSceneSchema.parse(

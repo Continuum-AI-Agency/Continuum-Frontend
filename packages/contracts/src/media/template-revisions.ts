@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { sceneRenderRequestSchema } from './blend-scene';
+import { templateOperationCoverageSchema, templateOperationInputSchema, templateOperationOriginSchema } from './template-operation-events';
 import { hyperframesRevisionSchema } from './hyperframes-native-revisions';
 import { templateRevisionRefSchema } from './template-revision-pin';
 
@@ -105,6 +107,11 @@ export const templateRevisionEditsSchema = z
     slots: z.array(templateSourceSlotEditSchema).max(500).default([]),
     orders: z.array(templateLayerOrderSchema).max(16).default([]),
     recolor: templateRevisionRecolorSchema.optional(),
+    blender: z.object({
+      values: sceneRenderRequestSchema.shape.values,
+      outputId: z.string().min(1),
+      overrides: sceneRenderRequestSchema.shape.overrides,
+    }).strict().optional(),
   })
   .strict()
   .superRefine((edits, ctx) => {
@@ -115,6 +122,10 @@ export const templateRevisionEditsSchema = z
       ctx.addIssue({ code: 'custom', message: 'Duplicate composition order' });
     if (new Set(edits.slots.map((slot) => slot.slotKey)).size !== edits.slots.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate field edit' });
+    Object.entries(edits.blender?.values ?? {}).forEach(([field, value]) => {
+      if (value && typeof value === 'object' && !Array.isArray(value) && !value.versionId)
+        ctx.addIssue({ code: 'custom', path: ['blender', 'values', field], message: 'Choose an exact Library media version' });
+    });
     edits.slots.forEach((slot, index) => {
       if (
         slot.defaultValue &&
@@ -129,6 +140,108 @@ export const templateRevisionEditsSchema = z
     });
   });
 export type TemplateRevisionEdits = z.infer<typeof templateRevisionEditsSchema>;
+
+/** A layer edit's identity: a design layer by artboard, an After Effects layer by comp. */
+export function templateRevisionLayerKey(layer: TemplateRevisionLayerEdit): string {
+  return layer.designLayerId !== undefined
+    ? `design:${layer.artboardId ?? ''}:${layer.designLayerId}`
+    : `${layer.compId}:${layer.layerId}`;
+}
+
+/** One edited field; an absent `from` / `to` means that revision leaves the field as the file has it. */
+export interface TemplateRevisionFieldChange {
+  field: string;
+  from?: unknown;
+  to?: unknown;
+}
+
+export interface TemplateRevisionEditsDiff {
+  layers: Array<{
+    key: string;
+    compId: number;
+    layerId: number;
+    changes: TemplateRevisionFieldChange[];
+  }>;
+  slots: Array<{ slotKey: string; changes: TemplateRevisionFieldChange[] }>;
+  orders: Array<{ compId: number; from?: number[]; to?: number[] }>;
+  recolor?: { from?: TemplateRevisionRecolor; to?: TemplateRevisionRecolor };
+  arrangement?: { from?: unknown; to?: unknown };
+  blender?: { from?: unknown; to?: unknown };
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const both = <T>(from: T | undefined, to: T | undefined) => ({
+  ...(from !== undefined ? { from } : {}),
+  ...(to !== undefined ? { to } : {}),
+});
+
+function fieldChanges(
+  from: Record<string, unknown> | undefined,
+  to: Record<string, unknown> | undefined,
+  identity: readonly string[],
+): TemplateRevisionFieldChange[] {
+  const fields = new Set([...Object.keys(from ?? {}), ...Object.keys(to ?? {})]);
+  return [...fields]
+    .filter((field) => !identity.includes(field) && !same(from?.[field], to?.[field]))
+    .sort()
+    .map((field) => ({ field, ...both(from?.[field], to?.[field]) }));
+}
+
+function byKey<T, K extends string | number>(items: T[], key: (item: T) => K): Map<K, T> {
+  return new Map(items.map((item) => [key(item), item]));
+}
+
+/**
+ * What one revision edits differently from another. A revision's edits are its whole snapshot over
+ * the source file, not a delta on its parent, so any two revisions of one source compare directly.
+ */
+export function diffTemplateRevisionEdits(
+  fromEdits: TemplateRevisionEdits,
+  toEdits: TemplateRevisionEdits,
+): TemplateRevisionEditsDiff {
+  // Parsed so both sides carry one key order and their defaults.
+  const from = templateRevisionEditsSchema.parse(fromEdits);
+  const to = templateRevisionEditsSchema.parse(toEdits);
+  const layersFrom = byKey(from.layers, templateRevisionLayerKey);
+  const layersTo = byKey(to.layers, templateRevisionLayerKey);
+  const slotsFrom = byKey(from.slots, (slot) => slot.slotKey);
+  const slotsTo = byKey(to.slots, (slot) => slot.slotKey);
+  const ordersFrom = byKey(from.orders, (order) => order.compId);
+  const ordersTo = byKey(to.orders, (order) => order.compId);
+  const layers = [...new Set([...layersFrom.keys(), ...layersTo.keys()])].sort().flatMap((key) => {
+    const before = layersFrom.get(key);
+    const after = layersTo.get(key);
+    const layer = (after ?? before)!;
+    const changes = fieldChanges(before, after, [
+      'compId',
+      'layerId',
+      'designLayerId',
+      'artboardId',
+    ]);
+    return changes.length ? [{ key, compId: layer.compId, layerId: layer.layerId, changes }] : [];
+  });
+  const slots = [...new Set([...slotsFrom.keys(), ...slotsTo.keys()])].sort().flatMap((slotKey) => {
+    const changes = fieldChanges(slotsFrom.get(slotKey), slotsTo.get(slotKey), ['slotKey']);
+    return changes.length ? [{ slotKey, changes }] : [];
+  });
+  const orders = [...new Set([...ordersFrom.keys(), ...ordersTo.keys()])]
+    .sort((a, b) => a - b)
+    .flatMap((compId) => {
+      const before = ordersFrom.get(compId)?.layerIds;
+      const after = ordersTo.get(compId)?.layerIds;
+      return same(before, after) ? [] : [{ compId, ...both(before, after) }];
+    });
+  return {
+    layers,
+    slots,
+    orders,
+    ...(same(from.recolor, to.recolor) ? {} : { recolor: both(from.recolor, to.recolor) }),
+    ...(same(from.blender, to.blender) ? {} : { blender: both(from.blender, to.blender) }),
+    ...(same(from.arrangement, to.arrangement)
+      ? {}
+      : { arrangement: both(from.arrangement, to.arrangement) }),
+  };
+}
 
 export const templateRevisionPublicationSchema = z
   .object({
@@ -290,6 +403,9 @@ export const saveTemplateRevisionRequestSchema = templateRevisionPreviewRequestS
     expectedHeadRevisionId: z.string().uuid(),
     idempotencyKey: z.string().uuid(),
     uploadAssetId: z.string().uuid().optional(),
+    operations: z.array(templateOperationInputSchema).max(500).optional(),
+    operationCoverage: templateOperationCoverageSchema.optional(),
+    origin: templateOperationOriginSchema.optional(),
     /** Only a new variant is tagged: a tag says what the variant was made for. */
     tags: z.array(templateVariantTagSchema).max(4).optional(),
   })

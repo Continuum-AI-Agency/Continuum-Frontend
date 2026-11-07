@@ -13,6 +13,9 @@ import {
   type ScenePreviewRequest,
   type SceneRenderRequest,
   type SceneRenderStatus,
+  type SceneTemplateView,
+  type TemplateRevisionVariant,
+  templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import parseExample from '../../../../packages/contracts/src/media/__fixtures__/blend-parse.example.json';
 
@@ -24,15 +27,7 @@ const OUT_ASSET = '88888888-8888-4888-8888-888888888888';
 const OUT_VERSION = '99999999-9999-4999-8999-999999999999';
 
 const parse = blendParseSchema.parse(parseExample);
-type View = {
-  assetId: string;
-  versionId: string;
-  templateKey: string;
-  parseState: string;
-  fields: typeof parse.fields;
-  outputs: typeof parse.outputs;
-  externals: never[];
-};
+type View = SceneTemplateView;
 const VIEW: View = {
   assetId: ASSET,
   versionId: VERSION,
@@ -53,6 +48,7 @@ const draft = (n: number): ScenePreview => ({
 });
 
 let view = VIEW;
+let revisionCatalog: TemplateRevisionVariant[] = [];
 const previewSignals: AbortSignal[] = [];
 let hangFirstPreview = false;
 const requestScenePreview = mock(
@@ -81,6 +77,11 @@ const listSceneRenders = mock(async () => ({ renders: [] }));
 const signLibraryAsset = mock(async () => 'https://signed.test/final.png');
 
 // Module stubs are process-wide in Bun: each takes the real exports first and hands them back.
+const realClient = { ...(await import('@/lib/supabase/client')) };
+mock.module('@/lib/supabase/client', () => ({ ...realClient, createSupabaseBrowserClient: () => ({ auth: {
+  getSession: async () => ({ data: { session: { user: { id: BRAND }, access_token: 'scene-fixture-token' } } }),
+  onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+} }) }));
 const realScene = { ...(await import('@/lib/library/sceneTemplates')) };
 const realSources = { ...(await import('@/lib/library/templateSources')) };
 const realElements = { ...(await import('@/lib/ai-studio/elements')) };
@@ -95,6 +96,7 @@ mock.module('@/lib/library/sceneTemplates', () => ({
 mock.module('@/lib/library/templateSources', () => ({
   ...realSources,
   fetchTemplateSources: async () => [{ assetId: ASSET, displayName: 'Summer Scene', parse: null }],
+  fetchTemplateRevisionVariants: async () => revisionCatalog,
 }));
 mock.module('@/lib/ai-studio/elements', () => ({ ...realElements, signLibraryAsset }));
 
@@ -106,6 +108,7 @@ import { PREVIEW_DEBOUNCE_MS } from './useScenePreview';
 afterEach(() => {
   cleanup();
   view = VIEW;
+  revisionCatalog = [];
   previewSignals.length = 0;
   hangFirstPreview = false;
   jobReads = 0;
@@ -114,16 +117,17 @@ afterEach(() => {
 });
 
 afterAll(() => {
+  mock.module('@/lib/supabase/client', () => realClient);
   mock.module('@/lib/library/sceneTemplates', () => realScene);
   mock.module('@/lib/library/templateSources', () => realSources);
   mock.module('@/lib/ai-studio/elements', () => realElements);
 });
 
-function mount() {
+function mount(revisionId?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <SceneEditor brandId={BRAND} assetId={ASSET} />
+      <SceneEditor brandId={BRAND} assetId={ASSET} revisionId={revisionId} />
     </QueryClientProvider>,
   );
 }
@@ -131,6 +135,25 @@ function mount() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, PREVIEW_DEBOUNCE_MS + 150));
 
 describe('SceneEditor', () => {
+  test('a saved scene shows its committed values and pins preview and proof renders to the exact revision', async () => {
+    const revisionId = '11111111-1111-4111-8111-111111111111';
+    view = { ...VIEW, revisionId, values: { headline: 'Committed copy' } };
+    mount();
+    const field = await screen.findByRole('textbox', { name: 'Title text default' });
+    expect((field as HTMLInputElement).value).toBe('Committed copy');
+    expect(screen.getByText('As saved in revision')).toBeTruthy();
+    await waitFor(() => expect(requestScenePreview.mock.calls[0]?.[1].revisionId).toBe(revisionId));
+    expect(field.closest('fieldset')?.disabled).toBe(true);
+    expect((field as HTMLInputElement).value).toBe('Committed copy');
+    fireEvent.click(screen.getByRole('button', { name: 'Render final' }));
+    await waitFor(() =>
+      expect(requestSceneRender.mock.calls[0]?.[1]).toMatchObject({
+        revisionId,
+        versionId: VERSION,
+        values: {},
+      }),
+    );
+  });
   test('loads the fields, names the template and draws the file as it is', async () => {
     mount();
     await screen.findByRole('heading', { level: 1, name: 'Summer Scene' });
@@ -259,4 +282,24 @@ describe('SceneEditor', () => {
     await waitFor(() => expect(requestSceneRender).toHaveBeenCalledTimes(1));
     expect(requestSceneRender.mock.calls[0]?.[1]?.overrides).toEqual({ mediaType: 'image' });
   });
+});
+
+
+test.each([true, false])('Blender Original or historical checkout cannot edit a saved native revision (original=%s)', async original => {
+  const revisionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const newerId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const variantId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const revision = { templateId: ASSET, variantId, id: revisionId, number: 1, parentRevisionId: null,
+    sourceAssetId: ASSET, sourceVersionId: VERSION, checksum: 'a'.repeat(64), edits: {}, publications: [],
+    createdAt: '2026-10-31T00:00:00Z', createdBy: null,
+    source: { assetId: ASSET, brandId: BRAND, versionId: VERSION, family: 'blender', parseState: 'parsed', createdAt: '2026-10-31T00:00:00Z' } };
+  revisionCatalog = [templateRevisionVariantSchema.parse({ templateId: ASSET, variantId, name: 'Saved Blender', original,
+    parentRevisionId: null, draftHeadRevisionId: original ? revisionId : newerId, publishedHeadRevisionId: null,
+    archivedAt: null, sourceKind: 'blender', revisions: original ? [revision] : [revision, { ...revision, id: newerId, number: 2, parentRevisionId: revisionId }] })];
+  view = { ...VIEW, revisionId };
+  mount(revisionId);
+  const field = await screen.findByRole('textbox', { name: 'Title text default' });
+  await screen.findByText('This revision is read-only. Branch it in Version control before editing.');
+  expect(field.closest('fieldset')?.disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Save native revision' }) as HTMLButtonElement).disabled).toBe(true);
 });

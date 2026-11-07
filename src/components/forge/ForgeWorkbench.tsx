@@ -2,6 +2,7 @@
 
 import {
   isWebTemplateKey,
+  type TemplateRevision,
   type TemplateSourceSummary,
   templateDisplayName,
   type WorkspaceTemplate,
@@ -25,11 +26,11 @@ import {
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
-import { Skeleton } from '@/components/ui/skeleton';
+import { WebComponentTemplateDetail } from '@/components/forge/WebComponentTemplateDetail';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -39,9 +40,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
@@ -73,7 +74,10 @@ const TemplateGallery = dynamic(
 );
 
 const NativeHyperframesEditor = dynamic(
-  () => import('@/components/forge/native/NativeHyperframesEditor').then((module) => module.NativeHyperframesEditor),
+  () =>
+    import('@/components/forge/native/NativeHyperframesEditor').then(
+      (module) => module.NativeHyperframesEditor,
+    ),
   { loading: () => <Skeleton className="h-96 w-full" /> },
 );
 
@@ -132,6 +136,7 @@ export function ForgeWorkbench({
 }) {
   const exitGuard = useForgeExitGuard();
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedRevision, setSelectedRevision] = useState<TemplateRevision | null>(null);
   const [detailTab, setDetailTab] = useState<string | undefined>();
   // The composition to land on in Edit layers — an output row's Edit names its own.
   const [detailComp, setDetailComp] = useState<string | undefined>();
@@ -367,7 +372,10 @@ export function ForgeWorkbench({
   // shell reads `#approvals`, and taken once: the template opens here, and its set opens in Render
   // once the template's key is known.
   const [deepLink, setDeepLink] = useState<ForgeDeepLink | null>(null);
-  const [authoringHandoff, setAuthoringHandoff] = useState<{ revisionId: string; error: string | null } | null>(null);
+  const [authoringHandoff, setAuthoringHandoff] = useState<{
+    revisionId: string;
+    error: string | null;
+  } | null>(null);
   useEffect(() => {
     const link = readForgeDeepLink(window.location.search);
     if (!link) return;
@@ -375,9 +383,10 @@ export function ForgeWorkbench({
     if (link.hyperframesRevisionId) {
       setAuthoringHandoff({
         revisionId: link.hyperframesRevisionId,
-        error: link.brandId && link.brandId !== brandId
-          ? 'This composition was opened for a different brand. Switch to that brand and open the handoff again.'
-          : null,
+        error:
+          link.brandId && link.brandId !== brandId
+            ? 'This composition was opened for a different brand. Switch to that brand and open the handoff again.'
+            : null,
       });
     }
     if (link.templateAssetId && link.tab) setDetailTab(link.tab);
@@ -391,10 +400,13 @@ export function ForgeWorkbench({
         setDetailTab(tab);
         setDetailComp(comp);
         setSelected(assetId);
+        setSelectedRevision(null);
       }),
     );
   const openShared = (template: SharedTemplate | null) =>
-    exitGuard.runGuarded(() => morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)));
+    exitGuard.runGuarded(() =>
+      morph(() => setSelectedShared(template ? sharedTemplateId(template) : null)),
+    );
 
   // An intent is an event, taken once and handed back, the way the Render grid takes its own.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event.
@@ -404,7 +416,18 @@ export function ForgeWorkbench({
     open(templateIntent.assetId, templateIntent.tab ?? 'layers');
   }, [templateIntent]);
 
-  const current = sources.find((source) => source.assetId === selected) ?? null;
+  const current =
+    selectedRevision?.source ?? sources.find((source) => source.assetId === selected) ?? null;
+  const openRevision = async (revision: TemplateRevision, tab = 'variants', comp?: string): Promise<void> => {
+    await exitGuard.runPreserving(() =>
+      morph(() => {
+        setSelected(revision.sourceAssetId);
+        setSelectedRevision(revision);
+        setDetailTab(tab);
+        setDetailComp(comp);
+      }),
+    );
+  };
   const currentShared = current
     ? null
     : (shared.find((template) => sharedTemplateId(template) === selectedShared) ?? null);
@@ -482,7 +505,13 @@ export function ForgeWorkbench({
                 ? 'Showing the last available list. Refresh to check for changes.'
                 : 'Your uploaded templates could not be loaded. Shared templates may still be available.'}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void sourceQuery.refetch()} disabled={sourceQuery.isFetching}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void sourceQuery.refetch()}
+              disabled={sourceQuery.isFetching}
+            >
               {sourceQuery.isFetching ? 'Retrying…' : 'Retry'}
             </Button>
           </AlertDescription>
@@ -526,7 +555,13 @@ export function ForgeWorkbench({
                   : 'Showing the last available catalog. Refresh to check for changes.'
                 : 'Your uploaded templates are still available. The shared catalog could not be loaded.'}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void workspaceQuery.refetch()}
+              disabled={workspaceQuery.isFetching}
+            >
               {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
             </Button>
           </AlertDescription>
@@ -545,17 +580,31 @@ export function ForgeWorkbench({
                 ? 'Showing templates from workspaces we could read. Other shared templates may be missing.'
                 : 'No shared templates can be confirmed until the workspace catalog loads. Your uploaded templates remain available.'}
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => void workspaceQuery.refetch()} disabled={workspaceQuery.isFetching}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void workspaceQuery.refetch()}
+              disabled={workspaceQuery.isFetching}
+            >
               {workspaceQuery.isFetching ? 'Retrying…' : 'Retry'}
             </Button>
           </AlertDescription>
         </Alert>
       ) : null}
-      {!workspaceQuery.isPending && !workspaceQuery.isError && workspaceFailures.length === 0 && discoveredItems.length === 0 ? (
-        <Empty className="h-auto w-full rounded-lg border border-dashed py-3" data-testid="shared-catalog-empty">
+      {!workspaceQuery.isPending &&
+      !workspaceQuery.isError &&
+      workspaceFailures.length === 0 &&
+      discoveredItems.length === 0 ? (
+        <Empty
+          className="h-auto w-full rounded-lg border border-dashed py-3"
+          data-testid="shared-catalog-empty"
+        >
           <EmptyHeader>
             <EmptyTitle>No shared templates</EmptyTitle>
-            <EmptyDescription>No shared templates are available to this brand yet.</EmptyDescription>
+            <EmptyDescription>
+              No shared templates are available to this brand yet.
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : null}
@@ -576,7 +625,11 @@ export function ForgeWorkbench({
         </div>
       ) : null}
 
-      {authoringHandoff?.error ? <p role="alert" className="text-xs text-destructive">{authoringHandoff.error}</p> : null}
+      {authoringHandoff?.error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {authoringHandoff.error}
+        </p>
+      ) : null}
 
       <DesignTemplateImports
         imports={imports}
@@ -599,19 +652,22 @@ export function ForgeWorkbench({
         />
       ) : current?.family === 'hyperframes' ? (
         <NativeHyperframesEditor
-          key={`${brandId}:${current.assetId}`}
+          key={`${brandId}:${current.assetId}:${selectedRevision?.id ?? 'head'}`}
           brandId={brandId}
           assetId={current.assetId}
           name={sourceDisplayName(current)}
+          initialRevisionId={selectedRevision?.id}
           onBack={() => open(null)}
           onDraftChange={exitGuard.onDraftChange}
         />
       ) : current?.family === 'blender' ? (
         // A .blend is fields and cameras, not comps and slots: none of the After Effects sheet applies.
         <SceneTemplateDetail
-          key={current.assetId}
+          key={`${current.assetId}:${selectedRevision?.id ?? 'head'}`}
           brandId={brandId}
           source={current}
+          revisionId={selectedRevision?.id}
+          onOpenRevision={openRevision}
           onBack={() => open(null)}
           onRename={(title) => void rename(current.assetId, title)}
           onRemove={() => setRemoving(current)}
@@ -628,11 +684,13 @@ export function ForgeWorkbench({
         />
       ) : current ? (
         <TemplateDetail
-          key={current.assetId}
+          key={`${current.assetId}:${selectedRevision?.id ?? 'head'}`}
           brandId={brandId}
           source={current}
           initialTab={detailTab}
           initialComp={detailComp}
+          revisionId={selectedRevision?.id}
+          onOpenRevision={openRevision}
           onBack={() => open(null)}
           onDraftChange={exitGuard.onDraftChange}
           hyperframesRevisionId={authoringHandoff?.error ? undefined : authoringHandoff?.revisionId}
@@ -641,9 +699,7 @@ export function ForgeWorkbench({
             open(assetId, tab);
           }}
           onRename={(title) => void rename(current.assetId, title)}
-          onRemove={() =>
-            exitGuard.runGuarded(() => setRemoving(current))
-          }
+          onRemove={() => exitGuard.runGuarded(() => setRemoving(current))}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
@@ -678,6 +734,7 @@ export function ForgeWorkbench({
           shared={shared}
           adopting={adopting}
           onOpen={open}
+          onOpenRevision={openRevision}
           onOpenShared={openShared}
           onRename={(assetId, title) => void rename(assetId, title)}
           onToggleShared={(template) => void toggleShared(template)}

@@ -4,7 +4,7 @@
 // Every field shows the pending edit over the file's value and reports changes upward; the editor
 // decides what counts as an edit. A property the file animates or rigs is shown, never written.
 
-import type {
+import type { TemplateOperationOrigin,
   FontInventoryRow,
   TemplateLayerTransform,
 } from '@continuum/contracts';
@@ -76,7 +76,7 @@ export function TemplateLayerInspector({
   edit?: AuthoringLayerEdit;
   fonts: FontInventoryRow[];
   disabled: boolean;
-  onEdit: (change: Partial<AuthoringLayerEdit>, group?: string) => void;
+  onEdit: (change: Partial<AuthoringLayerEdit>, group?: string, origin?: TemplateOperationOrigin) => void;
   onEditCommit?: (group: string) => void;
   idPrefix?: string;
 }) {
@@ -87,8 +87,9 @@ export function TemplateLayerInspector({
   const font = edit?.font ?? layer.font;
   const fontReason = fontEditReason(layer);
   const weight = boldFaceFor(font, fonts);
-  const numericEdit = (field: string, change: Partial<AuthoringLayerEdit>) =>
-    onEdit(change, `${idPrefix}:${layer.layerId}:${field}`);
+  const controlOrigin = (control: string): TemplateOperationOrigin => ({ tool: 'Forge inspector', control });
+  const numericEdit = (field: string, change: Partial<AuthoringLayerEdit>, control: string) =>
+    onEdit(change, `${idPrefix}:${layer.layerId}:${field}`, controlOrigin(control));
   const numericCommit = (field: string) => onEditCommit?.(`${idPrefix}:${layer.layerId}:${field}`);
   return (
     <div className="flex flex-col gap-5">
@@ -108,7 +109,7 @@ export function TemplateLayerInspector({
             size="sm"
             checked={edit?.visible ?? layer.visible}
             disabled={disabled || !!layer.visibilityReason}
-            onCheckedChange={(visible) => onEdit({ visible })}
+            onCheckedChange={(visible) => onEdit({ visible }, undefined, controlOrigin('Visible in template'))}
           />
         </div>
         {layer.visibilitySlotKeys.length ? (
@@ -125,7 +126,7 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[0]}
             disabled={locked('position')}
-            onChange={(x) => numericEdit('x', { x })}
+            onChange={(x) => numericEdit('x', { x }, 'Position X')}
             onCommit={() => numericCommit('x')}
           />
           <NumberScrubField
@@ -134,7 +135,7 @@ export function TemplateLayerInspector({
             suffix="px"
             value={position[1]}
             disabled={locked('position')}
-            onChange={(y) => numericEdit('y', { y })}
+            onChange={(y) => numericEdit('y', { y }, 'Position Y')}
             onCommit={() => numericCommit('y')}
           />
           <NumberScrubField
@@ -142,7 +143,7 @@ export function TemplateLayerInspector({
             suffix="°"
             value={edit?.rotation ?? layer.rotation ?? 0}
             disabled={locked('rotation')}
-            onChange={(rotation) => numericEdit('rotation', { rotation })}
+            onChange={(rotation) => numericEdit('rotation', { rotation }, 'Rotation')}
             onCommit={() => numericCommit('rotation')}
           />
           <NumberScrubField
@@ -152,7 +153,7 @@ export function TemplateLayerInspector({
             max={100}
             value={edit?.opacity ?? layer.opacity ?? 100}
             disabled={locked('opacity')}
-            onChange={(opacity) => numericEdit('opacity', { opacity })}
+            onChange={(opacity) => numericEdit('opacity', { opacity }, 'Opacity')}
             onCommit={() => numericCommit('opacity')}
           />
           <NumberScrubField
@@ -160,7 +161,7 @@ export function TemplateLayerInspector({
             suffix="%"
             value={scale[0]}
             disabled={locked('scale')}
-            onChange={(x) => numericEdit('scale-x', { scale: [x, scale[1]] })}
+            onChange={(x) => numericEdit('scale-x', { scale: [x, scale[1]] }, 'Scale X')}
             onCommit={() => numericCommit('scale-x')}
           />
           <NumberScrubField
@@ -168,7 +169,7 @@ export function TemplateLayerInspector({
             suffix="%"
             value={scale[1]}
             disabled={locked('scale')}
-            onChange={(y) => numericEdit('scale-y', { scale: [scale[0], y] })}
+            onChange={(y) => numericEdit('scale-y', { scale: [scale[0], y] }, 'Scale Y')}
             onCommit={() => numericCommit('scale-y')}
           />
         </div>
@@ -191,7 +192,7 @@ export function TemplateLayerInspector({
               step={0.5}
               value={edit?.fontSize ?? layer.fontSize ?? 1}
               disabled={disabled || !!fontReason}
-              onChange={(fontSize) => numericEdit('font-size', { fontSize })}
+              onChange={(fontSize) => numericEdit('font-size', { fontSize }, 'Text size (pt)')}
               onCommit={() => numericCommit('font-size')}
             />
             <label
@@ -203,7 +204,7 @@ export function TemplateLayerInspector({
                 checked={weight.bold}
                 disabled={disabled || !!fontReason || !weight.target}
                 onCheckedChange={() => {
-                  if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName });
+                  if (weight.target?.postScriptName) onEdit({ font: weight.target.postScriptName }, undefined, controlOrigin('Bold'));
                 }}
               />
               Bold

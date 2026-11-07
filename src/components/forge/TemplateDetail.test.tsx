@@ -11,7 +11,10 @@ import type {
   ApiRenderOutput,
   TemplateForgeNeed,
   TemplateSource,
+  TemplateRevision,
+  TemplateRevisionVariant,
 } from '@continuum/contracts';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -50,6 +53,19 @@ const SOURCE: TemplateSource = {
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-12T00:00:00Z',
 };
+
+const TEST_USER = '33333333-3333-4333-8333-333333333333';
+const revisionFor = (id: string, variantId: string): TemplateRevision => ({
+  id, variantId, templateId: ASSET, number: 1, parentRevisionId: null, sourceAssetId: ASSET, sourceVersionId: SOURCE.versionId,
+  checksum: 'a'.repeat(64), edits: { layers: [], slots: [], orders: [] }, createdAt: '2026-10-31T00:00:00Z',
+  createdBy: TEST_USER, nativeCommitId: null, dependencies: null, source: SOURCE, publications: [],
+});
+const revisionRow = revisionFor('11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-222222222222');
+const revisionVariant: TemplateRevisionVariant = { templateId: ASSET, variantId: revisionRow.variantId,
+  name: 'Edit variant', original: false, parentRevisionId: null, draftHeadRevisionId: revisionRow.id,
+  publishedHeadRevisionId: null, archivedAt: null, tags: [], sourceKind: 'after_effects', revisions: [revisionRow] };
+
+let revisionCatalogForTest: TemplateRevisionVariant[] = [];
 
 const CONTINUUM_WORKSPACE = {
   id: '77777777-7777-4777-8777-777777777777',
@@ -179,6 +195,13 @@ const previewTemplateRebind = mock(async (..._args: unknown[]) => ({
 const confirmTemplateRebind = mock(async (..._args: unknown[]) => undefined);
 
 mock.module('@/lib/library/templateSources', () => ({
+  fetchTemplateAuthoringUserId: async () => TEST_USER,
+  openTemplateAuthoringWorkingCopy: async (_templateId: string, request: { variantId: string; baseRevisionId: string }) => ({
+    id: '44444444-4444-4444-8444-444444444444', brandId: BRAND, principalId: TEST_USER, templateId: ASSET,
+    variantId: request.variantId, baseRevisionId: request.baseRevisionId, sourceAssetId: ASSET, sourceVersionId: SOURCE.versionId,
+    sourceChecksum: 'a'.repeat(64), createdAt: '2026-10-31T00:00:00Z', closedAt: null, landedRevisionId: null,
+  }),
+  fetchTemplateRevisionVariants: async () => revisionCatalogForTest,
   fetchTemplateVariables: async () => ({
     variables: [
       {
@@ -379,11 +402,15 @@ const check = (name: string) =>
 function renderDetail(
   onOpenRender = mock((_intent: unknown) => undefined),
   source: TemplateSource = SOURCE,
+  options?: { variants?: TemplateRevisionVariant[]; initialTab?: string; onOpenRevision?: (revision: TemplateRevision, tab?: string) => void },
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(['forge', BRAND, 'template-variants'], []);
+  revisionCatalogForTest = options?.variants ?? [];
+  client.setQueryData(['forge', BRAND, 'revision-variants', ASSET], revisionCatalogForTest);
   const tree = (nextSource: TemplateSource) => (
     <QueryClientProvider client={client}>
+      <ToastProvider>
       <TemplateDetail
         brandId={BRAND}
         source={nextSource}
@@ -391,7 +418,12 @@ function renderDetail(
         onRename={() => undefined}
         onOpenRender={onOpenRender}
         onChanged={async () => undefined}
+        initialTab={options?.initialTab}
+        revisionId={options?.variants?.[0]?.draftHeadRevisionId}
+        onOpenRevision={options?.onOpenRevision}
+        onOpenVariant={options?.onOpenRevision ? () => undefined : undefined}
       />
+      </ToastProvider>
     </QueryClientProvider>
   );
   const view = render(tree(source));
@@ -402,8 +434,18 @@ function renderDetail(
 }
 
 describe('TemplateDetail', () => {
+  test('the header variant switch preserves Layers while selecting an exact revision of shared bytes', async () => {
+    const next = revisionFor('77777777-7777-4777-8777-111111111111', '77777777-7777-4777-8777-222222222222');
+    const onOpenRevision = mock((_revision: TemplateRevision, _tab?: string) => {});
+    renderDetail(undefined, SOURCE, { initialTab: 'layers', onOpenRevision,
+      variants: [{ ...revisionVariant, original: true }, { ...revisionVariant, name: 'Second variant', variantId: next.variantId,
+        draftHeadRevisionId: next.id, revisions: [next] }] });
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Inspect template variant' }), { target: { value: next.variantId } });
+    expect(onOpenRevision).toHaveBeenCalledWith(next, 'layers');
+  });
+
   test('Author stays attached to the open immutable source and beta revision tabs remain available', async () => {
-    renderDetail();
+    renderDetail(undefined, SOURCE, { variants: [revisionVariant] });
     const tabs = screen.getByRole('tablist');
     expect(within(tabs).getByRole('tab', { name: 'Edit layers', exact: true })).toBeTruthy();
     expect(within(tabs).getByRole('tab', { name: /Variants/ })).toBeTruthy();

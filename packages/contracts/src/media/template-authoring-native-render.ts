@@ -16,6 +16,7 @@ const selection = z
 
 export const templateAuthoringNativeRenderRequestSchema = z
   .object({
+    workingCopyId: uuid.optional(),
     expectedDraftRevision: z.number().int().positive(),
     sourceChecksum: sha256,
     commandDigest: sha256,
@@ -70,7 +71,7 @@ export const templateAuthoringNativeRenderSchema = z
   .object({
     renderId: uuid,
     artifactId: uuid,
-    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid }).strict(),
+    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid, workingCopyId: uuid.optional() }).strict(),
     userId: uuid,
     draftRevision: z.number().int().positive(),
     sourceChecksum: sha256,

@@ -1,5 +1,7 @@
 'use client';
 
+import { selectTemplateRevision } from './revisionSelection';
+
 // The Layers tab editor: a template's layer stack, a live layout preview and the selected layer's
 // inspector, in one bounded workspace whose panes scroll on their own. Edits autosave to a private
 // draft, and a version save never rewrites the golden source: on the original upload it forks a new
@@ -14,6 +16,9 @@
 import {
   type TemplatePreview,
   type TemplateAuthoringCommand,
+  type TemplateOperationOrigin,
+  type TemplateAuthoringWorkingCopy,
+  type TemplateRevision,
   type TemplateAuthoringDocument,
   type TemplateAuthoringArtifactCommit,
   templateLayerPreviewRequestSchema,
@@ -21,7 +26,7 @@ import {
 import type { MediaAsset } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { CircleHelp, ChevronDown, Copy, GitFork, Layers, Loader2, Lock, Plus, Redo2, RotateCcw, RectangleHorizontal, Circle, Image as ImageIcon, Type, Trash2, Undo2 } from 'lucide-react';
+import { CircleHelp, ChevronDown, Copy, GitFork, Layers, Loader2, Lock, Plus, Redo2, RectangleHorizontal, Circle, Image as ImageIcon, Type, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -59,6 +64,7 @@ import {
 import { templateAuthoringEqual } from '@/components/forge/templateAuthoringEquality';
 import { templateAuthoringWorkspaceIdentity, useTemplateAuthoringDraft } from '@/components/forge/useTemplateAuthoringDraft';
 import { compareTemplateDrafts } from '@/components/forge/templateDraftComparison';
+import { DiscardEditsButton } from '@/components/forge/DiscardEditsButton';
 import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { TemplateLayerInspector } from '@/components/forge/AuthoringTemplateLayerInspector';
@@ -107,6 +113,7 @@ import {
   fetchTemplateLayerInventory,
   fetchTemplateLayerScene,
   fetchTemplateRevisionVariants,
+  fetchExactTemplateRevision,
   fetchTemplateVariables,
   previewTemplateLayers,
   putTemplateAuthoringDraft,
@@ -236,11 +243,14 @@ export function TemplateAuthoringEditor({
   active,
   onSaved,
   onOpenVariant,
+  onOpenRevision,
   onOpenRender,
   templateKey,
   onDraftChange,
   hyperframesRevisionId,
   onOpenFontRepair,
+  revisionId,
+  workingCopy,
 }: {
   brandId: string;
   assetId: string;
@@ -251,6 +261,7 @@ export function TemplateAuthoringEditor({
   active: boolean;
   onSaved: () => Promise<void>;
   onOpenVariant?: (assetId: string) => void;
+  onOpenRevision?: (revision: TemplateRevision) => void | Promise<unknown>;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   templateKey?: string | null;
   onDraftChange?: LayerDraftChange;
@@ -258,9 +269,24 @@ export function TemplateAuthoringEditor({
   hyperframesRevisionId?: string;
   /** Move from an exact preparation font diagnostic to Forge's existing Fonts check. */
   onOpenFontRepair?: () => void;
+  revisionId?: string;
+  workingCopy?: TemplateAuthoringWorkingCopy;
 }) {
   const [history, setHistory] = useState<LayerHistory>(() => createLayerHistory(EMPTY_DRAFT));
   const historyRef = useRef(history);
+  const recordOperationRef = useRef<(action: import('./templateOperationJournal').ForgeDraftAction) => string | null>(() => null);
+  const pendingOperationIds = useRef<string[]>([]);
+  const historyOperationIds = useRef(new WeakMap<LayerDraftSnapshot, string[]>());
+  const appendRecordedCommand = (snapshot: LayerDraftSnapshot, command: TemplateAuthoringCommand, origin?: TemplateOperationOrigin) => {
+    const id = recordOperationRef.current({
+      command: 'forge_authoring_command', changes: { command },
+      affectedObjects: 'nodeId' in command ? [command.nodeId] : [],
+      origin: { tool: 'Forge web editor', ...origin },
+    });
+    if (!id) return historyRef.current.present;
+    pendingOperationIds.current.push(id);
+    return appendLayerDraftCommand(snapshot, command);
+  };
   historyRef.current = history;
   const { edits, orders, exposures } = history.present;
   const [pinnedVersionId, setPinnedVersionId] = useState<string | null>(null);
@@ -310,18 +336,28 @@ export function TemplateAuthoringEditor({
     resolver: zodResolver(nameSchema),
     defaultValues: { name: `${name} variant` },
   });
-  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}`;
+  const sourceKey = `${brandId}:${assetId}:${versionId ?? ''}${workingCopy ? `:working-copy:${workingCopy.id}` : ''}`;
   const relinkSourceKeyRef = useRef(sourceKey);
   relinkSourceKeyRef.current = sourceKey;
   const authoringScope = useMemo(
-    () => effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null,
-    [brandId, assetId, effectiveVersionId],
+    () => effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null,
+    [brandId, assetId, effectiveVersionId, workingCopy?.id],
   );
   const sourceKeyRef = useRef(sourceKey);
   const savedRevisionKeyRef = useRef<string | null>(null);
   const pushSnapshot = (snapshot: LayerDraftSnapshot, group: string | null = null) => {
     const wasDirty = isLayerHistoryDirty(historyRef.current);
-    const next = updateLayerHistory(historyRef.current, snapshot, group);
+    const previous = historyRef.current;
+    const operationIds = pendingOperationIds.current.splice(0);
+    if (!operationIds.length && !same(previous.present, snapshot)) {
+      const id = recordOperationRef.current({ command: 'forge_snapshot_adopt', evidence: 'unknown',
+        changes: { commands: commandsFromLayerSnapshot(snapshot), qualification: 'snapshot-only' },
+        origin: { tool: 'Forge web editor' } });
+      if (id) operationIds.push(id);
+    }
+    const next = updateLayerHistory(previous, snapshot, group);
+    historyOperationIds.current.set(next.present, group && group === previous.group
+      ? [...(historyOperationIds.current.get(previous.present) ?? []), ...operationIds] : operationIds);
     historyRef.current = next;
     setHistory(next);
     if (!wasDirty && isLayerHistoryDirty(next)) setPinnedVersionId(versionId);
@@ -333,9 +369,19 @@ export function TemplateAuthoringEditor({
     setHistory(next);
     setTimeout(() => void flushDraftRef.current(), 0);
   };
-  const moveHistory = (move: (current: LayerHistory) => LayerHistory) => {
+  const moveHistory = (move: (current: LayerHistory) => LayerHistory, shortcut?: string) => {
     const wasDirty = isLayerHistoryDirty(historyRef.current);
-    const next = move(historyRef.current);
+    const previous = historyRef.current;
+    const next = move(previous);
+    if (next === previous) return;
+    const undo = move === undoLayerHistory;
+    const id = recordOperationRef.current({
+      command: undo ? 'forge_undo' : 'forge_redo',
+      changes: { before: commandsFromLayerSnapshot(previous.present), after: commandsFromLayerSnapshot(next.present) },
+      causedBy: (historyOperationIds.current.get(undo ? previous.present : next.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', ...(shortcut ? { shortcut } : { button: undo ? 'Undo' : 'Redo' }) },
+    });
+    if (!id) return;
     historyRef.current = next;
     setHistory(next);
     if (!wasDirty && isLayerHistoryDirty(next)) setPinnedVersionId(versionId);
@@ -355,7 +401,18 @@ export function TemplateAuthoringEditor({
   const updateDraftRef = useRef<
     (commands: ReturnType<typeof commandsFromLayerSnapshot>, immediate?: boolean) => void
   >(() => {});
-  const saveDraft = useCallback(() => flushDraftRef.current(), []);
+  const saveDraft = useCallback(() => {
+    const id = recordOperationRef.current({ command: 'forge_private_draft_save_requested', outcome: 'requested',
+      changes: { commands: commandsFromLayerSnapshot(historyRef.current.present) },
+      origin: { tool: 'Forge exit guard', button: 'Save private draft' } });
+    return id ? flushDraftRef.current() : Promise.resolve(false);
+  }, []);
+  const discardByUser = useCallback(() => {
+    const id = recordOperationRef.current({ command: 'forge_discard',
+      changes: { before: commandsFromLayerSnapshot(historyRef.current.present), after: [] },
+      origin: { tool: 'Forge exit guard', button: 'Discard' } });
+    if (id) discard();
+  }, [discard]);
   const dirty = isLayerHistoryDirty(history);
   useEffect(() => {
     if (sourceKeyRef.current === sourceKey) return;
@@ -435,6 +492,7 @@ export function TemplateAuthoringEditor({
   }, [authoringCommands]);
   const authoringDraft = useTemplateAuthoringDraft({
     scope: authoringScope,
+    baseRevisionId: workingCopy?.baseRevisionId,
     // Keep private saving and the exit guard available after switching inner tabs.
     enabled: (active || draftSessionOpened) && !!effectiveVersionId,
     commands: authoringCommands,
@@ -442,6 +500,13 @@ export function TemplateAuthoringEditor({
   });
   flushDraftRef.current = authoringDraft.save;
   updateDraftRef.current = authoringDraft.update;
+  recordOperationRef.current = authoringDraft.recordOperation;
+  const retryAuthoringDraft = authoringDraft.retry;
+  const retryDraft = useCallback(() => {
+    const id = recordOperationRef.current({ command: 'forge_private_draft_retry_requested', outcome: 'requested',
+      changes: {}, origin: { tool: 'Forge editor', button: 'Retry draft save' } });
+    return id ? retryAuthoringDraft() : Promise.resolve(false);
+  }, [retryAuthoringDraft]);
   const workspaceSeed = authoringDraft.persistedDraft?.seed ?? authoringDraft.serverDraft?.seed ?? null;
   useEffect(() => {
     if (workspaceSeed) setSeedImportError(null);
@@ -460,15 +525,15 @@ export function TemplateAuthoringEditor({
     currentWorkspaceIdentity?.startsWith('pinned_source:') === true;
   const hasUncompiledLifecycle = authoringCommands.length > 0;
   const baseInventory = useQuery({
-    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId],
-    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string),
+    queryKey: ['forge-layer-inventory', brandId, assetId, effectiveVersionId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerInventory(brandId, assetId, effectiveVersionId as string, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
   const baseScene = useQuery({
-    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId],
-    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId),
+    queryKey: ['forge-layer-scene', brandId, assetId, effectiveVersionId, compId, workingCopy?.id],
+    queryFn: () => fetchTemplateLayerScene(brandId, assetId, effectiveVersionId as string, compId, workingCopy?.id),
     enabled: ready && authoringDraft.ready && canQueryPinnedSourceViews,
     staleTime: Number.POSITIVE_INFINITY,
     placeholderData: keepPreviousData,
@@ -477,6 +542,7 @@ export function TemplateAuthoringEditor({
   const workspacePreview = useQuery({
     queryKey: [
       'forge-authoring-workspace-preview',
+      workingCopy?.id,
       authoringDraft.userId,
       brandId,
       assetId,
@@ -491,7 +557,7 @@ export function TemplateAuthoringEditor({
       if (!revision) throw new Error('The private workspace draft is not saved yet.');
       return fetchTemplateAuthoringWorkspacePreview(
         assetId,
-        { brandId, baseVersionId: effectiveVersionId as string },
+        { brandId, baseVersionId: effectiveVersionId as string, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) },
         revision,
         compId ?? undefined,
       );
@@ -641,7 +707,7 @@ export function TemplateAuthoringEditor({
           expectedRevision: authoringDraft.persistedDraft.revision,
         }
       : undefined;
-    void fetchTemplateAuthoringFontPreview(assetId, { brandId, baseVersionId: effectiveVersionId }, fontChoice, seedPins)
+    void fetchTemplateAuthoringFontPreview(assetId, { brandId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) }, fontChoice, seedPins)
       .then(async ({ bytes }) => {
         const face = await new FontFace(family, bytes).load();
         if (cancelled) return;
@@ -663,11 +729,12 @@ export function TemplateAuthoringEditor({
     templateLayerPreviewRequestSchema.parse({
       brandId,
       expectedVersionId: effectiveVersionId,
+      ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
       ...(compId ? { compId } : {}),
       edits: change.edits.filter((edit) => edit.compId === compId),
     });
   const composed = useQuery({
-    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled],
+    queryKey: ['forge-layer-preview', brandId, assetId, effectiveVersionId, compId, settled, workingCopy?.id],
     queryFn: async () => ({
       view: await previewTemplateLayers(assetId, request(settled)),
       changes: settled,
@@ -975,14 +1042,9 @@ export function TemplateAuthoringEditor({
       (channel.channel === 'position' || channel.channel === 'scale' || channel.channel === 'rotation'));
 
   // Publication stays tied to the immutable registry row for this exact source version.
-  const sourceVariant = variants.data?.find((variant) =>
-    variant.revisions.some(
-      (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
-    ),
-  );
-  const exactSourceRevision = sourceVariant?.revisions.find(
-    (revision) => revision.sourceAssetId === assetId && revision.sourceVersionId === effectiveVersionId,
-  );
+  const revisionSelection = selectTemplateRevision(variants.data ?? [], assetId, effectiveVersionId, revisionId);
+  const sourceVariant = revisionSelection?.variant;
+  const exactSourceRevision = revisionSelection?.revision;
   const lineage = sourceVariant
     ? { role: sourceVariant.original ? 'golden' as const : 'variant' as const }
     : undefined;
@@ -1007,6 +1069,10 @@ export function TemplateAuthoringEditor({
     !hasUnreconciledLocalCommands && !seedImporting;
   const attachHyperframesSeed = async () => {
     if (!canAttachHyperframesSeed || !hyperframesRevisionId || !effectiveVersionId) return;
+    const requested = recordOperationRef.current({ command: 'forge_workspace_seed_import_requested', outcome: 'requested',
+      changes: { hyperframesRevisionId, baseVersionId: effectiveVersionId },
+      origin: { tool: 'Forge editor', button: canBootstrapEmptyDraft ? 'Create private draft and import' : 'Import into this Forge workspace' } });
+    if (!requested) return;
     setSeedImporting(true);
     setSeedImportError(null);
     try {
@@ -1016,22 +1082,23 @@ export function TemplateAuthoringEditor({
           emptyDraft = await putTemplateAuthoringDraft(assetId, {
             brandId,
             baseVersionId: effectiveVersionId,
+            ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
             expectedRevision: 0,
             commands: [],
           });
         } catch (writeError) {
           // The bootstrap is idempotent only after an exact owner/scope read proves that an empty
           // draft won the revision-zero CAS. Never retry a blind write over a concurrent draft.
-          const existing = await fetchTemplateAuthoringDraft(assetId, brandId, effectiveVersionId).catch(() => null);
+          const existing = await fetchTemplateAuthoringDraft(assetId, brandId, effectiveVersionId, workingCopy?.id).catch(() => null);
           const expectedChecksum = authoringDraft.sourceDocument?.sourceChecksum;
           if (!existing || existing.requiresReconciliation || existing.seed || existing.commands.length ||
               existing.revision < 1 || existing.scope.brandId !== brandId || existing.scope.assetId !== assetId ||
-              existing.scope.baseVersionId !== effectiveVersionId || !expectedChecksum || existing.sourceChecksum !== expectedChecksum)
+              existing.scope.baseVersionId !== effectiveVersionId || existing.scope.workingCopyId !== workingCopy?.id || !expectedChecksum || existing.sourceChecksum !== expectedChecksum)
             throw writeError;
           emptyDraft = existing;
         }
         if (emptyDraft.revision < 1 || emptyDraft.commands.length || emptyDraft.requiresReconciliation || emptyDraft.seed ||
-            emptyDraft.scope.brandId !== brandId || emptyDraft.scope.assetId !== assetId || emptyDraft.scope.baseVersionId !== effectiveVersionId ||
+            emptyDraft.scope.brandId !== brandId || emptyDraft.scope.assetId !== assetId || emptyDraft.scope.baseVersionId !== effectiveVersionId || emptyDraft.scope.workingCopyId !== workingCopy?.id ||
             emptyDraft.sourceChecksum !== authoringDraft.sourceDocument?.sourceChecksum)
           throw new Error('Forge did not confirm an empty private draft for this exact source. Your local work is unchanged.');
       }
@@ -1039,6 +1106,7 @@ export function TemplateAuthoringEditor({
         brandId,
         assetId,
         baseVersionId: effectiveVersionId,
+        ...(workingCopy ? { workingCopyId: workingCopy.id } : {}),
         expectedDraftRevision: emptyDraft.revision,
       });
       if (result.artifact.purpose !== 'workspace_seed')
@@ -1058,7 +1126,7 @@ export function TemplateAuthoringEditor({
   const authoringLifecycle = useTemplateAuthoringLifecycle({
     active,
     enabled: hasUncompiledLifecycle && !staleSource && !sourceChanged,
-    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId } : null,
+    scope: effectiveVersionId ? { brandId, assetId, baseVersionId: effectiveVersionId, ...(workingCopy ? { workingCopyId: workingCopy.id } : {}) } : null,
     revision: authoringDraft.revision,
     syncStatus: authoringDraft.status,
     draftDirty: authoringDraft.dirty || !same(authoringCommands, authoringDraft.persistedDraft?.commands ?? []),
@@ -1116,6 +1184,7 @@ export function TemplateAuthoringEditor({
     target: AuthoringEditableLayer,
     change: Partial<TemplateLayerEdit>,
     group: string | null = null,
+    origin?: TemplateOperationOrigin,
   ) => {
     const current = historyRef.current.present;
     const nextEdits = applyLayerChange(current.edits, layers, target, change);
@@ -1129,11 +1198,11 @@ export function TemplateAuthoringEditor({
         layerId: candidate.layerId,
         ...change,
       };
-      next = appendLayerDraftCommand(next, {
+      next = appendRecordedCommand(next, {
         type: 'layer.edit',
         nodeId: `aep:${candidate.compId}:${candidate.layerId}`,
         edit,
-      });
+      }, origin);
     }
     pushSnapshot(next, group);
   };
@@ -1141,8 +1210,9 @@ export function TemplateAuthoringEditor({
     target: AuthoringEditableLayer,
     change: Partial<TemplateLayerEdit>,
     group: string | null = null,
+    origin?: TemplateOperationOrigin,
   ) => {
-    editLayer(target, change, group);
+    editLayer(target, change, group, origin);
     if (change.visible !== undefined || change.font !== undefined)
       setTimeout(() => void flushDraftRef.current(), 0);
   };
@@ -1176,7 +1246,7 @@ export function TemplateAuthoringEditor({
     }
     setSelected(nodeId);
   };
-  const reorder = (order: Array<number | string>) => {
+  const reorder = (order: Array<number | string>, origin: TemplateOperationOrigin) => {
     if (selectedAuthoringComposition?.artboardId) {
       const nodeOrder = order.map((id) => typeof id === 'string' ? id : null);
       if (nodeOrder.some((id) => id === null)) return;
@@ -1184,7 +1254,7 @@ export function TemplateAuthoringEditor({
         type: 'composition.order',
         artboardId: selectedAuthoringComposition.artboardId,
         nodeIds: nodeOrder as string[],
-      });
+      }, null, true, origin);
       return;
     }
     if (shownComp === null) return;
@@ -1202,20 +1272,20 @@ export function TemplateAuthoringEditor({
       if (same(nodeOrder, sourceOrder)) delete next[shownComp];
       else next[shownComp] = nodeOrder;
       snapshot = { ...snapshot, nodeOrders: next, orders: nextLegacyOrders };
-      snapshot = appendLayerDraftCommand(snapshot, { type: 'composition.order', compId: shownComp, nodeIds: nodeOrder });
+      snapshot = appendRecordedCommand(snapshot, { type: 'composition.order', compId: shownComp, nodeIds: nodeOrder }, origin);
     } else {
       const numericOrder = order.map((id) => typeof id === 'number' ? id : Number(id.split(':')[2]));
       const next = { ...snapshot.orders };
       if (same(numericOrder, fileStack)) delete next[shownComp];
       else next[shownComp] = numericOrder;
       snapshot = { ...snapshot, orders: next };
-      snapshot = appendLayerDraftCommand(snapshot, { type: 'composition.order', compId: shownComp, layerIds: numericOrder });
+      snapshot = appendRecordedCommand(snapshot, { type: 'composition.order', compId: shownComp, layerIds: numericOrder }, origin);
     }
     pushSnapshot(snapshot);
     setTimeout(() => void flushDraftRef.current(), 0);
   };
-  const recordAuthoringCommand = (command: import('@continuum/contracts').TemplateAuthoringCommand, group: string | null = null, immediate = true) => {
-    const snapshot = appendLayerDraftCommand(historyRef.current.present, command);
+  const recordAuthoringCommand = (command: import('@continuum/contracts').TemplateAuthoringCommand, group: string | null = null, immediate = true, origin?: TemplateOperationOrigin) => {
+    const snapshot = appendRecordedCommand(historyRef.current.present, command, origin);
     pushSnapshot(snapshot, group);
     if (immediate) setTimeout(() => void flushDraftRef.current(), 0);
   };
@@ -1224,6 +1294,7 @@ export function TemplateAuthoringEditor({
     edit: Extract<TemplateAuthoringCommand, { type: 'layer.edit' }>['edit'],
     group: string | null = null,
     immediate = true,
+    origin?: TemplateOperationOrigin,
   ) => {
     if (node.kind !== 'group' || !authoringDocument || templateAuthoringGroupHasMotion(authoringDocument, node.nodeId)) return false;
     const verifiedSourceGroup = !!node.sourceRef && !!authoringDocument &&
@@ -1247,7 +1318,7 @@ export function TemplateAuthoringEditor({
       ...(edit.rotation === undefined ? {} : { rotation: edit.rotation }),
     };
     if (!Object.keys(transform).length) return false;
-    recordAuthoringCommand({ type: 'layer.group.transform', nodeId: node.nodeId, transform }, group, immediate);
+    recordAuthoringCommand({ type: 'layer.group.transform', nodeId: node.nodeId, transform }, group, immediate, origin);
     return true;
   };
   const createMask = (draft: import('@/components/forge/templateAuthoringMasks').MaskDraft) => {
@@ -1257,7 +1328,7 @@ export function TemplateAuthoringEditor({
       draftMaskId: crypto.randomUUID(),
       nodeId: selectedNode.nodeId,
       ...draft,
-    });
+    }, null, true, { tool: 'Forge mask creation', button: `Add ${draft.shape} mask` });
   };
   const maskMutationWriterProof = true;
   const updateAuthoredMask = (
@@ -1266,11 +1337,11 @@ export function TemplateAuthoringEditor({
     patch: Extract<import('@continuum/contracts').TemplateAuthoringCommand, { type: 'mask.update' }>['patch'],
   ) => {
     if (!maskMutationWriterProof || !authoringDraft.ready || staleSource) return;
-    recordAuthoringCommand({ type: 'mask.update', nodeId, draftMaskId, patch });
+    recordAuthoringCommand({ type: 'mask.update', nodeId, draftMaskId, patch }, null, true, { tool: 'Forge authored masks', button: 'Save' });
   };
   const deleteAuthoredMask = (nodeId: string, draftMaskId: string) => {
     if (!maskMutationWriterProof || !authoringDraft.ready || staleSource) return;
-    recordAuthoringCommand({ type: 'mask.delete', nodeId, draftMaskId });
+    recordAuthoringCommand({ type: 'mask.delete', nodeId, draftMaskId }, null, true, { tool: 'Forge authored masks', button: 'Delete' });
   };
   const createArtboard = () => {
     if (!authoringDraft.ready || !authoringDocument || staleSource || selectedAuthoringComposition?.artboardReason !== null) return;
@@ -1283,7 +1354,7 @@ export function TemplateAuthoringEditor({
       height: Math.round(selectedAuthoringComposition?.height ?? 1080),
       frameRate: selectedAuthoringComposition?.frameRate ?? 30,
       durationSec: selectedAuthoringComposition?.durationSec ?? 15,
-    });
+    }, null, true, { button: 'Add artboard' });
     setDraftArtboardId(artboardId);
     setCompId(null);
     setSelected(null);
@@ -1303,7 +1374,7 @@ export function TemplateAuthoringEditor({
       artboardId,
       ...source,
       name: `${selectedAuthoringComposition.name ?? 'Composition'} copy`.slice(0, 180),
-    });
+    }, null, true, { button: 'Duplicate' });
     setDraftArtboardId(artboardId);
     setCompId(selectedAuthoringComposition.compId ?? selectedAuthoringComposition.sourceCompId);
     setSelected(null);
@@ -1317,26 +1388,27 @@ export function TemplateAuthoringEditor({
       !Number.isInteger(width) || !Number.isInteger(height) || width < 4 || height < 4 || width > 30_000 || height > 30_000 ||
       (width === selectedAuthoringComposition.width && height === selectedAuthoringComposition.height)
     ) return;
-    recordAuthoringCommand({ type: 'artboard.resize', ...target, width, height });
+    recordAuthoringCommand({ type: 'artboard.resize', ...target, width, height }, null, true, { button: 'Apply composition size' });
   };
   const editAuthoredNode = (
     node: NonNullable<typeof selectedNode>,
     edit: Extract<import('@continuum/contracts').TemplateAuthoringCommand, { type: 'layer.edit' }>['edit'],
     group: string | null = null,
     immediate = true,
+    origin?: TemplateOperationOrigin,
   ) => {
     if (node.kind === 'group') {
-      editGeneratedGroup(node, edit, group, immediate);
+      editGeneratedGroup(node, edit, group, immediate, origin);
       return;
     }
     if (node.nodeId.startsWith('draft:')) {
       if ('compId' in edit) return;
-      recordAuthoringCommand({ type: 'layer.edit', nodeId: node.nodeId, edit }, group, immediate);
+      recordAuthoringCommand({ type: 'layer.edit', nodeId: node.nodeId, edit }, group, immediate, origin);
       return;
     }
     const sourceRef = node.sourceRef;
     const target = sourceRef && layers.find((candidate) => candidate.compId === sourceRef.compId && candidate.layerId === sourceRef.layerId);
-    if (target) editLayer(target, edit);
+    if (target) editLayer(target, edit, group, origin);
   };
   const createText = () => {
     const composition = selectedAuthoringComposition;
@@ -1353,11 +1425,11 @@ export function TemplateAuthoringEditor({
       fontSize: 48,
       fillColor: [1, 1, 1],
       position: [Math.round((composition.width ?? 0) / 2), Math.round((composition.height ?? 0) / 2)],
-    });
+    }, null, true, { button: 'Add text layer' });
     setSelected(nodeId);
     setNewText('');
   };
-  const createShape = (shape: 'rectangle' | 'ellipse') => {
+  const createShape = (shape: 'rectangle' | 'ellipse', origin: TemplateOperationOrigin = { tool: 'Forge creation tools', button: shape === 'rectangle' ? 'Rectangle' : 'Ellipse' }) => {
     const composition = selectedAuthoringComposition;
     const target = composition && authoringCompositionTarget(composition);
     if (!composition || !target || composition.shapeCreationReason) return;
@@ -1372,7 +1444,7 @@ export function TemplateAuthoringEditor({
       size: [240, 140],
       fill: { type: 'solid', color: [0.12, 0.55, 0.7], opacity: 0.24 },
       stroke: { type: 'solid', color: [0.12, 0.55, 0.7], opacity: 1, width: 2 },
-    });
+    }, null, true, origin);
     setSelected(nodeId);
   };
   const createArtwork = async (asset: MediaAsset) => {
@@ -1408,7 +1480,7 @@ export function TemplateAuthoringEditor({
         position: [Math.round(composition.width / 2), Math.round(composition.height / 2)],
         size,
         assetRef,
-      });
+      }, null, true, { tool: 'Forge Library picker', button: 'Add image' });
       setSelected(nodeId);
       setArtworkMessage('Image added from its pinned Library version.');
     } catch (reason) {
@@ -1472,7 +1544,7 @@ export function TemplateAuthoringEditor({
       if (!dependency.width || !dependency.height || version.width !== dependency.width || version.height !== dependency.height)
         throw new Error(`Choose an image with the exact ${dependency.width} × ${dependency.height} dimensions required by this package dependency.`);
       if (!requestStillTargetsCurrentSource()) return;
-      recordAuthoringCommand({ type: 'dependency.relink', footageItemId, assetRef });
+      recordAuthoringCommand({ type: 'dependency.relink', footageItemId, assetRef }, null, true, { tool: 'Forge Library picker', button: 'Relink dependency' });
       if (attempt === artworkRelinkAttemptRef.current) {
         setArtworkRetryFootageItemId(null);
         setArtworkMessage('The pinned Library version is queued for this private package. Forge will verify the relink during compilation.');
@@ -1495,7 +1567,7 @@ export function TemplateAuthoringEditor({
     }
     void createArtwork(asset);
   };
-  const duplicateSelected = () => {
+  const duplicateSelected = (origin: TemplateOperationOrigin = { tool: 'Forge layer tools', button: 'Duplicate' }) => {
     if (!selectedNode || selectedNode.duplicateReason) return;
     const nodeId = `draft:${crypto.randomUUID()}` as const;
     recordAuthoringCommand({
@@ -1503,12 +1575,12 @@ export function TemplateAuthoringEditor({
       nodeId,
       sourceNodeId: selectedNode.nodeId,
       name: `${selectedNode.name ?? selectedNode.textContent ?? 'Layer'} copy`,
-    });
+    }, null, true, origin);
     setSelected(nodeId);
   };
-  const deleteSelected = () => {
+  const deleteSelected = (origin: TemplateOperationOrigin = { tool: 'Forge layer tools', button: 'Delete' }) => {
     if (!selectedNode || selectedNode.deleteReason) return;
-    recordAuthoringCommand({ type: 'layer.delete', nodeId: selectedNode.nodeId });
+    recordAuthoringCommand({ type: 'layer.delete', nodeId: selectedNode.nodeId }, null, true, origin);
     const remaining = baseNodeIds.filter((id) => id !== selectedNode.nodeId);
     setSelected(remaining[0] ?? null);
   };
@@ -1522,7 +1594,7 @@ export function TemplateAuthoringEditor({
       ...target,
       name: 'Group',
       memberNodeIds: [...groupSelectionIds],
-    });
+    }, null, true, { button: 'Group' });
     setGroupSelectionIds([]);
     setSelected(nodeId);
   };
@@ -1532,10 +1604,16 @@ export function TemplateAuthoringEditor({
     const memberNodeIds = groupCommand?.memberNodeIds ??
       (authoringDocument ? templateAuthoringSourceGroupMemberIds(authoringDocument, selectedNode.nodeId) : null);
     if (!memberNodeIds?.length) return;
-    recordAuthoringCommand({ type: 'layer.ungroup', nodeId: selectedNode.nodeId });
+    recordAuthoringCommand({ type: 'layer.ungroup', nodeId: selectedNode.nodeId }, null, true, { button: 'Ungroup' });
     setSelected(memberNodeIds[0] ?? null);
   };
   const reset = () => {
+    const id = recordOperationRef.current({ command: 'forge_clear',
+      changes: { before: commandsFromLayerSnapshot(historyRef.current.present), after: [] },
+      causedBy: (historyOperationIds.current.get(historyRef.current.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', button: 'Reset edits' } });
+    if (!id) return;
+    pendingOperationIds.current.push(id);
     pushSnapshot(EMPTY_DRAFT);
     setError(null);
     setTimeout(() => void flushDraftRef.current(), 0);
@@ -1562,10 +1640,12 @@ export function TemplateAuthoringEditor({
           throw new Error('The exact source revision is not registered in the immutable Forge catalog.');
         }
         committed = await authoringLifecycle.reviewAndCommit({
+          origin: { tool: 'Forge editor', button: saveTo === 'this_variant'
+            ? 'Review and publish revision' : onVariant ? 'Review and publish new variant' : 'Review and publish as new variant' },
           saveTo,
           parentRevisionId,
           expectedHeadRevisionId: saveTo === 'this_variant'
-            ? sourceVariant.draftHeadRevisionId
+            ? workingCopy?.baseRevisionId ?? sourceVariant.draftHeadRevisionId
             : parentRevisionId,
           ...(saveTo === 'this_variant' ? { variantId: sourceVariant.variantId } : {}),
           ...(variantName ? { name: variantName } : {}),
@@ -1601,7 +1681,10 @@ export function TemplateAuthoringEditor({
         setError('Package saved as a version. The template list could not refresh.');
       }
       const stillDirty = sourceKeyRef.current.startsWith(`${brandId}:${assetId}:`) && isLayerHistoryDirty(historyRef.current);
-      if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
+      if (openAfterSave && !stillDirty && sourceKeyRef.current === identity && onOpenRevision) {
+        try { await onOpenRevision(await fetchExactTemplateRevision(brandId, result.assetId, result.revisionId)); }
+        catch { setError('The version was saved. Reopen its exact revision from Variants.'); }
+      } else if (saveTo === 'new_variant' && openAfterSave && !stillDirty) onOpenVariant?.(result.assetId);
       if (stillDirty) setError('The reviewed version was saved. Your newer edits stay in this private draft.');
       setSaving(false);
       return !stillDirty;
@@ -1609,13 +1692,15 @@ export function TemplateAuthoringEditor({
     return false;
   };
   const draftState: LayerDraftState = {
+    contextId: sourceKey,
     dirty: authoringDraft.dirty,
     busy: !authoringDraft.ready || !authoringDraft.sourceDocument || authoringDraft.status === 'saving',
     saveLabel: 'Save private draft',
     save: saveDraft,
-    discard,
+    park: () => authoringDraft.park(commandsFromLayerSnapshot(historyRef.current.present)),
+    discard: discardByUser,
     status: authoringDraft.status,
-    retry: authoringDraft.retry,
+    retry: retryDraft,
   };
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
@@ -1629,6 +1714,7 @@ export function TemplateAuthoringEditor({
     draftState.save,
     draftState.discard,
     draftState.retry,
+    workingCopy?.id,
   ]);
   useEffect(() => () => onDraftChangeRef.current?.(null), []);
   useEffect(() => {
@@ -1643,10 +1729,10 @@ export function TemplateAuthoringEditor({
         return;
       if (event.key.toLowerCase() === 'z') {
         event.preventDefault();
-        moveHistory(event.shiftKey ? redoLayerHistory : undoLayerHistory);
+        moveHistory(event.shiftKey ? redoLayerHistory : undoLayerHistory, `${event.metaKey ? 'Meta' : 'Control'}+${event.shiftKey ? 'Shift+' : ''}Z`);
       } else if (event.key.toLowerCase() === 'y') {
         event.preventDefault();
-        moveHistory(redoLayerHistory);
+        moveHistory(redoLayerHistory, `${event.metaKey ? 'Meta' : 'Control'}+Y`);
       } else if (event.key.toLowerCase() === 'd' && selectedNode && !selectedNode.duplicateReason) {
         event.preventDefault();
         duplicateSelected();
@@ -1677,7 +1763,7 @@ export function TemplateAuthoringEditor({
             {!lineage ? <span role="status" className="text-xs text-muted-foreground">{variants.isPending ? 'Checking source revision…' : variants.isError ? 'Revision registry unavailable' : 'This exact source version has no registered Forge revision'}</span> : null}
             {lineage?.role === 'golden' ? (
               <Pill variant="warning">
-                <Lock className="size-3" aria-hidden /> Golden source
+                <Lock className="size-3" aria-hidden /> Original
               </Pill>
             ) : null}
             {onVariant ? (
@@ -1688,8 +1774,8 @@ export function TemplateAuthoringEditor({
             {lineage ? (
               <p className="text-xs text-muted-foreground">
                 {onVariant
-                  ? 'Save writes this variant’s next revision.'
-                  : 'Your original upload stays intact. Publishing creates a variant.'}
+                  ? 'Publishing saves this variant’s next revision. The original stays unchanged.'
+                  : 'Your original stays unchanged. Publishing creates a new variant.'}
               </p>
             ) : null}
           </div>
@@ -1706,7 +1792,6 @@ export function TemplateAuthoringEditor({
             {authoringDraft.status !== 'saved' || authoringDraft.revision > 0 ? (
               <span role="status" aria-live="polite" className="text-2xs text-muted-foreground">
                 {authoringDraft.status === 'loading' ? 'Loading private draft…' : null}
-                {authoringDraft.status === 'saving' ? 'Saving private draft…' : null}
                 {authoringDraft.status === 'saved' ? `Draft saved${authoringDraft.revision ? ` · revision ${authoringDraft.revision}` : ''}` : null}
                 {authoringDraft.status === 'unsaved' || authoringDraft.status === 'error'
                   ? 'Draft not saved'
@@ -1720,7 +1805,7 @@ export function TemplateAuthoringEditor({
               </span>
             ) : null}
             {authoringDraft.status === 'error' || authoringDraft.status === 'unsaved' || authoringDraft.error ? (
-              <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>
+              <Button size="xs" variant="outline" onClick={() => void retryDraft()}>
                 Retry draft save
               </Button>
             ) : null}
@@ -1744,9 +1829,10 @@ export function TemplateAuthoringEditor({
             >
               <Redo2 aria-hidden />
             </Button>
-            <Button size="sm" variant="ghost" disabled={saving || !dirty} onClick={reset}>
-              <RotateCcw data-icon="inline-start" aria-hidden /> Reset
-            </Button>
+            <DiscardEditsButton
+              disabled={saving || (!dirty && authoringCommands.length === 0)}
+              onDiscard={reset}
+            />
           </div>
         </header>
 
@@ -1819,7 +1905,12 @@ export function TemplateAuthoringEditor({
               size="xs"
               variant="outline"
               className="mt-2"
-              onClick={() => void authoringDraft.adoptServerDraft()}
+              onClick={() => {
+                const id = recordOperationRef.current({ command: 'forge_server_draft_adopt_requested', outcome: 'requested',
+                  changes: { revision: authoringDraft.serverDraft?.revision },
+                  origin: { tool: 'Forge draft recovery', button: 'Use server draft · keep local recovery' } });
+                if (id) void authoringDraft.adoptServerDraft();
+              }}
             >
               Use server draft · keep local recovery
             </Button>
@@ -1851,9 +1942,14 @@ export function TemplateAuthoringEditor({
                     </details>
                     {(() => {
                       const recoveryIdentity = recovery.workspaceIdentity ?? templateAuthoringWorkspaceIdentity(undefined, recovery.sourceChecksum);
-                      const matchesWorkspace = !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity;
+                      const matchesWorkspace = !!currentWorkspaceIdentity && recoveryIdentity === currentWorkspaceIdentity && recovery.scope.workingCopyId === authoringScope?.workingCopyId;
                       return (
-                        <Button size="xs" variant="outline" disabled={!!authoringDraft.serverDraft?.requiresReconciliation || !matchesWorkspace} onClick={() => void authoringDraft.restoreRecovery(recovery.id)}>
+                        <Button size="xs" variant="outline" disabled={!!authoringDraft.serverDraft?.requiresReconciliation || !matchesWorkspace} onClick={() => {
+                          const id = recordOperationRef.current({ command: 'forge_recovery_restore_requested', outcome: 'requested',
+                            changes: { recoveryId: recovery.id, revision: recovery.revision },
+                            origin: { tool: 'Forge draft recovery', button: 'Restore this copy' } });
+                          if (id) void authoringDraft.restoreRecovery(recovery.id);
+                        }}>
                           {authoringDraft.serverDraft?.requiresReconciliation ? 'Restore unavailable for changed source' : !matchesWorkspace ? 'Different workspace · preserved' : 'Restore this copy'}
                         </Button>
                       );
@@ -1925,8 +2021,8 @@ export function TemplateAuthoringEditor({
               />
               {authoringDraft.sourceDocument ? (
                 <FieldSet className="flex-row items-center gap-1" aria-label="Create layer tools">
-                  <Button size="icon-sm" variant="outline" aria-label="Add rectangle layer" title="Add rectangle" disabled={busy || staleSource || !selectedAuthoringComposition || !!selectedAuthoringComposition.shapeCreationReason} onClick={() => createShape('rectangle')}><RectangleHorizontal aria-hidden /></Button>
-                  <Button size="icon-sm" variant="outline" aria-label="Add ellipse layer" title="Add ellipse" disabled={busy || staleSource || !selectedAuthoringComposition || !!selectedAuthoringComposition.shapeCreationReason} onClick={() => createShape('ellipse')}><Circle aria-hidden /></Button>
+                  <Button size="icon-sm" variant="outline" aria-label="Add rectangle layer" title="Add rectangle" disabled={busy || staleSource || !selectedAuthoringComposition || !!selectedAuthoringComposition.shapeCreationReason} onClick={() => createShape('rectangle', { tool: 'Forge toolbar', button: 'Add rectangle layer' })}><RectangleHorizontal aria-hidden /></Button>
+                  <Button size="icon-sm" variant="outline" aria-label="Add ellipse layer" title="Add ellipse" disabled={busy || staleSource || !selectedAuthoringComposition || !!selectedAuthoringComposition.shapeCreationReason} onClick={() => createShape('ellipse', { tool: 'Forge toolbar', button: 'Add ellipse layer' })}><Circle aria-hidden /></Button>
                   <Button size="icon-sm" variant="outline" aria-label="Add text layer tools" title="Add text" disabled={busy || staleSource || !selectedAuthoringComposition || !!selectedAuthoringComposition.creationReason} onClick={() => {
                     setCreationToolsOpen(true);
                     requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[aria-label="New text layer content"]')?.focus());
@@ -2127,7 +2223,7 @@ export function TemplateAuthoringEditor({
                     className="flex-1"
                     disabled={busy || staleSource || !!selectedNode.duplicateReason}
                     title={selectedNode.duplicateReason ?? undefined}
-                    onClick={duplicateSelected}
+                    onClick={() => duplicateSelected()}
                   >
                     <Copy aria-hidden /> Duplicate
                   </Button>
@@ -2137,7 +2233,7 @@ export function TemplateAuthoringEditor({
                     className="flex-1"
                     disabled={busy || staleSource || !!selectedNode.deleteReason}
                     title={selectedNode.deleteReason ?? undefined}
-                    onClick={deleteSelected}
+                    onClick={() => deleteSelected()}
                   >
                     <Trash2 aria-hidden /> Delete
                   </Button>
@@ -2170,16 +2266,16 @@ export function TemplateAuthoringEditor({
                       ? undefined
                       : reorder
                   }
-                  onToggleVisible={(id) => {
+                  onToggleVisible={(id, origin) => {
                     const node = authoringNodes.get(String(id));
                     const sourceMatch = /^aep:\d+:(\d+)$/.exec(String(id));
                     const target = node?.sourceRef
                       ? byId.get(node.sourceRef.layerId)
                       : sourceMatch ? byId.get(Number(sourceMatch[1])) : undefined;
                     if (target) {
-                      if (target) editLayer(target, { visible: !(edits[nativeLayerEditKey(target.compId, target.layerId)]?.visible ?? target.visible) });
+                      if (target) editLayer(target, { visible: !(edits[nativeLayerEditKey(target.compId, target.layerId)]?.visible ?? target.visible) }, null, origin);
                     } else if (node?.nodeId.startsWith('draft:') && node.capabilities.visibility && !node.visibilityReason) {
-                      recordAuthoringCommand({ type: 'layer.edit', nodeId: node.nodeId, edit: { visible: !node.visible } });
+                      recordAuthoringCommand({ type: 'layer.edit', nodeId: node.nodeId, edit: { visible: !node.visible } }, null, true, origin);
                     }
                   }}
                 />
@@ -2264,14 +2360,14 @@ export function TemplateAuthoringEditor({
                   removedSourceNodeIds={removedSourceNodeIds}
                   selectedNodeId={selectedId}
                   onSelectNode={selectLayer}
-                  onAuthoredGestureCommit={(nodeId, edit) => {
+                  onAuthoredGestureCommit={(nodeId, edit, origin) => {
                     const node = authoringNodes.get(nodeId);
                     if (!node?.capabilities.transform || node.transformLocks.position || node.sourceRef) return;
                     if (node.kind === 'group') {
-                      editGeneratedGroup(node, edit);
+                      editGeneratedGroup(node, edit, null, true, origin);
                       return;
                     }
-                    recordAuthoringCommand({ type: 'layer.edit', nodeId, edit });
+                    recordAuthoringCommand({ type: 'layer.edit', nodeId, edit }, null, true, origin);
                   }}
                   onDuplicateNode={selectedNode && !selectedNode.duplicateReason && !staleSource ? duplicateSelected : undefined}
                   onDeleteNode={selectedNode && !selectedNode.deleteReason && !staleSource ? deleteSelected : undefined}
@@ -2281,7 +2377,7 @@ export function TemplateAuthoringEditor({
                   fonts={fonts.data ?? []}
                   disabled={staleSource}
                   onSelect={selectLayer}
-                  onGestureCommit={({ edits: gestureEdits, selectionIds, group }) => {
+                  onGestureCommit={({ edits: gestureEdits, selectionIds, group, origin }) => {
                     let snapshot = historyRef.current.present;
                     for (const gestureEdit of gestureEdits) {
                       const target = layers.find(
@@ -2290,9 +2386,10 @@ export function TemplateAuthoringEditor({
                       if (!target) continue;
                       const { compId: _compId, layerId: _layerId, ...change } = gestureEdit;
                       const nextEdits = applyLayerChange(snapshot.edits, layers, target, change);
-                      snapshot = appendLayerDraftCommand(
+                      snapshot = appendRecordedCommand(
                         { ...snapshot, edits: nextEdits },
                         { type: 'layer.edit', nodeId: `aep:${target.compId}:${target.layerId}`, edit: gestureEdit },
+                        origin,
                       );
                     }
                     pushSnapshot(snapshot, group);
@@ -2300,9 +2397,9 @@ export function TemplateAuthoringEditor({
                     if (firstSelected !== undefined) selectLayer(firstSelected);
                     setTimeout(() => void flushDraftRef.current(), 0);
                   }}
-                  onEdit={(target, change, group, end) => {
+                  onEdit={(target, change, group, end, origin) => {
                     if (Object.keys(change).length > 0)
-                      editAndPersistGesture(target, change, group ?? null);
+                      editAndPersistGesture(target, change, group ?? null, origin);
                     if (end) closeHistoryGroup();
                   }}
                 />
@@ -2340,7 +2437,7 @@ export function TemplateAuthoringEditor({
               onPlayheadChange={onPlayheadChange}
               disabled={busy || staleSource}
               groupMotionVerified={generatedGroupMotionReadbackVerified || verifiedSourceGroupMotion}
-              onCommand={recordAuthoringCommand}
+              onCommand={(command, origin) => recordAuthoringCommand(command, null, true, origin)}
             />
             </div>
             </ResizablePanel>
@@ -2454,13 +2551,13 @@ export function TemplateAuthoringEditor({
                   edit={edits[nativeLayerEditKey(layer.compId, layer.layerId)]}
                   fonts={fonts.data ?? []}
                   disabled={!authoringDraft.ready || staleSource}
-                  onEdit={(change, group) => editAndPersistGesture(layer, change, group ?? null)}
+                  onEdit={(change, group, origin) => editAndPersistGesture(layer, change, group ?? null, origin)}
                   onEditCommit={closeHistoryGroup}
                 />
                 {selectedNode?.capabilities.text ? (
                   <label htmlFor="layer-text-content" className="mt-3 flex flex-col gap-1 text-2xs text-muted-foreground">
                     Text content
-                    <Input id="layer-text-content" aria-label="Layer text content" maxLength={20000} className="text-xs text-foreground" value={selectedNode.textContent ?? ''} disabled={!authoringDraft.ready || staleSource} onChange={(event) => editAuthoredNode(selectedNode, { text: event.target.value }, `text:${selectedNode.nodeId}`, false)} onBlur={closeHistoryGroup} />
+                    <Input id="layer-text-content" aria-label="Layer text content" maxLength={20000} className="text-xs text-foreground" value={selectedNode.textContent ?? ''} disabled={!authoringDraft.ready || staleSource} onChange={(event) => editAuthoredNode(selectedNode, { text: event.target.value }, `text:${selectedNode.nodeId}`, false, { tool: 'Forge inspector', control: 'Layer text content' })} onBlur={closeHistoryGroup} />
                   </label>
                 ) : null}
                 {selectedNode ? (
@@ -2505,7 +2602,7 @@ export function TemplateAuthoringEditor({
                   {selectedNode.capabilities.text ? (
                     <label htmlFor="draft-text-content" className="flex flex-col gap-1 text-2xs text-muted-foreground">
                       Text content
-                      <Input id="draft-text-content" aria-label="Draft text content" maxLength={20000} className="text-xs text-foreground" value={selectedNode.textContent ?? ''} disabled={!authoringDraft.ready || staleSource} onChange={(event) => editAuthoredNode(selectedNode, { text: event.target.value }, `text:${selectedNode.nodeId}`, false)} onBlur={closeHistoryGroup} />
+                      <Input id="draft-text-content" aria-label="Draft text content" maxLength={20000} className="text-xs text-foreground" value={selectedNode.textContent ?? ''} disabled={!authoringDraft.ready || staleSource} onChange={(event) => editAuthoredNode(selectedNode, { text: event.target.value }, `text:${selectedNode.nodeId}`, false, { tool: 'Forge inspector', control: 'Draft text content' })} onBlur={closeHistoryGroup} />
                     </label>
                   ) : null}
                 </section>
@@ -2517,7 +2614,7 @@ export function TemplateAuthoringEditor({
                       <NumberScrubField key={axis} label={`${axis} position`} ariaLabel={`${axis} position`} suffix="px"
                         value={selectedNode.position?.[index] ?? 0}
                         disabled={!authoringDraft.ready || staleSource || (!!selectedNode.transformLocks.position && !canMutateSelectedGroup) || (selectedNode.kind === 'group' && !canMutateSelectedGroup)}
-                        onChange={(value) => editAuthoredNode(selectedNode, { position: index === 0 ? [value, selectedNode.position?.[1] ?? 0] : [selectedNode.position?.[0] ?? 0, value] }, `number:${selectedNode.nodeId}:position:${axis}`, false)}
+                        onChange={(value) => editAuthoredNode(selectedNode, { position: index === 0 ? [value, selectedNode.position?.[1] ?? 0] : [selectedNode.position?.[0] ?? 0, value] }, `number:${selectedNode.nodeId}:position:${axis}`, false, { tool: 'Forge inspector', control: `${axis} position` })}
                         onCommit={closeHistoryGroup}
                       />
                     ))}
@@ -2526,14 +2623,14 @@ export function TemplateAuthoringEditor({
                       <>
                         <NumberScrubField label="Rotation" ariaLabel="Draft rotation" suffix="°" step={0.1} min={-36_000} max={36_000}
                           value={selectedNode.rotation ?? 0} disabled={!authoringDraft.ready || staleSource || !!selectedNode.transformLocks.rotation}
-                          onChange={(value) => editAuthoredNode(selectedNode, { rotation: value }, `number:${selectedNode.nodeId}:rotation`, false)} onCommit={closeHistoryGroup} />
+                          onChange={(value) => editAuthoredNode(selectedNode, { rotation: value }, `number:${selectedNode.nodeId}:rotation`, false, { tool: 'Forge inspector', control: 'Draft rotation' })} onCommit={closeHistoryGroup} />
                         <NumberScrubField label="Opacity" ariaLabel="Draft opacity" suffix="%" min={0} max={100}
                           value={selectedNode.opacity ?? 100} disabled={!authoringDraft.ready || staleSource || !!selectedNode.transformLocks.opacity}
-                          onChange={(value) => editAuthoredNode(selectedNode, { opacity: value }, `number:${selectedNode.nodeId}:opacity`, false)} onCommit={closeHistoryGroup} />
+                          onChange={(value) => editAuthoredNode(selectedNode, { opacity: value }, `number:${selectedNode.nodeId}:opacity`, false, { tool: 'Forge inspector', control: 'Draft opacity' })} onCommit={closeHistoryGroup} />
                         {(['X', 'Y'] as const).map((axis, index) => (
                           <NumberScrubField key={axis} label={`Scale ${axis}`} ariaLabel={`Draft scale ${axis}`} suffix="%" step={0.1} min={0.01} max={10_000}
                             value={selectedNode.scale?.[index] ?? 100} disabled={!authoringDraft.ready || staleSource || !!selectedNode.transformLocks.scale}
-                            onChange={(value) => editAuthoredNode(selectedNode, { scale: index === 0 ? [value, selectedNode.scale?.[1] ?? 100] : [selectedNode.scale?.[0] ?? 100, value] }, `number:${selectedNode.nodeId}:scale:${axis}`, false)} onCommit={closeHistoryGroup} />
+                            onChange={(value) => editAuthoredNode(selectedNode, { scale: index === 0 ? [value, selectedNode.scale?.[1] ?? 100] : [selectedNode.scale?.[0] ?? 100, value] }, `number:${selectedNode.nodeId}:scale:${axis}`, false, { tool: 'Forge inspector', control: `Draft scale ${axis}` })} onCommit={closeHistoryGroup} />
                         ))}
                       </>
                     ) : null}
@@ -2551,11 +2648,11 @@ export function TemplateAuthoringEditor({
                         <NumberScrubField label="Group rotation" ariaLabel="Group rotation" suffix="°" step={0.1} min={-36_000} max={36_000}
                           className="col-span-2" value={selectedNode.rotation ?? 0}
                           disabled={!authoringDraft.ready || staleSource || !canMutateSelectedGroup}
-                          onChange={(value) => editGeneratedGroup(selectedNode, { rotation: value }, `number:${selectedNode.nodeId}:rotation`, false)} onCommit={closeHistoryGroup} />
+                          onChange={(value) => editGeneratedGroup(selectedNode, { rotation: value }, `number:${selectedNode.nodeId}:rotation`, false, { tool: 'Forge inspector', control: 'Group rotation' })} onCommit={closeHistoryGroup} />
                         {(['X', 'Y'] as const).map((axis, index) => (
                           <NumberScrubField key={axis} label={`Group scale ${axis}`} ariaLabel={`Group scale ${axis}`} suffix="%" step={0.1} min={0.01} max={10_000}
                             value={selectedNode.scale?.[index] ?? 100} disabled={!authoringDraft.ready || staleSource || !canMutateSelectedGroup}
-                            onChange={(value) => editGeneratedGroup(selectedNode, { scale: index === 0 ? [value, selectedNode.scale?.[1] ?? 100] : [selectedNode.scale?.[0] ?? 100, value] }, `number:${selectedNode.nodeId}:scale:${axis}`, false)} onCommit={closeHistoryGroup} />
+                            onChange={(value) => editGeneratedGroup(selectedNode, { scale: index === 0 ? [value, selectedNode.scale?.[1] ?? 100] : [selectedNode.scale?.[0] ?? 100, value] }, `number:${selectedNode.nodeId}:scale:${axis}`, false, { tool: 'Forge inspector', control: `Group scale ${axis}` })} onCommit={closeHistoryGroup} />
                         ))}
                       </>
                     ) : null}
@@ -2594,7 +2691,7 @@ export function TemplateAuthoringEditor({
                       value={selectedNode.fontSize ?? 48}
                       onChange={(event) => {
                         const value = Number(event.target.value);
-                        if (Number.isFinite(value)) editAuthoredNode(selectedNode, { fontSize: value });
+                        if (Number.isFinite(value)) editAuthoredNode(selectedNode, { fontSize: value }, null, true, { tool: 'Forge inspector', control: 'Draft text size' });
                       }}
                     />
                   </label>
@@ -2655,9 +2752,9 @@ export function TemplateAuthoringEditor({
                         if (exposed === (field.exposed ?? true)) delete next[field.key];
                         else next[field.key] = exposed;
                         let snapshot = { ...historyRef.current.present, exposures: next };
-                        snapshot = appendLayerDraftCommand(snapshot, {
+                        snapshot = appendRecordedCommand(snapshot, {
                           type: 'exposure.set', slotKey: field.key, exposed,
-                        });
+                        }, { tool: 'Forge exposed fields', control: 'Field exposure' });
                         pushSnapshot(snapshot);
                         setTimeout(() => void flushDraftRef.current(), 0);
                       }}
@@ -2681,12 +2778,12 @@ export function TemplateAuthoringEditor({
                 <p className="text-xs font-medium text-foreground">{preparationSummary.label}
                   {authoringLifecycle.artifact ? <span className="font-normal text-muted-foreground"> · revision {authoringLifecycle.artifact.draftRevision}</span> : null}
                 </p>
-                <p className="truncate text-xs text-muted-foreground" title={preparationSummary.detail}>{preparationSummary.detail}</p>
+                <p className="text-pretty text-xs text-muted-foreground">{preparationSummary.detail}</p>
               </div>
               {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
                 <Button size="xs" variant="outline" onClick={onOpenFontRepair}>Resolve fonts</Button>
               ) : preparationSummary.action === 'save' && authoringDraft.status === 'error' ? (
-                <Button size="xs" variant="outline" onClick={() => void authoringDraft.retry()}>Retry draft save</Button>
+                <Button size="xs" variant="outline" onClick={() => void retryDraft()}>Retry draft save</Button>
               ) : preparationSummary.action === 'checks' ? (
                 <Button size="xs" variant="outline" onClick={showRepair}>{preparationSummary.label.includes('Artwork') ? 'Relink artwork' : preparationSummary.label.includes('format') ? 'Review format checks' : 'Review checks'}</Button>
               ) : null}
@@ -2741,7 +2838,7 @@ export function TemplateAuthoringEditor({
               {saving && !onVariant ? (
                 <Loader2 className="animate-spin" data-icon="inline-start" />
               ) : null}
-              {onVariant ? 'Review and publish new variant' : 'Review and publish variant'}
+              {onVariant ? 'Review and publish new variant' : 'Review and publish as new variant'}
             </Button>
           </form>
           {savedVariant ? (
@@ -2764,7 +2861,9 @@ export function TemplateAuthoringEditor({
                 onClick={async () => {
                   try {
                     await onSaved();
-                    onOpenVariant?.(savedVariant.assetId);
+                    if (onOpenRevision)
+                      await onOpenRevision(await fetchExactTemplateRevision(brandId, savedVariant.assetId, savedVariant.revisionRef.revisionId));
+                    else onOpenVariant?.(savedVariant.assetId);
                   } catch {
                     setError('Variant saved. The template list could not refresh. Try again.');
                   }
@@ -2781,9 +2880,9 @@ export function TemplateAuthoringEditor({
           brandId={brandId}
           assetId={assetId}
           revisionId={exactSourceRevision.id}
-          expectedHeadRevisionId={sourceVariant?.draftHeadRevisionId ?? exactSourceRevision.id}
+          expectedHeadRevisionId={workingCopy?.baseRevisionId ?? sourceVariant?.draftHeadRevisionId ?? exactSourceRevision.id}
           variantId={sourceVariant && !sourceVariant.original ? sourceVariant.variantId : undefined}
-          onSaved={onSaved}
+          onSaved={async (saved) => { await onSaved(); if (onOpenRevision) await onOpenRevision(saved); }}
         />
       ) : null}
     </>

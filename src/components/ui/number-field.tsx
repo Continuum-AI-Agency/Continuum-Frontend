@@ -11,6 +11,7 @@
 
 import { NumberField as NumberFieldPrimitive } from '@base-ui/react/number-field';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 import { fractionDigitsForStep } from './number-flow-value';
@@ -89,6 +90,7 @@ function NumberScrubField({
   onCommit,
 }: NumberScrubFieldProps) {
   const inline = orientation === 'inline';
+  const inputChanged = useRef(false);
   // At least two decimals so a step-1 geometry field still reads 10.5 rather than 11,
   // and `minimumFractionDigits: 0` so a whole number stays whole.
   const digits = Math.max(fractionDigitsForStep(step), 2);
@@ -115,7 +117,20 @@ function NumberScrubField({
       {...(value === undefined ? { defaultValue } : { value })}
       {...(min === undefined ? {} : { min })}
       {...(max === undefined ? {} : { max })}
-      onValueChange={(next) => report(next, onChange as ((value: never) => void) | undefined)}
+      onValueChange={(next, details) => {
+        // Display rounding must not turn focus/blur of an untouched source value into an edit.
+        if (details.reason === 'input-blur' && !inputChanged.current) {
+          details.cancel();
+          return;
+        }
+        if (
+          details.reason === 'input-change' ||
+          details.reason === 'input-clear' ||
+          details.reason === 'input-paste'
+        )
+          inputChanged.current = true;
+        report(next, onChange as ((value: never) => void) | undefined);
+      }}
       {...(onCommit
         ? {
             onValueCommitted: (next: number | null) =>
@@ -148,6 +163,9 @@ function NumberScrubField({
       >
         <NumberFieldInput
           aria-label={ariaLabel ?? label}
+          onFocus={() => {
+            inputChanged.current = false;
+          }}
           placeholder={placeholder ?? (nullable ? 'Auto' : undefined)}
           className="h-full w-full min-w-0 bg-transparent px-2 text-2xs tabular-nums text-foreground outline-none placeholder:text-muted-foreground"
         />

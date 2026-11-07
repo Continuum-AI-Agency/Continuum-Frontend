@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type {
   SaveTemplateLayerVariantRequest,
   TemplateAuthoringDocument,
@@ -69,6 +69,8 @@ const library = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
   ...library,
   fetchTemplateAuthoringUserId: async () => 'exit-guard-test-user',
+  appendTemplateAuthoringHistory: async () => {},
+  fetchTemplateRevisionVariants: async () => [],
   fetchTemplateAuthoringDocument: async () => authoringDocument,
   fetchTemplateAuthoringDraft: async () => persistedDraft,
   putTemplateAuthoringDraft: async (_asset: string, request: TemplateAuthoringDraftPut) => {
@@ -125,6 +127,42 @@ const ASSET = '00000000-0000-4000-8000-000000000002';
 const VERSION = '00000000-0000-4000-8000-000000000003';
 const CLIENT = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+// In-memory browser boundary for this component test; process durability is tested separately.
+const originalIndexedDb = globalThis.indexedDB;
+beforeEach(() => {
+  const stores = new Map<string, Map<IDBValidKey, unknown>>();
+  const db = {
+    objectStoreNames: { contains: (name: string) => stores.has(name) },
+    createObjectStore(name: string) { stores.set(name, new Map()); return {}; },
+    close() {},
+    transaction(name: string) {
+      const store = stores.get(name)!;
+      const tx = { oncomplete: null as (() => void) | null, onerror: null, onabort: null,
+        objectStore: () => ({
+          get: (key: IDBValidKey) => request(store.get(key)),
+          getAll: () => request([...store.values()]),
+          put: (value: { id?: IDBValidKey }, key?: IDBValidKey) => {
+            const id = key ?? value.id; if (id !== undefined) store.set(id, structuredClone(value)); return request(id);
+          },
+          delete: (key: IDBValidKey) => { store.delete(key); return request(undefined); },
+        }),
+      };
+      function request(result: unknown) {
+        const req = { result, error: null, onsuccess: null as (() => void) | null, onerror: null };
+        queueMicrotask(() => { req.onsuccess?.(); tx.oncomplete?.(); }); return req;
+      }
+      return tx;
+    },
+  };
+  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: {
+    open() {
+      const req = { result: db, error: null, onupgradeneeded: null as (() => void) | null,
+        onsuccess: null as (() => void) | null, onerror: null };
+      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.(); }); return req;
+    },
+  } });
+});
+
 function GuardedEditor() {
   const guard = useForgeExitGuard();
   const [active, setActive] = useState(true);
@@ -162,6 +200,7 @@ function GuardedEditor() {
 
 afterEach(() => {
   cleanup();
+  Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: originalIndexedDb });
   savedLayers.length = 0;
   draftWrites.length = 0;
   persistedDraft = null;

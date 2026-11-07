@@ -58,6 +58,20 @@ describe('verifyTemplateAuthoringPackageResponse', () => {
     await expect(verifyTemplateAuthoringPackageResponse(mismatched, expected)).rejects.toThrow('artifact pins');
   });
 
+  it('requires the exact working-copy pin even when two private packages share identical bytes', async () => {
+    const expected = await artifact();
+    const scoped = { ...expected, scope: { ...expected.scope, workingCopyId: '00000000-0000-4000-8000-000000000200' } };
+    const good = await response(scoped);
+    good.headers.set('x-template-authoring-working-copy-id', scoped.scope.workingCopyId);
+    await verifyTemplateAuthoringPackageResponse(good, scoped);
+    const other = await response(scoped);
+    other.headers.set('x-template-authoring-working-copy-id', '00000000-0000-4000-8000-000000000201');
+    await expect(verifyTemplateAuthoringPackageResponse(other, scoped)).rejects.toThrow('artifact pins');
+    const legacy = await response(expected);
+    legacy.headers.set('x-template-authoring-working-copy-id', scoped.scope.workingCopyId);
+    await expect(verifyTemplateAuthoringPackageResponse(legacy, expected)).rejects.toThrow('artifact pins');
+  });
+
   it('rejects package bytes that do not match the pinned package checksum', async () => {
     const expected = await artifact();
     await expect(verifyTemplateAuthoringPackageResponse(await response(expected, new TextEncoder().encode('tampered')), expected)).rejects.toThrow('checksum verification');

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import type { LayerDraftState } from '@/components/forge/layerDraft';
 import { confirmForgeExit, useForgeExitGuard } from './useForgeExitGuard';
@@ -38,6 +38,33 @@ function Harness({ saveResult = true }: { saveResult?: boolean }) {
 }
 
 describe('useForgeExitGuard', () => {
+  test('branch switching parks the persistent copy without saving or discarding its edits', async () => {
+    const { result } = renderHook(() => useForgeExitGuard());
+    let parked = false;
+    let saved = false;
+    let discarded = false;
+    act(() => result.current.onDraftChange({ contextId: 'working-copy-a', dirty: true, busy: false, saveLabel: 'Save',
+      save: async () => { saved = true; return true; }, discard: () => { discarded = true; },
+      park: async () => { parked = true; return true; } }));
+    await act(async () => { expect(await result.current.runPreserving(() => { document.body.dataset.exited = 'yes'; })).toBe(true); });
+    expect(parked).toBe(true);
+    expect(saved).toBe(false);
+    expect(discarded).toBe(false);
+    expect(document.body.dataset.exited).toBe('yes');
+  });
+
+  test('a delayed parking acknowledgement cannot navigate a replacement working copy', async () => {
+    const { result } = renderHook(() => useForgeExitGuard());
+    let finish!: (value: boolean) => void;
+    const parking = new Promise<boolean>((resolve) => { finish = resolve; });
+    const draft = { dirty: true, busy: false, saveLabel: 'Save', save: async () => true, discard: () => {} };
+    act(() => result.current.onDraftChange({ ...draft, contextId: 'working-copy-a', park: () => parking }));
+    const switching = result.current.runPreserving(() => { document.body.dataset.exited = 'yes'; });
+    act(() => result.current.onDraftChange({ ...draft, contextId: 'working-copy-b' }));
+    await act(async () => { finish(true); expect(await switching).toBe(false); });
+    expect(document.body.dataset.exited).toBeUndefined();
+  });
+
   test('holds the requested exit until the person discards', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Dirty' }));

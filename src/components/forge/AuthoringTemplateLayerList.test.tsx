@@ -24,6 +24,24 @@ describe('TemplateLayerList', () => {
     expect(onReorder).toHaveBeenCalledWith([
       'draft:10000000-0000-4000-8000-000000000001',
       71,
+    ], { tool: 'Forge layer list', button: 'Bring layer forward' });
+  });
+
+  test('records stable show/hide button actions and keeps target identity separate', () => {
+    const onToggleVisible = mock(() => {});
+    const longName = 'L'.repeat(500);
+    render(<TemplateLayerList label="Visibility" rows={[
+      { id: 'aep:1:11', label: 'Hidden title', kind: 'text', hidden: true },
+      { id: 'aep:1:12', label: 'Shown box', kind: 'shape' },
+      { id: 'aep:1:13', label: longName, kind: 'shape' },
+    ]} onToggleVisible={onToggleVisible} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show Hidden title' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Shown box' }));
+    fireEvent.click(screen.getByRole('button', { name: `Hide ${longName}` }));
+    expect(onToggleVisible.mock.calls).toEqual([
+      ['aep:1:11', { tool: 'Forge layer list', button: 'Show layer' }],
+      ['aep:1:12', { tool: 'Forge layer list', button: 'Hide layer' }],
+      ['aep:1:13', { tool: 'Forge layer list', button: 'Hide layer' }],
     ]);
   });
 

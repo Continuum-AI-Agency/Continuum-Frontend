@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { templateRevisionLayerEditSchema } from './template-revisions';
 import { templateAuthoringKeyframesInventorySchema } from './template-authoring-keyframes';
+import { templateRevisionLayerEditSchema } from './template-revisions';
 import { renameTemplateSourceRequestSchema, templateSlotSchema } from './template-source';
 
 export const templateLayerEditSchema = templateRevisionLayerEditSchema;
@@ -12,6 +12,7 @@ export type TemplateLayerEdit = z.infer<typeof templateLayerEditSchema>;
 
 export const templateLayerPreviewRequestSchema = z
   .object({
+    workingCopyId: z.string().uuid().optional(),
     brandId: z.string().uuid(),
     expectedVersionId: z.string().uuid(),
     compId: z.number().int().positive().optional(),
@@ -65,8 +66,12 @@ export const templateEditableLayerSchema = z
     /** Optional on legacy inventories; null is affirmative native grouping eligibility. */
     groupingReason: z.string().nullable().optional(),
     timingReason: z.string().nullable().optional(),
-    keyframeReasons: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeReasons.optional(),
-    keyframeChannels: templateAuthoringKeyframesInventorySchema.unwrap().shape.keyframeChannels.optional(),
+    keyframeReasons: templateAuthoringKeyframesInventorySchema
+      .unwrap()
+      .shape.keyframeReasons.optional(),
+    keyframeChannels: templateAuthoringKeyframesInventorySchema
+      .unwrap()
+      .shape.keyframeChannels.optional(),
     maskReason: z.string().nullable().optional(),
     /** Writer-supplied text geometry in comp pixels; never a Rust structural identity. */
     x: z.number().finite().nullable().optional(),
@@ -128,8 +133,10 @@ export type TemplateLayerPreviewResponse = z.infer<typeof templateLayerPreviewRe
  */
 export const templateLayerViewQuerySchema = z
   .object({
+    workingCopyId: z.string().uuid().optional(),
     brandId: z.string().uuid(),
     versionId: z.string().uuid(),
+    revisionId: z.string().uuid().optional(),
     /** Scene only: the comp to draw. Omitted: the template's default (delivery) comp. */
     compId: z.coerce.number().int().positive().optional(),
   })

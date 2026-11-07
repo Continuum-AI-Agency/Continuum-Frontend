@@ -128,6 +128,7 @@ function Section({
 type RowProps = {
   brandId: string;
   changes: SceneChanges;
+  baseline?: SceneChanges;
   selectedKey: string | null;
   onSelect: (key: string) => void;
   onChange: (key: string, value: SceneValue) => void;
@@ -139,6 +140,7 @@ function FieldRow({
   shown,
   brandId,
   changes,
+  baseline,
   selectedKey,
   onSelect,
   onChange,
@@ -181,7 +183,7 @@ function FieldRow({
         brandId={brandId}
         field={field}
         label={label}
-        value={(changes[field.key] ?? field.default) as SceneValue | null}
+        value={(changes[field.key] ?? baseline?.[field.key] ?? field.default) as SceneValue | null}
         onChange={(next) => (next === null ? onReset(field.key) : onChange(field.key, next))}
       />
     </div>

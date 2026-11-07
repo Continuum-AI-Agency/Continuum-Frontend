@@ -17,7 +17,7 @@ const POLL_MS = 2_000;
 
 export type SceneRenderStart = Pick<
   SceneRenderRequest,
-  'versionId' | 'outputId' | 'values' | 'overrides'
+  'versionId' | 'outputId' | 'values' | 'overrides' | 'revisionId'
 >;
 type SceneMediaType = NonNullable<SceneRenderStart['overrides']>['mediaType'];
 

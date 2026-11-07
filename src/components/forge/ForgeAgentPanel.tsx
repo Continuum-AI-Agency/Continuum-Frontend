@@ -1,7 +1,7 @@
 'use client';
 
 import type { ForgeAgentFrame, ForgeAgentRequest, ForgeAgentTool } from '@continuum/contracts';
-import { Check, Send, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
+import { Check, Send, Sparkles, Square, TriangleAlert, Undo2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Conversation,
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import type { DraftChange } from '@/components/forge/draftChanges';
 import { streamForgeAgent } from '@/lib/api/forgeAgent.client';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,12 @@ export type ForgeAgentTurn = {
   error?: string;
   /** Draft revisions this turn saved: one undo step each in the editor. */
   drafts: number;
+  /** Layers the turn's drafts touched, from the draft frames. */
+  changedNodeIds: string[];
+  /** What the turn changed, read from the draft once the turn ends. */
+  changes?: DraftChange[];
+  /** The person took the whole turn back ("Undo this turn"), or why they could not. */
+  undo?: 'done' | 'blocked';
 };
 
 /** How a turn folds its NDJSON frames. */
@@ -60,7 +67,11 @@ export function applyForgeAgentFrame(turn: ForgeAgentTurn, frame: ForgeAgentFram
         ),
       };
     case 'draft':
-      return { ...turn, drafts: turn.drafts + 1 };
+      return {
+        ...turn,
+        drafts: turn.drafts + 1,
+        changedNodeIds: [...new Set([...turn.changedNodeIds, ...frame.data.changedNodeIds, ...frame.data.createdNodeIds])],
+      };
     case 'question':
       return { ...turn, question: frame.data };
     case 'done':
@@ -106,21 +117,32 @@ export function ForgeAgentPanel({
   assetId,
   brandId,
   baseVersionId,
+  workingCopyId,
   compId,
   selectedNodeIds,
+  selectedLayerNames = [],
   prepare,
   onDraft,
+  finishTurn,
+  undoTurn,
   onRunningChange,
 }: {
   assetId: string;
   brandId: string;
   baseVersionId: string;
+  workingCopyId?: string;
   compId?: number;
   selectedNodeIds: readonly string[];
+  /** The selected layers' names, in selection order. */
+  selectedLayerNames?: readonly string[];
   /** Saves pending editor changes; the draft revision the agent starts from, or null to refuse. */
   prepare: () => Promise<number | null>;
   /** The agent saved a new draft revision. */
   onDraft: () => Promise<void>;
+  /** The turn ended: what it changed on these layers, read from the editor's draft. */
+  finishTurn?: (turnId: string, nodeIds: string[]) => DraftChange[];
+  /** Puts the draft back as this turn found it, as one undo step; false once it has moved on. */
+  undoTurn?: (turnId: string) => boolean;
   onRunningChange: (running: boolean) => void;
 }): React.ReactNode {
   const [turns, setTurns] = useState<ForgeAgentTurn[]>([]);
@@ -144,6 +166,7 @@ export function ForgeAgentPanel({
       question: null,
       status: 'running',
       drafts: 0,
+      changedNodeIds: [],
     };
     const update = (change: (current: ForgeAgentTurn) => ForgeAgentTurn) =>
       setTurns((all) => all.map((entry) => (entry.id === turn.id ? change(entry) : entry)));
@@ -165,6 +188,7 @@ export function ForgeAgentPanel({
       const request: ForgeAgentRequest = {
         brandId,
         baseVersionId,
+        ...(workingCopyId ? { workingCopyId } : {}),
         prompt: prompt.slice(0, 8_000),
         history,
         selection: { nodeIds: selectedNodeIds.slice(0, 200) },
@@ -173,17 +197,22 @@ export function ForgeAgentPanel({
       };
       // Draft reloads run one after another, in frame order.
       let reloads = Promise.resolve();
+      const touched = new Set<string>();
       await streamForgeAgent({
         assetId,
         request,
         signal: controller.signal,
         onFrame: (frame) => {
           update((current) => applyForgeAgentFrame(current, frame));
-          if (frame.type === 'draft') reloads = reloads.then(onDraft).catch(() => undefined);
+          if (frame.type === 'draft') {
+            for (const id of [...frame.data.changedNodeIds, ...frame.data.createdNodeIds]) touched.add(id);
+            reloads = reloads.then(onDraft).catch(() => undefined);
+          }
         },
       });
       await reloads;
-      update((current) => (current.status === 'running' ? { ...current, status: 'done' } : current));
+      const changes = touched.size && finishTurn ? finishTurn(turn.id, [...touched]) : undefined;
+      update((current) => ({ ...(current.status === 'running' ? { ...current, status: 'done' } : current), changes }));
     } catch (error) {
       update((current) =>
         controller.signal.aborted
@@ -244,10 +273,42 @@ export function ForgeAgentPanel({
                         </div>
                       </div>
                     ) : null}
+                    {turn.changes?.length && turn.status !== 'running' ? (
+                      <ul aria-label="What this turn changed" className="flex flex-col gap-0.5 text-xs">
+                        {turn.changes.map((change) => (
+                          <li key={change.key} className="text-pretty">
+                            <span className="font-medium">{change.name}</span>: {change.changes.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {turn.drafts > 0 && turn.status !== 'running' ? (
-                      <span className="text-xs text-muted-foreground">
-                        Saved to your draft as {turn.drafts} undo step{turn.drafts === 1 ? '' : 's'}.
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {turn.undo === 'done' ? (
+                          <span>Turn undone. Redo brings it back.</span>
+                        ) : (
+                          <>
+                            <span>Saved to your draft.</span>
+                            {undoTurn ? (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={running}
+                                onClick={() => {
+                                  const undone = undoTurn(turn.id);
+                                  setTurns((all) => all.map((entry) => (entry.id === turn.id ? { ...entry, undo: undone ? 'done' : 'blocked' } : entry)));
+                                }}
+                              >
+                                <Undo2 data-icon="inline-start" aria-hidden />
+                                Undo this turn
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
+                        {turn.undo === 'blocked' ? (
+                          <span>The draft changed after this turn; use Undo for those steps.</span>
+                        ) : null}
+                      </div>
                     ) : null}
                     {turn.status === 'stopped' ? <span className="text-xs text-muted-foreground">Stopped.</span> : null}
                     {turn.status === 'error' && turn.error ? (
@@ -281,9 +342,11 @@ export function ForgeAgentPanel({
           <Textarea
             value={draft}
             placeholder={
-              selectedNodeIds.length
-                ? `Ask about the ${selectedNodeIds.length} selected layer${selectedNodeIds.length === 1 ? '' : 's'}…`
-                : 'Ask the template agent…'
+              selectedLayerNames.length && selectedLayerNames.length <= 3
+                ? `Ask about ${selectedLayerNames.join(', ')}…`
+                : selectedNodeIds.length
+                  ? `Ask about the ${selectedNodeIds.length} selected layer${selectedNodeIds.length === 1 ? '' : 's'}…`
+                  : 'Ask the template agent…'
             }
             aria-label="Ask the template agent"
             className="min-h-16 resize-none pr-12 text-sm"

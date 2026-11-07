@@ -489,15 +489,14 @@ describe('ForgeWorkbench', () => {
       expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
     });
 
-    test('a selected template opens the carried composition in its existing Layers workspace', async () => {
+    test('a carried composition waits for an exact editable branch before opening a private workspace', async () => {
       at(`?template=${ASSET}&hfRevision=revision-42&brand=${BRAND}`);
       renderWorkbench();
 
-      expect(await screen.findAllByTestId('hyperframes-seed-handoff')).toHaveLength(2);
+      expect(await screen.findAllByText('Choose an exact variant revision in Variants before opening a private working copy.')).toHaveLength(2);
       expect(screen.getByRole('tab', { name: 'Author' })).toBeTruthy();
-      expect(screen.getByText('Source selected · Untitled template')).toBeTruthy();
-      expect(screen.getAllByText(/privately stage and verify the composition package/i)).toHaveLength(2);
-      expect(screen.getAllByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toHaveLength(1);
+      expect(screen.queryByTestId('hyperframes-seed-handoff')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Import into this Forge workspace|Create private draft and import/ })).toBeNull();
     });
 
     test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {
