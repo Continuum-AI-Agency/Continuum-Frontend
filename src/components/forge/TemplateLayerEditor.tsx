@@ -777,11 +777,35 @@ export function TemplateLayerEditor({
         .filter((name): name is string => !!name),
     [agentSelection, authoringDocument, authoringDraft.sourceDocument],
   );
-  const describeAgentTurn = useCallback(
-    (nodeIds: string[]) =>
-      describeTurnChanges(agentTurnStartRef.current, commandsFromLayerSnapshot(historyRef.current.present), nodeIds, changeNodesRef.current),
-    [],
-  );
+  // Each finished turn's draft before and after, so "Undo this turn" can put the whole turn back.
+  const agentTurnsRef = useRef(new Map<string, { before: TemplateAuthoringCommand[]; after: TemplateAuthoringCommand[] }>());
+  const finishAgentTurn = useCallback((turnId: string, nodeIds: string[]) => {
+    const before = agentTurnStartRef.current;
+    const after = commandsFromLayerSnapshot(historyRef.current.present);
+    agentTurnsRef.current.set(turnId, { before, after });
+    return describeTurnChanges(before, after, nodeIds, changeNodesRef.current);
+  }, []);
+  const undoAgentTurnRef = useRef<(turnId: string) => boolean>(() => false);
+  undoAgentTurnRef.current = (turnId: string) => {
+    const turn = agentTurnsRef.current.get(turnId);
+    const current = commandsFromLayerSnapshot(historyRef.current.present);
+    // Only while the draft is exactly as the turn left it: later edits are never taken back here.
+    if (!turn || JSON.stringify(current) !== JSON.stringify(turn.after)) return false;
+    const id = recordOperationRef.current({ command: 'forge_agent_turn_undo',
+      changes: { before: current, after: turn.before },
+      causedBy: (historyOperationIds.current.get(historyRef.current.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', button: 'Undo this turn' } });
+    if (!id) return false;
+    pendingOperationIds.current.push(id);
+    pushSnapshot(layerSnapshotFromCommands(turn.before));
+    agentTurnsRef.current.delete(turnId);
+    setLayerInputs({});
+    setLayerValidity({});
+    setError(null);
+    setTimeout(() => void flushDraftRef.current(), 0);
+    return true;
+  };
+  const undoAgentTurn = useCallback((turnId: string) => undoAgentTurnRef.current(turnId), []);
   const viewStateKey =
     authoringDraft.userId && authoringScope && currentWorkspaceIdentity
       ? templateAuthoringViewStateKey(
@@ -4112,7 +4136,8 @@ export function TemplateLayerEditor({
                     compId={compId ?? inventoryData?.compId ?? undefined}
                     selectedNodeIds={agentSelection}
                     selectedLayerNames={agentLayerNames}
-                    describeTurn={describeAgentTurn}
+                    finishTurn={finishAgentTurn}
+                    undoTurn={undoAgentTurn}
                     prepare={prepareAgentTurn}
                     onDraft={async () => { if (sourceKeyRef.current === sourceKey) await adoptAgentDraft(); }}
                     onRunningChange={setAgentRunning}

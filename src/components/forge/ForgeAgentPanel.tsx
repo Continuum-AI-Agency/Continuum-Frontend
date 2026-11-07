@@ -1,7 +1,7 @@
 'use client';
 
 import type { ForgeAgentFrame, ForgeAgentRequest, ForgeAgentTool } from '@continuum/contracts';
-import { Check, Send, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
+import { Check, Send, Sparkles, Square, TriangleAlert, Undo2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Conversation,
@@ -48,6 +48,8 @@ export type ForgeAgentTurn = {
   changedNodeIds: string[];
   /** What the turn changed, read from the draft once the turn ends. */
   changes?: DraftChange[];
+  /** The person took the whole turn back ("Undo this turn"), or why they could not. */
+  undo?: 'done' | 'blocked';
 };
 
 /** How a turn folds its NDJSON frames. */
@@ -121,7 +123,8 @@ export function ForgeAgentPanel({
   selectedLayerNames = [],
   prepare,
   onDraft,
-  describeTurn,
+  finishTurn,
+  undoTurn,
   onRunningChange,
 }: {
   assetId: string;
@@ -136,8 +139,10 @@ export function ForgeAgentPanel({
   prepare: () => Promise<number | null>;
   /** The agent saved a new draft revision. */
   onDraft: () => Promise<void>;
-  /** What the turn changed on these layers, read from the editor's draft after the turn. */
-  describeTurn?: (nodeIds: string[]) => DraftChange[];
+  /** The turn ended: what it changed on these layers, read from the editor's draft. */
+  finishTurn?: (turnId: string, nodeIds: string[]) => DraftChange[];
+  /** Puts the draft back as this turn found it, as one undo step; false once it has moved on. */
+  undoTurn?: (turnId: string) => boolean;
   onRunningChange: (running: boolean) => void;
 }): React.ReactNode {
   const [turns, setTurns] = useState<ForgeAgentTurn[]>([]);
@@ -206,7 +211,7 @@ export function ForgeAgentPanel({
         },
       });
       await reloads;
-      const changes = touched.size && describeTurn ? describeTurn([...touched]) : undefined;
+      const changes = touched.size && finishTurn ? finishTurn(turn.id, [...touched]) : undefined;
       update((current) => ({ ...(current.status === 'running' ? { ...current, status: 'done' } : current), changes }));
     } catch (error) {
       update((current) =>
@@ -278,9 +283,32 @@ export function ForgeAgentPanel({
                       </ul>
                     ) : null}
                     {turn.drafts > 0 && turn.status !== 'running' ? (
-                      <span className="text-xs text-muted-foreground">
-                        Saved to your draft as {turn.drafts} undo step{turn.drafts === 1 ? '' : 's'}.
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {turn.undo === 'done' ? (
+                          <span>Turn undone. Redo brings it back.</span>
+                        ) : (
+                          <>
+                            <span>Saved to your draft.</span>
+                            {undoTurn ? (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={running}
+                                onClick={() => {
+                                  const undone = undoTurn(turn.id);
+                                  setTurns((all) => all.map((entry) => (entry.id === turn.id ? { ...entry, undo: undone ? 'done' : 'blocked' } : entry)));
+                                }}
+                              >
+                                <Undo2 data-icon="inline-start" aria-hidden />
+                                Undo this turn
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
+                        {turn.undo === 'blocked' ? (
+                          <span>The draft changed after this turn; use Undo for those steps.</span>
+                        ) : null}
+                      </div>
                     ) : null}
                     {turn.status === 'stopped' ? <span className="text-xs text-muted-foreground">Stopped.</span> : null}
                     {turn.status === 'error' && turn.error ? (
