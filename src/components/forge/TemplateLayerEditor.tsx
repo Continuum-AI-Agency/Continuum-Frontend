@@ -72,6 +72,8 @@ import {
 } from '@/components/forge/layerHistory';
 import type { PreviewEdits } from '@/components/forge/layerPreviewSvg';
 import { DiscardEditsButton } from '@/components/forge/DiscardEditsButton';
+import { DraftChangesButton } from '@/components/forge/DraftChangesButton';
+import { describeDraftChanges, withoutLayerChanges } from '@/components/forge/draftChanges';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { TemplateDownloadButtons, type TemplateOriginalFile } from '@/components/forge/TemplateDownloadButtons';
 import {
@@ -754,6 +756,15 @@ export function TemplateLayerEditor({
   ]);
   const relinkDocumentRef = useRef(authoringDocument);
   relinkDocumentRef.current = authoringDocument;
+  // What this draft changes against the revision it started from (the Changes list).
+  const draftChanges = useMemo(
+    () =>
+      describeDraftChanges(authoringCommands, [
+        ...(authoringDocument?.nodes ?? []),
+        ...(authoringDraft.sourceDocument?.nodes ?? []),
+      ]),
+    [authoringCommands, authoringDocument, authoringDraft.sourceDocument],
+  );
   const viewStateKey =
     authoringDraft.userId && authoringScope && currentWorkspaceIdentity
       ? templateAuthoringViewStateKey(
@@ -2238,6 +2249,23 @@ export function TemplateLayerEditor({
     setError(null);
     setTimeout(() => void flushDraftRef.current(), 0);
   };
+  // Drops one layer's own edits and keeps every other change; Undo brings them back.
+  const undoLayerChanges = (nodeId: string) => {
+    const before = commandsFromLayerSnapshot(historyRef.current.present);
+    const after = withoutLayerChanges(before, nodeId);
+    if (after.length === before.length) return;
+    const id = recordOperationRef.current({ command: 'forge_revert_layer',
+      changes: { before, after },
+      causedBy: (historyOperationIds.current.get(historyRef.current.present) ?? []).slice(-99),
+      origin: { tool: 'Forge web editor', button: 'Undo layer changes' } });
+    if (!id) return;
+    pendingOperationIds.current.push(id);
+    pushSnapshot(layerSnapshotFromCommands(after));
+    setLayerInputs({});
+    setLayerValidity({});
+    setError(null);
+    setTimeout(() => void flushDraftRef.current(), 0);
+  };
   const save = async (saveTo: TemplateLayerSaveTarget, openAfterSave = true): Promise<boolean> => {
     if (hasUncompiledLifecycle) {
       if (Object.values(layerValidity).some((fields) => fields.length > 0)) {
@@ -2513,6 +2541,16 @@ export function TemplateLayerEditor({
             >
               <Redo2 aria-hidden />
             </Button>
+            <DraftChangesButton
+              changes={draftChanges}
+              baseLabel={
+                onVariant && currentVariant && currentRevision
+                  ? `${currentVariant.name} · Revision ${currentRevision.number}`
+                  : 'the original'
+              }
+              disabled={saving || agentRunning}
+              onUndo={undoLayerChanges}
+            />
             <DiscardEditsButton
               disabled={saving || (!dirty && authoringCommands.length === 0)}
               onDiscard={reset}
