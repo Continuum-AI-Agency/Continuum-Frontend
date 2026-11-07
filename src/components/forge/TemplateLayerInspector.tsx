@@ -316,7 +316,8 @@ export function TemplateLayerInspector({
             </label>
             <label
               htmlFor={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}
-              className="flex h-8 items-center gap-2 text-xs"
+              // The checkbox's 32 px tap area reaches 8 px left of its box: keep it off the size field.
+              className="flex h-8 items-center gap-2 pl-2 text-xs"
             >
               <Checkbox
                 id={`${idPrefix}-bold-${layer.compId}-${layer.layerId}`}

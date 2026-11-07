@@ -2597,6 +2597,49 @@ export function TemplateLayerEditor({
               onDiscard={reset}
             />
           </div>
+          {/* The edit's stage and its one next step, where it is seen without scrolling. */}
+          {hasUncompiledLifecycle ? (
+            <div className="flex min-w-0 basis-full items-center justify-between gap-2 border-t border-border/60 pt-2">
+              <div className="min-w-0" role="status" aria-live="polite">
+                <p className="text-xs font-medium text-foreground">
+                  {preparationSummary.label}
+                  {authoringLifecycle.artifact ? (
+                    <span className="font-normal text-muted-foreground">
+                      {' '}
+                      · revision {authoringLifecycle.artifact.draftRevision}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-pretty text-xs text-muted-foreground">{preparationSummary.detail}</p>
+              </div>
+              {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
+                <Button size="xs" variant="outline" onClick={onOpenFontRepair}>
+                  Resolve fonts
+                </Button>
+              ) : preparationSummary.action === 'save' && authoringDraft.status === 'error' ? (
+                <Button size="xs" variant="outline" onClick={() => void retryDraft()}>
+                  Retry draft save
+                </Button>
+              ) : preparationSummary.action === 'checks' ? (
+                <Button size="xs" variant="outline" onClick={showRepair}>
+                  {preparationSummary.label.includes('Artwork')
+                    ? 'Relink artwork'
+                    : preparationSummary.label.includes('format')
+                      ? 'Review format checks'
+                      : 'Review checks'}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="shrink-0"
+                onClick={() => setPreparationDetailsOpen((open) => !open)}
+              >
+                {preparationDetailsOpen ? 'Hide preparation details' : 'Show preparation details'}
+              </Button>
+            </div>
+          ) : null}
         </header>
 
         {workspaceSeed ? (
@@ -4149,48 +4192,6 @@ export function TemplateLayerEditor({
         </ResizablePanelGroup>
 
         <footer className="flex flex-col gap-2 border-t border-border px-3 py-2">
-          {hasUncompiledLifecycle ? (
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <div className="min-w-0" role="status" aria-live="polite">
-                <p className="text-xs font-medium text-foreground">
-                  {preparationSummary.label}
-                  {authoringLifecycle.artifact ? (
-                    <span className="font-normal text-muted-foreground">
-                      {' '}
-                      · revision {authoringLifecycle.artifact.draftRevision}
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-pretty text-xs text-muted-foreground">{preparationSummary.detail}</p>
-              </div>
-              {preparationSummary.action === 'fonts' && onOpenFontRepair ? (
-                <Button size="xs" variant="outline" onClick={onOpenFontRepair}>
-                  Resolve fonts
-                </Button>
-              ) : preparationSummary.action === 'save' && authoringDraft.status === 'error' ? (
-                <Button size="xs" variant="outline" onClick={() => void retryDraft()}>
-                  Retry draft save
-                </Button>
-              ) : preparationSummary.action === 'checks' ? (
-                <Button size="xs" variant="outline" onClick={showRepair}>
-                  {preparationSummary.label.includes('Artwork')
-                    ? 'Relink artwork'
-                    : preparationSummary.label.includes('format')
-                      ? 'Review format checks'
-                      : 'Review checks'}
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                className="shrink-0"
-                onClick={() => setPreparationDetailsOpen((open) => !open)}
-              >
-                {preparationDetailsOpen ? 'Hide preparation details' : 'Show preparation details'}
-              </Button>
-            </div>
-          ) : null}
           <form
             onSubmit={(e) => {
               e.preventDefault();
