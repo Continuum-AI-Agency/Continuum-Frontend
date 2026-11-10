@@ -10,11 +10,6 @@ import {
   aiStudioGenerationRequestSchema,
 } from '@/lib/schemas/aiStudio';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import {
-  createFallbackJobFromRequest,
-  markFallbackJobErrored,
-  recordFallbackJob,
-} from '../fallback';
 
 function buildBackendUrl(path: string): string {
   return new URL(path, getApiBaseUrl()).toString();
@@ -102,11 +97,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     logError('Upstream unreachable', { error, ...requestContext });
-    const fallbackJob = createFallbackJobFromRequest(parsed.data);
-    recordFallbackJob(fallbackJob);
     return NextResponse.json(
-      { job: fallbackJob, meta: { fallback: true, reason: 'upstream-unreachable' } },
-      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The generation service is unreachable.', reason: 'upstream-unreachable' },
+      { status: 502 },
     );
   }
 
@@ -120,20 +113,10 @@ export async function POST(request: NextRequest) {
 
     logError('Upstream returned error', { status: response.status, detail });
 
-    const fallbackJob = createFallbackJobFromRequest(parsed.data);
-    recordFallbackJob(fallbackJob);
-
+    // Keep the upstream status: a 402 is a paywall, never a job to fake.
     return NextResponse.json(
-      {
-        job: fallbackJob,
-        meta: {
-          fallback: true,
-          reason: 'upstream-error',
-          status: response.status,
-          detail,
-        },
-      },
-      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'Generation failed upstream.', reason: 'upstream-error', detail },
+      { status: response.status },
     );
   }
 
@@ -142,43 +125,20 @@ export async function POST(request: NextRequest) {
     payload = await response.json();
   } catch (error) {
     logError('Upstream returned non-JSON payload', error);
-    const fallbackJob = createFallbackJobFromRequest(parsed.data);
-    recordFallbackJob(fallbackJob);
     return NextResponse.json(
-      {
-        job: fallbackJob,
-        meta: {
-          fallback: true,
-          reason: 'invalid-json',
-        },
-      },
-      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The generation service returned an unreadable response.', reason: 'invalid-json' },
+      { status: 502 },
     );
   }
 
   try {
     const result = mapBackendGenerationResponse(payload);
-    recordFallbackJob(result.job);
     return NextResponse.json(result, { status: response.status });
   } catch (err) {
     logError('Schema normalization failed', { err, ...requestContext });
-    const fallbackJob = createFallbackJobFromRequest(parsed.data);
-    recordFallbackJob(fallbackJob);
-    markFallbackJobErrored(
-      fallbackJob.brandProfileId,
-      fallbackJob.id,
-      err instanceof Error ? err.message : String(err),
-    );
     return NextResponse.json(
-      {
-        job: fallbackJob,
-        meta: {
-          fallback: true,
-          reason: 'schema-mismatch',
-          detail: err instanceof Error ? err.message : err,
-        },
-      },
-      { status: 202, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The generation service returned an unexpected response.', reason: 'schema-mismatch' },
+      { status: 502 },
     );
   }
 }

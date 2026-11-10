@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { mapBackendJobsResponse } from '@/lib/ai-studio/backend';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getFallbackJobs } from '../fallback';
 
 const querySchema = z.object({
   brandProfileId: z.string().min(1, 'brandProfileId is required'),
@@ -54,14 +53,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Failed to reach AI Studio jobs service', error);
-    const fallbackJobs = getFallbackJobs({
-      brandProfileId: parsed.data.brandProfileId,
-      limit: parsed.data.limit,
-      after: parsed.data.after,
-    });
     return NextResponse.json(
-      { jobs: fallbackJobs, meta: { fallback: true, reason: 'upstream-unreachable' } },
-      { status: 200, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The jobs service is unreachable.', reason: 'upstream-unreachable' },
+      { status: 502 },
     );
   }
 
@@ -78,22 +72,9 @@ export async function GET(request: NextRequest) {
       detail,
     });
 
-    const fallbackJobs = getFallbackJobs({
-      brandProfileId: parsed.data.brandProfileId,
-      limit: parsed.data.limit,
-      after: parsed.data.after,
-    });
     return NextResponse.json(
-      {
-        jobs: fallbackJobs,
-        meta: {
-          fallback: true,
-          reason: 'upstream-error',
-          status: response.status,
-          detail,
-        },
-      },
-      { status: 200, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'Listing jobs failed upstream.', reason: 'upstream-error', detail },
+      { status: response.status },
     );
   }
 
@@ -102,20 +83,9 @@ export async function GET(request: NextRequest) {
     payload = await response.json();
   } catch (error) {
     console.error('AI Studio jobs upstream returned non-JSON payload', error);
-    const fallbackJobs = getFallbackJobs({
-      brandProfileId: parsed.data.brandProfileId,
-      limit: parsed.data.limit,
-      after: parsed.data.after,
-    });
     return NextResponse.json(
-      {
-        jobs: fallbackJobs,
-        meta: {
-          fallback: true,
-          reason: 'invalid-json',
-        },
-      },
-      { status: 200, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The jobs service returned an unreadable response.', reason: 'invalid-json' },
+      { status: 502 },
     );
   }
 
@@ -124,21 +94,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(dataResponse, { status: 200 });
   } catch (err) {
     console.error('Failed to normalize AI Studio jobs payload', err);
-    const fallbackJobs = getFallbackJobs({
-      brandProfileId: parsed.data.brandProfileId,
-      limit: parsed.data.limit,
-      after: parsed.data.after,
-    });
     return NextResponse.json(
-      {
-        jobs: fallbackJobs,
-        meta: {
-          fallback: true,
-          reason: 'schema-mismatch',
-          detail: err instanceof Error ? err.message : err,
-        },
-      },
-      { status: 200, headers: { 'x-continuum-ai-studio': 'fallback' } },
+      { error: 'The jobs service returned an unexpected response.', reason: 'schema-mismatch' },
+      { status: 502 },
     );
   }
 }

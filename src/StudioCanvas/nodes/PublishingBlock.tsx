@@ -399,7 +399,12 @@ export function PaidPublisherBlock({
           <Button
             className="nodrag h-8 w-full text-xs"
             disabled={actionDisabled}
-            onClick={replacePaid}
+            onClick={(event) => {
+              // The same button previews, then confirms: a double-click's second click
+              // would apply the swap the first click only asked to preview.
+              if (event.detail > 1) return;
+              void replacePaid();
+            }}
           >
             <Send className="mr-1.5" />
             {actionPending
