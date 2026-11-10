@@ -184,6 +184,7 @@ import { JainaEmptyState } from './components/JainaEmptyState';
 import { JainaHeader } from './components/JainaHeader';
 import { JainaMessageItem } from './components/JainaMessageItem';
 import { JainaOutboxTurn } from './components/JainaOutboxTurn';
+import { JainaRunProgressIndicator } from './components/JainaRunProgress';
 import { JainaUnansweredNotice } from './components/JainaUnansweredNotice';
 
 /**
@@ -1059,6 +1060,20 @@ export function JainaChatSurface({
 
   /** The turn on screen right now, projected once so the effects below share one object. */
   const liveMessage = uiMessages.at(-1) ?? null;
+  // The turn the progress bar times: keyed by the reader's own message, so a new question starts
+  // a new clock, and told the question so its label speaks the reader's language.
+  const lastUserMessage = React.useMemo(
+    () => uiMessages.findLast((message) => message.role === 'user'),
+    [uiMessages],
+  );
+  const lastUserQuestion = React.useMemo(
+    () =>
+      (lastUserMessage?.parts ?? [])
+        .map((part) => (part.type === 'text' ? part.text : ''))
+        .join(' ')
+        .trim(),
+    [lastUserMessage],
+  );
   const liveChatMessage = messages.at(-1) ?? null;
   const activeResponseId =
     isStreaming && liveChatMessage?.role === 'assistant' ? liveChatMessage.id : null;
@@ -3402,6 +3417,13 @@ export function JainaChatSurface({
                       ))}
                     </React.Fragment>
                   ))}
+
+                  <JainaRunProgressIndicator
+                    turnKey={lastUserMessage?.id ?? null}
+                    message={liveMessage?.role === 'assistant' ? liveMessage : undefined}
+                    question={lastUserQuestion}
+                    active={isStreaming}
+                  />
 
                   {unansweredQuestion ? (
                     <JainaUnansweredNotice
