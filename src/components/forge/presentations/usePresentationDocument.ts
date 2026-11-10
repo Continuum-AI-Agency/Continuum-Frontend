@@ -8,178 +8,217 @@ import type {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayerDraftChange } from '@/components/forge/layerDraft';
+import type { OperationJournalStorage } from '@/components/forge/templateOperationJournal';
 import { type PresentationScope, presentationsApi } from '@/lib/api/presentations.client';
+import {
+  appendTemplateAuthoringHistory,
+  fetchTemplateAuthoringUserId,
+} from '@/lib/library/templateSources';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { PresentationEngine } from './presentationEngine';
+import {
+  type PresentationCopyState,
+  PresentationWorkingCopy,
+  sendPresentationRequest,
+} from './presentationWorkingCopy';
 
 export function usePresentationDocument(
   scope: PresentationScope,
   onDraftChange?: LayerDraftChange,
+  options: { storage?: OperationJournalStorage } = {},
 ) {
+  const [userId, setUserId] = useState<string | null>(null);
   const key = useMemo(
-    () => ['forge', scope.brandId, 'presentation', scope.assetId, scope.baseVersionId],
-    [scope.brandId, scope.assetId, scope.baseVersionId],
+    () => ['forge', userId, scope.brandId, 'presentation', scope.assetId, scope.baseVersionId],
+    [userId, scope.brandId, scope.assetId, scope.baseVersionId],
   );
+  const identity = JSON.stringify(key);
+  const live = useRef(identity);
+  live.current = identity;
   const queryClient = useQueryClient();
+  const [engine, setEngine] = useState<PresentationEngine | null>(null);
+  const [model, setModel] = useState<{
+    identity: string;
+    copy: PresentationWorkingCopy;
+    state: PresentationCopyState;
+  } | null>(null);
+  const [pending, setPending] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const busy = pending > 0;
+  const active = model?.identity === identity ? model : null;
+  const state = active?.state;
+  const document: PresentationDocument | null = state?.history.present.document ?? null;
+  const dirty = !!state && (!!state.history.present.commands.length || !!state.pending);
+
+  useEffect(() => {
+    let current = true,
+      changed = false;
+    const client = createSupabaseBrowserClient();
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
+      changed = true;
+      live.current = '';
+      setUserId(session?.user.id ?? null);
+    });
+    void fetchTemplateAuthoringUserId().then(
+      (id) => {
+        if (current && !changed) setUserId(id);
+      },
+      (cause) => {
+        if (current)
+          setError(
+            cause instanceof Error ? cause.message : 'Sign in to open this private presentation.',
+          );
+      },
+    );
+    return () => {
+      current = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
   const query = useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => presentationsApi.load(scope, signal),
+    enabled: !!userId,
+    queryFn: async ({ signal }) => {
+      if ((await fetchTemplateAuthoringUserId()) !== userId)
+        throw new Error('The signed-in account changed.');
+      const envelope = await presentationsApi.load(scope, signal);
+      if ((await fetchTemplateAuthoringUserId()) !== userId)
+        throw new Error('The signed-in account changed.');
+      return envelope;
+    },
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const [engine, setEngine] = useState<PresentationEngine | null>(null);
-  const [local, setLocal] = useState<{
-    document: PresentationDocument;
-    commands: PresentationCommand[];
-  } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const lock = useRef(false);
-  const undo = useRef<Array<NonNullable<typeof local>>>([]);
-  const redo = useRef<Array<NonNullable<typeof local>>>([]);
-  const retry = useRef<{ signature: string; id: string } | null>(null);
-  const [historyVersion, setHistoryVersion] = useState(0);
-  const document = local?.document ?? query.data?.document ?? null;
-  const dirty = Boolean(local?.commands.length);
-
   useEffect(() => {
     const runtime = new PresentationEngine();
     setEngine(runtime);
     return () => runtime.dispose();
   }, []);
-
-  const adopt = useCallback(
-    (envelope: PresentationEnvelope) => {
-      queryClient.setQueryData(key, envelope);
-      setLocal(null);
-      undo.current = [];
-      redo.current = [];
-      retry.current = null;
-      setHistoryVersion((value) => value + 1);
-    },
-    [key, queryClient],
-  );
-
-  const perform = useCallback(
-    async (commands: PresentationCommand[]) => {
-      if (!document || !engine || lock.current) return false;
-      lock.current = true;
-      setBusy(true);
-      setError(null);
-      try {
+  useEffect(() => {
+    if (!userId || !query.data || !engine) return;
+    let current = true;
+    void PresentationWorkingCopy.open({
+      userId,
+      scope,
+      initial: query.data,
+      storage: options.storage,
+      currentPrincipal: fetchTemplateAuthoringUserId,
+      process: async (input, commands, retryId) => {
         const result = await engine.process({
           operation: 'apply',
-          document,
-          expectedRevision: document.revision,
-          retryId: crypto.randomUUID(),
+          document: input,
+          expectedRevision: input.revision,
+          retryId,
           commands,
         });
         if (!result.ok || !result.document)
           throw new Error('The engine did not return the edited document.');
-        undo.current.push(local ?? { document, commands: [] });
-        redo.current = [];
-        setLocal({
-          document: result.document,
-          commands: [...(local?.commands ?? []), ...commands],
-        });
-        setHistoryVersion((value) => value + 1);
-        return true;
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'The edit could not be applied.');
-        return false;
-      } finally {
-        lock.current = false;
-        setBusy(false);
-      }
+        return result.document;
+      },
+      send: (intent) => sendPresentationRequest(scope, userId, intent),
+      append: (events) =>
+        appendTemplateAuthoringHistory(userId, scope.assetId, scope.brandId, events),
+      onError: (cause) => {
+        if (current && live.current === identity)
+          setError(
+            cause instanceof Error ? cause.message : 'Operation history remains queued privately.',
+          );
+      },
+    })
+      .then(async (copy) => {
+        const recovered = await copy.read();
+        if (current && live.current === identity) setModel({ identity, copy, state: recovered });
+      })
+      .catch((cause) => {
+        if (current && live.current === identity)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'The private presentation could not be opened.',
+          );
+      });
+    return () => {
+      current = false;
+    };
+  }, [userId, identity, query.data, engine, options.storage]);
+
+  const adoptState = useCallback(
+    (next: PresentationCopyState) => {
+      if (live.current !== identity) return;
+      setModel((current) =>
+        current?.identity === identity && next.version >= current.state.version
+          ? { ...current, state: next }
+          : current,
+      );
+      const cached = queryClient.getQueryData<PresentationEnvelope>(key);
+      if (cached?.draftRevision !== next.server.draftRevision)
+        queryClient.setQueryData(key, next.server);
     },
-    [document, engine, local],
+    [identity, key, queryClient],
   );
-
-  const save = useCallback(async () => {
-    if (!dirty) return true;
-    if (!local || !query.data || lock.current) return false;
-    lock.current = true;
-    setBusy(true);
-    setError(null);
-    const signature = JSON.stringify([query.data.draftRevision, local.commands]);
-    if (retry.current?.signature !== signature)
-      retry.current = { signature, id: crypto.randomUUID() };
-    try {
-      adopt(
-        await presentationsApi.apply(
-          scope,
-          query.data.draftRevision,
-          local.commands,
-          retry.current.id,
-        ),
-      );
-      return true;
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : 'The changes could not be saved. They remain in this workspace.',
-      );
-      return false;
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }, [dirty, local, query.data, scope, adopt]);
-
-  const discard = useCallback(() => {
-    setLocal(null);
-    undo.current = [];
-    redo.current = [];
-    retry.current = null;
-    setError(null);
-    setHistoryVersion((value) => value + 1);
-  }, []);
-
-  const history = useCallback(
-    async (direction: 'undo' | 'redo') => {
-      if (lock.current) return;
-      const from = direction === 'undo' ? undo.current : redo.current;
-      const to = direction === 'undo' ? redo.current : undo.current;
-      const snapshot = from.pop();
-      if (snapshot && document) {
-        to.push(local ?? { document, commands: [] });
-        setLocal(snapshot);
-        setHistoryVersion((value) => value + 1);
-        return;
-      }
-      if (dirty || !query.data) return;
-      lock.current = true;
-      setBusy(true);
+  const operate = useCallback(
+    async (run: (copy: PresentationWorkingCopy) => Promise<PresentationCopyState>) => {
+      if (!active) return false;
+      setPending((value) => value + 1);
       setError(null);
       try {
-        adopt(
-          await presentationsApi.history(
-            scope,
-            query.data.draftRevision,
-            direction,
-            crypto.randomUUID(),
-          ),
+        adoptState(await run(active.copy));
+        return true;
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : 'The changes remain in the private presentation.',
         );
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'History could not be restored.');
+        try {
+          adoptState(await active.copy.read());
+        } catch {
+          /* The previously visible, durable state remains intact. */
+        }
+        return false;
       } finally {
-        lock.current = false;
-        setBusy(false);
+        setPending((value) => value - 1);
       }
     },
-    [document, local, dirty, query.data, scope, adopt],
+    [active?.copy, adoptState],
   );
-
+  const perform = useCallback(
+    (commands: PresentationCommand[]) => operate((copy) => copy.perform(commands)),
+    [operate],
+  );
+  const save = useCallback(() => operate((copy) => copy.save()), [operate]);
+  const history = useCallback(
+    async (direction: 'undo' | 'redo') => {
+      await operate((copy) => copy.history(direction));
+    },
+    [operate],
+  );
+  const discard = useCallback(() => {
+    void operate((copy) => copy.discard());
+  }, [operate]);
+  const adopt = useCallback(
+    (envelope: PresentationEnvelope) => {
+      void operate((copy) => copy.replace(envelope));
+    },
+    [operate],
+  );
+  const park = useCallback(async () => {
+    if (!active) return false;
+    await active.copy.park();
+    return live.current === identity;
+  }, [active?.copy, identity]);
   useEffect(() => {
     onDraftChange?.({
+      contextId: identity,
       dirty,
       busy,
       saveLabel: 'Save presentation',
       save,
+      park,
       discard,
       status: error ? 'error' : busy ? 'saving' : dirty ? 'unsaved' : 'saved',
     });
-  }, [dirty, busy, save, discard, error, onDraftChange]);
+  }, [identity, dirty, busy, save, park, discard, error, onDraftChange]);
   useEffect(() => () => onDraftChange?.(null), [onDraftChange]);
 
   return {
@@ -195,8 +234,8 @@ export function usePresentationDocument(
     discard,
     adopt,
     history,
-    historyVersion,
-    canUndoLocal: undo.current.length > 0,
-    canRedoLocal: redo.current.length > 0,
+    historyVersion: state?.version ?? 0,
+    canUndoLocal: !!state?.history.past.length,
+    canRedoLocal: !!state?.history.future.length,
   };
 }

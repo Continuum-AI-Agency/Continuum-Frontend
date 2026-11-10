@@ -17,7 +17,7 @@ export type SceneChanges = Readonly<Record<string, SceneValue>>;
 export const HISTORY_LIMIT = 50;
 
 export type SceneEditorState = {
-  defaults: Readonly<Record<string, BlendField['default']>>;
+  defaults: Readonly<Record<string, SceneValue | null>>;
   changes: SceneChanges;
   past: SceneChanges[];
   future: SceneChanges[];
@@ -28,6 +28,7 @@ export type SceneEditorState = {
 };
 
 export type SceneEditorAction =
+  | { type: 'restore'; changes: SceneChanges; outputId: string | null }
   | { type: 'set'; key: string; value: SceneValue }
   | { type: 'resetField'; key: string }
   | { type: 'resetAll' }
@@ -37,10 +38,13 @@ export type SceneEditorAction =
   | { type: 'redo' };
 
 export function initialSceneEditor(
-  view: Pick<SceneTemplateView, 'fields' | 'outputs'>,
+  view: Pick<SceneTemplateView, 'fields' | 'outputs' | 'values'>,
 ): SceneEditorState {
   return {
-    defaults: Object.fromEntries(view.fields.map((field) => [field.key, field.default])),
+    defaults: {
+      ...Object.fromEntries(view.fields.map((field) => [field.key, field.default])),
+      ...view.values,
+    },
     changes: {},
     past: [],
     future: [],
@@ -77,6 +81,7 @@ export function sceneEditorReducer(
   action: SceneEditorAction,
 ): SceneEditorState {
   switch (action.type) {
+    case 'restore': return { ...state, changes: action.changes, outputId: action.outputId, past: [], future: [], editing: null };
     case 'set': {
       const rest = without(state.changes, action.key);
       const changes = sameValue(action.value, state.defaults[action.key])

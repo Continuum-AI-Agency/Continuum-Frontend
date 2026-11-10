@@ -10,33 +10,46 @@ export const templateAuthoringPreparationArtifactSchema = z
     brandId: uuid,
     assetId: uuid,
     baseVersionId: uuid,
+    workingCopyId: uuid.optional(),
     draftRevision: z.number().int().positive(),
     sourceChecksum: sha256,
     commandDigest: sha256,
     packageChecksum: sha256,
   })
   .strict();
-export type TemplateAuthoringPreparationArtifact = z.infer<typeof templateAuthoringPreparationArtifactSchema>;
+export type TemplateAuthoringPreparationArtifact = z.infer<
+  typeof templateAuthoringPreparationArtifactSchema
+>;
 
 export const templateAuthoringPreparationRequestSchema = z
   .object({
     artifactId: uuid,
+    workingCopyId: uuid.optional(),
     expectedDraftRevision: z.number().int().positive(),
     sourceChecksum: sha256,
     commandDigest: sha256,
     packageChecksum: sha256,
   })
   .strict();
-export type TemplateAuthoringPreparationRequest = z.infer<typeof templateAuthoringPreparationRequestSchema>;
+export type TemplateAuthoringPreparationRequest = z.infer<
+  typeof templateAuthoringPreparationRequestSchema
+>;
 
 export const templateAuthoringPreparationStateSchema = z.enum([
-  'pending', 'submitted', 'running', 'needs_input', 'draft_ready', 'review_ready', 'failed', 'stale',
+  'pending',
+  'submitted',
+  'running',
+  'needs_input',
+  'draft_ready',
+  'review_ready',
+  'failed',
+  'stale',
 ]);
 
 export const templateAuthoringPreparationSchema = z
   .object({
     artifactId: uuid,
-    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid }).strict(),
+    scope: z.object({ brandId: uuid, assetId: uuid, baseVersionId: uuid, workingCopyId: uuid.optional() }).strict(),
     userId: uuid,
     draftRevision: z.number().int().positive(),
     sourceChecksum: sha256,

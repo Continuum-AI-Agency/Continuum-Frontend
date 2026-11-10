@@ -22,7 +22,7 @@ const VIEW_STORE = 'views';
 const queues = new Map<string, Promise<unknown>>();
 
 export const templateDraftScopeKey = (userId: string, scope: TemplateAuthoringScope) =>
-  `${userId}:${scope.brandId}:${scope.assetId}:${scope.baseVersionId}`;
+  `${userId}:${scope.brandId}:${scope.assetId}:${scope.baseVersionId}${scope.workingCopyId ? `:working-copy:${scope.workingCopyId}` : ''}`;
 
 export type TemplateAuthoringViewState = {
   userId: string;
@@ -40,7 +40,7 @@ export const templateAuthoringViewStateKey = (
   workspaceIdentity: string,
 ) => `${templateDraftScopeKey(userId, scope)}:workspace:${workspaceIdentity}:view`;
 
-function openDb(): Promise<IDBDatabase> {
+export function openTemplateDraftDb(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined')
     return Promise.reject(new Error('Private recovery storage is unavailable in this browser.'));
   return new Promise((resolve, reject) => {
@@ -56,6 +56,8 @@ function openDb(): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error ?? new Error('Private recovery storage is unavailable.'));
   });
 }
+
+const openDb = openTemplateDraftDb;
 
 export async function readTemplateAuthoringViewState(
   userId: string,
@@ -99,13 +101,17 @@ function queued<T>(key: string, run: () => Promise<T>): Promise<T> {
 export async function listTemplateDraftRecoveries(
   userId: string,
   scope: TemplateAuthoringScope,
+  includeLegacy = false,
 ): Promise<TemplateDraftRecovery[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).getAll();
     req.onsuccess = () => resolve((req.result as TemplateDraftRecovery[])
-      .filter((item) => item.userId === userId && templateDraftScopeKey(item.userId, item.scope) === templateDraftScopeKey(userId, scope))
+      .filter((item) => item.userId === userId && (
+        templateDraftScopeKey(item.userId, item.scope) === templateDraftScopeKey(userId, scope) ||
+        includeLegacy && !!scope.workingCopyId && !item.scope.workingCopyId &&
+        item.scope.brandId === scope.brandId && item.scope.assetId === scope.assetId && item.scope.baseVersionId === scope.baseVersionId))
       .sort((a, b) => b.savedAt.localeCompare(a.savedAt)));
     req.onerror = () => reject(req.error ?? new Error('Could not read private recovery snapshots.'));
     tx.oncomplete = () => db.close();

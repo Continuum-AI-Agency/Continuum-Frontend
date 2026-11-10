@@ -33,6 +33,7 @@ import {
   Shapes,
   Type,
 } from 'lucide-react';
+import type { TemplateOperationOrigin } from '@continuum/contracts';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -64,8 +65,8 @@ export function TemplateLayerList({
   selectedId?: number | string | null;
   onSelect?: (id: number | string) => void;
   /** Omit to show the stack read-only. Receives the whole new order, front first. */
-  onReorder?: (order: Array<number | string>) => void;
-  onToggleVisible?: (id: number | string) => void;
+  onReorder?: (order: Array<number | string>, origin: TemplateOperationOrigin) => void;
+  onToggleVisible?: (id: number | string, origin: TemplateOperationOrigin) => void;
   groupSelectionIds?: readonly (number | string)[];
   onToggleGroupSelection?: (id: number | string) => void;
 }) {
@@ -74,11 +75,12 @@ export function TemplateLayerList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const ids = rows.map((row) => row.id);
-  const move = (from: number, to: number) => {
-    if (onReorder && from !== to && to >= 0 && to < ids.length) onReorder(arrayMove(ids, from, to));
+  const move = (from: number, to: number, origin: TemplateOperationOrigin) => {
+    if (onReorder && from !== to && to >= 0 && to < ids.length) onReorder(arrayMove(ids, from, to), origin);
   };
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (over) move(ids.indexOf(active.id as number | string), ids.indexOf(over.id as number | string));
+  const onDragEnd = ({ active, over, activatorEvent }: DragEndEvent) => {
+    if (over) move(ids.indexOf(active.id as number | string), ids.indexOf(over.id as number | string),
+      { tool: 'Forge layer list', ...(activatorEvent.type === 'keydown' ? { gesture: 'Keyboard layer reorder' } : { gesture: 'Reorder layers' }) });
   };
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -93,7 +95,7 @@ export function TemplateLayerList({
               selected={row.id === selectedId}
               movable={!!onReorder}
               onSelect={onSelect}
-              onStep={(step) => move(index, index + step)}
+              onStep={(step) => move(index, index + step, { tool: 'Forge layer list', button: step < 0 ? 'Bring layer forward' : 'Send layer backward' })}
               onToggleVisible={onToggleVisible}
               groupSelected={groupSelectionIds?.includes(row.id) ?? false}
               onToggleGroupSelection={onToggleGroupSelection}
@@ -124,7 +126,7 @@ function LayerRow({
   movable: boolean;
   onSelect?: (id: number | string) => void;
   onStep: (step: 1 | -1) => void;
-  onToggleVisible?: (id: number | string) => void;
+  onToggleVisible?: (id: number | string, origin: TemplateOperationOrigin) => void;
   groupSelected: boolean;
   onToggleGroupSelection?: (id: number | string) => void;
 }) {
@@ -224,7 +226,7 @@ function LayerRow({
           size="icon-xs"
           variant="ghost"
           aria-label={row.hidden ? `Show ${row.label}` : `Hide ${row.label}`}
-          onClick={() => onToggleVisible(row.id)}
+          onClick={() => onToggleVisible(row.id, { tool: 'Forge layer list', button: row.hidden ? 'Show layer' : 'Hide layer' })}
         >
           {row.hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
         </Button>

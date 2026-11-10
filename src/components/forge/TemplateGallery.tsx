@@ -326,6 +326,7 @@ export function TemplateGallery({
   shared,
   adopting,
   onOpen,
+  onOpenRevision,
   onOpenShared,
   onRename,
   onToggleShared,
@@ -349,6 +350,7 @@ export function TemplateGallery({
   /** `tab` names the detail tab to land on — `layers` for settings, `variants` for a variant. */
   /** `comp` names the composition Edit layers opens on — an output row's own. */
   onOpen: (assetId: string, tab?: string, comp?: string) => void;
+  onOpenRevision?: (revision: import('@continuum/contracts').TemplateRevision, tab?: string, comp?: string) => void | Promise<unknown>;
   onOpenShared: (template: SharedTemplate) => void;
   onRename: (assetId: string, title: string) => void;
   onToggleShared: (template: SharedTemplate) => void;
@@ -957,8 +959,8 @@ export function TemplateGallery({
                                         />
                                       </TemplateHoverPreview>
                                     }
-                                    onOpen={() => onOpen(draft.sourceAssetId, 'variants')}
-                                    onEdit={() => onOpen(draft.sourceAssetId, 'layers')}
+                                    onOpen={() => onOpenRevision ? void onOpenRevision(draft, 'variants') : onOpen(draft.sourceAssetId, 'variants')}
+                                    onEdit={() => onOpenRevision ? void onOpenRevision(draft, 'layers') : onOpen(draft.sourceAssetId, 'layers')}
                                   />
                                 );
                               })

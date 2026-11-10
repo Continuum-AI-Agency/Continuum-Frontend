@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import { useState } from 'react';
 
 import { NumberScrubField } from './number-field';
 
@@ -108,5 +109,106 @@ describe('NumberScrubField', () => {
 
     fireEvent.blur(input(container));
     expect(onCommit).toHaveBeenCalledWith(3);
+  });
+
+  it('preserves untouched source precision when a pointer leaves Y to undo an X edit', () => {
+    const original = { x: 544.494198358019, y: 1013.7701297156863 };
+    const changedY = mock(() => {});
+    function Editor() {
+      const [history, setHistory] = useState({
+        present: original,
+        past: [] as (typeof original)[],
+      });
+      const edit = (change: Partial<typeof original>) =>
+        setHistory((current) => ({
+          present: { ...current.present, ...change },
+          past: [...current.past, current.present],
+        }));
+      return (
+        <>
+          <NumberScrubField label="X" value={history.present.x} onChange={(x) => edit({ x })} />
+          <NumberScrubField
+            label="Y"
+            value={history.present.y}
+            onChange={(y) => {
+              changedY();
+              edit({ y });
+            }}
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setHistory((current) => ({
+                present: current.past.at(-1)!,
+                past: current.past.slice(0, -1),
+              }))
+            }
+          >
+            Undo
+          </button>
+          <output>{JSON.stringify(history.present)}</output>
+        </>
+      );
+    }
+    const { getByLabelText, getByRole } = render(<Editor />);
+    const x = getByLabelText('X');
+    const y = getByLabelText('Y');
+    const undo = getByRole('button', { name: 'Undo' });
+    fireEvent.focus(x);
+    fireEvent.change(x, { target: { value: '561.74' } });
+    fireEvent.blur(x, { relatedTarget: y });
+    fireEvent.focus(y);
+    fireEvent.pointerDown(undo, { pointerType: 'mouse', button: 0 });
+    fireEvent.blur(y, { relatedTarget: undo });
+    fireEvent.focus(undo);
+    fireEvent.pointerUp(undo, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(undo);
+    expect(changedY).not.toHaveBeenCalled();
+    expect(getByRole('status').textContent).toBe(JSON.stringify(original));
+    expect((x as HTMLInputElement).value).toBe('544.49');
+  });
+
+  it('keeps uncontrolled source precision on passive blur without a change or commit', () => {
+    const onChange = mock(() => {});
+    const onCommit = mock(() => {});
+    const { container } = render(
+      <NumberScrubField
+        label="Y"
+        defaultValue={1013.7701297156863}
+        onChange={onChange}
+        onCommit={onCommit}
+      />,
+    );
+    fireEvent.focus(input(container));
+    fireEvent.blur(input(container));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('still commits an actual typed value clamped to the configured bound', () => {
+    const onCommit = mock(() => {});
+    const { container } = render(
+      <NumberScrubField label="Copies" defaultValue={2} min={1} max={10} onCommit={onCommit} />,
+    );
+    fireEvent.focus(input(container));
+    fireEvent.change(input(container), { target: { value: '30' } });
+    fireEvent.blur(input(container));
+    expect(input(container).value).toBe('10');
+    expect(onCommit).toHaveBeenCalledWith(10);
+  });
+
+  it('still reports and commits keyboard stepping before passive blur', () => {
+    const onChange = mock(() => {});
+    const onCommit = mock(() => {});
+    const { container } = render(
+      <NumberScrubField label="Copies" defaultValue={2} onChange={onChange} onCommit={onCommit} />,
+    );
+    fireEvent.focus(input(container));
+    fireEvent.keyDown(input(container), { key: 'ArrowUp' });
+    fireEvent.keyUp(input(container), { key: 'ArrowUp' });
+    fireEvent.blur(input(container));
+    expect(onChange).toHaveBeenCalledWith(3);
+    expect(onCommit).toHaveBeenCalledWith(3);
+    expect(input(container).value).toBe('3');
   });
 });

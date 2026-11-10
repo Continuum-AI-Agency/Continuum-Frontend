@@ -30,9 +30,10 @@ export function fetchSceneTemplate(
   brandId: string,
   assetId: string,
   signal?: AbortSignal,
+  revisionId?: string,
 ): Promise<SceneTemplateView> {
   return request({
-    path: `${scenePath(assetId)}${brandQuery(brandId)}`,
+    path: `${scenePath(assetId)}${brandQuery(brandId)}${revisionId ? `&revisionId=${encodeURIComponent(revisionId)}` : ''}`,
     schema: sceneTemplateViewSchema,
     signal,
   });

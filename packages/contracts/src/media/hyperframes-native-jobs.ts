@@ -8,6 +8,7 @@ import {
   hyperframesUploadPinSchema,
 } from './hyperframes-native';
 import { hyperframesNativeRenderRequestSchema } from './hyperframes-native-render';
+import { templateOperationOriginSchema } from './template-operation-events';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const outputs = z
@@ -30,8 +31,12 @@ export const hyperframesSceneRenderRequestSchema = z
     family: z.literal('hyperframes'),
     brandId: z.uuid(),
     revisionId: z.uuid(),
+    releaseId: z.uuid().optional(),
+    bindingId: z.uuid().optional(),
+    templateKey: z.string().min(1).max(500).optional(),
     sceneSha256: hash,
     submissionId: z.uuid(),
+    origin: templateOperationOriginSchema.optional(),
     engine: hyperframesNativeRenderRequestSchema.shape.engine,
     tools: hyperframesNativeRenderRequestSchema.shape.tools,
     outputs,

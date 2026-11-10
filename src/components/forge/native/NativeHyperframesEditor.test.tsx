@@ -1,5 +1,5 @@
 /** Mounted editor + real browser transport against explicit HTTP fixtures; excludes hosted/auth/renderer proof. */
-import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import {
   type HyperframesSceneRenderStatus,
   type HyperframesSceneView,
@@ -7,11 +7,12 @@ import {
   templateRevisionVariantSchema,
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import type { LayerDraftState } from '@/components/forge/layerDraft';
 import { useForgeExitGuard } from '@/components/forge/useForgeExitGuard';
 
+const PRINCIPAL = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BRAND = '11111111-1111-4111-8111-111111111111';
 const ASSET = '22222222-2222-4222-8222-222222222222';
 const VERSION = '33333333-3333-4333-8333-333333333333';
@@ -69,7 +70,7 @@ const base: HyperframesSceneView = {
 };
 const saved = templateRevisionSchema.parse({
   templateId: ASSET,
-  variantId: VARIANT,
+  variantId: ORIGINAL,
   id: CHILD,
   number: 1,
   parentRevisionId: ORIGINAL,
@@ -100,7 +101,7 @@ const saved = templateRevisionSchema.parse({
 });
 const childView: HyperframesSceneView = {
   ...base,
-  revision: { ...base.revision, variantId: VARIANT, revisionId: CHILD },
+  revision: { ...base.revision, variantId: ORIGINAL, revisionId: CHILD },
   sceneSha256: saved.native!.sceneSha256,
   capabilities: [{ ...base.capabilities[0]!, text: { value: 'A longer headline' } }],
 };
@@ -124,14 +125,15 @@ const originalVariant = templateRevisionVariantSchema.parse({
     },
   ],
 });
+const workingVariant = templateRevisionVariantSchema.parse({ ...originalVariant, original: false, name: 'Native copy' });
 const childVariant = templateRevisionVariantSchema.parse({
-  ...originalVariant,
-  variantId: VARIANT,
+  ...workingVariant,
+  variantId: ORIGINAL,
   name: 'Native copy',
   original: false,
   parentRevisionId: ORIGINAL,
   draftHeadRevisionId: CHILD,
-  revisions: [saved],
+  revisions: [...workingVariant.revisions, saved],
 });
 const apiBefore = process.env.NEXT_PUBLIC_API_URL;
 process.env.NEXT_PUBLIC_API_URL = 'https://native-editor.test';
@@ -140,9 +142,29 @@ mock.module('@/lib/auth/getBrowserAccessToken', () => ({
   ...authBefore,
   getBrowserAccessToken: async () => 'editor-fixture-token',
 }));
+let sessionPrincipal = PRINCIPAL;
+let authListener: ((event: string, session: { user: { id: string }; access_token: string } | null) => void) | undefined;
+const clientBefore = { ...(await import('@/lib/supabase/client')) };
+mock.module('@/lib/supabase/client', () => ({ ...clientBefore, createSupabaseBrowserClient: () => ({
+  auth: { getSession: async () => ({ data: { session: { user: { id: sessionPrincipal }, access_token: 'editor-fixture-token' } } }),
+    onAuthStateChange: (listener: NonNullable<typeof authListener>) => { authListener = listener; return { data: { subscription: { unsubscribe() {} } } }; }, },
+}) }));
+const { NativeWorkingCopy } = await import('./nativeWorkingCopy');
+const nativeOpen = NativeWorkingCopy.open.bind(NativeWorkingCopy);
+let failNativeProjection = false;
+let nativeRecords = new Map<string, import('../templateOperationJournal').OperationJournalState>();
+const nativeOpenSpy = spyOn(NativeWorkingCopy, 'open').mockImplementation(options => nativeOpen({ ...options,
+  storage: { async change(key, update) {
+    const row = structuredClone(nativeRecords.get(key) ?? { workingCopyId: crypto.randomUUID(), sequence: 0, events: [], acknowledged: [], outbox: null });
+    const result = update(row);
+    if (failNativeProjection && row.events.at(-1)?.command === 'forge_native_edit') { failNativeProjection = false; throw new Error('Native private storage interrupted'); }
+    nativeRecords.set(key, row); return structuredClone(result);
+  } },
+}));
 const { NativeHyperframesEditor } = await import('./NativeHyperframesEditor');
 const fetchBefore = globalThis.fetch;
 const posts: { path: string; body: Record<string, unknown> }[] = [];
+let readOnlyOriginal = false;
 let failSave = true;
 let failRender = false;
 let acceptedSave = false;
@@ -156,6 +178,11 @@ let queryClient: QueryClient;
 
 beforeEach(() => {
   posts.length = 0;
+  nativeRecords = new Map();
+  failNativeProjection = false;
+  sessionPrincipal = PRINCIPAL;
+  authListener = undefined;
+  readOnlyOriginal = false;
   failSave = true;
   failRender = false;
   acceptedSave = false;
@@ -188,6 +215,7 @@ beforeEach(() => {
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer editor-fixture-token');
     if (init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      if (url.pathname.endsWith('/history')) return respond({ items: (body.operations as object[]).map(event => ({ ...event, principalId: PRINCIPAL, revisionId: null, revisionIds: [], receivedAt: new Date().toISOString() })) });
       posts.push({ path: url.pathname, body });
       if (url.pathname.endsWith('/revisions')) {
         if (failSave) {
@@ -211,7 +239,7 @@ beforeEach(() => {
       return respond(status, 202);
     }
     if (url.pathname.endsWith('/revision-variants'))
-      return respond({ items: acceptedSave ? [originalVariant, childVariant] : [originalVariant] });
+      return respond({ items: acceptedSave ? [childVariant] : [readOnlyOriginal ? originalVariant : workingVariant] });
     if (url.pathname.endsWith('/scene/uploads'))
       return respond({
         family: 'hyperframes',
@@ -274,6 +302,8 @@ afterEach(() => {
   globalThis.fetch = fetchBefore;
 });
 afterAll(() => {
+  nativeOpenSpy.mockRestore();
+  mock.module('@/lib/supabase/client', () => clientBefore);
   mock.module('@/lib/auth/getBrowserAccessToken', () => authBefore);
   if (apiBefore === undefined) delete process.env.NEXT_PUBLIC_API_URL;
   else process.env.NEXT_PUBLIC_API_URL = apiBefore;
@@ -294,9 +324,15 @@ function mount(pins: { initialRevisionId?: string; initialJobId?: string } = {})
   );
 }
 
+async function editableCopy() {
+  const field = await screen.findByLabelText('Text 1');
+  await waitFor(() => expect(field.closest('fieldset')?.disabled).toBe(false));
+  return field;
+}
+
 test('native editor loads full copy, keeps refused edits, retries the exact save, and opens the saved branch under its parent', async () => {
   mount();
-  const copy = await screen.findByLabelText('Text 1');
+  const copy = await editableCopy();
   expect((copy as HTMLTextAreaElement).value).toBe('Just use');
   expect(screen.queryByLabelText('Text 2')).toBeNull();
   fireEvent.change(copy, { target: { value: 'A longer headline' } });
@@ -321,18 +357,18 @@ test('native editor loads full copy, keeps refused edits, retries the exact save
     parentRevisionId: ORIGINAL,
     expectedParentSceneSha256: base.sceneSha256,
     expectedSourceSceneSha256: base.sceneSha256,
-    expectedHeadRevisionId: null,
+    expectedHeadRevisionId: ORIGINAL,
     edits: { operations: [{ op: 'text', fieldId: 'copy:text', value: 'A longer headline' }] },
   });
-  expect(posts[0]!.body.variantId).toBeUndefined();
-  await screen.findByText('Native copy');
+  expect(posts[0]!.body.variantId).toBe(ORIGINAL);
+  await screen.findByRole('button', { name: 'Native copy Variant' });
   expect(draft?.dirty).toBe(false);
 });
 
 test('native preview retries preserve submission identity, validates the frame, pins the saved scene, and cancels its real job route', async () => {
   failRender = true;
   mount();
-  await screen.findByLabelText('Text 1');
+  await editableCopy();
   const frame = screen.getByLabelText('Preview frame (0–2)');
   fireEvent.change(frame, { target: { value: '3' } });
   fireEvent.click(screen.getByRole('button', { name: 'Preview frame' }));
@@ -372,6 +408,7 @@ test('pending native ingestion shows its diagnosis and never mounts an AE editor
 });
 
 test('a superseded source is read-only while its immutable saved revision can still be rendered', async () => {
+  readOnlyOriginal = true;
   sceneOverride = { ...base, sourceSceneSha256: null };
   mount();
   const copy = await screen.findByLabelText('Text 1');
@@ -464,7 +501,7 @@ test('the native editor protects dirty copy through the existing Forge exit guar
       <GuardedNativeEditor />
     </QueryClientProvider>,
   );
-  fireEvent.change(await screen.findByLabelText('Text 1'), {
+  fireEvent.change(await editableCopy(), {
     target: { value: 'Keep this draft' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Back to templates' }));
@@ -490,7 +527,7 @@ test('text pagination bounds mounted controls and preserves changes across pages
     })),
   };
   mount();
-  fireEvent.change(await screen.findByLabelText('Text 1'), { target: { value: 'First edit' } });
+  fireEvent.change(await editableCopy(), { target: { value: 'First edit' } });
   expect(
     screen.getAllByRole('textbox').filter((control) => control.tagName === 'TEXTAREA'),
   ).toHaveLength(20);
@@ -512,13 +549,13 @@ test('text pagination bounds mounted controls and preserves changes across pages
 
 test('mounted source ordering changes the real save payload and supports discard', async () => {
   mount();
+  await editableCopy();
   const earlier = await screen.findByRole('button', { name: 'Move right earlier' });
   fireEvent.click(earlier);
-  fireEvent.change(screen.getByLabelText('Variant name'), { target: { value: 'Reordered' } });
   fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
-  expect(
+  await waitFor(() => expect(
     (screen.getByRole('button', { name: 'Move left earlier' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  ).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Move right earlier' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
   await screen.findByText('Variant was not saved');
@@ -536,7 +573,7 @@ test('late source-order metadata preserves unsaved copy and dirty state', async 
     release = resolve;
   });
   mount();
-  const copy = await screen.findByLabelText('Text 1');
+  const copy = await editableCopy();
   fireEvent.change(copy, { target: { value: 'Edited while loading' } });
   await waitFor(() => expect(draft?.dirty).toBe(true));
   release();
@@ -560,7 +597,7 @@ test('an unavailable companion order endpoint leaves existing copy editing usabl
   await screen.findByText(
     'Element order is unavailable for this source. Copy and size edits remain available.',
   );
-  fireEvent.change(screen.getByLabelText('Text 1'), { target: { value: 'Compatible copy' } });
+  fireEvent.change(await editableCopy(), { target: { value: 'Compatible copy' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
   await screen.findByText('Variant was not saved');
   expect(
@@ -570,4 +607,52 @@ test('an unavailable companion order endpoint leaves existing copy editing usabl
       }
     ).operations,
   ).toEqual([{ op: 'text', fieldId: 'copy:text', value: 'Compatible copy' }]);
+});
+
+test('Original native checkout is read-only until the explicit branch action', async () => {
+  readOnlyOriginal = true;
+  mount();
+  const field = await screen.findByLabelText('Text 1');
+  await screen.findByText('This revision is read-only. Branch it in Variant control before editing.');
+  expect(field.closest('fieldset')?.disabled).toBe(true);
+  expect(screen.getByRole('button', { name: 'Save variant' }).closest('fieldset')?.disabled).toBe(true);
+  expect(posts.filter(post => post.path.endsWith('/revisions'))).toHaveLength(0);
+});
+
+test('an older native revision stays read-only when its branch has a newer saved head', async () => {
+  acceptedSave = true;
+  mount({ initialRevisionId: ORIGINAL });
+  const field = await screen.findByLabelText('Text 1');
+  await screen.findByText('This revision is read-only. Branch it in Variant control before editing.');
+  expect(field.closest('fieldset')?.disabled).toBe(true);
+  expect(screen.getByRole('link', { name: 'Saved revision link' }).getAttribute('href')).toContain(ORIGINAL);
+  expect(posts.filter(post => post.path.endsWith('/revisions'))).toHaveLength(0);
+});
+
+
+test('a failed native private write blocks commit until the exact visible edit is durably retried', async () => {
+  mount(); const field = await editableCopy(); failNativeProjection = true;
+  fireEvent.change(field, { target: { value: 'Retain failed local edit' } });
+  await screen.findByRole('button', { name: 'Retry native history' });
+  fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
+  await waitFor(() => expect(screen.getAllByText(/last edit has not reached private storage/).length).toBeGreaterThan(0));
+  expect(posts.filter(post => post.path.endsWith('/revisions'))).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry native history' }));
+  await waitFor(() => expect(document.body.textContent?.includes('The last edit has not reached private storage.')).toBe(false));
+  fireEvent.click(screen.getByRole('button', { name: 'Save variant' }));
+  await screen.findByText('Variant was not saved');
+  const request = posts.find(post => post.path.endsWith('/revisions')); expect(request).toBeDefined();
+  expect((request!.body.edits as { operations: object[] }).operations).toContainEqual({ op: 'text', fieldId: 'copy:text', value: 'Retain failed local edit' });
+});
+
+
+test('switching authenticated owners hides the previous private native projection and opens a separate copy', async () => {
+  mount(); const field = await editableCopy();
+  fireEvent.change(field, { target: { value: 'Private owner A copy' } });
+  await waitFor(() => expect(draft?.dirty).toBe(true));
+  const other = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  await act(async () => { sessionPrincipal = other; authListener?.('SIGNED_IN', { user: { id: other }, access_token: 'editor-fixture-token' }); });
+  await waitFor(() => expect((screen.getByLabelText('Text 1') as HTMLTextAreaElement).value).toBe('Just use'));
+  expect((screen.getByLabelText('Text 1') as HTMLTextAreaElement).value).not.toBe('Private owner A copy');
+  expect(posts.filter(post => post.path.endsWith('/revisions'))).toHaveLength(0);
 });

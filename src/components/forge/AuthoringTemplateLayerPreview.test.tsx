@@ -457,7 +457,7 @@ describe('template preview interactions', () => {
     expect(container.querySelector('span.border-dashed')?.getAttribute('style')).toContain('top: 150px');
     fireEvent.pointerUp(canvas, { pointerId: 28, clientX: 170, clientY: 87 });
     expect(onAuthoredGestureCommit).toHaveBeenCalledTimes(1);
-    expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([groupId, { position: [20, 20] }]);
+    expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([groupId, { position: [20, 20] }, { tool: 'Forge canvas', gesture: 'move layer' }]);
     expect(onEdit).not.toHaveBeenCalled();
     expect(container.querySelector('[data-layer-id="1"]')?.getAttribute('transform')).toBe(firstTransform);
     expect(container.querySelector('[data-layer-id="2"]')?.getAttribute('transform')).toBe(secondTransform);
@@ -505,7 +505,7 @@ describe('template preview interactions', () => {
     expect(firstElement.getAttribute('transform')).toBe(`translate(3 5) ${firstTransform}`);
     expect(secondElement.getAttribute('transform')).toBe(`translate(3 5) ${secondTransform}`);
     fireEvent.pointerUp(canvas, { pointerId: 44, clientX: 105, clientY: 207 });
-    expect(onAuthoredGestureCommit).toHaveBeenCalledWith(groupId, { position: [13, 25] });
+    expect(onAuthoredGestureCommit).toHaveBeenCalledWith(groupId, { position: [13, 25] }, { tool: 'Forge canvas', gesture: 'move layer' });
   });
 
   test('generated group handle drag does not snap against its own descendants', () => {
@@ -540,7 +540,7 @@ describe('template preview interactions', () => {
     fireEvent.pointerMove(canvas, { pointerId: 63, clientX: 172, clientY: 120 });
     expect(container.querySelector('span.border-dashed')).toBeNull();
     fireEvent.pointerUp(canvas, { pointerId: 63, clientX: 172, clientY: 120 });
-    expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([groupId, { position: [12, 20] }]);
+    expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([groupId, { position: [12, 20] }, { tool: 'Forge canvas', gesture: 'move layer' }]);
   });
 
   test('draft text drag commits one stable-UUID position edit at pointer up', () => {
@@ -586,6 +586,7 @@ describe('template preview interactions', () => {
     expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([
       node.nodeId,
       { position: [122, 231] },
+      { tool: 'Forge canvas', gesture: 'Move layer' },
     ]);
   });
 
@@ -670,6 +671,7 @@ describe('template preview interactions', () => {
     expect(onAuthoredGestureCommit.mock.calls[0]).toEqual([
       draft.nodeId,
       { position: [130, 220], scale: [150, 100], rotation: 0 },
+      { tool: 'Forge canvas', gesture: 'resize layer' },
     ]);
     expect(onEdit).not.toHaveBeenCalled();
     expect(container.querySelector('[data-layer-id="1"]')?.getAttribute('transform')).toBeNull();
@@ -792,7 +794,7 @@ describe('template preview interactions', () => {
       authoredRenderNodes={[{ nodeId: draft.nodeId, position: [400, 500] }]} /></>);
     expect(container.querySelector(`[data-authored-node-id="${draft.nodeId}"]`)?.getAttribute('transform')).toBe(liveTransform);
     fireEvent.pointerUp(canvas, { pointerId: 45, clientX: 105, clientY: 206 });
-    expect(onAuthoredGestureCommit).toHaveBeenCalledWith(draft.nodeId, { position: [123, 224] });
+    expect(onAuthoredGestureCommit).toHaveBeenCalledWith(draft.nodeId, { position: [123, 224] }, { tool: 'Forge canvas', gesture: 'move layer' });
     expect(container.querySelector(`[data-authored-node-id="${draft.nodeId}"]`)?.getAttribute('transform'))
       .toBe('translate(400 500) rotate(0) scale(1 1)');
     expect(onAuthoredGestureCommit.mock.calls[0]?.[1]).not.toHaveProperty('scale');
@@ -878,6 +880,8 @@ describe('template preview interactions', () => {
     fireEvent.contextMenu(screen.getByRole('application', { name: 'Interactive template preview' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete selected layer' }));
     expect(onDeleteNode).toHaveBeenCalledTimes(1);
+    expect(onDuplicateNode).toHaveBeenCalledWith({ tool: 'Forge canvas menu', control: 'Duplicate selected layer' });
+    expect(onDeleteNode).toHaveBeenCalledWith({ tool: 'Forge canvas menu', control: 'Delete selected layer' });
   });
 
   test('arrow keys move the selected layer; modified keys and locked positions cannot write', () => {
@@ -900,6 +904,7 @@ describe('template preview interactions', () => {
       { x: 101, y: 200 },
       'canvas:nudge:1',
       true,
+      { tool: 'Forge canvas', shortcut: 'ArrowRight' },
     );
     fireEvent.keyDown(canvas, { key: 'ArrowDown', shiftKey: true });
     expect(onEdit).toHaveBeenLastCalledWith(
@@ -907,6 +912,7 @@ describe('template preview interactions', () => {
       { x: 100, y: 210 },
       'canvas:nudge:2',
       true,
+      { tool: 'Forge canvas', shortcut: 'Shift+ArrowDown' },
     );
     fireEvent.keyDown(canvas, { key: 'ArrowUp', ctrlKey: true });
     const locked = { ...layer, transformLocks: { position: 'Animated position' } };
@@ -972,7 +978,7 @@ describe('template preview interactions', () => {
     });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 30, clientY: 40 });
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 30, clientY: 40 });
-    expect(onEdit).toHaveBeenLastCalledWith(layer, { x: 120, y: 230 }, 'canvas:move:1', true);
+    expect(onEdit).toHaveBeenLastCalledWith(layer, { x: 120, y: 230 }, 'canvas:move:1', true, { tool: 'Forge canvas', gesture: 'move layers' });
     expect(screen.queryByRole('dialog', { name: 'Layer controls' })).toBeNull();
   });
 
@@ -1007,6 +1013,7 @@ describe('template preview interactions', () => {
       edits: [{ compId: 1, layerId: 1, x: 106, y: 200 }],
       selectionIds: [1],
       group: 'canvas:move:1',
+      origin: { tool: 'Forge canvas', gesture: 'move layers' },
     });
   });
 
@@ -1054,6 +1061,7 @@ describe('template preview interactions', () => {
         { x: 125, y: 235 },
         'canvas:move:1',
         true,
+        { tool: 'Forge canvas', gesture: 'move layers' },
       );
     } finally {
       window.requestAnimationFrame = originalRaf;
@@ -1114,6 +1122,7 @@ describe('template preview interactions', () => {
       ],
       selectionIds: [1, 2],
       group: 'canvas:move:1',
+      origin: { tool: 'Forge canvas', gesture: 'move layers' },
     });
     expect(onEdit).not.toHaveBeenCalled();
   });
@@ -1140,6 +1149,8 @@ describe('template preview interactions', () => {
     fireEvent.keyDown(canvas, { key: 'Delete' });
     expect(duplicate).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledTimes(1);
+    expect(duplicate).toHaveBeenCalledWith({ tool: 'Forge canvas', shortcut: 'Control+D' });
+    expect(remove).toHaveBeenCalledWith({ tool: 'Forge canvas', shortcut: 'Delete' });
   });
 
   test('zoom controls are labeled and reset to the fitted canvas', () => {

@@ -19,6 +19,8 @@ import {
   listSceneRenders,
   sceneProblem,
 } from '@/lib/library/sceneTemplates';
+import { fetchTemplateRevisionVariants } from '@/lib/library/templateSources';
+import { VersionControlPanel } from './VersionControlPanel';
 
 // A Blender template's sheet in the Forge gallery: each output's last final render (or, before
 // there is one, a draft at the file's own values), which fields it offers, and its recent renders. Editing happens in the scene editor; this sheet
@@ -38,8 +40,8 @@ function fieldSummary(fields: readonly { name: string }[]) {
   return more > 0 ? `${shown} and ${more} more` : shown;
 }
 
-export function sceneEditorHref(assetId: string) {
-  return `/forge/scene/${encodeURIComponent(assetId)}`;
+export function sceneEditorHref(assetId: string, revisionId?: string) {
+  return `/forge/scene/${encodeURIComponent(assetId)}${revisionId ? `?revision=${encodeURIComponent(revisionId)}` : ''}`;
 }
 
 export function SceneTemplateDetail({
@@ -48,21 +50,36 @@ export function SceneTemplateDetail({
   onBack,
   onRename,
   onRemove,
+  revisionId,
+  onOpenRevision,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
   onRename: (title: string) => void;
   onRemove: () => void;
+  revisionId?: string;
+  onOpenRevision?: (
+    revision: import('@continuum/contracts').TemplateRevision,
+  ) => void | Promise<void>;
 }) {
   const { assetId } = source;
   const name = source.displayName ?? templateDisplayName(source.parse?.filename);
   const parsed = source.parseState === 'parsed';
   const view = useQuery({
-    queryKey: forgeQueryKeys.sceneTemplate(brandId, assetId),
-    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal),
+    queryKey: [
+      ...forgeQueryKeys.sceneTemplate(brandId, assetId),
+      ...(revisionId ? [revisionId] : []),
+    ],
+    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal, revisionId),
     enabled: parsed,
     staleTime: FORGE_STALE_MS.active,
+  });
+  const variants = useQuery({
+    queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
+    queryFn: () => fetchTemplateRevisionVariants(brandId, assetId, true),
+    enabled: !source.house,
+    retry: false,
   });
   const [outputId, setOutputId] = useState<string | null>(null);
   const outputs = view.data?.outputs ?? [];
@@ -82,6 +99,7 @@ export function SceneTemplateDetail({
     brandId,
     assetId,
     versionId: view.data?.versionId ?? null,
+    revisionId,
     outputId: !history.isPending && !latest ? (output?.id ?? null) : null,
     values: NO_CHANGES,
   });
@@ -125,7 +143,7 @@ export function SceneTemplateDetail({
           )}
           {view.data ? (
             <Link
-              href={sceneEditorHref(assetId)}
+              href={sceneEditorHref(assetId, revisionId)}
               className={buttonVariants({ size: 'sm', className: 'gap-1.5' })}
             >
               <Box className="size-3.5" aria-hidden />
@@ -134,6 +152,18 @@ export function SceneTemplateDetail({
           ) : null}
         </div>
       </header>
+      {variants.data?.length ? (
+        <div className="p-[var(--card-pad)]">
+          <VersionControlPanel
+            brandId={brandId}
+            assetId={assetId}
+            versionId={source.versionId}
+            variants={variants.data}
+            revisionId={revisionId}
+            onOpenRevision={onOpenRevision}
+          />
+        </div>
+      ) : null}
 
       {!parsed ? (
         <p

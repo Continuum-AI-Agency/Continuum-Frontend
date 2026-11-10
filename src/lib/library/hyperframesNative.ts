@@ -20,6 +20,7 @@ import {
   templateRevisionVariantsResponseSchema,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
+import { savePinnedTemplateRevision } from './templateSources';
 
 const path = (assetId: string) => `/api/ai-studio/templates/${encodeURIComponent(assetId)}`;
 const query = (brandId: string, revisionId?: string) =>
@@ -126,7 +127,15 @@ export async function saveNativeHyperframesRevision(
   assetId: string,
   body: SaveHyperframesRevisionRequest,
   signal?: AbortSignal,
+  expectedUserId?: string,
 ) {
+  if (expectedUserId) {
+    const revision = await savePinnedTemplateRevision(assetId, saveHyperframesRevisionRequestSchema.parse(body), expectedUserId, signal);
+    if (revision.native?.family !== 'hyperframes' || revision.templateId !== assetId ||
+      revision.parentRevisionId !== body.parentRevisionId || body.variantId && revision.variantId !== body.variantId)
+      throw new Error('Expected the exact saved native Hyperframes revision.');
+    return revision;
+  }
   return request<TemplateRevision>({
     path: `${path(assetId)}/revisions`,
     method: 'POST',

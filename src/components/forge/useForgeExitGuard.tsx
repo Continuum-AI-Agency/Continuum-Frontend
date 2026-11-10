@@ -121,6 +121,23 @@ export function useForgeExitGuard() {
     [request],
   );
 
+  const runPreserving = useCallback(async (action: () => void) => {
+    const current = draftRef.current;
+    if (!current?.park) return request(action);
+    try {
+      if (!(await current.park())) {
+        toast.error('The private working copy could not be preserved. Your editor remains open.');
+        return false;
+      }
+      if (draftRef.current?.contextId !== current.contextId) return false;
+      action();
+      return true;
+    } catch {
+      toast.error('The private working copy could not be preserved. Your editor remains open.');
+      return false;
+    }
+  }, [request]);
+
   const saveAndExit = async () => {
     const current = draftRef.current;
     if (!current || savingRef.current) return;
@@ -187,5 +204,5 @@ export function useForgeExitGuard() {
     </AlertDialog>
   );
 
-  return { onDraftChange, runGuarded, dialog, confirm: request };
+  return { onDraftChange, runGuarded, runPreserving, dialog, confirm: request };
 }

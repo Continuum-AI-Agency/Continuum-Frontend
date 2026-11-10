@@ -4,12 +4,17 @@ import {
   type BlendOutput,
   MAX_FRAMES,
   type SceneTemplateView,
+  type TemplateRevisionVariant,
+  saveTemplateRevisionRequestSchema,
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Clapperboard, Redo2, RotateCcw, Undo2 } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useReducer, useState } from 'react';
+import { VersionControlPanel } from '../VersionControlPanel';
+import { useNativeWorkingCopy } from '../native/useNativeWorkingCopy';
+import { Input } from '@/components/ui/input';
 import { forgeDeepLinkHref } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
@@ -18,16 +23,16 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchSceneTemplate, sceneProblem } from '@/lib/library/sceneTemplates';
-import { fetchTemplateSources } from '@/lib/library/templateSources';
+import { fetchTemplateSources, fetchTemplateRevisionVariants, savePinnedTemplateRevision } from '@/lib/library/templateSources';
 import { SceneInspector } from './SceneInspector';
 import { ScenePreviewStage } from './ScenePreviewStage';
 import { SceneRenderPanel } from './SceneRenderPanel';
-import { initialSceneEditor, sceneEditorReducer } from './sceneEditorReducer';
+import { initialSceneEditor, sceneEditorReducer, type SceneChanges, type SceneEditorAction } from './sceneEditorReducer';
 import { useScenePreview } from './useScenePreview';
 import { useSceneRenderJob } from './useSceneRenderJob';
 
 // The Blender scene editor: the file's fields on the left, a draft of the picked camera in the
-// middle, final renders on the right. It edits what one render will say, never the .blend itself.
+// middle, final renders on the right. Saved native revisions use the shared coordinator.
 
 type SceneMediaType = BlendOutput['mediaType'];
 
@@ -79,12 +84,28 @@ function SceneMediaTypePicker({
   );
 }
 
-export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: string }) {
+export function SceneEditor({
+  brandId,
+  assetId,
+  revisionId,
+}: {
+  brandId: string;
+  assetId: string;
+  revisionId?: string;
+}) {
   const queryClient = useQueryClient();
+  const [openedRevision, setOpenedRevision] = useState(revisionId);
+  const variants = useQuery({ queryKey: forgeQueryKeys.revisionVariants(brandId, assetId),
+    queryFn: () => fetchTemplateRevisionVariants(brandId, assetId, true), retry: false });
+  const exactRevisionId = openedRevision ?? revisionId ?? variants.data?.find(item => item.original)?.draftHeadRevisionId;
   const view = useQuery({
-    queryKey: forgeQueryKeys.sceneTemplate(brandId, assetId),
-    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal),
+    queryKey: [
+      ...forgeQueryKeys.sceneTemplate(brandId, assetId),
+      ...(exactRevisionId ? [exactRevisionId] : []),
+    ],
+    queryFn: ({ signal }) => fetchSceneTemplate(brandId, assetId, signal, exactRevisionId),
     staleTime: FORGE_STALE_MS.active,
+    enabled: !!exactRevisionId || variants.isSuccess,
   });
   // The name lives on the template source row, which the Forge gallery has usually cached already.
   const sources = useQuery({
@@ -97,6 +118,7 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
     ? (source.displayName ?? templateDisplayName(source.parse?.filename))
     : 'Blender template';
 
+  if (variants.isError && !exactRevisionId) return <p role="alert">Version history could not be read. <Button onClick={() => void variants.refetch()}>Retry revisions</Button></p>;
   if (view.isPending) {
     return (
       <div
@@ -123,11 +145,14 @@ export function SceneEditor({ brandId, assetId }: { brandId: string; assetId: st
   return (
     // A newer version is a different set of fields: its edits start from its own defaults.
     <SceneEditorBody
-      key={view.data.versionId}
+      key={`${view.data.versionId}:${view.data.revisionId ?? 'source'}`}
       brandId={brandId}
       assetId={assetId}
       name={name}
       view={view.data}
+      variants={variants.data ?? []}
+      onOpenRevision={setOpenedRevision}
+      onSaved={async () => { await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.revisionVariants(brandId, assetId) }); }}
       onReload={() =>
         void queryClient.invalidateQueries({
           queryKey: forgeQueryKeys.sceneTemplate(brandId, assetId),
@@ -142,15 +167,56 @@ function SceneEditorBody({
   assetId,
   name,
   view,
+  variants,
+  onOpenRevision,
+  onSaved,
   onReload,
 }: {
   brandId: string;
   assetId: string;
   name: string;
   view: SceneTemplateView;
+  variants: TemplateRevisionVariant[];
+  onOpenRevision: (id: string) => void;
+  onSaved: () => Promise<void>;
   onReload: () => void;
 }) {
-  const [state, dispatch] = useReducer(sceneEditorReducer, view, initialSceneEditor);
+  const [state, localDispatch] = useReducer(sceneEditorReducer, view, initialSceneEditor);
+  const variant = variants.find(item => item.revisions.some(revision => revision.id === view.revisionId));
+  const revision = variant?.revisions.find(item => item.id === view.revisionId);
+  const sourceValues = useMemo(() => ({ ...Object.fromEntries(view.fields.filter(field => field.default !== null).map(field => [field.key, field.default])), ...view.values }) as SceneChanges, [view]);
+  const copy = useNativeWorkingCopy<{ values: SceneChanges; outputId: string | null }>({ brandId, family: 'blender', selection: variant && revision ? { variant, revision } : undefined,
+    initial: { values: sourceValues, outputId: view.outputs[0]?.id ?? null },
+    restore: snapshot => localDispatch({ type: 'restore', changes: Object.fromEntries(Object.entries(snapshot.values)
+      .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(sourceValues[key]))), outputId: snapshot.outputId }) });
+  const [saveTarget, setSaveTarget] = useState<'current' | 'new'>('current');
+  const [variantName, setVariantName] = useState('Blender variant');
+  const registry = !!view.revisionId;
+  const dispatch = (action: SceneEditorAction) => {
+    if (registry && (!copy.ready || copy.readOnly)) return;
+    if (registry && (action.type === 'undo' || action.type === 'redo' || action.type === 'resetAll')) {
+      void copy.history(action.type === 'resetAll' ? 'discard' : action.type,
+        { tool: 'Forge scene editor', button: action.type === 'undo' ? 'Undo' : action.type === 'redo' ? 'Redo' : 'Reset' }); return;
+    }
+    const next = sceneEditorReducer(state, action);
+    if (registry && action.type !== 'select' && action.type !== 'restore') copy.change(
+      { values: { ...sourceValues, ...next.changes }, outputId: next.outputId },
+      { tool: 'Forge scene inspector', ...(action.type === 'set' ? { control: view.fields.find(field => field.key === action.key)?.name ?? action.key }
+        : action.type === 'resetField' ? { button: `Reset ${action.key}` } : { control: 'Output' }) },
+      action.type === 'set' || action.type === 'resetField' ? [`blender:${action.key}`] : ['blender:output'],
+      action.type === 'set' ? action.key : null);
+    localDispatch(action);
+  };
+  const save = async () => {
+    const saved = await copy.save((base, snapshot, id) => ({ ...saveTemplateRevisionRequestSchema.parse({ brandId,
+      parentRevisionId: base.baseRevisionId, expectedHeadRevisionId: base.baseRevisionId, idempotencyKey: id,
+      ...(saveTarget === 'new' ? { name: variantName } : { variantId: base.variantId }),
+      edits: { blender: { values: snapshot.values, ...(snapshot.outputId ? { outputId: snapshot.outputId } : {}) } },
+      origin: { tool: 'Forge scene editor', button: 'Save native revision' } }) }),
+      intent => savePinnedTemplateRevision(intent.assetId, intent.body, intent.userId),
+      { tool: 'Forge scene editor', button: 'Save native revision' });
+    if (saved) { await onSaved(); onOpenRevision(saved.revision.id); }
+  };
   const output = view.outputs.find((candidate) => candidate.id === state.outputId) ?? null;
   // Cleared whenever the output changes, so each output starts from its own default.
   const [pickedMediaType, setPickedMediaType] = useState<SceneMediaType | null>(null);
@@ -159,8 +225,9 @@ function SceneEditorBody({
   const preview = useScenePreview({
     brandId,
     assetId,
-    versionId: view.versionId,
-    outputId: output?.id ?? null,
+    versionId: copy.state?.base.sourceVersionId ?? view.versionId,
+    revisionId: copy.state?.base.baseRevisionId ?? view.revisionId,
+    outputId: registry && !copy.ready ? null : output?.id ?? null,
     values: state.changes,
   });
   const render = useSceneRenderJob(brandId, assetId);
@@ -169,6 +236,7 @@ function SceneEditorBody({
     (error) => error && sceneProblem(error).code === 'scene_version_stale',
   );
 
+  if (registry && !copy.ready) return <div role="status">Opening private native copy… {copy.error && <p role="alert">{copy.error}</p>}</div>;
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -182,7 +250,11 @@ function SceneEditorBody({
           </Link>
           <h1 className="min-w-0 truncate text-base font-semibold">{name}</h1>
           <Badge variant={changed ? 'violet' : 'muted'} className="text-2xs">
-            {changed ? `${changed} changed` : 'As in the file'}
+            {changed
+              ? `${changed} changed`
+              : view.revisionId
+                ? 'As saved in revision'
+                : 'As in the file'}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -191,7 +263,7 @@ function SceneEditorBody({
             variant="ghost"
             size="icon-sm"
             aria-label="Undo"
-            disabled={!state.past.length}
+            disabled={registry ? !copy.state?.history.past.length : !state.past.length}
             onClick={() => dispatch({ type: 'undo' })}
           >
             <Undo2 aria-hidden />
@@ -201,7 +273,7 @@ function SceneEditorBody({
             variant="ghost"
             size="icon-sm"
             aria-label="Redo"
-            disabled={!state.future.length}
+            disabled={registry ? !copy.state?.history.future.length : !state.future.length}
             onClick={() => dispatch({ type: 'redo' })}
           >
             <Redo2 aria-hidden />
@@ -229,7 +301,8 @@ function SceneEditorBody({
               output &&
               mediaType &&
               render.start({
-                versionId: view.versionId,
+                versionId: copy.state?.base.sourceVersionId ?? view.versionId,
+                ...(copy.state?.base.baseRevisionId || view.revisionId ? { revisionId: copy.state?.base.baseRevisionId ?? view.revisionId } : {}),
                 outputId: output.id,
                 values: state.changes,
                 overrides: { mediaType },
@@ -241,6 +314,26 @@ function SceneEditorBody({
           </Button>
         </div>
       </header>
+      {registry && <section aria-label="Native revision editing" className="space-y-2 border-b border-border p-3 text-xs"
+        data-working-copy-id={copy.state?.workingCopyId} data-base-revision-id={copy.state?.base.baseRevisionId}>
+        <p>{copy.readOnly ? 'This revision is read-only. Branch it in Version control before editing.' : !copy.ready ? 'Opening private native copy…'
+          : `Private browser copy · base ${copy.state?.base.baseRevisionId.slice(0, 8)}. Saving and releasing are separate.`}</p>
+        {copy.state && variant && copy.state.base.baseRevisionId !== variant.draftHeadRevisionId && <p role="alert">The branch advanced. Your private edits remain pinned to their captured base; save requires conflict review.</p>}
+        {copy.error && <p role="alert">{copy.error} <Button size="xs" onClick={() => void copy.retry()}>Retry native history</Button></p>}
+        {copy.state?.pending && <p role="status">The exact native save is retained. <Button size="xs" disabled={copy.saving} onClick={() => void copy.dismissSave()}>Stop retrying native request</Button></p>}
+        <div className="flex flex-wrap gap-2">
+          <select aria-label="Save native changes to" value={saveTarget} onChange={event => setSaveTarget(event.target.value as 'current' | 'new')} disabled={copy.readOnly || !copy.ready}>
+            <option value="current">Current variant</option><option value="new">New variant</option>
+          </select>
+          {saveTarget === 'new' && <Input aria-label="Native variant name" value={variantName} maxLength={120} onChange={event => setVariantName(event.target.value)} />}
+          <Button size="sm" disabled={copy.readOnly || !copy.ready || copy.saving || !copy.dirty && !copy.state?.pending} onClick={() => void save()}>
+            {copy.saving ? 'Saving native revision…' : copy.state?.pending ? 'Retry saved native intent' : 'Save native revision'}
+          </Button>
+        </div>
+        <details><summary>Variant control and releases</summary><VersionControlPanel brandId={brandId} assetId={assetId}
+          versionId={view.versionId} variants={variants} revisionId={view.revisionId}
+          onOpenRevision={async selected => { await copy.park(); onOpenRevision(selected.id); }} /></details>
+      </section>}
       {stale ? (
         <p
           role="alert"
@@ -265,17 +358,20 @@ function SceneEditorBody({
           aria-label="Fields"
           className="min-h-0 overflow-y-auto border-b border-border lg:border-r lg:border-b-0"
         >
+          <fieldset disabled={registry && (copy.readOnly || !copy.ready)}>
           <SceneInspector
             brandId={brandId}
             fields={view.fields}
             camera={output?.camera ?? null}
             cameras={cameras}
             changes={state.changes}
+            baseline={view.values}
             selectedKey={state.selectedKey}
             onSelect={(key) => dispatch({ type: 'select', key })}
             onChange={(key, value) => dispatch({ type: 'set', key, value })}
             onReset={(key) => dispatch({ type: 'resetField', key })}
           />
+          </fieldset>
         </aside>
         <main className="min-h-0 min-w-0 overflow-y-auto p-3">
           <ScenePreviewStage

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateAuthoringCommand, TemplateAuthoringNode } from '@continuum/contracts';
+import type { TemplateAuthoringCommand, TemplateOperationOrigin, TemplateAuthoringNode } from '@continuum/contracts';
 import { ChevronDown, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -91,7 +91,7 @@ export function TemplateLayerTimeline({
   playheadSec: number;
   onPlayheadChange: (seconds: number) => void;
   disabled: boolean;
-  onCommand: (command: TemplateAuthoringCommand) => void;
+  onCommand: (command: TemplateAuthoringCommand, origin: TemplateOperationOrigin) => void;
 }) {
   const controlId = useId();
   const [motionOpen, setMotionOpen] = useState(false);
@@ -196,7 +196,7 @@ export function TemplateLayerTimeline({
     return () => window.cancelAnimationFrame(animationFrame);
   }, [playing, hasClock, durationSec, frameRate, node?.nodeId]);
 
-  const replaceFrames = (frames: CommandFrame[]) => {
+  const replaceFrames = (frames: CommandFrame[], origin: TemplateOperationOrigin) => {
     if (!selectedChannel || !node || !activeChannelEnabled || disabled) return;
     onCommand({
       type: 'layer.keyframes.replace',
@@ -204,7 +204,7 @@ export function TemplateLayerTimeline({
       channelId: selectedChannel.channelId,
       channel: selectedChannel.channel,
       keyframes: frames,
-    });
+    }, { tool: 'Forge timeline', ...origin });
   };
 
   const commitTiming = () => {
@@ -217,7 +217,7 @@ export function TemplateLayerTimeline({
     }
     setStatus(null);
     if (inSec !== node.inSec || outSec !== node.outSec)
-      onCommand({ type: 'layer.timing', nodeId: node.nodeId, inSec, outSec });
+      onCommand({ type: 'layer.timing', nodeId: node.nodeId, inSec, outSec }, { tool: 'Forge timeline', button: 'Apply timing' });
   };
 
   const addKeyframe = () => {
@@ -262,12 +262,12 @@ export function TemplateLayerTimeline({
       inInterpolation: 'LINEAR' as const,
       outInterpolation: 'LINEAR' as const,
     }].sort((left, right) => left.timeSec - right.timeSec);
-    replaceFrames(next);
+    replaceFrames(next, { button: 'Add at playhead' });
     setSelectedFrameId(keyframeId);
     setStatus(null);
   };
 
-  const editFrame = (keyframeId: string, change: Partial<CommandFrame>) => {
+  const editFrame = (keyframeId: string, change: Partial<CommandFrame>, origin: TemplateOperationOrigin) => {
     if (!selectedChannel || !activeChannelEnabled) return;
     const next = selectedFrames.map((frame) => frame.keyframeId === keyframeId ? { ...frame, ...change } : frame)
       .sort((left, right) => left.timeSec - right.timeSec);
@@ -276,10 +276,10 @@ export function TemplateLayerTimeline({
       return;
     }
     setStatus(null);
-    replaceFrames(next);
+    replaceFrames(next, origin);
   };
 
-  const commitKeyframeTime = () => {
+  const commitKeyframeTime = (shortcut?: string) => {
     if (!selectedChannel || !selectedFrame || !selectedChannel.frameRate || disabled || !activeChannelEnabled) return;
     const draft = keyframeTimeDraftRef.current.trim();
     const value = Number(draft);
@@ -301,7 +301,7 @@ export function TemplateLayerTimeline({
     const lastCommitted = lastCommittedKeyframeTimeRef.current;
     if (timeSec === selectedFrame.timeSec || (lastCommitted?.nodeId === node?.nodeId && lastCommitted.channelId === selectedChannel.channelId && lastCommitted.keyframeId === selectedFrame.keyframeId && lastCommitted.timeSec === timeSec)) return;
     if (node) lastCommittedKeyframeTimeRef.current = { nodeId: node.nodeId, channelId: selectedChannel.channelId, keyframeId: selectedFrame.keyframeId, timeSec };
-    editFrame(selectedFrame.keyframeId, { timeSec });
+    editFrame(selectedFrame.keyframeId, { timeSec }, { control: 'Keyframe time', ...(shortcut ? { shortcut } : {}) });
   };
 
   const beginKeyframeDrag = (event: ReactPointerEvent<HTMLButtonElement>, frame: CommandFrame) => {
@@ -358,7 +358,7 @@ export function TemplateLayerTimeline({
       setStatus('That move would place two keyframes on the same frame.');
       return;
     }
-    replaceFrames(next);
+    replaceFrames(next, { gesture: 'Move keyframe' });
     setStatus(null);
   };
 
@@ -376,7 +376,7 @@ export function TemplateLayerTimeline({
       [side === 'in' ? 'inInterpolation' : 'outInterpolation']: value,
       ...(value === 'BEZIER' && side === 'in' && !selectedFrame.inEase?.length ? { inEase: ease } : {}),
       ...(value === 'BEZIER' && side === 'out' && !selectedFrame.outEase?.length ? { outEase: ease } : {}),
-    });
+    }, { control: `${side} interpolation` });
   };
 
   const editEase = (side: 'in' | 'out', axis: number, key: 'speed' | 'influence', value: number) => {
@@ -385,13 +385,13 @@ export function TemplateLayerTimeline({
     const current = [...(selectedFrame[easeKey] ?? [])];
     while (current.length < motionEaseDimensions(selectedChannel)) current.push({ speed: 0, influence: 33.333 });
     current[axis] = { ...current[axis]!, [key]: value };
-    editFrame(selectedFrame.keyframeId, { [easeKey]: current });
+    editFrame(selectedFrame.keyframeId, { [easeKey]: current }, { control: `${side} ${motionEaseAxisLabel(selectedChannel, axis)} ease ${key}` });
   };
 
   const removeFrame = (keyframeId: string) => {
     if (!selectedChannel) return;
     const next = selectedFrames.filter((frame) => frame.keyframeId !== keyframeId);
-    replaceFrames(next);
+    replaceFrames(next, { button: 'Delete selected keyframe' });
     setSelectedFrameId(next[0]?.keyframeId ?? '');
     setStatus(null);
   };
@@ -413,7 +413,7 @@ export function TemplateLayerTimeline({
       setStatus('That move would place two keyframes on the same frame.');
       return;
     }
-    replaceFrames(next);
+    replaceFrames(next, { button: `Move keyframe one frame ${delta < 0 ? 'earlier' : 'later'}` });
     setStatus(null);
   };
 
@@ -536,7 +536,7 @@ export function TemplateLayerTimeline({
             <Button size="xs" variant="outline" className="text-xs" disabled={disabled || !activeChannelEnabled || !hasClock || selectedChannel.frameRate == null || (!selectedChannel.keyframes.length && !hasVerifiedStartValue)} onClick={addKeyframe}>
               <Plus aria-hidden="true" /> Add at playhead
             </Button>
-            <Button size="xs" variant="ghost" className="text-xs" disabled={disabled || !activeChannelEnabled || selectedFrames.length === 0} onClick={() => { replaceFrames([]); setSelectedFrameId(''); }}>
+            <Button size="xs" variant="ghost" className="text-xs" disabled={disabled || !activeChannelEnabled || selectedFrames.length === 0} onClick={() => { replaceFrames([], { button: 'Clear keys' }); setSelectedFrameId(''); }}>
               Clear keys
             </Button>
           </li> : null}
@@ -587,8 +587,8 @@ export function TemplateLayerTimeline({
                     <Input id={`${controlId}-keyframe-time`} aria-label="Keyframe time" className="h-7 w-20 text-xs" type="number" step={selectedChannel.frameRate ? 1 / selectedChannel.frameRate : 'any'} value={keyframeTimeDraft} disabled={disabled || !activeChannelEnabled} onChange={(event) => {
                       keyframeTimeDraftRef.current = event.target.value;
                       setKeyframeTimeDraft(event.target.value);
-                    }} onBlur={commitKeyframeTime} onKeyDown={(event) => {
-                      if (event.key === 'Enter') { event.preventDefault(); commitKeyframeTime(); }
+                    }} onBlur={() => commitKeyframeTime()} onKeyDown={(event) => {
+                      if (event.key === 'Enter') { event.preventDefault(); commitKeyframeTime('Enter'); }
                       if (event.key === 'Escape') {
                         const draft = String(selectedFrame.timeSec);
                         keyframeTimeDraftRef.current = draft;
@@ -617,7 +617,7 @@ export function TemplateLayerTimeline({
                               vector[axis] = value;
                               nextValue = vector;
                             }
-                            editFrame(selectedFrame.keyframeId, { value: nextValue });
+                            editFrame(selectedFrame.keyframeId, { value: nextValue }, { control: `${LABELS[selectedChannel.channel]} ${Array.isArray(selectedFrame.value) ? AXES[axis] : ''} value`.replace('  ', ' ') });
                           }} />
                         </label>
                   ))}
