@@ -46,6 +46,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
     accounts: [
       candidate('acct-ig', 'instagram', 'acme_a'),
       candidate('acct-tt', 'tiktok', 'acme_tt'),
+      candidate('acct-li', 'linkedin', 'acme_company'),
     ],
   });
   return React.createElement(QueryClientProvider, { client }, children);
@@ -95,6 +96,28 @@ function jsonResponse(status: number, body: unknown) {
     json: async () => body,
   };
 }
+
+const instagramLinkedInGroup = {
+  ...(draft as object),
+  platforms: ['instagram', 'linkedin'],
+  groupId: 'group-415',
+  groupMembers: [
+    { backendDraftId: 'draft-1', platform: 'instagram', status: 'draft', accountId: 'acct-ig' },
+    {
+      backendDraftId: 'draft-li',
+      platform: 'linkedin',
+      status: 'draft',
+      accountId: 'acct-li',
+      draft: {
+        id: 'placement-1::linkedin',
+        backendDraftId: 'draft-li',
+        status: 'draft',
+        platforms: ['linkedin'],
+        targetAccountId: 'acct-li',
+      },
+    },
+  ],
+} as never;
 
 const approved = (ids: Array<[string, string]>) =>
   jsonResponse(200, {
@@ -349,5 +372,98 @@ describe('useApproveScheduleDraft', () => {
 
     expect(outcome).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Bug #415: the existing client chain must remain compatible with brand-authorized status writes.
+  it('schedules Instagram and LinkedIn with bodyless approval and status-only authenticated patches', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        approved([
+          ['draft-1', 'instagram'],
+          ['draft-li', 'linkedin'],
+        ]),
+      )
+      .mockResolvedValue(jsonResponse(200, { status: 'scheduled' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = render();
+    await act(async () => {
+      expect(await result.current.approveAndSchedule(instagramLinkedInGroup)).toBe(true);
+    });
+    expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
+    expect(
+      fetchMock.mock.calls.slice(1).map(([url, init]) => ({
+        url,
+        method: init.method,
+        body: JSON.parse(init.body as string),
+        authorization: init.headers.Authorization,
+      })),
+    ).toEqual([
+      {
+        url: `${API_BASE}/api/organic/calendar/drafts/draft-1`,
+        method: 'PATCH',
+        body: { status: 'scheduled' },
+        authorization: 'Bearer test-token',
+      },
+      {
+        url: `${API_BASE}/api/organic/calendar/drafts/draft-li`,
+        method: 'PATCH',
+        body: { status: 'scheduled' },
+        authorization: 'Bearer test-token',
+      },
+    ]);
+    expect(showMock.mock.calls[0][0]).toMatchObject({
+      title: 'Approved & scheduled',
+      description: expect.stringContaining('LinkedIn @acme_company'),
+    });
+  });
+
+  it('retries an already accepted scheduling request without changing dates or calling publish', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(approved([['draft-1', 'instagram']]))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'scheduled' }))
+      .mockResolvedValueOnce(approved([['draft-1', 'instagram']]))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'scheduled' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = render();
+    await act(async () => {
+      expect(await result.current.approveAndSchedule(draft)).toBe(true);
+      expect(await result.current.approveAndSchedule(draft)).toBe(true);
+    });
+    expect(
+      fetchMock.mock.calls
+        .filter(([, init]) => init.method === 'PATCH')
+        .map(([, init]) => JSON.parse(init.body as string)),
+    ).toEqual([{ status: 'scheduled' }, { status: 'scheduled' }]);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/publish'))).toBe(false);
+  });
+
+  it('names a member still scheduled when compensation is refused, without reporting group success', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        approved([
+          ['draft-1', 'instagram'],
+          ['draft-li', 'linkedin'],
+        ]),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'scheduled' }))
+      .mockResolvedValueOnce(jsonResponse(409, { message: 'Refresh the planner and try again.' }))
+      .mockResolvedValueOnce(jsonResponse(403, { message: 'Brand access was removed.' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = render();
+    await act(async () => {
+      expect(await result.current.approveAndSchedule(instagramLinkedInGroup)).toBe(false);
+    });
+    expect(updateDraftMock.mock.calls.map(([id]) => id)).toEqual(['placement-1']);
+    expect(showMock).toHaveBeenCalledTimes(1);
+    const description = showMock.mock.calls[0][0].description;
+    expect(description).toContain('Instagram could not be reverted');
+    expect(description).not.toContain('Nothing was scheduled');
+    expect(showMock.mock.calls[0][0]).toMatchObject({
+      title: 'Scheduling failed',
+      variant: 'error',
+    });
   });
 });

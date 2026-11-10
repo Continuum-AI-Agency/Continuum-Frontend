@@ -223,4 +223,42 @@ describe('useUnscheduleDraft', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(updateDraftMock).toHaveBeenCalled();
   });
+
+  // Bug #415: cancellation uses the same status-only API as scheduling and compensation.
+  it('cancels a LinkedIn post through an authenticated status-only request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { status: 'draft' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useUnscheduleDraft());
+    await act(async () => {
+      expect(
+        await result.current.unschedule({
+          ...(scheduledDraft as object),
+          platforms: ['linkedin'],
+        } as never),
+      ).toBe(true);
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ status: 'draft' });
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
+  });
+
+  it('keeps the scheduled state and displays a stale-write refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(409, {
+          error: 'stale_state',
+          message: 'Refresh the planner and try again.',
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useUnscheduleDraft());
+    await act(async () => {
+      expect(await result.current.unschedule(scheduledDraft)).toBe(false);
+    });
+    expect(updateDraftMock).not.toHaveBeenCalled();
+    expect(showMock.mock.calls[0][0]).toMatchObject({
+      variant: 'error',
+      description: expect.stringContaining('Refresh the planner and try again.'),
+    });
+  });
 });
