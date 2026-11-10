@@ -1,5 +1,6 @@
 'use client';
 
+import { unstable_isUnrecognizedActionError } from 'next/navigation';
 import React, { createContext, useCallback, useContext, useTransition } from 'react';
 import { mutateOnboardingStateAction, resetOnboardingStateAction } from '@/app/onboarding/actions';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -68,6 +69,12 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
           startTransition(() => {
             setState(previous);
           });
+          // A tab opened before a deploy posts Server Action ids the new build no longer has, so
+          // no retry from it can save. A reload resumes from the last saved step on the new build.
+          if (unstable_isUnrecognizedActionError(error)) {
+            window.location.reload();
+            throw error;
+          }
           console.error('Failed to update onboarding state', error);
           show({
             title: 'Save failed',

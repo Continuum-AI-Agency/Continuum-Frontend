@@ -1,12 +1,6 @@
 'use client';
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function GlobalError() {
   return (
     <html lang="en">
       <body
@@ -36,8 +30,11 @@ export default function GlobalError({
           <p style={{ fontSize: 14, color: '#a1a1aa', marginBottom: 32 }}>
             An unexpected error occurred. Please try reloading the page.
           </p>
+          {/* A real reload, not reset(): reset re-renders the same bundle, and a tab opened before a
+              deploy then calls Server Actions the new build no longer has, crashing again. */}
           <button
-            onClick={reset}
+            type="button"
+            onClick={() => window.location.reload()}
             style={{
               height: 40,
               padding: '0 24px',
