@@ -10,6 +10,8 @@ import {
   type BrandVoice,
   type BusinessSummary,
   type FirstImpression,
+  fetchPreviewLatest,
+  fetchPreviewSnapshot,
   fetchPreviewStatus,
   type OnboardingPreviewEvent,
   type OnboardingPreviewWorkflowResult,
@@ -507,4 +509,32 @@ function hasAnyBucket(b: AgentPreviewBuckets): boolean {
       b.brandProfile ||
       b.firstImpression,
   );
+}
+
+async function loadLatestCompletedBuckets(brandId: string): Promise<AgentPreviewBuckets | null> {
+  try {
+    const latest = await fetchPreviewLatest(brandId);
+    if (latest?.status !== 'completed' && latest?.status !== 'partial') return null;
+    const snapshot = await fetchPreviewSnapshot(latest.run_id);
+    return snapshot?.result ? seedBucketsFromSnapshot(snapshot.result) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the cards show when a request was refused before any run existed. Clearing them for
+ * the attempt must not cost the person results they already have: keep the previous ones,
+ * else the brand's latest completed run, else mark every section failed so each card says so.
+ */
+export async function resultsAfterRejectedRun(
+  previous: AgentPreviewBuckets | null,
+  brandId: string,
+): Promise<AgentPreviewBuckets> {
+  if (previous && hasAnyBucket(previous)) return previous;
+  const latest = await loadLatestCompletedBuckets(brandId);
+  if (latest && hasAnyBucket(latest)) return latest;
+  const failed = emptyBuckets();
+  for (const section of previewSectionSchema.options) failed.sectionStatus[section] = 'error';
+  return failed;
 }
