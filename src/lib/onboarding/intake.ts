@@ -1,10 +1,11 @@
 import type { OnboardingState } from './state';
 
-export function readyIntakeDocuments(state: OnboardingState) {
+export function readyIntakeDocuments(state: OnboardingState, now = Date.now()) {
   return state.documents.filter(
     (doc) =>
       doc.status === 'ready' &&
       !doc.archivedAt &&
+      (!doc.expiresAt || Date.parse(doc.expiresAt) > now) &&
       (!doc.retention || doc.retention === 'permanent'),
   );
 }
