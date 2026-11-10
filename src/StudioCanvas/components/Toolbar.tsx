@@ -1,5 +1,5 @@
 import { Hash, Play, RotateCw, Square } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ElementsPanel } from '@/components/ai-studio/elements/ElementsPanel';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -13,15 +13,25 @@ export function Toolbar() {
   const [elementsOpen, setElementsOpen] = useState(false);
   const { brandId } = useStudioStore();
   const executionControls = useWorkflowExecution();
-  const { streamState, cancel } = executionControls;
+  const { streamState, cancel, reset } = executionControls;
+  const runIdRef = useRef(0);
+  const lastRunRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const run = async (options: { forceRegenerateAll?: boolean } = {}) => {
     console.warn('[studio] RUNFLOW-CLICK', { brandId, options });
+    const runId = ++runIdRef.current;
     setIsRunning(true);
     try {
-      await executeWorkflow(executionControls, { brandId, ...options });
+      // Abort latches cancel so an aborted run's remaining nodes do not start. Clear it only
+      // once that run has settled, or its nodes would run alongside this one.
+      await lastRunRef.current;
+      if (runIdRef.current !== runId) return;
+      reset();
+      const current = executeWorkflow(executionControls, { brandId, ...options });
+      lastRunRef.current = current.catch(() => undefined);
+      await current;
     } finally {
-      setIsRunning(false);
+      if (runIdRef.current === runId) setIsRunning(false);
     }
   };
 
@@ -29,6 +39,7 @@ export function Toolbar() {
   const handleRerunAll = () => run({ forceRegenerateAll: true });
 
   const handleAbort = () => {
+    runIdRef.current += 1;
     cancel();
     setIsRunning(false);
   };

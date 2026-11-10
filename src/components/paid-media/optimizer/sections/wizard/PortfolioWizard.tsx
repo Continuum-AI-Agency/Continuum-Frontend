@@ -259,18 +259,21 @@ export function PortfolioWizard({
     const members = selectedMembers(draft);
     const host = platformHost(draft);
     try {
-      const { portfolio_id } = host
-        ? await createPlatform.mutateAsync({
-            brand_id: brandId,
-            platform: host.platform,
-            account_id: host.account_id,
-            config,
-          })
-        : await create.mutateAsync({
-            brand_id: brandId,
-            ad_account_id: adAccountId,
-            config,
-          });
+      // A retry after a partial failure resumes on the portfolio that already exists.
+      const { portfolio_id } = createdId
+        ? { portfolio_id: createdId }
+        : host
+          ? await createPlatform.mutateAsync({
+              brand_id: brandId,
+              platform: host.platform,
+              account_id: host.account_id,
+              config,
+            })
+          : await create.mutateAsync({
+              brand_id: brandId,
+              ad_account_id: adAccountId,
+              config,
+            });
       setCreatedId(portfolio_id);
       if (!host) await enrollMeta(portfolio_id);
       if (members.length > 0) {
