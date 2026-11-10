@@ -1,5 +1,9 @@
 import { afterLoadIdle } from '@/lib/observability/afterLoadIdle';
 import { bufferEarlyErrors } from '@/lib/observability/earlyErrorBuffer';
+import { guardAgainstTranslatedDom } from '@/lib/translateDomGuard';
+
+// Before hydration, so React never touches a translated text node unguarded.
+guardAgainstTranslatedDom();
 
 // Analytics is not critical path.
 //
