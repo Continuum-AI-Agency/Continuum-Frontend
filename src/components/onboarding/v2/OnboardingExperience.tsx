@@ -31,6 +31,7 @@ import type { OnboardingState } from '@/lib/onboarding/state';
 import { timing, trackOnboardingEvent } from '@/lib/onboarding/telemetry';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { getSessionUser } from '@/lib/supabase/sessionUser';
+import { AnalysisErrorContext } from './dna/CardSurface';
 import { OnboardingBrandSwitcher } from './OnboardingBrandSwitcher';
 import { OnboardingShell, type ShellPillId } from './OnboardingShell';
 import type { StepperState } from './OnboardingStepper';
@@ -49,7 +50,7 @@ import { UrlScreen } from './screens/UrlScreen';
 import { hasSeenWelcome, WelcomeScreen } from './screens/WelcomeScreen';
 import {
   type AgentPreviewBuckets,
-  emptyBuckets,
+  resultsAfterRejectedRun,
   runAgentPreview,
   seedBucketsFromSnapshot,
 } from './state/agentPreview';
@@ -58,6 +59,14 @@ import { JobPersistor } from './state/JobPersistor';
 import { readOnboardingSource } from './state/jobRunners';
 
 const TOTAL_STEPS = 6;
+
+// The job holds either the live buckets or an outcome that wraps them.
+function bucketsOf(data: unknown): AgentPreviewBuckets | null {
+  if (!data || typeof data !== 'object') return null;
+  return 'buckets' in data
+    ? (data as { buckets: AgentPreviewBuckets }).buckets
+    : (data as AgentPreviewBuckets);
+}
 
 // Post-Brand-DNA "Competitor Inspirations → brand-guided generations" finale.
 // On by default: only disabled when the flag is explicitly "false" (then Brand
@@ -359,7 +368,6 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     const generation = ++analysisGenerationRef.current;
     setSourceError(null);
     useBrandProfileRevealCache.getState().invalidateBrand(brandId);
-    patch('agentPreview', emptyBuckets());
     const userId = (await getSessionUser())?.id;
     if (!userId || generation !== analysisGenerationRef.current) return false;
     let source: OnboardingSourceResponse | null = null;
@@ -414,6 +422,8 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     if (generation !== analysisGenerationRef.current) return false;
     lastStartedKeyRef.current = inputKey;
     trackOnboardingEvent('onboarding_agent_preview_started', { source_kind: intake.kind });
+    const previousBuckets = bucketsOf(jobs.agentPreview.data);
+    let previewRejected = false;
     void start('agentPreview', (signal) =>
       runAgentPreview(
         {
@@ -438,9 +448,18 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           },
         },
         signal,
-      ),
+      ).catch((error: unknown) => {
+        if (!signal.aborted) previewRejected = true;
+        throw error;
+      }),
     ).then((outcome) => {
       if (generation !== analysisGenerationRef.current) return;
+      if (!outcome && previewRejected) {
+        // The request was refused or failed before any results: keep what the person had.
+        void resultsAfterRejectedRun(previousBuckets, brandId).then((kept) => {
+          if (generation === analysisGenerationRef.current) patch('agentPreview', kept);
+        });
+      }
       if (outcome) {
         useBrandProfileRevealCache.getState().write(brandId, inputKey, {
           buckets: outcome.buckets,
@@ -590,13 +609,10 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
     launching,
   });
 
-  const agentRaw = jobs.agentPreview.data as
-    | AgentPreviewBuckets
-    | { buckets: AgentPreviewBuckets }
-    | null;
-  const agentBuckets: AgentPreviewBuckets | null =
-    agentRaw && typeof agentRaw === 'object' && 'buckets' in agentRaw ? agentRaw.buckets : agentRaw;
+  const agentRaw = jobs.agentPreview.data;
+  const agentBuckets = bucketsOf(agentRaw);
   const readinessLoading = jobs.agentPreview.status === 'running';
+  const analysisError = jobs.agentPreview.status === 'error' ? jobs.agentPreview.error : null;
 
   useEffect(() => {
     trackOnboardingEvent('onboarding_step_viewed', { screen });
@@ -818,11 +834,14 @@ function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingE
           ) : screen === 4 ? (
             <InvitesScreen totalSteps={totalSteps} />
           ) : screen === 5 ? (
-            <BrandDnaScreen
-              agentBuckets={agentBuckets}
-              readinessLoading={readinessLoading}
-              onRetry={handleAgentRerun}
-            />
+            <AnalysisErrorContext.Provider value={analysisError}>
+              <BrandDnaScreen
+                agentBuckets={agentBuckets}
+                readinessLoading={readinessLoading}
+                analysisError={analysisError}
+                onRetry={handleAgentRerun}
+              />
+            </AnalysisErrorContext.Provider>
           ) : screen === 6 ? (
             <CompetitorInspirationsScreen
               brandId={brandId}

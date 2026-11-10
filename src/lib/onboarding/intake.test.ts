@@ -79,3 +79,21 @@ test('cache identity follows original input and document versions, not generated
     ),
   ).toHaveLength(0);
 });
+test('archived, expired, unready and temporary documents are never sent as intake evidence', () => {
+  const now = Date.parse('2026-10-20T00:00:00Z');
+  const withDocs = (documents: (typeof document)[]) =>
+    mergeOnboardingState(state(), { documents: documents as never });
+  const live = { ...document, id: 'live' };
+  const docs = [
+    live,
+    { ...document, id: 'archived', archivedAt: '2026-10-11T00:00:00Z' },
+    { ...document, id: 'expired', expiresAt: '2026-10-19T00:00:00Z' },
+    { ...document, id: 'unexpired', expiresAt: '2026-10-21T00:00:00Z' },
+    { ...document, id: 'processing', status: 'processing' as const },
+    { ...document, id: 'temporary', retention: 'ephemeral' as const },
+  ];
+  expect(readyIntakeDocuments(withDocs(docs), now).map((doc) => doc.id)).toEqual([
+    'live',
+    'unexpired',
+  ]);
+});

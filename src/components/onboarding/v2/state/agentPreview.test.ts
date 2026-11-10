@@ -29,15 +29,21 @@ const resumeOnboardingPreviewMock = mock<
   ) => Promise<{ brandProfile?: unknown; structured?: unknown; complete?: unknown }>
 >(async () => ({}));
 
+const fetchPreviewLatestMock = mock<(brandId: string) => Promise<unknown>>(async () => null);
+const fetchPreviewSnapshotMock = mock<(runId: string) => Promise<unknown>>(async () => null);
+
 mock.module('@/lib/onboarding/agentClient', () => ({
   runOnboardingPreview: runOnboardingPreviewMock,
   resumeOnboardingPreview: resumeOnboardingPreviewMock,
+  fetchPreviewLatest: fetchPreviewLatestMock,
+  fetchPreviewSnapshot: fetchPreviewSnapshotMock,
 }));
 
 import {
   type AgentPreviewBuckets,
   emptyBuckets,
   makeEventHandler,
+  resultsAfterRejectedRun,
   runAgentPreview,
   seedBucketsFromSnapshot,
 } from '@/components/onboarding/v2/state/agentPreview';
@@ -568,4 +574,51 @@ it('forwards original intake, documents, and social evidence without inventing a
     runContext: { platform_urls: [] },
   });
   expect(result.inputKey).toBe('input:key');
+});
+
+describe('a request the backend rejects before any run exists', () => {
+  const rejection = 'A selected document is unavailable or still processing.';
+  const previous = (): AgentPreviewBuckets => ({
+    ...emptyBuckets(),
+    runId: 'run-before',
+    voice: { tone: 'Warm' },
+    sectionStatus: { ...emptyBuckets().sectionStatus, voice: 'done' },
+  });
+
+  beforeEach(() => {
+    runOnboardingPreviewMock.mockReset();
+    fetchPreviewLatestMock.mockReset();
+    fetchPreviewSnapshotMock.mockReset();
+  });
+
+  it('rejects with the backend message and never reports a run id', async () => {
+    runOnboardingPreviewMock.mockRejectedValue(new Error(rejection));
+    const input = makeInput();
+    await expect(runAgentPreview(input, new AbortController().signal)).rejects.toThrow(rejection);
+    expect(input.onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the previous sections', async () => {
+    const kept = await resultsAfterRejectedRun(previous(), 'brand-1');
+    expect(kept.voice?.tone).toBe('Warm');
+    expect(kept.sectionStatus.voice).toBe('done');
+    expect(fetchPreviewLatestMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the latest completed run when nothing is on screen', async () => {
+    fetchPreviewLatestMock.mockResolvedValue({ run_id: 'run-latest', status: 'completed' });
+    fetchPreviewSnapshotMock.mockResolvedValue({
+      result: { prompt_version: 1, structured: { brand_voice: { tone: 'Saved' } } },
+    });
+    const kept = await resultsAfterRejectedRun(null, 'brand-1');
+    expect(fetchPreviewSnapshotMock).toHaveBeenCalledWith('run-latest');
+    expect(kept.voice?.tone).toBe('Saved');
+  });
+
+  it('marks every section failed when there is nothing to keep, so no card reads as empty', async () => {
+    fetchPreviewLatestMock.mockResolvedValue({ run_id: 'run-failed', status: 'failed' });
+    const failed = await resultsAfterRejectedRun(emptyBuckets(), 'brand-1');
+    expect(Object.values(failed.sectionStatus).every((status) => status === 'error')).toBe(true);
+    expect(fetchPreviewSnapshotMock).not.toHaveBeenCalled();
+  });
 });
