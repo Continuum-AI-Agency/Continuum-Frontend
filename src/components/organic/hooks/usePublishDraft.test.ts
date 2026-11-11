@@ -337,6 +337,46 @@ describe('usePublishDraft', () => {
     expect(result.current.error).toContain('LinkedIn (@acme_li) failed');
   });
 
+  // The toast fades; the card is what still says which member failed and why.
+  it("keeps a failed member's reason on its own card", async () => {
+    const reason = '(#200) The permission(s) pages_manage_posts are not available';
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(
+        streamOf([
+          published('draft-instagram', 'instagram', 'ig-post-1'),
+          {
+            event: 'failed',
+            data: { id: 'draft-facebook', type: 'failed', error: reason, code: 'api_error' },
+          },
+          complete([
+            ok('draft-instagram', 'instagram', 'ig-post-1'),
+            {
+              id: 'draft-facebook',
+              status: 'failed',
+              platform: 'facebook',
+              error: reason,
+              code: 'api_error',
+            },
+          ]),
+        ]),
+      ),
+    );
+
+    const { result } = renderHook(() => usePublishDraft());
+    await act(async () => {
+      await result.current.publish(group());
+    });
+
+    const patches = new Map(
+      updateDraftMock.mock.calls.map(([id, updater]) => [id, updater({})] as const),
+    );
+    expect(patches.get('placement-1::facebook')).toEqual({ publishError: reason });
+    expect(showMock.mock.calls.at(-1)?.[0].description).toContain(
+      `Facebook (@acme_fb) failed: ${reason}`,
+    );
+  });
+
   // A stream that ends without its summary may have published some members. "Failed" would
   // invite the click that posts them twice.
   it('reports an unknown outcome when the stream ends without its summary', async () => {
