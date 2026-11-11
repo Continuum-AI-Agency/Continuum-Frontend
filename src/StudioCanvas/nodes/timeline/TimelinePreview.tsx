@@ -111,12 +111,13 @@ function captionWordStyle(
   };
 }
 
-// Presentational sequence preview. The <video> layer is driven imperatively by
-// usePlayheadPlayback (it swaps source + seeks across clips); the <img> layer
-// shows the active still. Both are letterboxed (object-contain) on a black frame
-// to approximate the rendered output.
+// Presentational sequence preview. The two <video> elements are driven imperatively by
+// usePlayheadPlayback (ping-pong: one on screen, the other parked on the next clip); the
+// <img> layer shows the active still. All are letterboxed (object-contain) on a black
+// frame to approximate the rendered output.
 export function TimelinePreview({
-  videoRef,
+  videoRefs,
+  activeVideo,
   showVideo,
   activeImageUrl,
   isEmpty,
@@ -141,7 +142,11 @@ export function TimelinePreview({
   captionStyle,
   onCaptionPositionChange,
 }: {
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  videoRefs: readonly [
+    React.RefObject<HTMLVideoElement | null>,
+    React.RefObject<HTMLVideoElement | null>,
+  ];
+  activeVideo: 0 | 1;
   showVideo: boolean;
   activeImageUrl?: string;
   isEmpty: boolean;
@@ -186,12 +191,16 @@ export function TimelinePreview({
     ? resolveStyleWithPreset(captionStyle, caption.style)
     : undefined;
   const captionFamily = resolvedCaptionStyle?.fontFamily;
+  const videoRef = videoRefs[activeVideo];
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = mediaMuted ?? false;
-    video.volume = Math.max(0, Math.min(1, mediaVolume ?? 1));
-  }, [mediaMuted, mediaVolume, videoRef]);
+    for (const [index, ref] of videoRefs.entries()) {
+      const video = ref.current;
+      if (!video) continue;
+      // The parked element is silent: only the one on screen may play its own audio.
+      video.muted = index !== activeVideo || (mediaMuted ?? false);
+      video.volume = Math.max(0, Math.min(1, mediaVolume ?? 1));
+    }
+  }, [activeVideo, mediaMuted, mediaVolume, videoRefs]);
 
   // Register the same face the worker will burn in. Without this the preview falls back to
   // the system stack and the gallery shows a typeface the export will not use.
@@ -212,18 +221,29 @@ export function TimelinePreview({
           ...(frameSize ? { aspectRatio: frameSize.width / frameSize.height, flex: 'none' } : {}),
         }}
       >
-        <video
-          ref={videoRef}
-          crossOrigin="anonymous"
-          playsInline
-          muted={false}
-          className="absolute inset-0 h-full w-full object-contain transition-opacity"
-          style={{
-            ...mediaStyle,
-            opacity:
-              showVideo && !needsCanvasPreview(shaderEffects) ? (mediaStyle?.opacity ?? 1) : 0,
-          }}
-        />
+        {videoRefs.map((ref, index) => (
+          <video
+            // biome-ignore lint/suspicious/noArrayIndexKey: the pair is fixed; each element keeps its slot.
+            key={index}
+            ref={ref}
+            crossOrigin="anonymous"
+            playsInline
+            preload="auto"
+            muted={index !== activeVideo}
+            className="absolute inset-0 h-full w-full object-contain"
+            style={
+              index === activeVideo
+                ? {
+                    ...mediaStyle,
+                    opacity:
+                      showVideo && !needsCanvasPreview(shaderEffects)
+                        ? (mediaStyle?.opacity ?? 1)
+                        : 0,
+                  }
+                : { opacity: 0 }
+            }
+          />
+        ))}
         {!showVideo && activeImageUrl && !needsCanvasPreview(shaderEffects) ? (
           // biome-ignore lint/performance/noImgElement: in-memory still preview; next/image adds no value for canvas media
           <img

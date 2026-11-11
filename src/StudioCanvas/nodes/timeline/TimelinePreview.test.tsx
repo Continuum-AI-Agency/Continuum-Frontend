@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { createRef } from 'react';
+import { createRef, type RefObject } from 'react';
 import type { ClipEffectSpec } from '../../utils/render/effectSpec';
 import { TimelinePreview } from './TimelinePreview';
 
 afterEach(cleanup);
 
 const shaderEffects: ClipEffectSpec = { vignette: { amount: 0.8 } };
+const videoPair = (): readonly [
+  RefObject<HTMLVideoElement | null>,
+  RefObject<HTMLVideoElement | null>,
+] => [createRef<HTMLVideoElement>(), createRef<HTMLVideoElement>()];
 
 describe('TimelinePreview effect parity', () => {
   for (const effects of [
@@ -16,7 +20,8 @@ describe('TimelinePreview effect parity', () => {
     it(`uses the canvas for the base, incoming crossfade, and overlay layer with ${effects === shaderEffects ? 'shaders' : 'crop'}`, () => {
       const { container } = render(
         <TimelinePreview
-          videoRef={createRef<HTMLVideoElement>()}
+          videoRefs={videoPair()}
+          activeVideo={0}
           showVideo
           isEmpty={false}
           isPlaying={false}
@@ -59,10 +64,34 @@ describe('TimelinePreview effect parity', () => {
   }
 });
 
+it('shows the active element of the ping-pong pair and keeps the other hidden and silent', () => {
+  const refs = videoPair();
+  render(
+    <TimelinePreview
+      videoRefs={refs}
+      activeVideo={1}
+      showVideo
+      isEmpty={false}
+      isPlaying
+      onTogglePlay={() => undefined}
+      playheadSec={2}
+      totalSec={4}
+      mediaStyle={{ opacity: 0.8 }}
+    />,
+  );
+  const [first, second] = refs.map((ref) => ref.current);
+  expect(second?.style.opacity).toBe('0.8');
+  expect(second?.muted).toBe(false);
+  expect(first?.style.opacity).toBe('0');
+  expect(first?.muted).toBe(true);
+  expect(first?.getAttribute('preload')).toBe('auto');
+});
+
 it('plays a nonempty image/audio sequence without a primary video track', () => {
   render(
     <TimelinePreview
-      videoRef={createRef<HTMLVideoElement>()}
+      videoRefs={videoPair()}
+      activeVideo={0}
       showVideo={false}
       isEmpty
       isPlaying={false}
