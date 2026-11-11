@@ -532,6 +532,41 @@ describe('CalendarDraftCard', () => {
     expect(screen.getByText('Clear')).toBeTruthy();
   });
 
+  // Publish-now hands a failed claim back to its pre-claim status, so the card is not `failed`
+  // and used to show nothing. The reason now stays on it until a publish succeeds.
+  it.each([
+    'draft',
+    'approved',
+    'scheduled',
+  ] as const)('shows why the last publish failed on a %s card', (status) => {
+    render(
+      <CalendarDraftCard
+        draft={{ ...draft, status, publishError: '(#200) Permissions error' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    expect(screen.getByText('Last publish failed')).toBeTruthy();
+    expect(screen.getByText('(#200) Permissions error')).toBeTruthy();
+  });
+
+  it('keeps a published card free of an old publish failure', () => {
+    render(
+      <CalendarDraftCard
+        draft={{ ...draft, status: 'published', publishError: '(#200) Permissions error' }}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={mock()}
+        onToggleSelection={mock()}
+      />,
+    );
+
+    expect(screen.queryByText('(#200) Permissions error')).toBeNull();
+  });
+
   it('invokes the onMouseEnter hover callback for the preview surface', () => {
     const onMouseEnter = mock();
     const { container } = render(
