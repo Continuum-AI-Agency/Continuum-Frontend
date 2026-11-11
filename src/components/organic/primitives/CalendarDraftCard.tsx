@@ -167,9 +167,7 @@ export function CalendarDraftCard({
   // A failed publish-now hands the draft back to its pre-claim status, so the card's status does
   // not say the post never went out. The reason does, until a publish succeeds and clears it.
   const lastPublishError =
-    draft.status === 'draft' || draft.status === 'approved' || draft.status === 'scheduled'
-      ? draft.publishError
-      : undefined;
+    draft.status === 'draft' || draft.status === 'scheduled' ? draft.publishError : undefined;
   const isAssignedToDay = draft.dateLabel.trim().length > 0;
   const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;

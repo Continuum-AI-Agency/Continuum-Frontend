@@ -536,7 +536,6 @@ describe('CalendarDraftCard', () => {
   // and used to show nothing. The reason now stays on it until a publish succeeds.
   it.each([
     'draft',
-    'approved',
     'scheduled',
   ] as const)('shows why the last publish failed on a %s card', (status) => {
     render(
